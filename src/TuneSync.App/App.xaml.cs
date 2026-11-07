@@ -1,6 +1,5 @@
-﻿using System.Configuration;
-using System.Data;
-using System.Windows;
+﻿using System.Windows;
+using Wpf.Ui.Appearance;
 
 namespace TuneSync.App;
 
@@ -9,5 +8,9 @@ namespace TuneSync.App;
 /// </summary>
 public partial class App : Application
 {
+    protected override void OnStartup(StartupEventArgs e)
+    {
+        base.OnStartup(e);
+        ApplicationThemeManager.Apply(ApplicationTheme.Light);
+    }
 }
-

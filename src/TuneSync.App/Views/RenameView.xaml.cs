@@ -8,7 +8,7 @@ using TuneSync.Core.Services;
 
 namespace TuneSync.App.Views;
 
-public partial class RenameView : UserControl
+public partial class RenameView : Page
 {
     private readonly ObservableCollection<RenameRow> _rows = [];
     private List<(string OldPath, string NewPath)> _applyList = [];

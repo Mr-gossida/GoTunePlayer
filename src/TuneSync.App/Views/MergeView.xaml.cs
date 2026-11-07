@@ -8,7 +8,7 @@ using TuneSync.Core.Services;
 
 namespace TuneSync.App.Views;
 
-public partial class MergeView : UserControl
+public partial class MergeView : Page
 {
     private readonly ObservableCollection<MergePlanRow> _rows = [];
     private List<MergePlanItem> _plan = [];

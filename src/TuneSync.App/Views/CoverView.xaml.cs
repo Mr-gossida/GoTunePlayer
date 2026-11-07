@@ -8,7 +8,7 @@ using TuneSync.Core.Services;
 
 namespace TuneSync.App.Views;
 
-public partial class CoverView : UserControl
+public partial class CoverView : Page
 {
     private readonly ObservableCollection<TrackRow> _rows = [];
 

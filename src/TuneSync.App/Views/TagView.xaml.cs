@@ -8,7 +8,7 @@ using TuneSync.Core.Services;
 
 namespace TuneSync.App.Views;
 
-public partial class TagView : UserControl
+public partial class TagView : Page
 {
     private readonly ObservableCollection<TrackTags> _rows = [];
 

@@ -1,6 +1,7 @@
-<UserControl x:Class="TuneSync.App.Views.CoverView"
-             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+<Page x:Class="TuneSync.App.Views.CoverView"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      Title="앨범 커버">
     <Grid Margin="10">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
@@ -49,4 +50,4 @@
             </StackPanel>
         </Grid>
     </Grid>
-</UserControl>
+</Page>

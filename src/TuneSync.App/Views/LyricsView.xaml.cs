@@ -8,7 +8,7 @@ using TuneSync.Core.Services;
 
 namespace TuneSync.App.Views;
 
-public partial class LyricsView : UserControl
+public partial class LyricsView : Page
 {
     private readonly ObservableCollection<LyricsRow> _rows = [];
     private readonly LyricsService _lyricsService = new();
