@@ -68,7 +68,9 @@
                     </Border>
                     <TextBlock x:Name="SelectionInfo" Margin="0,12,0,12" TextWrapping="Wrap" Opacity="0.7"/>
                     <Button Content="이미지 파일로 교체..." HorizontalAlignment="Stretch" Click="ReplaceFromFile_Click"/>
-                    <ui:Button Content="선택한 전체 항목에 같은 커버 적용" HorizontalAlignment="Stretch" Appearance="Primary" Margin="0,8,0,0" Click="ApplyToAll_Click"/>
+                    <ui:Button HorizontalAlignment="Stretch" Appearance="Primary" Margin="0,8,0,0" Click="ApplyToAll_Click">
+                        <TextBlock Text="선택한 전체 항목에 같은 커버 적용" TextWrapping="Wrap" TextAlignment="Center"/>
+                    </ui:Button>
                 </StackPanel>
             </ui:Card>
         </Grid>
