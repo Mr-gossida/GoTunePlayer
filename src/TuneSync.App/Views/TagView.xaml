@@ -1,45 +1,50 @@
 <Page x:Class="TuneSync.App.Views.TagView"
       xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
       xmlns:local="clr-namespace:TuneSync.App.Views"
       Title="태그">
     <Page.Resources>
         <local:FileNameConverter x:Key="FileNameConverter"/>
     </Page.Resources>
-    <Grid Margin="10">
+    <Grid Margin="24">
         <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
-        <Grid Grid.Row="0" Margin="0,0,0,6">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="Auto"/>
-                <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="Auto"/>
-            </Grid.ColumnDefinitions>
-            <TextBlock Text="폴더:" VerticalAlignment="Center" Margin="0,0,8,0"/>
-            <TextBox Grid.Column="1" x:Name="FolderBox" IsReadOnly="True"/>
-            <Button Grid.Column="2" Content="찾아보기..." Margin="6,0,0,0" Click="Browse_Click"/>
-        </Grid>
+        <ui:Card Grid.Row="0" Margin="0,0,0,16">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="60"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock Text="폴더" VerticalAlignment="Center"/>
+                <TextBox Grid.Column="1" x:Name="FolderBox" IsReadOnly="True" Margin="12,0"/>
+                <Button Grid.Column="2" Content="찾아보기..." Click="Browse_Click"/>
+                <Button Grid.Column="3" Content="새로고침" Margin="8,0,0,0" Click="Refresh_Click"/>
+                <ui:Button Grid.Column="4" Content="변경사항 저장" Margin="8,0,0,0" Appearance="Primary" Click="SaveAll_Click"/>
+                <TextBlock Grid.Column="5" x:Name="StatusText" VerticalAlignment="Center" Margin="16,0,0,0" Opacity="0.7"/>
+            </Grid>
+        </ui:Card>
 
-        <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,6">
-            <Button Content="새로고침(저장 안 한 변경은 사라짐)" Padding="10,4" Click="Refresh_Click"/>
-            <Button Content="변경사항 저장" Padding="10,4" Margin="8,0,0,0" Click="SaveAll_Click"/>
-            <TextBlock x:Name="StatusText" VerticalAlignment="Center" Margin="12,0,0,0" Foreground="Gray"/>
-        </StackPanel>
-
-        <DataGrid Grid.Row="2" x:Name="TagGrid" AutoGenerateColumns="False" CanUserAddRows="False">
-            <DataGrid.Columns>
-                <DataGridTextColumn Header="파일" Binding="{Binding Path, Converter={StaticResource FileNameConverter}}" IsReadOnly="True" Width="1.6*"/>
-                <DataGridTextColumn Header="Title" Binding="{Binding Title}" Width="1.3*"/>
-                <DataGridTextColumn Header="Artist" Binding="{Binding Artist}" Width="1*"/>
-                <DataGridTextColumn Header="AlbumArtist" Binding="{Binding AlbumArtist}" Width="1*"/>
-                <DataGridTextColumn Header="Album" Binding="{Binding Album}" Width="1.2*"/>
-                <DataGridTextColumn Header="Composer" Binding="{Binding Composer}" Width="1*"/>
-                <DataGridTextColumn Header="Genre" Binding="{Binding Genre}" Width="0.8*"/>
-            </DataGrid.Columns>
-        </DataGrid>
+        <ui:Card Grid.Row="1" Padding="0">
+            <DataGrid x:Name="TagGrid" AutoGenerateColumns="False" CanUserAddRows="False"
+                      BorderThickness="0" Background="Transparent">
+                <DataGrid.Columns>
+                    <DataGridTextColumn Header="파일" Binding="{Binding Path, Converter={StaticResource FileNameConverter}}" IsReadOnly="True" Width="1.6*"/>
+                    <DataGridTextColumn Header="Title" Binding="{Binding Title}" Width="1.3*"/>
+                    <DataGridTextColumn Header="Artist" Binding="{Binding Artist}" Width="1*"/>
+                    <DataGridTextColumn Header="AlbumArtist" Binding="{Binding AlbumArtist}" Width="1*"/>
+                    <DataGridTextColumn Header="Album" Binding="{Binding Album}" Width="1.2*"/>
+                    <DataGridTextColumn Header="Composer" Binding="{Binding Composer}" Width="1*"/>
+                    <DataGridTextColumn Header="Genre" Binding="{Binding Genre}" Width="0.8*"/>
+                </DataGrid.Columns>
+            </DataGrid>
+        </ui:Card>
     </Grid>
 </Page>

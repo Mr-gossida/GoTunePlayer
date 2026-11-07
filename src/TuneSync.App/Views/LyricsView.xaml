@@ -1,42 +1,54 @@
 <Page x:Class="TuneSync.App.Views.LyricsView"
       xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
       Title="가사">
-    <Grid Margin="10">
+    <Grid Margin="24">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
-        <Grid Grid.Row="0" Margin="0,0,0,6">
+        <ui:Card Grid.Row="0" Margin="0,0,0,16">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="60"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock Text="폴더" VerticalAlignment="Center"/>
+                <TextBox Grid.Column="1" x:Name="FolderBox" IsReadOnly="True" Margin="12,0"/>
+                <Button Grid.Column="2" Content="찾아보기..." Click="Browse_Click"/>
+            </Grid>
+        </ui:Card>
+
+        <Grid Grid.Row="1" Margin="0,0,0,16">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto"/>
-                <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
-            <TextBlock Text="폴더:" VerticalAlignment="Center" Margin="0,0,8,0"/>
-            <TextBox Grid.Column="1" x:Name="FolderBox" IsReadOnly="True"/>
-            <Button Grid.Column="2" Content="찾아보기..." Margin="6,0,0,0" Click="Browse_Click"/>
+            <Button Grid.Column="0" Content="선택 항목 LRCLIB 검색" Click="SearchSelected_Click"/>
+            <Button Grid.Column="1" Content="전체 검색" Margin="8,0,0,0" Click="SearchAll_Click"/>
+            <ui:Button Grid.Column="2" Content="선택 항목 적용" Margin="8,0,0,0" Appearance="Primary" Click="ApplySelected_Click"/>
+            <ui:Button Grid.Column="3" Content="찾은 전체 적용" Margin="8,0,0,0" Appearance="Primary" Click="ApplyAllFound_Click"/>
+            <TextBlock Grid.Column="4" x:Name="StatusText" VerticalAlignment="Center" Margin="16,0,0,0" Opacity="0.7"/>
         </Grid>
 
-        <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,6">
-            <Button Content="선택 항목 LRCLIB 검색" Padding="10,4" Click="SearchSelected_Click"/>
-            <Button Content="전체 검색" Padding="10,4" Margin="8,0,0,0" Click="SearchAll_Click"/>
-            <Button Content="선택 항목 적용" Padding="10,4" Margin="8,0,0,0" Click="ApplySelected_Click"/>
-            <Button Content="찾은 전체 적용" Padding="10,4" Margin="8,0,0,0" Click="ApplyAllFound_Click"/>
-            <TextBlock x:Name="StatusText" VerticalAlignment="Center" Margin="12,0,0,0" Foreground="Gray"/>
-        </StackPanel>
-
-        <DataGrid Grid.Row="2" x:Name="TrackGrid" AutoGenerateColumns="False" IsReadOnly="True"
-                  CanUserAddRows="False" SelectionMode="Extended">
-            <DataGrid.Columns>
-                <DataGridTextColumn Header="파일" Binding="{Binding FileName}" Width="2*"/>
-                <DataGridTextColumn Header="아티스트" Binding="{Binding Artist}" Width="1*"/>
-                <DataGridTextColumn Header="제목" Binding="{Binding Title}" Width="1.5*"/>
-                <DataGridTextColumn Header="기존 가사" Binding="{Binding HasExistingLabel}" Width="90"/>
-                <DataGridTextColumn Header="검색 결과" Binding="{Binding FoundLabel}" Width="130"/>
-            </DataGrid.Columns>
-        </DataGrid>
+        <ui:Card Grid.Row="2" Padding="0">
+            <DataGrid x:Name="TrackGrid" AutoGenerateColumns="False" IsReadOnly="True"
+                      CanUserAddRows="False" SelectionMode="Extended" BorderThickness="0" Background="Transparent">
+                <DataGrid.Columns>
+                    <DataGridTextColumn Header="파일" Binding="{Binding FileName}" Width="2*"/>
+                    <DataGridTextColumn Header="아티스트" Binding="{Binding Artist}" Width="1*"/>
+                    <DataGridTextColumn Header="제목" Binding="{Binding Title}" Width="1.5*"/>
+                    <DataGridTextColumn Header="기존 가사" Binding="{Binding HasExistingLabel}" Width="90"/>
+                    <DataGridTextColumn Header="검색 결과" Binding="{Binding FoundLabel}" Width="130"/>
+                </DataGrid.Columns>
+            </DataGrid>
+        </ui:Card>
     </Grid>
 </Page>
