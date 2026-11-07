@@ -14,6 +14,6 @@ public partial class MainWindow : FluentWindow
         InitializeComponent();
         SystemThemeWatcher.Watch(this);
         RootNavigation.SetPageProviderService(new SimplePageProvider());
-        RootNavigation.Loaded += (_, _) => RootNavigation.Navigate(typeof(Views.MergeView));
+        RootNavigation.Loaded += (_, _) => RootNavigation.Navigate(typeof(Views.LibraryView));
     }
 }

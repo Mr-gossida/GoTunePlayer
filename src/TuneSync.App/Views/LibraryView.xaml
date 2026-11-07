@@ -15,15 +15,15 @@
 
         <StackPanel Grid.Row="0" Margin="0,0,0,20">
             <TextBlock Text="음악 라이브러리" FontSize="20" FontWeight="SemiBold"/>
-            <TextBlock Margin="0,4,0,0" Opacity="0.6" TextWrapping="Wrap"
+            <TextBlock Margin="0,4,0,0" Foreground="{DynamicResource TextFillColorSecondaryBrush}" TextWrapping="Wrap"
                        Text="왼쪽 트리에서 폴더를 찾아 들어가고, 파일을 선택하면 오른쪽에 커버·이름 규칙·가사·태그 작업 패널이 나타납니다."/>
         </StackPanel>
 
         <Grid Grid.Row="1">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="260"/>
+                <ColumnDefinition Width="230"/>
                 <ColumnDefinition Width="16"/>
-                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="*" MinWidth="660"/>
             </Grid.ColumnDefinitions>
 
             <!-- Left: Explorer-style folder tree -->
@@ -69,7 +69,7 @@
                             <ColumnDefinition Width="Auto"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0" x:Name="PathText" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Opacity="0.8" Text="왼쪽에서 폴더를 선택하세요"/>
+                        <TextBlock Grid.Column="0" x:Name="PathText" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextFillColorSecondaryBrush}" Text="왼쪽에서 폴더를 선택하세요"/>
                         <CheckBox Grid.Column="1" x:Name="IncludeSubfoldersCheck" Content="하위 폴더 포함" VerticalAlignment="Center" Margin="12,0" Checked="IncludeSubfolders_Changed" Unchecked="IncludeSubfolders_Changed"/>
                         <RadioButton Grid.Column="2" x:Name="ListModeRadio" Content="목록" GroupName="ViewMode" IsChecked="True" VerticalAlignment="Center" Margin="12,0,0,0" Checked="ListModeRadio_Checked"/>
                         <RadioButton Grid.Column="3" x:Name="GridModeRadio" Content="격자" GroupName="ViewMode" VerticalAlignment="Center" Margin="8,0,0,0" Checked="GridModeRadio_Checked"/>
@@ -79,9 +79,9 @@
 
                 <Grid Grid.Row="1">
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="1.6*"/>
+                        <ColumnDefinition Width="*" MinWidth="320"/>
                         <ColumnDefinition Width="16"/>
-                        <ColumnDefinition Width="1*" MinWidth="360"/>
+                        <ColumnDefinition Width="320"/>
                     </Grid.ColumnDefinitions>
 
                     <ui:Card Grid.Column="0" Padding="0">
@@ -125,7 +125,7 @@
                         <TabControl x:Name="TaskTabs" BorderThickness="0" Background="Transparent">
                             <TabItem Header="커버">
                                 <StackPanel Margin="16">
-                                    <TextBlock x:Name="CoverSelectionInfo" Opacity="0.7" Margin="0,0,0,12" TextWrapping="Wrap" Text="파일을 선택하면 커버를 확인하고 바꿀 수 있습니다."/>
+                                    <TextBlock x:Name="CoverSelectionInfo" Foreground="{DynamicResource TextFillColorSecondaryBrush}" Margin="0,0,0,12" TextWrapping="Wrap" Text="파일을 선택하면 커버를 확인하고 바꿀 수 있습니다."/>
                                     <Border Height="200" CornerRadius="4" Background="{DynamicResource ControlFillColorDefaultBrush}">
                                         <Image x:Name="CoverPreviewImage" Stretch="Uniform"/>
                                     </Border>
@@ -176,7 +176,7 @@
                                         <Button Content="기본값으로" Margin="8,0,0,0" Click="ResetRenameRules_Click"/>
                                     </StackPanel>
                                     <CheckBox x:Name="IsAlbumCheck" Content="앨범 폴더(트랙 번호 포함)로 처리" Margin="0,0,0,8"/>
-                                    <TextBlock x:Name="RenameTargetInfo" Opacity="0.6" TextWrapping="Wrap" FontSize="12" Margin="0,0,0,12"/>
+                                    <TextBlock x:Name="RenameTargetInfo" Foreground="{DynamicResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" FontSize="12" Margin="0,0,0,12"/>
                                     <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
                                         <Button Content="미리보기" Click="PreviewRename_Click"/>
                                         <ui:Button Content="적용" Appearance="Primary" Margin="8,0,0,0" Click="ApplyRename_Click"/>
@@ -194,14 +194,14 @@
 
                             <TabItem Header="가사">
                                 <StackPanel Margin="16">
-                                    <TextBlock x:Name="LyricsTargetInfo" Opacity="0.6" TextWrapping="Wrap" FontSize="12" Margin="0,0,0,8"/>
+                                    <TextBlock x:Name="LyricsTargetInfo" Foreground="{DynamicResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" FontSize="12" Margin="0,0,0,8"/>
                                     <WrapPanel Margin="0,0,0,12">
                                         <Button Content="선택 항목 검색" Click="SearchLyricsSelected_Click"/>
                                         <Button Content="전체 검색" Margin="8,0,0,0" Click="SearchLyricsAll_Click"/>
                                         <ui:Button Content="선택 항목 적용" Appearance="Primary" Margin="8,8,0,0" Click="ApplyLyricsSelected_Click"/>
                                         <ui:Button Content="찾은 전체 적용" Appearance="Primary" Margin="8,8,0,0" Click="ApplyLyricsAllFound_Click"/>
                                     </WrapPanel>
-                                    <TextBlock x:Name="LyricsStatusText" Opacity="0.7" Margin="0,0,0,8"/>
+                                    <TextBlock x:Name="LyricsStatusText" Foreground="{DynamicResource TextFillColorSecondaryBrush}" Margin="0,0,0,8"/>
                                     <DataGrid x:Name="LyricsResultGrid" AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False"
                                               BorderThickness="0" Background="Transparent">
                                         <DataGrid.Columns>
@@ -224,7 +224,7 @@
                                             <ColumnDefinition Width="*"/>
                                             <ColumnDefinition Width="Auto"/>
                                         </Grid.ColumnDefinitions>
-                                        <TextBlock Grid.Column="0" x:Name="TagStatusText" Opacity="0.7" VerticalAlignment="Center" TextWrapping="Wrap"/>
+                                        <TextBlock Grid.Column="0" x:Name="TagStatusText" Foreground="{DynamicResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" TextWrapping="Wrap"/>
                                         <ui:Button Grid.Column="1" Content="변경사항 저장" Appearance="Primary" Click="SaveTags_Click"/>
                                     </Grid>
                                     <DataGrid Grid.Row="1" x:Name="TagEditGrid" AutoGenerateColumns="False" CanUserAddRows="False"
