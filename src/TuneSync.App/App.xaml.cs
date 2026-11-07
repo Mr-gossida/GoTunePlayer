@@ -15,6 +15,7 @@ public partial class App : Application
         // before any Wpf.Ui control is constructed, so this has to run before the window is
         // created - a StartupUri window would already be loading by the time OnStartup returns.
         ApplicationThemeManager.Apply(ApplicationTheme.Light);
+        ApplicationAccentColorManager.ApplySystemAccent();
         new MainWindow().Show();
     }
 }

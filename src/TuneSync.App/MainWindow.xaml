@@ -18,11 +18,11 @@
 
         <ui:NavigationView Grid.Row="1" x:Name="RootNavigation" IsBackButtonVisible="Collapsed">
             <ui:NavigationView.MenuItems>
-                <ui:NavigationViewItem Content="폴더 합치기" TargetPageType="{x:Type views:MergeView}"/>
-                <ui:NavigationViewItem Content="앨범 커버" TargetPageType="{x:Type views:CoverView}"/>
-                <ui:NavigationViewItem Content="폴더·파일명 규칙" TargetPageType="{x:Type views:RenameView}"/>
-                <ui:NavigationViewItem Content="가사" TargetPageType="{x:Type views:LyricsView}"/>
-                <ui:NavigationViewItem Content="태그" TargetPageType="{x:Type views:TagView}"/>
+                <ui:NavigationViewItem Content="폴더 합치기" Icon="{ui:SymbolIcon FolderSync24}" TargetPageType="{x:Type views:MergeView}"/>
+                <ui:NavigationViewItem Content="앨범 커버" Icon="{ui:SymbolIcon Album24}" TargetPageType="{x:Type views:CoverView}"/>
+                <ui:NavigationViewItem Content="폴더·파일명 규칙" Icon="{ui:SymbolIcon Rename24}" TargetPageType="{x:Type views:RenameView}"/>
+                <ui:NavigationViewItem Content="가사" Icon="{ui:SymbolIcon DocumentText24}" TargetPageType="{x:Type views:LyricsView}"/>
+                <ui:NavigationViewItem Content="태그" Icon="{ui:SymbolIcon TagMultiple24}" TargetPageType="{x:Type views:TagView}"/>
             </ui:NavigationView.MenuItems>
         </ui:NavigationView>
     </Grid>
