@@ -7,11 +7,19 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
-        <ui:Card Grid.Row="0" Margin="0,0,0,16">
+        <StackPanel Grid.Row="0" Margin="0,0,0,20">
+            <TextBlock Text="폴더 합치기" FontSize="20" FontWeight="SemiBold"/>
+            <TextBlock Margin="0,4,0,0" Opacity="0.6" TextWrapping="Wrap"
+                       Text="원본 폴더의 음악 파일을 대상 폴더로 합칩니다. 이름이 겹치는 파일은 삭제되지 않고 _quarantine 폴더로 자동 이동합니다."/>
+        </StackPanel>
+
+        <ui:Card Grid.Row="1" Margin="0,0,0,16">
             <StackPanel>
+                <TextBlock Text="폴더 선택" FontWeight="SemiBold" FontSize="14" Margin="0,0,0,12"/>
                 <Grid Margin="0,0,0,10">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="140"/>
@@ -35,24 +43,29 @@
             </StackPanel>
         </ui:Card>
 
-        <Grid Grid.Row="1" Margin="0,0,0,16">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="Auto"/>
-                <ColumnDefinition Width="Auto"/>
-                <ColumnDefinition Width="*"/>
-            </Grid.ColumnDefinitions>
-            <Button Grid.Column="0" Content="미리보기 (Dry Run)" Click="Scan_Click"/>
-            <ui:Button Grid.Column="1" Content="적용" Margin="8,0,0,0" Appearance="Primary" Click="Execute_Click"/>
-            <TextBlock Grid.Column="2" x:Name="StatusText" VerticalAlignment="Center" Margin="16,0,0,0" Opacity="0.7"/>
-        </Grid>
+        <StackPanel Grid.Row="2" Margin="0,0,0,16">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <Button Grid.Column="0" Content="미리보기 (Dry Run)" Click="Scan_Click"/>
+                <ui:Button Grid.Column="1" Content="적용" Margin="8,0,0,0" Appearance="Primary" Click="Execute_Click"/>
+                <TextBlock Grid.Column="2" x:Name="StatusText" VerticalAlignment="Center" Margin="16,0,0,0" Opacity="0.7"/>
+            </Grid>
+            <TextBlock Margin="0,8,0,0" Opacity="0.55" TextWrapping="Wrap" FontSize="12"
+                       Text="적용 시 '복제' 또는 '중복(기존 유지/신규 유지)' 결과로 밀려나는 쪽은 삭제되지 않고 대상 폴더 옆의 _quarantine 폴더로 이동합니다. 필요하면 그 폴더에서 직접 되돌릴 수 있습니다."/>
+        </StackPanel>
 
-        <ui:Card Grid.Row="2" Padding="0">
+        <ui:Card Grid.Row="3" Padding="0">
             <Grid>
                 <Grid.RowDefinitions>
-                    <RowDefinition Height="*"/>
                     <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
                 </Grid.RowDefinitions>
-                <DataGrid Grid.Row="0" x:Name="PlanGrid" AutoGenerateColumns="False" IsReadOnly="True"
+                <TextBlock Grid.Row="0" Text="변경 내역" FontWeight="SemiBold" FontSize="14" Margin="16,16,16,8"/>
+                <DataGrid Grid.Row="1" x:Name="PlanGrid" AutoGenerateColumns="False" IsReadOnly="True"
                           CanUserAddRows="False" BorderThickness="0" Background="Transparent">
                     <DataGrid.Columns>
                         <DataGridTextColumn Header="동작" Binding="{Binding ActionLabel}" Width="130"/>
@@ -63,8 +76,6 @@
                         <DataGridTextColumn Header="충돌 크기" Binding="{Binding ConflictSizeKb}" Width="100"/>
                     </DataGrid.Columns>
                 </DataGrid>
-                <TextBlock Grid.Row="1" Margin="16,8,16,16" Opacity="0.6" TextWrapping="Wrap" FontSize="12"
-                           Text="적용 시 '복제' 또는 '중복(기존 유지/신규 유지)' 결과로 밀려나는 쪽은 삭제되지 않고 대상 폴더 옆의 _quarantine 폴더로 이동합니다. 필요하면 그 폴더에서 직접 되돌릴 수 있습니다."/>
             </Grid>
         </ui:Card>
     </Grid>
