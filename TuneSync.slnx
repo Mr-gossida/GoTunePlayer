@@ -1,0 +1,6 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/TuneSync.App/TuneSync.App.csproj" />
+    <Project Path="src/TuneSync.Core/TuneSync.Core.csproj" />
+  </Folder>
+</Solution>
