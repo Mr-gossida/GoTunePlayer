@@ -17,9 +17,12 @@ public partial class LibraryView : Page
     private readonly ObservableCollection<LibraryFileItem> _files = [];
     private readonly ObservableCollection<RenameRow> _renamePreview = [];
     private readonly ObservableCollection<LibraryFileItem> _lyricsResults = [];
+    private readonly ObservableCollection<AutoMatchItem> _autoMatches = [];
     private readonly LyricsService _lyricsService = new();
+    private readonly MusicBrainzService _musicBrainzService = new();
     private string? _currentFolder;
     private bool _isGridMode;
+    private bool _autoMatchRunning;
     private List<(string OldPath, string NewPath)> _renameApplyList = [];
 
     public LibraryView()
@@ -30,8 +33,13 @@ public partial class LibraryView : Page
         FileGridBox.ItemsSource = _files;
         RenamePreviewGrid.ItemsSource = _renamePreview;
         LyricsResultGrid.ItemsSource = _lyricsResults;
+        AutoMatchList.ItemsSource = _autoMatches;
         LoadRulesIntoForm(AppSettings.LoadRenameRules());
-        Unloaded += (_, _) => _lyricsService.Dispose();
+        Unloaded += (_, _) =>
+        {
+            _lyricsService.Dispose();
+            _musicBrainzService.Dispose();
+        };
         UpdateTaskPanel();
     }
 
@@ -156,6 +164,13 @@ public partial class LibraryView : Page
         LyricsTargetInfo.Text = hasSelection
             ? $"선택한 {selected.Count}개 파일 기준으로 검색/적용합니다."
             : $"선택된 파일이 없어 전체 {_files.Count}개 파일 기준으로 검색/적용합니다.";
+
+        if (!_autoMatchRunning)
+        {
+            AutoMatchTargetInfo.Text = hasSelection
+                ? $"선택한 {selected.Count}개 파일을 대상으로 검색합니다. 기존 태그가 비었거나 매칭이 안 되면 건너뜁니다."
+                : $"선택된 파일이 없어 현재 폴더의 전체 {_files.Count}개 파일을 대상으로 검색합니다. 기존 태그가 비었거나 매칭이 안 되면 건너뜁니다.";
+        }
     }
 
     private List<LibraryFileItem> GetTaskTargets()
@@ -393,6 +408,123 @@ public partial class LibraryView : Page
         }
         LyricsStatusText.Text = errors.Count == 0 ? $"{targets.Count}건 적용 완료" : $"{errors.Count}건 실패";
         if (errors.Count > 0) MessageBox.Show(string.Join("\n", errors), "일부 실패", MessageBoxButton.OK, MessageBoxImage.Warning);
+    }
+
+    // ----- 자동 검색 tab -----
+
+    private async void RunAutoMatch_Click(object sender, RoutedEventArgs e)
+    {
+        if (_autoMatchRunning) return;
+
+        var targets = GetTaskTargets();
+        if (targets.Count == 0)
+        {
+            MessageBox.Show("검색할 파일이 없습니다. 먼저 폴더를 선택해 주세요.", "TuneSync");
+            return;
+        }
+
+        _autoMatchRunning = true;
+        _autoMatches.Clear();
+        var items = targets.Select(t => new AutoMatchItem(t)).ToList();
+        foreach (var item in items) _autoMatches.Add(item);
+
+        var done = 0;
+        var matched = 0;
+        foreach (var item in items)
+        {
+            AutoMatchTargetInfo.Text = $"검색 중... ({++done}/{items.Count})";
+
+            if (string.IsNullOrWhiteSpace(item.OldArtist) || string.IsNullOrWhiteSpace(item.OldTitle))
+            {
+                item.Status = "매칭 실패 (아티스트/제목 태그 없음)";
+                continue;
+            }
+
+            MusicBrainzMatch? match;
+            try
+            {
+                match = await _musicBrainzService.FindAsync(item.OldArtist, item.OldTitle);
+            }
+            catch (Exception ex)
+            {
+                item.Status = $"검색 오류: {ex.Message}";
+                continue;
+            }
+
+            if (match is null)
+            {
+                item.Status = "매칭 실패 (MusicBrainz에서 못 찾음)";
+                continue;
+            }
+
+            item.Match = match;
+            item.Status = "매칭 성공";
+            matched++;
+
+            if (!string.IsNullOrWhiteSpace(match.ReleaseMbid))
+            {
+                try { item.NewCoverBytes = await _musicBrainzService.GetCoverAsync(match.ReleaseMbid); }
+                catch { /* no cover art on file for this release - not an error */ }
+            }
+
+            try { item.LyricsMatch = await _lyricsService.FindAsync(match.Artist, match.Title); }
+            catch { /* lyrics lookup best-effort only */ }
+        }
+
+        _autoMatchRunning = false;
+        AutoMatchTargetInfo.Text = $"검색 완료: {items.Count}개 중 {matched}개 매칭 성공. 체크한 항목만 '선택 항목 적용'으로 반영됩니다.";
+    }
+
+    private void ApplyAutoMatch_Click(object sender, RoutedEventArgs e)
+    {
+        var targets = _autoMatches.Where(m => m.IsSelected && m.Match is not null).ToList();
+        if (targets.Count == 0)
+        {
+            MessageBox.Show("적용할 항목이 없습니다. 먼저 자동 검색을 실행하고, 적용할 항목의 체크박스를 선택해 주세요.", "TuneSync");
+            return;
+        }
+        if (MessageBox.Show($"선택한 {targets.Count}개 파일에 자동 검색 결과를 적용할까요? (파일에 직접 기록됩니다)", "TuneSync", MessageBoxButton.YesNo) != MessageBoxResult.Yes)
+            return;
+
+        var errors = new List<string>();
+        foreach (var item in targets)
+        {
+            try
+            {
+                var match = item.Match!;
+                var tags = item.Source.Tags;
+                if (!string.IsNullOrWhiteSpace(match.Title)) tags.Title = match.Title;
+                if (!string.IsNullOrWhiteSpace(match.Artist)) tags.Artist = match.Artist;
+                if (!string.IsNullOrWhiteSpace(match.Album)) tags.Album = match.Album;
+                if (!string.IsNullOrWhiteSpace(match.AlbumArtist)) tags.AlbumArtist = match.AlbumArtist;
+                if (match.Track is > 0) tags.Track = match.Track.Value;
+                if (match.Disc is > 0) tags.Disc = match.Disc.Value;
+                TagService.Write(tags);
+
+                if (item.NewCoverBytes is not null)
+                {
+                    CoverService.SetCover(item.Source.Path, item.NewCoverBytes, "image/jpeg");
+                    item.Source.CoverBytes = item.NewCoverBytes;
+                }
+
+                if (item.LyricsMatch?.BestLyrics is not null)
+                {
+                    TagService.WriteLyrics(item.Source.Path, item.LyricsMatch.BestLyrics);
+                    item.Source.HasLyrics = true;
+                }
+
+                item.Status = "적용 완료";
+            }
+            catch (Exception ex)
+            {
+                errors.Add($"{item.FileName}: {ex.Message}");
+                item.Status = $"적용 실패: {ex.Message}";
+            }
+        }
+
+        FileListGrid.Items.Refresh();
+        AutoMatchTargetInfo.Text = errors.Count == 0 ? $"{targets.Count}건 적용 완료" : $"{targets.Count - errors.Count}건 적용, {errors.Count}건 실패";
+        if (errors.Count > 0) MessageBox.Show(string.Join("\n", errors), "일부 적용 실패", MessageBoxButton.OK, MessageBoxImage.Warning);
     }
 
     // ----- Tag tab -----

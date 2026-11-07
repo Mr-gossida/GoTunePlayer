@@ -1,0 +1,181 @@
+using System.Net.Http.Headers;
+using System.Text.Json.Nodes;
+using TuneSync.Core.Models;
+
+namespace TuneSync.Core.Services;
+
+/// <summary>Looks up canonical tag data on MusicBrainz and cover art on the companion Cover
+/// Art Archive (both free, open, public APIs - no key required). MusicBrainz's usage policy
+/// requires a descriptive User-Agent and caps anonymous callers at roughly one request per
+/// second; both are enforced here so the app never risks getting the caller's IP rate-limited
+/// or blocked. See https://musicbrainz.org/doc/MusicBrainz_API/Rate_Limiting.</summary>
+public sealed class MusicBrainzService : IDisposable
+{
+    private const string UserAgentString = "TuneSync/0.1 (+https://github.com/)";
+    private static readonly TimeSpan MinRequestInterval = TimeSpan.FromMilliseconds(1100);
+
+    private readonly HttpClient _mbHttp;
+    private readonly HttpClient _caaHttp;
+    private readonly SemaphoreSlim _rateLimitGate = new(1, 1);
+    private DateTime _lastRequestUtc = DateTime.MinValue;
+
+    public MusicBrainzService()
+    {
+        _mbHttp = new HttpClient { BaseAddress = new Uri("https://musicbrainz.org/ws/2/") };
+        _mbHttp.DefaultRequestHeaders.UserAgent.ParseAdd(UserAgentString);
+        _mbHttp.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+
+        _caaHttp = new HttpClient { BaseAddress = new Uri("https://coverartarchive.org/") };
+        _caaHttp.DefaultRequestHeaders.UserAgent.ParseAdd(UserAgentString);
+    }
+
+    /// <summary>Searches MusicBrainz recordings for the given artist/title and returns the
+    /// best-scoring hit that carries a usable release MBID, or null if nothing plausible
+    /// matched (caller should treat that file as "매칭 실패" and leave it to manual editing).</summary>
+    public async Task<MusicBrainzMatch?> FindAsync(string artist, string title, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(artist) || string.IsNullOrWhiteSpace(title))
+            return null;
+
+        var query = $"artist:\"{EscapeLucene(artist)}\" AND recording:\"{EscapeLucene(title)}\"";
+        var url = $"recording?query={Uri.EscapeDataString(query)}&fmt=json&limit=5";
+
+        JsonNode? root;
+        try
+        {
+            using var resp = await RateLimitedGetAsync(url, ct);
+            if (!resp.IsSuccessStatusCode) return null;
+            var json = await resp.Content.ReadAsStringAsync(ct);
+            root = JsonNode.Parse(json);
+        }
+        catch
+        {
+            return null;
+        }
+
+        var recordings = root?["recordings"]?.AsArray();
+        if (recordings is null || recordings.Count == 0) return null;
+
+        // MusicBrainz treats a studio recording and a live/session recording of the same song
+        // as different recording entities, each scored independently - the top-scored one isn't
+        // necessarily the studio version, and its own release list won't include the studio
+        // album at all. So: scan every plausible recording (score >= 50) and prefer whichever
+        // one has an official studio-album release; only fall back to the first valid release
+        // of the first valid recording if nothing in the whole candidate set qualifies.
+        MusicBrainzMatch? fallback = null;
+        foreach (var rec in recordings)
+        {
+            if (rec is null) continue;
+            var score = rec["score"]?.GetValue<int>() ?? 0;
+            if (score < 50) continue; // too loose a match to trust unattended
+
+            var recTitle = rec["title"]?.GetValue<string>();
+            var artistCredit = rec["artist-credit"]?.AsArray();
+            var recArtist = artistCredit?.Count > 0 ? artistCredit[0]?["name"]?.GetValue<string>() : null;
+            if (string.IsNullOrWhiteSpace(recTitle) || string.IsNullOrWhiteSpace(recArtist)) continue;
+
+            var releases = rec["releases"]?.AsArray();
+            if (releases is null || releases.Count == 0) continue;
+
+            var preferred = releases.FirstOrDefault(IsPreferredRelease);
+            var release = preferred ?? releases.FirstOrDefault(r => r is not null);
+            if (release is null) continue;
+
+            var match = BuildMatch(release, recTitle, recArtist, score);
+            if (preferred is not null) return match;
+            fallback ??= match;
+        }
+
+        return fallback;
+
+        static MusicBrainzMatch BuildMatch(JsonNode release, string recTitle, string recArtist, int score)
+        {
+            var releaseMbid = release["id"]?.GetValue<string>();
+            var album = release["title"]?.GetValue<string>();
+            var releaseArtistCredit = release["artist-credit"]?.AsArray();
+            var albumArtist = releaseArtistCredit?.Count > 0 ? releaseArtistCredit[0]?["name"]?.GetValue<string>() : recArtist;
+
+            uint? track = null, disc = null;
+            var media = release["media"]?.AsArray()?.FirstOrDefault(m => m is not null);
+            if (media is not null)
+            {
+                disc = media["position"]?.GetValue<uint>();
+                var tracks = media["track"]?.AsArray();
+                var trackEntry = tracks?.FirstOrDefault(t => t is not null);
+                if (trackEntry is not null && uint.TryParse(trackEntry["number"]?.GetValue<string>(), out var tn))
+                    track = tn;
+            }
+
+            return new MusicBrainzMatch
+            {
+                Title = recTitle,
+                Artist = recArtist,
+                Album = album,
+                AlbumArtist = albumArtist,
+                ReleaseMbid = releaseMbid,
+                Track = track,
+                Disc = disc,
+                Score = score,
+            };
+        }
+
+        static bool IsPreferredRelease(JsonNode? release)
+        {
+            if (release is null) return false;
+            if (release["status"]?.GetValue<string>() != "Official") return false;
+            var releaseGroup = release["release-group"];
+            if (releaseGroup?["primary-type"]?.GetValue<string>() != "Album") return false;
+            var secondaryTypes = releaseGroup["secondary-types"]?.AsArray();
+            return secondaryTypes is null || secondaryTypes.Count == 0;
+        }
+    }
+
+    /// <summary>Downloads front cover art for a release from the Cover Art Archive.
+    /// Returns null if that release has no art on file there (common for obscure releases -
+    /// not an error, just nothing to apply).</summary>
+    public async Task<byte[]?> GetCoverAsync(string releaseMbid, CancellationToken ct = default)
+    {
+        try
+        {
+            using var resp = await _caaHttp.GetAsync($"release/{releaseMbid}/front-500", ct);
+            if (!resp.IsSuccessStatusCode) return null;
+            return await resp.Content.ReadAsByteArrayAsync(ct);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private async Task<HttpResponseMessage> RateLimitedGetAsync(string url, CancellationToken ct)
+    {
+        await _rateLimitGate.WaitAsync(ct);
+        try
+        {
+            var elapsed = DateTime.UtcNow - _lastRequestUtc;
+            if (elapsed < MinRequestInterval)
+                await Task.Delay(MinRequestInterval - elapsed, ct);
+
+            var response = await _mbHttp.GetAsync(url, ct);
+            _lastRequestUtc = DateTime.UtcNow;
+            return response;
+        }
+        finally
+        {
+            _rateLimitGate.Release();
+        }
+    }
+
+    private static string EscapeLucene(string value)
+    {
+        // MusicBrainz search uses Lucene query syntax; quotes inside a quoted phrase must be escaped.
+        return value.Replace("\\", "\\\\").Replace("\"", "\\\"");
+    }
+
+    public void Dispose()
+    {
+        _mbHttp.Dispose();
+        _caaHttp.Dispose();
+        _rateLimitGate.Dispose();
+    }
+}

@@ -123,6 +123,61 @@
                     <!-- Selection-driven task panel -->
                     <ui:Card Grid.Column="2" Padding="0">
                         <TabControl x:Name="TaskTabs" BorderThickness="0" Background="Transparent">
+                            <TabItem Header="자동 검색">
+                                <Grid Margin="16">
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="*"/>
+                                    </Grid.RowDefinitions>
+
+                                    <StackPanel Grid.Row="0" Margin="0,0,0,8">
+                                        <TextBlock Text="자동 검색" FontWeight="SemiBold" FontSize="14"/>
+                                        <TextBlock x:Name="AutoMatchTargetInfo" Foreground="{DynamicResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" FontSize="12" Margin="0,4,0,0"
+                                                   Text="MusicBrainz에서 태그를, Cover Art Archive에서 커버를, LRCLIB에서 가사를 찾아 비교합니다. 기존 태그가 비었거나 매칭이 안 되면 건너뜁니다."/>
+                                    </StackPanel>
+
+                                    <StackPanel Grid.Row="1" Margin="0,0,0,8">
+                                        <ui:Button Appearance="Primary" HorizontalAlignment="Stretch" Click="RunAutoMatch_Click">
+                                            <TextBlock Text="자동 검색 실행" TextWrapping="Wrap" TextAlignment="Center"/>
+                                        </ui:Button>
+                                        <ui:Button Appearance="Primary" HorizontalAlignment="Stretch" Margin="0,8,0,0" Click="ApplyAutoMatch_Click">
+                                            <TextBlock Text="선택 항목 적용" TextWrapping="Wrap" TextAlignment="Center"/>
+                                        </ui:Button>
+                                        <TextBlock x:Name="AutoMatchStatusText" Foreground="{DynamicResource TextFillColorSecondaryBrush}" Margin="0,8,0,0" TextWrapping="Wrap" FontSize="12"/>
+                                    </StackPanel>
+
+                                    <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
+                                        <ItemsControl x:Name="AutoMatchList">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <ui:Card Margin="0,0,0,8">
+                                                        <Grid>
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition Width="Auto"/>
+                                                                <ColumnDefinition Width="*"/>
+                                                            </Grid.ColumnDefinitions>
+                                                            <CheckBox Grid.Column="0" IsChecked="{Binding IsSelected}" Margin="0,2,8,0" VerticalAlignment="Top"/>
+                                                            <StackPanel Grid.Column="1">
+                                                                <TextBlock Text="{Binding FileName}" FontWeight="SemiBold" FontSize="12" TextWrapping="Wrap"/>
+                                                                <TextBlock Text="{Binding Status}" FontSize="11" Foreground="{DynamicResource TextFillColorSecondaryBrush}" Margin="0,2,0,0"/>
+                                                                <TextBlock Text="{Binding ArtistDiff}" FontSize="11" TextWrapping="Wrap" Margin="0,6,0,0"/>
+                                                                <TextBlock Text="{Binding TitleDiff}" FontSize="11" TextWrapping="Wrap" Margin="0,2,0,0"/>
+                                                                <TextBlock Text="{Binding AlbumDiff}" FontSize="11" TextWrapping="Wrap" Margin="0,2,0,0"/>
+                                                                <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+                                                                    <TextBlock Text="{Binding CoverStatus, StringFormat=커버: {0}}" FontSize="11" Margin="0,0,12,0"/>
+                                                                    <TextBlock Text="{Binding LyricsStatus, StringFormat=가사: {0}}" FontSize="11"/>
+                                                                </StackPanel>
+                                                            </StackPanel>
+                                                        </Grid>
+                                                    </ui:Card>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </ScrollViewer>
+                                </Grid>
+                            </TabItem>
+
                             <TabItem Header="커버">
                                 <StackPanel Margin="16">
                                     <TextBlock x:Name="CoverSelectionInfo" Foreground="{DynamicResource TextFillColorSecondaryBrush}" Margin="0,0,0,12" TextWrapping="Wrap" Text="파일을 선택하면 커버를 확인하고 바꿀 수 있습니다."/>
