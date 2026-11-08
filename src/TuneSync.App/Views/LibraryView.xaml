@@ -23,7 +23,7 @@
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="230"/>
                 <ColumnDefinition Width="16"/>
-                <ColumnDefinition Width="*" MinWidth="660"/>
+                <ColumnDefinition Width="*" MinWidth="780"/>
             </Grid.ColumnDefinitions>
 
             <!-- Left: Explorer-style folder tree -->
@@ -79,23 +79,38 @@
 
                 <Grid Grid.Row="1">
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" MinWidth="320"/>
-                        <ColumnDefinition Width="16"/>
-                        <ColumnDefinition Width="320"/>
+                        <ColumnDefinition Width="*" MinWidth="450"/>
+                        <ColumnDefinition Width="8"/>
+                        <ColumnDefinition Width="300" MinWidth="260" MaxWidth="420"/>
                     </Grid.ColumnDefinitions>
 
                     <ui:Card Grid.Column="0" Padding="0">
                         <Grid>
                             <DataGrid x:Name="FileListGrid" AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False"
                                       SelectionMode="Extended" BorderThickness="0" Background="Transparent"
+                                      HorizontalScrollBarVisibility="Auto"
                                       SelectionChanged="FileList_SelectionChanged">
                                 <DataGrid.Columns>
-                                    <DataGridTextColumn Header="파일" Binding="{Binding FileName}" Width="2*"/>
-                                    <DataGridTextColumn Header="아티스트" Binding="{Binding Tags.Artist}" Width="1.1*"/>
-                                    <DataGridTextColumn Header="제목" Binding="{Binding Tags.Title}" Width="1.3*"/>
-                                    <DataGridTextColumn Header="앨범" Binding="{Binding Tags.Album}" Width="1.1*"/>
-                                    <DataGridTextColumn Header="커버" Binding="{Binding HasCoverLabel}" Width="60"/>
-                                    <DataGridTextColumn Header="가사" Binding="{Binding HasLyricsLabel}" Width="60"/>
+                                    <DataGridTextColumn Header="파일" Binding="{Binding FileName}" Width="220" MinWidth="160"/>
+                                    <DataGridTextColumn Header="아티스트" Binding="{Binding Tags.Artist}" Width="120" MinWidth="100"/>
+                                    <DataGridTextColumn Header="제목" Binding="{Binding Tags.Title}" Width="150" MinWidth="120"/>
+                                    <DataGridTextColumn Header="앨범" Binding="{Binding Tags.Album}" Width="150" MinWidth="120"/>
+                                    <DataGridTextColumn Header="커버" Binding="{Binding HasCoverMark}" Width="50" MinWidth="50">
+                                        <DataGridTextColumn.ElementStyle>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="HorizontalAlignment" Value="Center"/>
+                                                <Setter Property="TextAlignment" Value="Center"/>
+                                            </Style>
+                                        </DataGridTextColumn.ElementStyle>
+                                    </DataGridTextColumn>
+                                    <DataGridTextColumn Header="가사" Binding="{Binding HasLyricsMark}" Width="50" MinWidth="50">
+                                        <DataGridTextColumn.ElementStyle>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="HorizontalAlignment" Value="Center"/>
+                                                <Setter Property="TextAlignment" Value="Center"/>
+                                            </Style>
+                                        </DataGridTextColumn.ElementStyle>
+                                    </DataGridTextColumn>
                                 </DataGrid.Columns>
                             </DataGrid>
                             <ListBox x:Name="FileGridBox" Visibility="Collapsed" SelectionMode="Extended"
@@ -119,6 +134,9 @@
                             </ListBox>
                         </Grid>
                     </ui:Card>
+
+                    <GridSplitter Grid.Column="1" Width="8" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+                                  ResizeBehavior="PreviousAndNext" Background="{DynamicResource ControlFillColorDefaultBrush}" Cursor="SizeWE"/>
 
                     <!-- Selection-driven task panel -->
                     <ui:Card Grid.Column="2" Padding="0">

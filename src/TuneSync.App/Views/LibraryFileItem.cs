@@ -23,6 +23,7 @@ public sealed class LibraryFileItem(string path, TrackTags tags, byte[]? coverBy
             _coverBytes = value;
             OnChanged();
             OnChanged(nameof(HasCoverLabel));
+            OnChanged(nameof(HasCoverMark));
             OnChanged(nameof(Thumbnail));
         }
     }
@@ -36,6 +37,7 @@ public sealed class LibraryFileItem(string path, TrackTags tags, byte[]? coverBy
             _hasLyrics = value;
             OnChanged();
             OnChanged(nameof(HasLyricsLabel));
+            OnChanged(nameof(HasLyricsMark));
         }
     }
 
@@ -50,6 +52,11 @@ public sealed class LibraryFileItem(string path, TrackTags tags, byte[]? coverBy
 
     public string HasCoverLabel => CoverBytes is null ? "없음" : "있음";
     public string HasLyricsLabel => HasLyrics ? "있음" : "없음";
+
+    /// <summary>Compact checkmark for the narrow 커버/가사 list columns - full-width "있음"/"없음"
+    /// text was getting clipped there, so these columns show a glyph instead.</summary>
+    public string HasCoverMark => CoverBytes is null ? "✗" : "✓";
+    public string HasLyricsMark => HasLyrics ? "✓" : "✗";
 
     public BitmapImage? Thumbnail => ToBitmapImage(CoverBytes);
 
