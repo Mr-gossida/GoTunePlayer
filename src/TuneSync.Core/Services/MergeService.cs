@@ -1,161 +1,212 @@
 using System.Text;
-using System.Text.RegularExpressions;
 using TuneSync.Core.Models;
 
 namespace TuneSync.Core.Services;
 
 /// <summary>Builds a dry-run plan for folding one folder's tracks into another, flags duplicates
-/// by normalized artist+title, and only ever *moves* the losing side into a quarantine folder —
-/// never deletes — so a bad call is one drag-and-drop away from undone.</summary>
-public static partial class MergeService
+/// by normalized artist+title, and only ever *moves* the losing side into a quarantine folder -
+/// never deletes - so a bad call is one drag-and-drop away from undone.</summary>
+public static class MergeService
 {
-    [GeneratedRegex(@"^\[(?<artist>.+?)\]\s*(?<title>.+)$")]
-    private static partial Regex BracketPattern();
-
-    public static (string Artist, string Title)? ParseBracketName(string fileNameWithoutExt)
+    /// <summary>Pure analysis - reads tags and directory listings, touches no files. Call
+    /// <see cref="ExecutePlan"/> with the result to actually move anything.</summary>
+    public static List<MergeAction> BuildPlan(string sourceFolder, string targetFolder, MergeRuleSet rules)
     {
-        var m = BracketPattern().Match(fileNameWithoutExt);
-        if (!m.Success) return null;
-        return (m.Groups["artist"].Value.Trim(), m.Groups["title"].Value.Trim());
-    }
+        var targetIndex = BuildTargetIndex(targetFolder);
+        var plan = new List<MergeAction>();
 
-    public static string NormalizeKey(string artist, string title)
-    {
-        var combined = (artist + "|" + title).Normalize(NormalizationForm.FormKC).ToLowerInvariant();
-        var sb = new StringBuilder(combined.Length);
-        foreach (var ch in combined)
-            if (!char.IsWhiteSpace(ch) && "-_,.()[]!?&:;~'\"’‘“”·".IndexOf(ch) < 0)
-                sb.Append(ch);
-        return sb.ToString();
-    }
+        var sourceOption = rules.IncludeSubfolders ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
+        var sourceFiles = Directory.EnumerateFiles(sourceFolder, "*.*", sourceOption)
+            .Where(TagService.IsSupported);
 
-    private static (string Artist, string Title)? KeyOf(string path)
-    {
-        var stem = Path.GetFileNameWithoutExtension(path);
-        var parsed = ParseBracketName(stem);
-        if (parsed is not null) return parsed;
-        if (!TagService.IsSupported(path)) return null;
-        try
+        foreach (var sourcePath in sourceFiles)
         {
-            var tags = TagService.Read(path);
-            return string.IsNullOrWhiteSpace(tags.Artist) || string.IsNullOrWhiteSpace(tags.Title)
-                ? null
-                : (tags.Artist, tags.Title);
-        }
-        catch
-        {
-            return null;
-        }
-    }
+            var key = ResolveKey(sourcePath);
+            var stem = Path.GetFileNameWithoutExtension(sourcePath);
+            var lrcPath = Path.Combine(Path.GetDirectoryName(sourcePath)!, stem + ".lrc");
+            var lyricsPath = File.Exists(lrcPath) ? lrcPath : null;
+            var sourceSize = new FileInfo(sourcePath).Length;
+            var destFileName = Path.GetFileName(sourcePath);
 
-    public static List<MergePlanItem> BuildPlan(string sourceFolder, string destFolder, RenameRuleSet rules)
-    {
-        var destIndex = new Dictionary<string, string>(); // normkey -> dest file name (audio file, not lyrics)
-        foreach (var destPath in Directory.EnumerateFiles(destFolder))
-        {
-            if (!TagService.IsSupported(destPath)) continue;
-            var key = KeyOf(destPath);
-            if (key is null) continue;
-            var norm = NormalizeKey(key.Value.Artist, key.Value.Title);
-            destIndex.TryAdd(norm, Path.GetFileName(destPath));
-        }
-
-        var plan = new List<MergePlanItem>();
-        var audioBySourceStem = Directory.EnumerateFiles(sourceFolder)
-            .Where(TagService.IsSupported)
-            .ToList();
-
-        foreach (var srcPath in audioBySourceStem)
-        {
-            var key = KeyOf(srcPath);
-            if (key is null) continue;
-            var (artist, title) = key.Value;
-
-            var tags = SafeRead(srcPath) ?? new TrackTags { Path = srcPath, Artist = artist, Title = title };
-            var destFileName = RenameService.BuildFileName(tags, rules, isAlbumTrack: false) + Path.GetExtension(srcPath);
-
-            var stem = Path.GetFileNameWithoutExtension(srcPath);
-            var lrcPath = Path.Combine(sourceFolder, stem + ".lrc");
-            var lrcExists = System.IO.File.Exists(lrcPath);
-
-            var norm = NormalizeKey(artist, title);
-            if (destIndex.TryGetValue(norm, out var conflictName))
+            if (key is null || !targetIndex.TryGetValue(key, out var conflictPath))
             {
-                var conflictPath = Path.Combine(destFolder, conflictName);
-                var srcSize = new FileInfo(srcPath).Length;
-                var destSize = new FileInfo(conflictPath).Length;
-                var action = srcSize > destSize ? MergeAction.ReplaceExisting : MergeAction.KeepExisting;
-                plan.Add(new MergePlanItem
+                plan.Add(new MergeAction
                 {
-                    SourcePath = srcPath,
-                    SourceLrcPath = lrcExists ? lrcPath : null,
+                    SourcePath = sourcePath,
+                    SourceLyricsPath = lyricsPath,
                     DestFileName = destFileName,
-                    ConflictWithPath = conflictPath,
-                    Action = action,
-                    SourceSize = srcSize,
-                    ConflictSize = destSize,
+                    ActionType = MergeActionType.Move,
+                    Reason = key is null ? "태그/파일명에서 곡 정보를 읽지 못함 - 그대로 이동" : "대상에 동일한 곡 없음",
+                    SourceSize = sourceSize,
                 });
+                continue;
             }
-            else
-            {
-                plan.Add(new MergePlanItem
-                {
-                    SourcePath = srcPath,
-                    SourceLrcPath = lrcExists ? lrcPath : null,
-                    DestFileName = destFileName,
-                    Action = MergeAction.Copy,
-                    SourceSize = new FileInfo(srcPath).Length,
-                });
-            }
+
+            var conflictSize = new FileInfo(conflictPath).Length;
+            plan.Add(BuildConflictAction(rules, sourcePath, lyricsPath, destFileName, conflictPath, sourceSize, conflictSize));
         }
 
         return plan;
     }
 
-    private static TrackTags? SafeRead(string path)
+    private static MergeAction BuildConflictAction(
+        MergeRuleSet rules, string sourcePath, string? lyricsPath, string destFileName,
+        string conflictPath, long sourceSize, long conflictSize)
     {
-        try { return TagService.Read(path); } catch { return null; }
+        switch (rules.ConflictResolution)
+        {
+            case MergeConflictResolution.KeepSourceAlways:
+                return Conflict(MergeActionType.Replace, "규칙: 항상 소스 우선");
+
+            case MergeConflictResolution.KeepTargetAlways:
+                return Conflict(MergeActionType.Quarantine, "규칙: 항상 대상 우선");
+
+            case MergeConflictResolution.RenameWithSuffix:
+                return new MergeAction
+                {
+                    SourcePath = sourcePath,
+                    SourceLyricsPath = lyricsPath,
+                    DestFileName = MakeUniqueName(destFileName, conflictPath),
+                    ActionType = MergeActionType.RenameAndMove,
+                    Reason = "규칙: 동명 파일 모두 보존 (이름 변경)",
+                    ConflictWithPath = conflictPath,
+                    SourceSize = sourceSize,
+                    ConflictSize = conflictSize,
+                };
+
+            case MergeConflictResolution.KeepNewerFile:
+                var sourceIsNewer = File.GetLastWriteTimeUtc(sourcePath) > File.GetLastWriteTimeUtc(conflictPath);
+                return sourceIsNewer
+                    ? Conflict(MergeActionType.Replace, "규칙: 더 최신 파일 유지 (소스가 더 최신)")
+                    : Conflict(MergeActionType.Quarantine, "규칙: 더 최신 파일 유지 (대상이 더 최신)");
+
+            case MergeConflictResolution.KeepLargerFile:
+            default:
+                return sourceSize > conflictSize
+                    ? Conflict(MergeActionType.Replace, "규칙: 더 큰 파일 유지 (소스가 더 큼)")
+                    : Conflict(MergeActionType.Quarantine, "규칙: 더 큰 파일 유지 (대상이 더 크거나 같음)");
+        }
+
+        MergeAction Conflict(MergeActionType type, string reason) => new()
+        {
+            SourcePath = sourcePath,
+            SourceLyricsPath = lyricsPath,
+            DestFileName = destFileName,
+            ActionType = type,
+            Reason = reason,
+            ConflictWithPath = conflictPath,
+            SourceSize = sourceSize,
+            ConflictSize = conflictSize,
+        };
     }
 
-    /// <summary>Applies a plan built by <see cref="BuildPlan"/>. Every file that loses a duplicate
-    /// comparison is moved into <paramref name="quarantineFolder"/>, not deleted.</summary>
-    public static void Execute(IEnumerable<MergePlanItem> plan, string destFolder, string quarantineFolder)
+    /// <summary>Applies a plan built by <see cref="BuildPlan"/>. Every file on the losing side of
+    /// a conflict is moved into <paramref name="quarantineFolder"/>, never deleted. Returns a
+    /// manifest of every move actually made, so a run can be reviewed or manually reversed.</summary>
+    public static List<(string From, string To)> ExecutePlan(
+        List<MergeAction> plan, string targetFolder, string quarantineFolder)
     {
         Directory.CreateDirectory(quarantineFolder);
+        var manifest = new List<(string From, string To)>();
 
-        foreach (var item in plan)
+        foreach (var action in plan)
         {
-            switch (item.Action)
+            switch (action.ActionType)
             {
-                case MergeAction.Copy:
-                    MoveInto(item.SourcePath, Path.Combine(destFolder, item.DestFileName));
-                    if (item.SourceLrcPath is not null)
-                        MoveInto(item.SourceLrcPath, Path.Combine(destFolder, Path.GetFileNameWithoutExtension(item.DestFileName) + ".lrc"));
+                case MergeActionType.Move:
+                case MergeActionType.RenameAndMove:
+                    MoveTracked(action.SourcePath, Path.Combine(targetFolder, action.DestFileName), manifest);
+                    MoveSidecar(action, targetFolder, manifest);
                     break;
 
-                case MergeAction.ReplaceExisting:
-                    var conflictLrc = Path.ChangeExtension(item.ConflictWithPath!, ".lrc");
-                    MoveInto(item.ConflictWithPath!, Path.Combine(quarantineFolder, Path.GetFileName(item.ConflictWithPath!)));
-                    if (System.IO.File.Exists(conflictLrc))
-                        MoveInto(conflictLrc, Path.Combine(quarantineFolder, Path.GetFileName(conflictLrc)));
-                    MoveInto(item.SourcePath, Path.Combine(destFolder, item.DestFileName));
-                    if (item.SourceLrcPath is not null)
-                        MoveInto(item.SourceLrcPath, Path.Combine(destFolder, Path.GetFileNameWithoutExtension(item.DestFileName) + ".lrc"));
+                case MergeActionType.Replace:
+                    var conflictLrc = Path.ChangeExtension(action.ConflictWithPath!, ".lrc");
+                    MoveTracked(action.ConflictWithPath!, Path.Combine(quarantineFolder, Path.GetFileName(action.ConflictWithPath!)), manifest);
+                    if (File.Exists(conflictLrc))
+                        MoveTracked(conflictLrc, Path.Combine(quarantineFolder, Path.GetFileName(conflictLrc)), manifest);
+                    MoveTracked(action.SourcePath, Path.Combine(targetFolder, action.DestFileName), manifest);
+                    MoveSidecar(action, targetFolder, manifest);
                     break;
 
-                case MergeAction.KeepExisting:
-                    MoveInto(item.SourcePath, Path.Combine(quarantineFolder, Path.GetFileName(item.SourcePath)));
-                    if (item.SourceLrcPath is not null)
-                        MoveInto(item.SourceLrcPath, Path.Combine(quarantineFolder, Path.GetFileName(item.SourceLrcPath)));
+                case MergeActionType.Quarantine:
+                    MoveTracked(action.SourcePath, Path.Combine(quarantineFolder, Path.GetFileName(action.SourcePath)), manifest);
+                    if (action.SourceLyricsPath is not null)
+                        MoveTracked(action.SourceLyricsPath, Path.Combine(quarantineFolder, Path.GetFileName(action.SourceLyricsPath)), manifest);
                     break;
             }
         }
+
+        return manifest;
     }
 
-    private static void MoveInto(string sourcePath, string destPath)
+    private static void MoveSidecar(MergeAction action, string targetFolder, List<(string, string)> manifest)
     {
-        if (!System.IO.File.Exists(sourcePath)) return;
+        if (action.SourceLyricsPath is null) return;
+        var destLrc = Path.Combine(targetFolder, Path.GetFileNameWithoutExtension(action.DestFileName) + ".lrc");
+        MoveTracked(action.SourceLyricsPath, destLrc, manifest);
+    }
+
+    private static void MoveTracked(string sourcePath, string destPath, List<(string From, string To)> manifest)
+    {
+        if (!File.Exists(sourcePath)) return;
         Directory.CreateDirectory(Path.GetDirectoryName(destPath)!);
-        System.IO.File.Move(sourcePath, destPath, overwrite: false);
+        File.Move(sourcePath, destPath, overwrite: false);
+        manifest.Add((sourcePath, destPath));
+    }
+
+    private static string MakeUniqueName(string fileName, string existingPath)
+    {
+        var dir = Path.GetDirectoryName(existingPath)!;
+        var stem = Path.GetFileNameWithoutExtension(fileName);
+        var ext = Path.GetExtension(fileName);
+
+        for (var n = 2; ; n++)
+        {
+            var candidate = $"{stem} ({n}){ext}";
+            if (!File.Exists(Path.Combine(dir, candidate))) return candidate;
+        }
+    }
+
+    private static Dictionary<string, string> BuildTargetIndex(string targetFolder)
+    {
+        var index = new Dictionary<string, string>();
+        if (!Directory.Exists(targetFolder)) return index;
+
+        foreach (var path in Directory.EnumerateFiles(targetFolder).Where(TagService.IsSupported))
+        {
+            var key = ResolveKey(path);
+            if (key is not null) index.TryAdd(key, path);
+        }
+        return index;
+    }
+
+    private static string? ResolveKey(string path)
+    {
+        var stem = Path.GetFileNameWithoutExtension(path);
+
+        try
+        {
+            var tags = TagService.Read(path);
+            if (!string.IsNullOrWhiteSpace(tags.Artist) && !string.IsNullOrWhiteSpace(tags.Title))
+                return NormalizeKey(tags.Artist, tags.Title);
+        }
+        catch
+        {
+            // unreadable tags - fall through to filename parsing
+        }
+
+        var parsed = FilenameParser.Parse(stem);
+        return parsed is null ? null : NormalizeKey(parsed.Value.Artist, parsed.Value.Title);
+    }
+
+    private static string NormalizeKey(string artist, string title)
+    {
+        var combined = (artist + "|" + title).Normalize(NormalizationForm.FormKC).ToLowerInvariant();
+        var sb = new StringBuilder(combined.Length);
+        const string ignoredPunctuation = "-_,.()[]!?&:;~'\"’‘“”·";
+        foreach (var ch in combined)
+            if (!char.IsWhiteSpace(ch) && ignoredPunctuation.IndexOf(ch) < 0)
+                sb.Append(ch);
+        return sb.ToString();
     }
 }

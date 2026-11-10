@@ -1,18 +1,17 @@
 using System.Net.Http.Json;
-using System.Text.Json;
 using System.Text.Json.Serialization;
 using TuneSync.Core.Models;
 
 namespace TuneSync.Core.Services;
 
-/// <summary>Looks up lyrics on LRCLIB only (open-licensed), never Melon/Bugs/Genius — see the
-/// project's lyrics-sourcing rule this app grew out of. A search match is only trusted when the
-/// returned artist plausibly matches ours; otherwise it's reported as "not found" rather than guessed.</summary>
-public sealed class LyricsService : IDisposable
+/// <summary>Looks up lyrics on LRCLIB only (open-licensed, no paywalled/ToS-restricted
+/// providers). A search match is only trusted when the returned artist plausibly matches ours;
+/// otherwise it's reported as "not found" rather than guessed.</summary>
+public sealed class LrcLibLyricsService : ILyricsService, IDisposable
 {
     private readonly HttpClient _http = new() { BaseAddress = new Uri("https://lrclib.net/api/") };
 
-    public LyricsService()
+    public LrcLibLyricsService()
     {
         _http.DefaultRequestHeaders.UserAgent.ParseAdd("TuneSync/0.1 (+https://github.com/)");
     }
@@ -22,7 +21,8 @@ public sealed class LyricsService : IDisposable
         var direct = await TryGetAsync(artist, title, ct);
         if (direct is not null) return direct;
 
-        // Retry with a parenthetical feat./with clause stripped, per the project's search-tip rule.
+        // Retry with a parenthetical feat./with clause stripped - a common reason an exact-match
+        // lookup misses even though the song is on LRCLIB under its bare title.
         var strippedTitle = StripFeature(title);
         if (strippedTitle != title)
         {
@@ -43,7 +43,7 @@ public sealed class LyricsService : IDisposable
             var dto = await resp.Content.ReadFromJsonAsync<LrcLibTrack>(cancellationToken: ct);
             return dto is null ? null : ToResult(dto);
         }
-        catch
+        catch (Exception) when (ct.IsCancellationRequested == false)
         {
             return null;
         }
@@ -64,7 +64,7 @@ public sealed class LyricsService : IDisposable
                 ?? results.FirstOrDefault(r => Normalize(r.ArtistName).Contains(normArtist) || normArtist.Contains(Normalize(r.ArtistName)));
             return match is null ? null : ToResult(match);
         }
-        catch
+        catch (Exception) when (ct.IsCancellationRequested == false)
         {
             return null;
         }
@@ -78,7 +78,7 @@ public sealed class LyricsService : IDisposable
     }
 
     private static string Normalize(string s) =>
-        new string(s.ToLowerInvariant().Where(char.IsLetterOrDigit).ToArray());
+        new([.. s.ToLowerInvariant().Where(char.IsLetterOrDigit)]);
 
     private static LyricsResult ToResult(LrcLibTrack dto) => new()
     {

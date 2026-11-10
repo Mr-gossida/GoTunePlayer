@@ -12,3 +12,6 @@ obj/
 *.dll
 *.exe
 *.pdb
+
+## Local app data samples
+*.local.json

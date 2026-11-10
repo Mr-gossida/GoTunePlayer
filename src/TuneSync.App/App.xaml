@@ -9,17 +9,6 @@
                 <ui:ThemesDictionary Theme="Light" />
                 <ui:ControlsDictionary />
             </ResourceDictionary.MergedDictionaries>
-
-            <!--
-                WPF-UI's own DataGrid.xaml wires DataGridColumnHeader's Background/Padding/sort-icon
-                but never sets a Foreground, relying on inheritance from the DataGrid. That inheritance
-                doesn't reliably reach the auto-generated header ContentPresenter, so headers were
-                rendering in a low-contrast default color against the dark theme instead of theme text.
-                Override explicitly so every DataGrid's column headers are always readable.
-            -->
-            <Style x:Key="{x:Type DataGridColumnHeader}" TargetType="DataGridColumnHeader" BasedOn="{StaticResource DefaultDataGridColumnHeaderStyle}">
-                <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}"/>
-            </Style>
         </ResourceDictionary>
     </Application.Resources>
 </Application>

@@ -4,20 +4,19 @@ using TuneSync.Core.Models;
 
 namespace TuneSync.Core.Services;
 
-/// <summary>Looks up canonical tag data on MusicBrainz and cover art on the companion Cover
-/// Art Archive (both free, open, public APIs - no key required). MusicBrainz's usage policy
-/// requires a descriptive User-Agent and caps anonymous callers at roughly one request per
-/// second; both are enforced here so the app never risks getting the caller's IP rate-limited
-/// or blocked. See https://musicbrainz.org/doc/MusicBrainz_API/Rate_Limiting.</summary>
-public sealed class MusicBrainzService : IDisposable
+/// <summary>Looks up canonical tag data on MusicBrainz and cover art on the companion Cover Art
+/// Archive (both free, open, public APIs - no key required). MusicBrainz's usage policy requires
+/// a descriptive User-Agent and caps anonymous callers at roughly one request per second; both
+/// are enforced here so the app never risks the caller's IP getting rate-limited or blocked.
+/// See https://musicbrainz.org/doc/MusicBrainz_API/Rate_Limiting.</summary>
+public sealed class MusicBrainzService : IMusicBrainzService, IDisposable
 {
     private const string UserAgentString = "TuneSync/0.1 (+https://github.com/)";
     private static readonly TimeSpan MinRequestInterval = TimeSpan.FromMilliseconds(1100);
 
     private readonly HttpClient _mbHttp;
     private readonly HttpClient _caaHttp;
-    private readonly SemaphoreSlim _rateLimitGate = new(1, 1);
-    private DateTime _lastRequestUtc = DateTime.MinValue;
+    private readonly RateLimiter _rateLimiter = new(MinRequestInterval);
 
     public MusicBrainzService()
     {
@@ -30,8 +29,8 @@ public sealed class MusicBrainzService : IDisposable
     }
 
     /// <summary>Searches MusicBrainz recordings for the given artist/title and returns the
-    /// best-scoring hit that carries a usable release MBID, or null if nothing plausible
-    /// matched (caller should treat that file as "매칭 실패" and leave it to manual editing).</summary>
+    /// best-scoring hit that carries a usable release MBID, or null if nothing plausible matched
+    /// (caller should treat that file as "매칭 실패" and leave it to manual editing).</summary>
     public async Task<MusicBrainzMatch?> FindAsync(string artist, string title, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(artist) || string.IsNullOrWhiteSpace(title))
@@ -48,7 +47,7 @@ public sealed class MusicBrainzService : IDisposable
             var json = await resp.Content.ReadAsStringAsync(ct);
             root = JsonNode.Parse(json);
         }
-        catch
+        catch (Exception) when (ct.IsCancellationRequested == false)
         {
             return null;
         }
@@ -56,12 +55,12 @@ public sealed class MusicBrainzService : IDisposable
         var recordings = root?["recordings"]?.AsArray();
         if (recordings is null || recordings.Count == 0) return null;
 
-        // MusicBrainz treats a studio recording and a live/session recording of the same song
-        // as different recording entities, each scored independently - the top-scored one isn't
-        // necessarily the studio version, and its own release list won't include the studio
-        // album at all. So: scan every plausible recording (score >= 50) and prefer whichever
-        // one has an official studio-album release; only fall back to the first valid release
-        // of the first valid recording if nothing in the whole candidate set qualifies.
+        // MusicBrainz treats a studio recording and a live/session recording of the same song as
+        // different recording entities, each scored independently - the top-scored one isn't
+        // necessarily the studio version, and its own release list won't include the studio album
+        // at all. So: scan every plausible recording (score >= 50) and prefer whichever one has an
+        // official studio-album release; only fall back to the first valid release of the first
+        // valid recording if nothing in the whole candidate set qualifies.
         MusicBrainzMatch? fallback = null;
         foreach (var rec in recordings)
         {
@@ -130,9 +129,9 @@ public sealed class MusicBrainzService : IDisposable
         }
     }
 
-    /// <summary>Downloads front cover art for a release from the Cover Art Archive.
-    /// Returns null if that release has no art on file there (common for obscure releases -
-    /// not an error, just nothing to apply).</summary>
+    /// <summary>Downloads front cover art for a release from the Cover Art Archive. Returns null
+    /// if that release has no art on file there (common for obscure releases - not an error, just
+    /// nothing to apply).</summary>
     public async Task<byte[]?> GetCoverAsync(string releaseMbid, CancellationToken ct = default)
     {
         try
@@ -141,7 +140,7 @@ public sealed class MusicBrainzService : IDisposable
             if (!resp.IsSuccessStatusCode) return null;
             return await resp.Content.ReadAsByteArrayAsync(ct);
         }
-        catch
+        catch (Exception) when (ct.IsCancellationRequested == false)
         {
             return null;
         }
@@ -149,33 +148,17 @@ public sealed class MusicBrainzService : IDisposable
 
     private async Task<HttpResponseMessage> RateLimitedGetAsync(string url, CancellationToken ct)
     {
-        await _rateLimitGate.WaitAsync(ct);
-        try
-        {
-            var elapsed = DateTime.UtcNow - _lastRequestUtc;
-            if (elapsed < MinRequestInterval)
-                await Task.Delay(MinRequestInterval - elapsed, ct);
-
-            var response = await _mbHttp.GetAsync(url, ct);
-            _lastRequestUtc = DateTime.UtcNow;
-            return response;
-        }
-        finally
-        {
-            _rateLimitGate.Release();
-        }
+        await _rateLimiter.WaitAsync(ct);
+        return await _mbHttp.GetAsync(url, ct);
     }
 
-    private static string EscapeLucene(string value)
-    {
+    private static string EscapeLucene(string value) =>
         // MusicBrainz search uses Lucene query syntax; quotes inside a quoted phrase must be escaped.
-        return value.Replace("\\", "\\\\").Replace("\"", "\\\"");
-    }
+        value.Replace("\\", "\\\\").Replace("\"", "\\\"");
 
     public void Dispose()
     {
         _mbHttp.Dispose();
         _caaHttp.Dispose();
-        _rateLimitGate.Dispose();
     }
 }

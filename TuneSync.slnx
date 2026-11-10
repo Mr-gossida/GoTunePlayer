@@ -3,4 +3,7 @@
     <Project Path="src/TuneSync.App/TuneSync.App.csproj" />
     <Project Path="src/TuneSync.Core/TuneSync.Core.csproj" />
   </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/TuneSync.Core.Tests/TuneSync.Core.Tests.csproj" />
+  </Folder>
 </Solution>

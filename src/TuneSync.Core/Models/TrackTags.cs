@@ -1,5 +1,7 @@
 namespace TuneSync.Core.Models;
 
+/// <summary>The text tags every TuneSync feature (library view, auto-fill, rename, merge) keys
+/// off. A plain data holder — <see cref="Services.TagService"/> is what maps it on/off disk.</summary>
 public sealed class TrackTags
 {
     public required string Path { get; init; }
@@ -11,6 +13,7 @@ public sealed class TrackTags
     public string Genre { get; set; } = "";
     public uint Track { get; set; }
     public uint Disc { get; set; }
+    public uint Year { get; set; }
 
     public TrackTags Clone() => new()
     {
@@ -23,5 +26,6 @@ public sealed class TrackTags
         Genre = Genre,
         Track = Track,
         Disc = Disc,
+        Year = Year,
     };
 }

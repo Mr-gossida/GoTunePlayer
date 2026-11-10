@@ -6,8 +6,9 @@ using TagLib;
 namespace TuneSync.Core.Services;
 
 /// <summary>Reads/writes embedded front-cover art and compares covers the way a human would:
-/// same-image-different-scan vs. genuinely-different-picture, not just "does a picture exist".</summary>
-public static class CoverService
+/// same-image-different-scan vs. genuinely-different-picture, not just "does a picture exist".
+/// Windows-only (System.Drawing/GDI+) - fine here since TuneSync only ships as a WPF app.</summary>
+public static class CoverArtService
 {
     public static byte[]? GetCover(string path)
     {
@@ -27,6 +28,29 @@ public static class CoverService
         };
         file.Tag.Pictures = [picture];
         file.Save();
+    }
+
+    public static BitmapImageBytes? GetThumbnail(byte[]? imageBytes, int size = 160)
+    {
+        if (imageBytes is null || imageBytes.Length == 0) return null;
+        try
+        {
+            using var ms = new MemoryStream(imageBytes);
+            using var src = Image.FromStream(ms);
+            using var thumb = new Bitmap(size, size, PixelFormat.Format24bppRgb);
+            using (var g = Graphics.FromImage(thumb))
+            {
+                g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
+                g.DrawImage(src, 0, 0, size, size);
+            }
+            using var outMs = new MemoryStream();
+            thumb.Save(outMs, ImageFormat.Jpeg);
+            return new BitmapImageBytes(outMs.ToArray());
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     /// <summary>16x16 grayscale perceptual-ish hash: re-encodes/re-scans of the same art collapse
@@ -59,8 +83,7 @@ public static class CoverService
     }
 
     /// <summary>Mean absolute per-channel difference on a 24x24 RGB downscale. Empirically:
-    /// ~0.1-1.1 = same picture (different scan/compression), ~100 = a genuinely different picture.
-    /// Mirrors the library's own triage metric so results stay comparable across tools.</summary>
+    /// ~0.1-1.1 = same picture (different scan/compression), ~100 = a genuinely different picture.</summary>
     public static double? CompareVisualDifference(byte[]? a, byte[]? b)
     {
         if (a is null || b is null) return null;
@@ -95,4 +118,11 @@ public static class CoverService
         g.DrawImage(src, 0, 0, 24, 24);
         return thumb;
     }
+}
+
+/// <summary>A re-encoded (JPEG) thumbnail's raw bytes, kept format-agnostic so the WPF layer can
+/// turn it into a BitmapImage without TuneSync.Core taking a WPF dependency.</summary>
+public sealed class BitmapImageBytes(byte[] jpegBytes)
+{
+    public byte[] JpegBytes { get; } = jpegBytes;
 }

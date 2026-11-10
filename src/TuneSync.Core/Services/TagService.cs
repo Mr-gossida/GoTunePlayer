@@ -2,14 +2,14 @@ using TuneSync.Core.Models;
 
 namespace TuneSync.Core.Services;
 
-/// <summary>Reads and writes the text tags every other TuneSync feature (rename, merge-dedupe,
-/// lyrics) keys off. Backed by TagLib#, so it understands mp3/flac/m4a transparently.</summary>
+/// <summary>Reads and writes the text tags and lyrics every other TuneSync feature keys off.
+/// Backed by TagLib#, so it understands mp3/flac/m4a (and, incidentally, ogg/wma/wav) transparently.</summary>
 public static class TagService
 {
-    public static readonly string[] SupportedExtensions = [".mp3", ".flac", ".m4a"];
+    public static readonly string[] SupportedExtensions = [".mp3", ".flac", ".m4a", ".ogg", ".wma", ".wav"];
 
     public static bool IsSupported(string path) =>
-        Array.IndexOf(SupportedExtensions, System.IO.Path.GetExtension(path).ToLowerInvariant()) >= 0;
+        Array.IndexOf(SupportedExtensions, Path.GetExtension(path).ToLowerInvariant()) >= 0;
 
     public static TrackTags Read(string path)
     {
@@ -26,6 +26,7 @@ public static class TagService
             Genre = t.FirstGenre ?? "",
             Track = t.Track,
             Disc = t.Disc,
+            Year = t.Year,
         };
     }
 
@@ -34,24 +35,26 @@ public static class TagService
         using var file = TagLib.File.Create(tags.Path);
         var t = file.Tag;
         t.Title = tags.Title;
-        t.Performers = [tags.Artist];
-        t.AlbumArtists = [tags.AlbumArtist];
+        t.Performers = string.IsNullOrEmpty(tags.Artist) ? [] : [tags.Artist];
+        t.AlbumArtists = string.IsNullOrEmpty(tags.AlbumArtist) ? [] : [tags.AlbumArtist];
         t.Album = tags.Album;
         t.Composers = string.IsNullOrEmpty(tags.Composer) ? [] : [tags.Composer];
         t.Genres = string.IsNullOrEmpty(tags.Genre) ? [] : [tags.Genre];
         t.Track = tags.Track;
         t.Disc = tags.Disc;
+        t.Year = tags.Year;
         file.Save();
     }
 
     public static string? ReadLyrics(string path)
     {
         using var file = TagLib.File.Create(path);
-        return file.Tag.Lyrics;
+        var lyrics = file.Tag.Lyrics;
+        return string.IsNullOrEmpty(lyrics) ? null : lyrics;
     }
 
     /// <summary>TagLib's Lyrics property maps to the right native field per format on its own:
-    /// ID3 USLT for mp3, the LYRICS Vorbis comment for flac, the ©lyr atom for m4a.</summary>
+    /// ID3 USLT for mp3, the LYRICS Vorbis comment for flac, the (c)lyr atom for m4a.</summary>
     public static void WriteLyrics(string path, string lyrics)
     {
         using var file = TagLib.File.Create(path);

@@ -1,0 +1,83 @@
+﻿<Page x:Class="TuneSync.App.Views.RenameView"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+      xmlns:vm="clr-namespace:TuneSync.App.ViewModels"
+      xmlns:conv="clr-namespace:TuneSync.App.Converters"
+      d:DataContext="{d:DesignInstance Type=vm:RenameViewModel}"
+      xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+      mc:Ignorable="d"
+      xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+      Title="이름 변경">
+    <Page.Resources>
+        <conv:InverseBooleanConverter x:Key="InverseBooleanConverter"/>
+    </Page.Resources>
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <StackPanel Grid.Row="0" Margin="0,0,0,8">
+            <ui:TextBlock Text="이름 변경" FontTypography="TitleLarge"/>
+            <ui:TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" Margin="0,4,0,0"
+                          Text="태그 값을 기반으로 파일명을 바꿉니다. {Artist} {AlbumArtist} {Title} {Album} {Track} {Disc} {Year} 토큰을 사용할 수 있습니다."/>
+        </StackPanel>
+
+        <StackPanel Grid.Row="1" Margin="0,8,0,12">
+            <Grid Margin="0,0,0,8">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                    <ui:TextBlock FontTypography="BodyStrong" Text="대상 폴더"/>
+                    <ui:TextBlock Text="{Binding FolderPath, TargetNullValue='선택되지 않음'}" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                </StackPanel>
+                <ui:Button Grid.Column="1" Content="폴더 선택" Icon="{ui:SymbolIcon FolderOpen24}" Command="{Binding BrowseFolderCommand}"/>
+            </Grid>
+
+            <CheckBox Content="하위 폴더 포함" IsChecked="{Binding IncludeSubfolders}" Margin="0,0,0,8"/>
+
+            <RadioButton GroupName="RenameModeGroup" Content="싱글 (앨범 아님)" IsChecked="{Binding IsAlbumMode, Converter={StaticResource InverseBooleanConverter}, Mode=TwoWay}" Margin="0,0,0,4"/>
+            <Grid Margin="20,0,0,8">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <ui:TextBlock Grid.Column="0" Text="패턴:" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                <TextBox Grid.Column="1" Text="{Binding SingleTrackPattern, UpdateSourceTrigger=PropertyChanged}"/>
+            </Grid>
+
+            <RadioButton GroupName="RenameModeGroup" Content="앨범 트랙 (트랙 번호 포함)" IsChecked="{Binding IsAlbumMode}" Margin="0,0,0,4"/>
+            <Grid Margin="20,0,0,8">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <ui:TextBlock Grid.Column="0" Text="패턴:" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                <TextBox Grid.Column="1" Text="{Binding AlbumTrackPattern, UpdateSourceTrigger=PropertyChanged}"/>
+            </Grid>
+
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                <ui:Button Content="미리보기" Icon="{ui:SymbolIcon Eye24}" Command="{Binding BuildPreviewCommand}" Margin="0,0,8,0"/>
+                <ui:Button Content="적용" Icon="{ui:SymbolIcon Checkmark24}" Appearance="Primary"
+                           Command="{Binding ExecuteCommand}" IsEnabled="{Binding IsPreviewReady}"/>
+            </StackPanel>
+        </StackPanel>
+
+        <DataGrid Grid.Row="2" ItemsSource="{Binding Preview}" AutoGenerateColumns="False"
+                  IsReadOnly="True" GridLinesVisibility="Horizontal">
+            <DataGrid.Columns>
+                <DataGridTextColumn Header="기존 파일명" Binding="{Binding OldFileName}" Width="280"/>
+                <DataGridTextColumn Header="새 파일명" Binding="{Binding NewFileName}" Width="280"/>
+                <DataGridTextColumn Header="상태" Binding="{Binding Status}" Width="*"/>
+            </DataGrid.Columns>
+        </DataGrid>
+
+        <ui:TextBlock Grid.Row="3" Text="{Binding StatusText}" Margin="0,8,0,0" TextWrapping="Wrap"
+                      Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+    </Grid>
+</Page>
