@@ -49,12 +49,9 @@ public partial class MiniPlayerWindow : FluentWindow
         var vertical = mode == PlayerMode.MiniVertical;
         HorizontalLayout.Visibility = vertical ? Visibility.Collapsed : Visibility.Visible;
         VerticalLayout.Visibility = vertical ? Visibility.Visible : Visibility.Collapsed;
-        Width = vertical ? CardWidth : StripWidth;
-        // The card's height follows its content (lyrics shown or not, queue folded out or not).
-        SizeToContent = vertical ? SizeToContent.Height : SizeToContent.Manual;
-        if (!vertical) Height = StripHeight;
 
         var saved = vertical ? _settings.MiniVertical : _settings.MiniHorizontal;
+        ApplySizing(saved);
         var area = SystemParameters.WorkArea;
         var left = saved?.Left ?? area.Right - Width - 24;
         var top = saved?.Top ?? area.Bottom - (vertical ? CardHeight : StripHeight) - 24;
@@ -70,9 +67,82 @@ public partial class MiniPlayerWindow : FluentWindow
         Top = top;
     }
 
+    // --- resizing: each mini player has its own limits and remembers its size ---
+
+    private const double StripMinWidth = 420, StripMaxWidth = 1000;
+    private const double CardMinWidth = 280, CardMaxWidth = 520;
+    private const double QueueMinHeight = 140;
+    private bool _applyingSize;
+
+    /// <summary>The strip: width only. The card: width (the cover scales with it); its height
+    /// follows the content while the queue is folded, and can be dragged freely while it's out
+    /// (the queue takes the extra room).</summary>
+    private void ApplySizing(WindowPlacement? saved = null)
+    {
+        _applyingSize = true;
+        try
+        {
+            if (_mode != PlayerMode.MiniVertical)
+            {
+                SizeToContent = SizeToContent.Manual;
+                MinWidth = StripMinWidth;
+                MaxWidth = StripMaxWidth;
+                MinHeight = MaxHeight = StripHeight;
+                Width = Math.Clamp(saved?.Width is > 0 and var w ? w : Width is > 0 and not double.NaN ? Width : StripWidth, StripMinWidth, StripMaxWidth);
+                Height = StripHeight;
+                return;
+            }
+
+            MinWidth = CardMinWidth;
+            MaxWidth = CardMaxWidth;
+            if (saved?.Width is > 0) Width = Math.Clamp(saved.Width, CardMinWidth, CardMaxWidth);
+            else if (double.IsNaN(Width) || Width < CardMinWidth || Width > CardMaxWidth) Width = CardWidth;
+
+            MinHeight = 0;
+            MaxHeight = SystemParameters.WorkArea.Height; // never taller than the screen
+            SizeToContent = SizeToContent.Height;
+            if (!_playback.IsMiniQueueExpanded) return;
+
+            // Queue out: start from the content's height with the queue at its minimum, then let
+            // the user (or the last saved size) decide how much taller it gets.
+            UpdateLayout();
+            var shortest = ActualHeight;
+            SizeToContent = SizeToContent.Manual;
+            MinHeight = Math.Min(shortest, MaxHeight);
+            var wanted = _settings.MiniVerticalQueueHeight > shortest ? _settings.MiniVerticalQueueHeight : shortest + 180;
+            Height = Math.Min(wanted, MaxHeight);
+        }
+        finally
+        {
+            _applyingSize = false;
+        }
+    }
+
+    protected override void OnRenderSizeChanged(SizeChangedInfo info)
+    {
+        base.OnRenderSizeChanged(info);
+        if (_applyingSize || !IsVisible || _mode != PlayerMode.MiniVertical) return;
+
+        if (!_playback.IsMiniQueueExpanded)
+        {
+            // Folded queue: the height always fits the content (a drag on the bottom edge
+            // springs back).
+            if (SizeToContent != SizeToContent.Height)
+                Dispatcher.BeginInvoke(() => ApplySizing(), System.Windows.Threading.DispatcherPriority.Loaded);
+            return;
+        }
+        // Wider card = bigger cover: keep room for at least the queue's minimum height.
+        if (MiniQueue.ActualHeight > 0)
+            MinHeight = Math.Clamp(ActualHeight - MiniQueue.ActualHeight + QueueMinHeight, 0, MaxHeight);
+        KeepOnScreen();
+        RememberPositionSoon();
+    }
+
     private void RememberPosition()
     {
-        var placement = new WindowPlacement { Left = Left, Top = Top, Width = Width, Height = Height };
+        if (_mode == PlayerMode.MiniVertical && _playback.IsMiniQueueExpanded && SizeToContent == SizeToContent.Manual)
+            _settings.MiniVerticalQueueHeight = ActualHeight;
+        var placement = new WindowPlacement { Left = Left, Top = Top, Width = ActualWidth > 0 ? ActualWidth : Width, Height = Height };
         if (_mode == PlayerMode.MiniVertical) _settings.MiniVertical = placement;
         else _settings.MiniHorizontal = placement;
         AppSettingsStore.Save(_settings);
@@ -128,6 +198,16 @@ public partial class MiniPlayerWindow : FluentWindow
     {
         if (e.PropertyName is nameof(PlaybackViewModel.CurrentFile) or nameof(PlaybackViewModel.IsMiniQueueExpanded))
             ScrollQueueToCurrent();
+        if (e.PropertyName == nameof(PlaybackViewModel.IsMiniQueueExpanded) && _mode == PlayerMode.MiniVertical)
+        {
+            if (!_playback.IsMiniQueueExpanded && SizeToContent == SizeToContent.Manual)
+                _settings.MiniVerticalQueueHeight = ActualHeight; // remember how tall it was
+            Dispatcher.BeginInvoke(() =>
+            {
+                ApplySizing();
+                KeepOnScreen();
+            }, System.Windows.Threading.DispatcherPriority.Loaded);
+        }
     }
 
     /// <summary>Folding the queue out grows the window downward; if that would run off the

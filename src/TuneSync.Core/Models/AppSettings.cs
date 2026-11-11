@@ -50,9 +50,12 @@ public sealed class AppSettings
     /// <summary>The vertical mini player's fold-out queue is open.</summary>
     public bool MiniQueueExpanded { get; set; }
 
-    /// <summary>Last spot of each mini player (only Left/Top are used).</summary>
+    /// <summary>Last spot and width of each mini player.</summary>
     public WindowPlacement? MiniHorizontal { get; set; }
     public WindowPlacement? MiniVertical { get; set; }
+
+    /// <summary>How tall the vertical mini player was dragged with its queue out (0 = default).</summary>
+    public double MiniVerticalQueueHeight { get; set; }
 
     /// <summary>The song loaded when the app was last closed, and how far into it - the app
     /// reopens on it, paused at that spot.</summary>

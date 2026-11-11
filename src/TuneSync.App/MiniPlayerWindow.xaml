@@ -8,7 +8,7 @@
         xmlns:sys="clr-namespace:System;assembly=System.Runtime"
         Title="TuneSync 미니 플레이어"
         Icon="pack://application:,,,/Assets/TuneSync.ico"
-        Width="500" Height="104" MinWidth="0" MinHeight="0" ResizeMode="NoResize" SizeToContent="Manual"
+        Width="500" Height="104" MinWidth="0" MinHeight="0" ResizeMode="CanResize" SizeToContent="Manual"
         WindowStartupLocation="Manual"
         ExtendsContentIntoTitleBar="True"
         WindowBackdropType="None"
@@ -141,7 +141,8 @@
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="Auto"/>
-                <RowDefinition Height="Auto"/>
+                <!-- The fold-out queue takes whatever height the card is dragged to. -->
+                <RowDefinition Height="*"/>
             </Grid.RowDefinitions>
 
             <StackPanel Grid.Row="0" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,0,-8,6">
@@ -272,7 +273,7 @@
                 </Grid>
             </ui:Button>
 
-            <ListBox x:Name="MiniQueue" Grid.Row="7" Height="320" Margin="-6,6,-6,0"
+            <ListBox x:Name="MiniQueue" Grid.Row="7" MinHeight="140" Margin="-6,6,-6,0"
                      ItemsSource="{Binding Library.PlaylistView}"
                      BorderThickness="0" Background="Transparent" FocusVisualStyle="{x:Null}"
                      ScrollViewer.VerticalScrollBarVisibility="Auto" ScrollViewer.HorizontalScrollBarVisibility="Disabled"
