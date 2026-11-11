@@ -1,0 +1,109 @@
+namespace TuneSync.Core.Models;
+
+/// <summary>Everything that should survive a restart: the last folder picked on each page, plus
+/// the rule/mode choices made there. Loaded once at startup and re-saved whenever one of these
+/// changes - see <see cref="Services.AppSettingsStore"/>.</summary>
+public sealed class AppSettings
+{
+    /// <summary>The music library is built from any number of watched folders (like a real media
+    /// player), added/removed via the +/- buttons rather than a single "current folder".</summary>
+    public List<LibraryFolderEntry> LibraryFolders { get; set; } = [];
+
+    public string? LastMergeSourceFolder { get; set; }
+    public string? LastMergeTargetFolder { get; set; }
+    public MergeConflictResolution MergeConflictResolution { get; set; } = MergeConflictResolution.KeepLargerFile;
+    public string MergeQuarantineFolderName { get; set; } = "_TuneSync_Quarantine";
+    public bool MergeIncludeSubfolders { get; set; } = true;
+
+    public string? LastRenameFolder { get; set; }
+    public bool RenameIncludeSubfolders { get; set; }
+    public bool RenameIsAlbumMode { get; set; }
+    public string RenameSingleTrackPattern { get; set; } = "{Artist} - {Title}";
+    public string RenameAlbumTrackPattern { get; set; } = "{Track} {Title}";
+
+    public bool AutoFillIsAutomaticMode { get; set; }
+
+    public AppTheme Theme { get; set; } = AppTheme.System;
+
+    /// <summary>Playback volume, 0..1.</summary>
+    public double Volume { get; set; } = 0.8;
+
+    public bool Shuffle { get; set; }
+    public RepeatMode Repeat { get; set; } = RepeatMode.Off;
+
+    public PlaylistSortKey PlaylistSort { get; set; } = PlaylistSortKey.FileName;
+    public bool PlaylistSortDescending { get; set; }
+    public PlaylistGroupKey PlaylistGroup { get; set; } = PlaylistGroupKey.None;
+
+    /// <summary>Last main-window bounds; null until the window has been closed once.</summary>
+    public WindowPlacement? Window { get; set; }
+
+    /// <summary>Full player or one of the mini players; the app reopens in the last one used.</summary>
+    public PlayerMode PlayerMode { get; set; } = PlayerMode.Full;
+
+    public bool ShowQueue { get; set; } = true;
+    public bool ShowLyrics { get; set; } = true;
+
+    /// <summary>Mini player stays above other windows.</summary>
+    public bool MiniTopmost { get; set; } = true;
+
+    /// <summary>The vertical mini player's fold-out queue is open.</summary>
+    public bool MiniQueueExpanded { get; set; }
+
+    /// <summary>Last spot of each mini player (only Left/Top are used).</summary>
+    public WindowPlacement? MiniHorizontal { get; set; }
+    public WindowPlacement? MiniVertical { get; set; }
+}
+
+public enum PlayerMode
+{
+    Full,
+    MiniHorizontal,
+    MiniVertical,
+}
+
+public enum AppTheme
+{
+    System,
+    Light,
+    Dark,
+}
+
+public enum RepeatMode
+{
+    /// <summary>Play through the list once and stop after the last track.</summary>
+    Off,
+
+    /// <summary>Start over from the beginning after the last track.</summary>
+    All,
+
+    /// <summary>Keep replaying the current track.</summary>
+    One,
+}
+
+public enum PlaylistSortKey
+{
+    FileName,
+    Path,
+    Artist,
+    Title,
+    Album,
+    Duration,
+}
+
+public enum PlaylistGroupKey
+{
+    None,
+    Folder,
+    Artist,
+    Album,
+}
+
+public sealed class WindowPlacement
+{
+    public double Left { get; set; }
+    public double Top { get; set; }
+    public double Width { get; set; }
+    public double Height { get; set; }
+    public bool IsMaximized { get; set; }
+}

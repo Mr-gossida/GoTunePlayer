@@ -7,7 +7,7 @@ namespace TuneSync.App;
 /// stays WPF-free, so this conversion lives here rather than in a Core service.</summary>
 public static class ImageHelper
 {
-    public static BitmapImage? ToBitmapImage(byte[]? bytes)
+    public static BitmapImage? ToBitmapImage(byte[]? bytes, int decodePixelWidth = 0)
     {
         if (bytes is null || bytes.Length == 0) return null;
         try
@@ -17,6 +17,8 @@ public static class ImageHelper
             image.BeginInit();
             image.CacheOption = BitmapCacheOption.OnLoad;
             image.StreamSource = ms;
+            // Decoding straight to the size it's shown at keeps a 3000px scan from costing ~36 MB.
+            if (decodePixelWidth > 0) image.DecodePixelWidth = decodePixelWidth;
             image.EndInit();
             image.Freeze();
             return image;

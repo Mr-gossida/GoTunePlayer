@@ -8,11 +8,13 @@
       xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
       mc:Ignorable="d"
       xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-      Title="이름 변경">
+      Title="이름 변경"
+      Foreground="{DynamicResource TextFillColorPrimaryBrush}">
     <Page.Resources>
         <conv:InverseBooleanConverter x:Key="InverseBooleanConverter"/>
+        <conv:EnumToVisibilityConverter x:Key="EnumToVisibilityConverter"/>
     </Page.Resources>
-    <Grid Margin="20">
+    <Grid Margin="20,16,20,24">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
@@ -26,7 +28,7 @@
                           Text="태그 값을 기반으로 파일명을 바꿉니다. {Artist} {AlbumArtist} {Title} {Album} {Track} {Disc} {Year} 토큰을 사용할 수 있습니다."/>
         </StackPanel>
 
-        <StackPanel Grid.Row="1" Margin="0,8,0,12">
+        <StackPanel Grid.Row="1" Margin="0,8,0,12" IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBooleanConverter}}">
             <Grid Margin="0,0,0,8">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
@@ -48,7 +50,8 @@
                     <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
                 <ui:TextBlock Grid.Column="0" Text="패턴:" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                <TextBox Grid.Column="1" Text="{Binding SingleTrackPattern, UpdateSourceTrigger=PropertyChanged}"/>
+                <ui:TextBox Grid.Column="1" Text="{Binding SingleTrackPattern, UpdateSourceTrigger=PropertyChanged}"
+                            PlaceholderText="{}{Artist} - {Title}" ClearButtonEnabled="False"/>
             </Grid>
 
             <RadioButton GroupName="RenameModeGroup" Content="앨범 트랙 (트랙 번호 포함)" IsChecked="{Binding IsAlbumMode}" Margin="0,0,0,4"/>
@@ -58,26 +61,31 @@
                     <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
                 <ui:TextBlock Grid.Column="0" Text="패턴:" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                <TextBox Grid.Column="1" Text="{Binding AlbumTrackPattern, UpdateSourceTrigger=PropertyChanged}"/>
+                <ui:TextBox Grid.Column="1" Text="{Binding AlbumTrackPattern, UpdateSourceTrigger=PropertyChanged}"
+                            PlaceholderText="{}{Track} {Title}" ClearButtonEnabled="False"/>
             </Grid>
 
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                 <ui:Button Content="미리보기" Icon="{ui:SymbolIcon Eye24}" Command="{Binding BuildPreviewCommand}" Margin="0,0,8,0"/>
-                <ui:Button Content="적용" Icon="{ui:SymbolIcon Checkmark24}" Appearance="Primary"
+                <ui:Button Content="적용" Icon="{ui:SymbolIcon Checkmark24}"
                            Command="{Binding ExecuteCommand}" IsEnabled="{Binding IsPreviewReady}"/>
             </StackPanel>
         </StackPanel>
 
         <DataGrid Grid.Row="2" ItemsSource="{Binding Preview}" AutoGenerateColumns="False"
-                  IsReadOnly="True" GridLinesVisibility="Horizontal">
+                  IsReadOnly="True" GridLinesVisibility="Horizontal" HorizontalScrollBarVisibility="Auto"
+                  HeadersVisibility="Column" SelectionUnit="FullRow" CellStyle="{StaticResource GridCellStyle}">
             <DataGrid.Columns>
-                <DataGridTextColumn Header="기존 파일명" Binding="{Binding OldFileName}" Width="280"/>
-                <DataGridTextColumn Header="새 파일명" Binding="{Binding NewFileName}" Width="280"/>
-                <DataGridTextColumn Header="상태" Binding="{Binding Status}" Width="*"/>
+                <DataGridTextColumn Header="기존 파일명" Binding="{Binding OldFileName}" Width="2*" MinWidth="180" ElementStyle="{StaticResource GridTrimmedText}"/>
+                <DataGridTextColumn Header="새 파일명" Binding="{Binding NewFileName}" Width="2*" MinWidth="180" ElementStyle="{StaticResource GridTrimmedText}"/>
+                <DataGridTextColumn Header="상태" Binding="{Binding Status}" Width="*" MinWidth="120" ElementStyle="{StaticResource GridSecondaryText}"/>
             </DataGrid.Columns>
         </DataGrid>
 
-        <ui:TextBlock Grid.Row="3" Text="{Binding StatusText}" Margin="0,8,0,0" TextWrapping="Wrap"
-                      Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+        <Grid Grid.Row="3" Margin="0,8,0,0">
+            <ui:TextBlock Text="{Binding StatusText}" TextWrapping="Wrap" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+            <ui:ProgressRing IsIndeterminate="True" Width="16" Height="16" HorizontalAlignment="Right"
+                              Visibility="{Binding IsBusy, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}"/>
+        </Grid>
     </Grid>
 </Page>

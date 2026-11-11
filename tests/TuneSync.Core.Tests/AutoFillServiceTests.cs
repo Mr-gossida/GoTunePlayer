@@ -46,6 +46,40 @@ public class AutoFillServiceTests
     }
 
     [Fact]
+    public async Task BuildProposalsAsync_LyricsOnly_SkipsMusicBrainzAndSearchesWithExistingTags()
+    {
+        var file = MakeFile("x.mp3", new TrackTags { Path = "x.mp3", Artist = "IU", Title = "Good Day", Album = "" });
+        var mb = new FakeMusicBrainzService { NextMatch = new MusicBrainzMatch { Title = "Good Day", Artist = "IU", Album = "Real Album" } };
+        var lyrics = new FakeLyricsService { NextResult = new LyricsResult { TrackName = "Good Day", ArtistName = "IU", PlainLyrics = "가사" } };
+        var service = new AutoFillService(mb, lyrics);
+
+        var proposals = await service.BuildProposalsAsync([file], options: new AutoFillOptions(Tags: false, Cover: false, Lyrics: true));
+
+        var proposal = Assert.Single(proposals);
+        Assert.Empty(mb.Calls);
+        Assert.Equal("가사", proposal.ProposedLyrics);
+        Assert.Null(proposal.ProposedAlbum); // tags weren't asked for, even though the album is empty
+    }
+
+    [Fact]
+    public async Task BuildProposalsAsync_ExistingCover_IsOnlySearchedWhenReplacementRequested()
+    {
+        var file = MakeFile("x.mp3", new TrackTags { Path = "x.mp3", Artist = "IU", Title = "Good Day" }, hasCover: true);
+        var mb = new FakeMusicBrainzService
+        {
+            NextMatch = new MusicBrainzMatch { Title = "Good Day", Artist = "IU", ReleaseMbid = "rel-1" },
+            NextCover = [1, 2, 3],
+        };
+        var service = new AutoFillService(mb, new FakeLyricsService());
+
+        var keep = await service.BuildProposalsAsync([file], options: new AutoFillOptions(Tags: false, Cover: true, Lyrics: false));
+        var replace = await service.BuildProposalsAsync([file], options: new AutoFillOptions(Tags: false, Cover: true, Lyrics: false, ReplaceExisting: true));
+
+        Assert.Equal("채울 항목 없음", Assert.Single(keep).Status);
+        Assert.Equal(new byte[] { 1, 2, 3 }, Assert.Single(replace).ProposedCoverBytes);
+    }
+
+    [Fact]
     public async Task BuildProposalsAsync_ReportsUnsearchable_WhenNoTagsAndNoParsableFilename()
     {
         var file = MakeFile(@"C:\music\track001.mp3", new TrackTags { Path = @"C:\music\track001.mp3" });

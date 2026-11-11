@@ -1,4 +1,5 @@
 using System.Windows.Controls;
+using TuneSync.App.ViewModels;
 
 namespace TuneSync.App.Views;
 
@@ -7,8 +8,9 @@ namespace TuneSync.App.Views;
 /// </summary>
 public partial class SettingsView : Page
 {
-    public SettingsView()
+    public SettingsView(SettingsViewModel viewModel)
     {
         InitializeComponent();
+        DataContext = viewModel;
     }
 }

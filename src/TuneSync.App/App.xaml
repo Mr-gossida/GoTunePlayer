@@ -1,14 +1,85 @@
 ﻿<Application x:Class="TuneSync.App.App"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:local="clr-namespace:TuneSync.App"
-             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml">
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             xmlns:sys="clr-namespace:System;assembly=System.Runtime"
+             ShutdownMode="OnMainWindowClose">
     <Application.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
-                <ui:ThemesDictionary Theme="Light" />
+                <ui:ThemesDictionary Theme="Dark" />
                 <ui:ControlsDictionary />
             </ResourceDictionary.MergedDictionaries>
+
+            <!-- Data grids: whole-row selection highlight only (no focus box around the clicked
+                 cell), and long text ends in "…" instead of being cut off mid-character. Both
+                 build on WPF-UI's own styles rather than replacing them. -->
+            <Style x:Key="GridCellStyle" TargetType="DataGridCell" BasedOn="{StaticResource DefaultDataGridCellStyle}">
+                <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            </Style>
+            <Style x:Key="GridTrimmedText" TargetType="TextBlock" BasedOn="{StaticResource DefaultDataGridTextElementStyle}">
+                <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+            </Style>
+            <Style x:Key="GridSecondaryText" TargetType="TextBlock" BasedOn="{StaticResource GridTrimmedText}">
+                <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}"/>
+            </Style>
+
+            <!-- Square icon-only button; the default Padding clips a 24px glyph in a small button. -->
+            <Style x:Key="IconButtonStyle" TargetType="ui:Button" BasedOn="{StaticResource {x:Type ui:Button}}">
+                <Setter Property="Width" Value="32"/>
+                <Setter Property="Height" Value="32"/>
+                <Setter Property="Padding" Value="0"/>
+                <Setter Property="HorizontalContentAlignment" Value="Center"/>
+                <Setter Property="VerticalContentAlignment" Value="Center"/>
+            </Style>
+
+            <!-- Player chrome: flat icon buttons over the cover-tinted background (PlayerPalette). -->
+            <Style x:Key="PlayerIconButtonStyle" TargetType="ui:Button" BasedOn="{StaticResource IconButtonStyle}">
+                <Setter Property="Width" Value="36"/>
+                <Setter Property="Height" Value="36"/>
+                <Setter Property="FontSize" Value="18"/>
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="BorderThickness" Value="0"/>
+                <Setter Property="CornerRadius" Value="18"/>
+                <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}"/>
+                <Setter Property="MouseOverBackground" Value="{DynamicResource PlayerHoverBrush}"/>
+                <Setter Property="PressedBackground" Value="{DynamicResource PlayerHoverBrush}"/>
+                <Setter Property="PressedForeground" Value="{DynamicResource TextFillColorSecondaryBrush}"/>
+                <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            </Style>
+
+            <!-- Same, but lit in the accent color while Tag is True (shuffle, queue, lyrics...). -->
+            <Style x:Key="PlayerToggleButtonStyle" TargetType="ui:Button" BasedOn="{StaticResource PlayerIconButtonStyle}">
+                <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}"/>
+                <Style.Triggers>
+                    <Trigger Property="Tag">
+                        <Trigger.Value><sys:Boolean>True</sys:Boolean></Trigger.Value>
+                        <Setter Property="Foreground" Value="{DynamicResource PlayerAccentBrush}"/>
+                    </Trigger>
+                </Style.Triggers>
+            </Style>
+
+            <!-- The one filled control: the round play/pause button in the cover's accent color. -->
+            <Style x:Key="PlayerPlayButtonStyle" TargetType="ui:Button" BasedOn="{StaticResource IconButtonStyle}">
+                <Setter Property="Width" Value="44"/>
+                <Setter Property="Height" Value="44"/>
+                <Setter Property="FontSize" Value="20"/>
+                <Setter Property="CornerRadius" Value="22"/>
+                <Setter Property="BorderThickness" Value="0"/>
+                <Setter Property="Background" Value="{DynamicResource PlayerAccentBrush}"/>
+                <Setter Property="Foreground" Value="{DynamicResource PlayerOnAccentBrush}"/>
+                <Setter Property="MouseOverBackground" Value="{DynamicResource PlayerAccentBrush}"/>
+                <Setter Property="PressedBackground" Value="{DynamicResource PlayerAccentBrush}"/>
+                <Setter Property="PressedForeground" Value="{DynamicResource PlayerOnAccentBrush}"/>
+                <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+                <Setter Property="RenderTransformOrigin" Value="0.5,0.5"/>
+                <Setter Property="RenderTransform"><Setter.Value><ScaleTransform/></Setter.Value></Setter>
+                <Style.Triggers>
+                    <Trigger Property="IsMouseOver" Value="True">
+                        <Setter Property="RenderTransform"><Setter.Value><ScaleTransform ScaleX="1.06" ScaleY="1.06"/></Setter.Value></Setter>
+                    </Trigger>
+                </Style.Triggers>
+            </Style>
         </ResourceDictionary>
     </Application.Resources>
 </Application>

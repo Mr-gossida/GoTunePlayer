@@ -46,6 +46,12 @@ public static class TagService
         file.Save();
     }
 
+    public static TimeSpan ReadDuration(string path)
+    {
+        using var file = TagLib.File.Create(path);
+        return file.Properties?.Duration ?? TimeSpan.Zero;
+    }
+
     public static string? ReadLyrics(string path)
     {
         using var file = TagLib.File.Create(path);

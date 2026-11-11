@@ -12,8 +12,10 @@ public sealed class AutoFillService(IMusicBrainzService musicBrainz, ILyricsServ
     public async Task<List<AutoFillProposal>> BuildProposalsAsync(
         IEnumerable<LibraryFile> files,
         IProgress<string>? progress = null,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        AutoFillOptions? options = null)
     {
+        var opt = options ?? new AutoFillOptions();
         var proposals = new List<AutoFillProposal>();
 
         foreach (var file in files)
@@ -22,6 +24,15 @@ public sealed class AutoFillService(IMusicBrainzService musicBrainz, ILyricsServ
 
             var proposal = new AutoFillProposal { File = file };
             proposals.Add(proposal);
+
+            var wantTags = opt.Tags;
+            var wantCover = opt.Cover && (file.IsMissingCover || opt.ReplaceExisting);
+            var wantLyrics = opt.Lyrics && (file.IsMissingLyrics || opt.ReplaceExisting);
+            if (!wantTags && !wantCover && !wantLyrics)
+            {
+                proposal.Status = "채울 항목 없음";
+                continue;
+            }
 
             var (artist, title) = ResolveSearchKey(file);
             if (string.IsNullOrWhiteSpace(artist) || string.IsNullOrWhiteSpace(title))
@@ -32,42 +43,46 @@ public sealed class AutoFillService(IMusicBrainzService musicBrainz, ILyricsServ
 
             progress?.Report($"{file.FileName} 검색 중...");
 
-            MusicBrainzMatch? match;
-            try
+            // MusicBrainz is only needed for tags and cover art; a lyrics-only search goes straight
+            // to the lyrics service with the artist/title already known (faster, and it still works
+            // when MusicBrainz has no match).
+            MusicBrainzMatch? match = null;
+            string? searchError = null;
+            if (wantTags || wantCover)
             {
-                match = await musicBrainz.FindAsync(artist, title, ct);
-            }
-            catch (Exception ex) when (ct.IsCancellationRequested == false)
-            {
-                proposal.Status = $"검색 오류: {ex.Message}";
-                continue;
+                try
+                {
+                    match = await musicBrainz.FindAsync(artist, title, ct);
+                }
+                catch (Exception ex) when (ct.IsCancellationRequested == false)
+                {
+                    searchError = ex.Message;
+                }
             }
 
-            if (match is null)
-            {
-                proposal.Status = "매칭 실패";
-                continue;
-            }
+            if (wantTags && match is not null)
+                FillProposedTagFields(proposal, file.Tags, match);
 
-            FillProposedTagFields(proposal, file.Tags, match);
-
-            if (file.IsMissingCover && !string.IsNullOrWhiteSpace(match.ReleaseMbid))
+            if (wantCover && !string.IsNullOrWhiteSpace(match?.ReleaseMbid))
             {
                 try { proposal.ProposedCoverBytes = await musicBrainz.GetCoverAsync(match.ReleaseMbid, ct); }
                 catch (Exception) when (ct.IsCancellationRequested == false) { /* best-effort */ }
             }
 
-            if (file.IsMissingLyrics)
+            if (wantLyrics)
             {
                 try
                 {
-                    var lyricsResult = await lyrics.FindAsync(match.Artist, match.Title, ct);
+                    var lyricsResult = await lyrics.FindAsync(match?.Artist ?? artist, match?.Title ?? title, ct);
                     proposal.ProposedLyrics = lyricsResult?.BestLyrics;
                 }
                 catch (Exception) when (ct.IsCancellationRequested == false) { /* best-effort */ }
             }
 
-            proposal.Status = proposal.HasAnyProposal ? "제안 생성됨" : "채울 항목 없음";
+            proposal.Status = proposal.HasAnyProposal ? "제안 생성됨"
+                : searchError is not null ? $"검색 오류: {searchError}"
+                : match is null && !wantLyrics ? "매칭 실패"
+                : "찾지 못함";
         }
 
         return proposals;
@@ -125,6 +140,7 @@ public sealed class AutoFillService(IMusicBrainzService musicBrainz, ILyricsServ
                 {
                     CoverArtService.SetCover(proposal.File.Path, proposal.ProposedCoverBytes);
                     proposal.File.CoverBytes = proposal.ProposedCoverBytes;
+                    proposal.File.ThumbnailBytes = CoverArtService.GetThumbnail(proposal.ProposedCoverBytes)?.JpegBytes;
                     proposal.File.HasCover = true;
                 }
 
@@ -132,6 +148,7 @@ public sealed class AutoFillService(IMusicBrainzService musicBrainz, ILyricsServ
                 {
                     TagService.WriteLyrics(proposal.File.Path, proposal.ProposedLyrics);
                     proposal.File.HasLyrics = true;
+                    proposal.File.IsLyricsSynced = LrcParser.IsSynced(proposal.ProposedLyrics);
                 }
 
                 undoEntries.Add(new AutoFillUndoEntry { Path = proposal.File.Path, Before = before });

@@ -3,12 +3,18 @@
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
       xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
       xmlns:vm="clr-namespace:TuneSync.App.ViewModels"
+      xmlns:conv="clr-namespace:TuneSync.App.Converters"
       d:DataContext="{d:DesignInstance Type=vm:MergeViewModel}"
       xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
       mc:Ignorable="d"
       xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-      Title="폴더 합치기">
-    <Grid Margin="20">
+      Title="폴더 합치기"
+      Foreground="{DynamicResource TextFillColorPrimaryBrush}">
+    <Page.Resources>
+        <conv:InverseBooleanConverter x:Key="InverseBooleanConverter"/>
+        <conv:EnumToVisibilityConverter x:Key="EnumToVisibilityConverter"/>
+    </Page.Resources>
+    <Grid Margin="20,16,20,24">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
@@ -22,7 +28,7 @@
                           Text="소스 폴더의 음원을 타겟 폴더로 이동합니다. 실행 전 미리보기로 전체 계획을 검토할 수 있고, 충돌한 파일은 삭제하지 않고 격리 폴더로 이동합니다."/>
         </StackPanel>
 
-        <StackPanel Grid.Row="1" Margin="0,8,0,12">
+        <StackPanel Grid.Row="1" Margin="0,8,0,12" IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBooleanConverter}}">
             <Grid Margin="0,0,0,8">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
@@ -63,22 +69,26 @@
                 <CheckBox Grid.Column="2" Content="하위 폴더 포함" IsChecked="{Binding IncludeSubfolders}" VerticalAlignment="Center"/>
 
                 <ui:Button Grid.Column="3" Content="미리보기" Icon="{ui:SymbolIcon Eye24}" Command="{Binding BuildPreviewCommand}" Margin="0,0,8,0"/>
-                <ui:Button Grid.Column="4" Content="실행" Icon="{ui:SymbolIcon FolderSync24}" Appearance="Primary"
+                <ui:Button Grid.Column="4" Content="실행" Icon="{ui:SymbolIcon FolderSync24}"
                            Command="{Binding ExecuteCommand}" IsEnabled="{Binding IsPlanReady}"/>
             </Grid>
         </StackPanel>
 
         <DataGrid Grid.Row="2" ItemsSource="{Binding Plan}" AutoGenerateColumns="False"
-                  IsReadOnly="True" GridLinesVisibility="Horizontal">
+                  IsReadOnly="True" GridLinesVisibility="Horizontal" HorizontalScrollBarVisibility="Auto"
+                  HeadersVisibility="Column" SelectionUnit="FullRow" CellStyle="{StaticResource GridCellStyle}">
             <DataGrid.Columns>
-                <DataGridTextColumn Header="소스 파일" Binding="{Binding SourceFileName}" Width="220"/>
-                <DataGridTextColumn Header="작업" Binding="{Binding ActionLabel}" Width="150"/>
-                <DataGridTextColumn Header="타겟 파일명" Binding="{Binding DestFileName}" Width="220"/>
-                <DataGridTextColumn Header="사유" Binding="{Binding Reason}" Width="*"/>
+                <DataGridTextColumn Header="소스 파일" Binding="{Binding SourceFileName}" Width="2*" MinWidth="160" ElementStyle="{StaticResource GridTrimmedText}"/>
+                <DataGridTextColumn Header="작업" Binding="{Binding ActionLabel}" Width="170" MinWidth="140" ElementStyle="{StaticResource GridTrimmedText}"/>
+                <DataGridTextColumn Header="타겟 파일명" Binding="{Binding DestFileName}" Width="2*" MinWidth="160" ElementStyle="{StaticResource GridTrimmedText}"/>
+                <DataGridTextColumn Header="사유" Binding="{Binding Reason}" Width="2*" MinWidth="160" ElementStyle="{StaticResource GridSecondaryText}"/>
             </DataGrid.Columns>
         </DataGrid>
 
-        <ui:TextBlock Grid.Row="3" Text="{Binding StatusText}" Margin="0,8,0,0" TextWrapping="Wrap"
-                      Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+        <Grid Grid.Row="3" Margin="0,8,0,0">
+            <ui:TextBlock Text="{Binding StatusText}" TextWrapping="Wrap" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+            <ui:ProgressRing IsIndeterminate="True" Width="16" Height="16" HorizontalAlignment="Right"
+                              Visibility="{Binding IsBusy, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}"/>
+        </Grid>
     </Grid>
 </Page>
