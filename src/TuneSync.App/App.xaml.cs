@@ -104,6 +104,7 @@ public partial class App : Application
         services.AddSingleton<MergeViewModel>();
         services.AddSingleton<RenameViewModel>();
         services.AddSingleton<SettingsViewModel>();
+        services.AddSingleton<SleepTimerViewModel>();
 
         services.AddSingleton<LibraryView>();
         services.AddSingleton<PlayView>();

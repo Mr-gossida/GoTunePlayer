@@ -62,6 +62,11 @@ public sealed class AppSettings
     /// <summary>While music is playing, keep the display on and the PC awake (so the lyrics stay
     /// on screen). Released as soon as playback pauses or stops.</summary>
     public bool KeepScreenOnWhilePlaying { get; set; } = true;
+
+    /// <summary>The player's screen saver: after this many minutes without input while music
+    /// plays, a full-screen "now playing" view takes over.</summary>
+    public bool ScreenSaverEnabled { get; set; } = true;
+    public int ScreenSaverMinutes { get; set; } = 5;
 }
 
 public enum PlayerMode

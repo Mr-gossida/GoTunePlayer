@@ -14,6 +14,7 @@
         WindowCornerPreference="Round">
     <Window.Resources>
         <conv:PlayPauseIconConverter x:Key="PlayPauseIconConverter"/>
+        <BooleanToVisibilityConverter x:Key="BoolToVisibility"/>
     </Window.Resources>
     <Window.InputBindings>
         <KeyBinding Key="MediaPlayPause" Command="{Binding TogglePlayPauseCommand}"/>
@@ -74,6 +75,10 @@
                                 <MenuItem Header="이름 변경" Click="OpenRename_Click">
                                     <MenuItem.Icon><ui:SymbolIcon Symbol="TextSortAscending24"/></MenuItem.Icon>
                                 </MenuItem>
+                                <Separator/>
+                                <MenuItem Header="화면 보호기 시작" Click="StartScreenSaver_Click">
+                                    <MenuItem.Icon><ui:SymbolIcon Symbol="Desktop24"/></MenuItem.Icon>
+                                </MenuItem>
                             </ContextMenu>
                         </ui:DropDownButton.Flyout>
                     </ui:DropDownButton>
@@ -90,9 +95,11 @@
         <Border Grid.Row="2" Background="{DynamicResource PlayerPanelBrush}" Padding="16,10,16,12">
             <Grid>
                 <Grid.ColumnDefinitions>
+                    <!-- Right column sizes to its controls (timer, toggles, volume) so none get
+                         clipped; the seek area in the middle gives way instead. -->
                     <ColumnDefinition Width="*" MinWidth="160"/>
                     <ColumnDefinition Width="2*" MaxWidth="720"/>
-                    <ColumnDefinition Width="*" MinWidth="160"/>
+                    <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
 
                 <Grid Grid.Column="0" VerticalAlignment="Center">
@@ -168,6 +175,21 @@
                 </StackPanel>
 
                 <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                    <!-- 예약 종료: lit while a shutdown is scheduled, with the time left beside it.
+                         DataContext is the SleepTimerViewModel (set in code). -->
+                    <ui:Button x:Name="SleepTimerButton" Margin="0,0,2,0" Click="SleepTimer_Click"
+                               Tag="{Binding IsActive}" ToolTip="{Binding ToolTip}" Width="NaN" MinWidth="36" Padding="9,0">
+                        <ui:Button.Style>
+                            <Style TargetType="ui:Button" BasedOn="{StaticResource PlayerToggleButtonStyle}">
+                                <Setter Property="CornerRadius" Value="18"/>
+                            </Style>
+                        </ui:Button.Style>
+                        <StackPanel Orientation="Horizontal">
+                            <ui:SymbolIcon Symbol="Timer24" FontSize="18"/>
+                            <TextBlock Text="{Binding RemainingText}" FontSize="11" FontWeight="SemiBold" Margin="5,0,0,0" VerticalAlignment="Center"
+                                       Visibility="{Binding IsActive, Converter={StaticResource BoolToVisibility}}"/>
+                        </StackPanel>
+                    </ui:Button>
                     <ui:Button Style="{StaticResource PlayerToggleButtonStyle}" Icon="{ui:SymbolIcon SlideText24}"
                                Tag="{Binding IsLyricsVisible}" Command="{Binding ToggleLyricsCommand}" ToolTip="가사 보기"/>
                     <ui:Button Style="{StaticResource PlayerToggleButtonStyle}" Margin="2,0,0,0" Icon="{ui:SymbolIcon TextBulletListLtr24}"

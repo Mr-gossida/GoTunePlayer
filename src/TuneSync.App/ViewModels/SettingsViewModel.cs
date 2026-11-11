@@ -21,7 +21,42 @@ public sealed partial class SettingsViewModel : ObservableObject
         Playback = playback;
         _theme = settings.Theme;
         _quarantineFolderName = settings.MergeQuarantineFolderName;
+        _screenSaverEnabled = settings.ScreenSaverEnabled;
+        _screenSaverMinutes = settings.ScreenSaverMinutes;
     }
+
+    // --- screen saver ---
+
+    [ObservableProperty]
+    private bool _screenSaverEnabled;
+
+    [ObservableProperty]
+    private int _screenSaverMinutes;
+
+    public IReadOnlyList<Choice<int>> ScreenSaverDelayOptions { get; } =
+    [
+        new(1, "1분 뒤"),
+        new(3, "3분 뒤"),
+        new(5, "5분 뒤"),
+        new(10, "10분 뒤"),
+        new(15, "15분 뒤"),
+        new(30, "30분 뒤"),
+    ];
+
+    partial void OnScreenSaverEnabledChanged(bool value)
+    {
+        _settings.ScreenSaverEnabled = value;
+        AppSettingsStore.Save(_settings);
+    }
+
+    partial void OnScreenSaverMinutesChanged(int value)
+    {
+        _settings.ScreenSaverMinutes = value;
+        AppSettingsStore.Save(_settings);
+    }
+
+    [RelayCommand]
+    private static void PreviewScreenSaver() => ScreenSaver.Show();
 
     public IReadOnlyList<Choice<AppTheme>> ThemeOptions { get; } =
     [
