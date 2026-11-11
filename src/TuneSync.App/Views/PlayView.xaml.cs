@@ -32,7 +32,7 @@ public partial class PlayView : Page
                 FollowCurrentLyric();
             }, System.Windows.Threading.DispatcherPriority.Loaded);
         };
-        SizeChanged += (_, _) => ApplyResponsiveLayout();
+        SizeChanged += (_, _) => ApplyResponsiveLayout(resizing: true);
         Loaded += (_, _) =>
         {
             SyncPlaylistToCurrentTrack();
@@ -42,8 +42,112 @@ public partial class PlayView : Page
         // Track change: capture the outgoing song's screen just before it's replaced...
         _viewModel.Playback.PropertyChanging += (_, e) =>
         {
-            if (e.PropertyName == nameof(PlaybackViewModel.CurrentFile)) CaptureOutgoing();
+            if (e.PropertyName != nameof(PlaybackViewModel.CurrentFile)) return;
+            CaptureOutgoing();
+            // The crossfade covers this change; don't also glide/reveal underneath it.
+            _trackChanging = true;
+            Dispatcher.BeginInvoke(() => _trackChanging = false, System.Windows.Threading.DispatcherPriority.Background);
         };
+        Loaded += (_, _) => ApplyIntroStage(animate: false);
+    }
+
+    // --- intro stage: hero card during the opening, then a dramatic hand-off to the lyrics ---
+
+    private bool _hero;
+    private bool _lyricsHeldBack;
+    private bool _trackChanging;
+
+    /// <summary>During a long instrumental opening the cover card moves to the middle of the
+    /// screen (wide layout) or a big equalizer pulse stands in for the lyrics (narrow layout).
+    /// When the singing is about to start, the cover glides back to its place and the lyrics rise
+    /// in out of a blur.</summary>
+    private void ApplyIntroStage(bool animate)
+    {
+        var playback = _viewModel.Playback;
+        var intro = playback.IsIntroVisible;
+        var hero = intro && playback.IsLyricsVisible && _compact != true;
+        animate = animate && IsLoaded && !_trackChanging;
+        // Only while an intro is actually on (it holds looping animations).
+        IntroPulse.Visibility = _compact == true && intro ? System.Windows.Visibility.Visible : System.Windows.Visibility.Collapsed;
+
+        if (hero != _hero)
+        {
+            System.Windows.Rect? from = animate && !hero && BigCover.IsVisible ? BoundsInLayer(BigCover) : null;
+            _hero = hero;
+            if (hero)
+            {
+                Grid.SetColumnSpan(NowPlayingPanel, 2);
+                NowPlayingPanel.HorizontalAlignment = System.Windows.HorizontalAlignment.Center;
+                NowPlayingPanel.Width = 340;
+                NowPlayingPanel.Margin = new System.Windows.Thickness(0);
+            }
+            else
+            {
+                NowPlayingPanel.ClearValue(Grid.ColumnSpanProperty);
+                NowPlayingPanel.ClearValue(HorizontalAlignmentProperty);
+                NowPlayingPanel.ClearValue(WidthProperty);
+                NowPlayingPanel.ClearValue(MarginProperty);
+                if (from is { } start && playback.CurrentCover is { } cover)
+                {
+                    UpdateLayout();
+                    GlideCover(cover, start, BoundsInLayer(BigCover), BigCover, 10, TimeSpan.FromMilliseconds(800));
+                    FadeSlideIn(NowPlayingPanel, 40, 0);
+                }
+            }
+        }
+
+        if (intro != _lyricsHeldBack)
+        {
+            _lyricsHeldBack = intro;
+            if (intro)
+            {
+                LyricsScrollViewer.BeginAnimation(OpacityProperty, null);
+                LyricsScrollViewer.Opacity = 0;
+            }
+            else if (animate)
+            {
+                RevealLyrics(LyricsScrollViewer);
+            }
+            else
+            {
+                LyricsScrollViewer.BeginAnimation(OpacityProperty, null);
+                LyricsScrollViewer.Opacity = 1;
+            }
+        }
+    }
+
+    /// <summary>The lyrics' entrance after the intro: they rise from below, grow to full size and
+    /// come into focus out of a heavy blur, all at once.</summary>
+    private static void RevealLyrics(System.Windows.FrameworkElement element)
+    {
+        var duration = TimeSpan.FromMilliseconds(1100);
+        var ease = new System.Windows.Media.Animation.QuarticEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut };
+        var blur = new System.Windows.Media.Effects.BlurEffect
+        {
+            Radius = 30,
+            RenderingBias = System.Windows.Media.Effects.RenderingBias.Performance,
+        };
+        var scale = new System.Windows.Media.ScaleTransform(0.88, 0.88);
+        var shift = new System.Windows.Media.TranslateTransform(0, 70);
+        element.Effect = blur;
+        element.RenderTransformOrigin = new System.Windows.Point(0, 0.5);
+        element.RenderTransform = new System.Windows.Media.TransformGroup { Children = { scale, shift } };
+
+        System.Windows.Media.Animation.DoubleAnimation Anim(double from, double to, TimeSpan length) => new(from, to, length) { EasingFunction = ease };
+        element.BeginAnimation(OpacityProperty, new System.Windows.Media.Animation.DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(700))
+        {
+            FillBehavior = System.Windows.Media.Animation.FillBehavior.Stop,
+        });
+        element.Opacity = 1;
+        var focus = Anim(30, 0, duration);
+        focus.Completed += (_, _) =>
+        {
+            if (element.Effect == blur) element.Effect = null; // no effect left running afterwards
+        };
+        blur.BeginAnimation(System.Windows.Media.Effects.BlurEffect.RadiusProperty, focus);
+        scale.BeginAnimation(System.Windows.Media.ScaleTransform.ScaleXProperty, Anim(0.88, 1, duration));
+        scale.BeginAnimation(System.Windows.Media.ScaleTransform.ScaleYProperty, Anim(0.88, 1, duration));
+        shift.BeginAnimation(System.Windows.Media.TranslateTransform.YProperty, Anim(70, 0, duration));
     }
 
     // --- crossfade between songs ---
@@ -59,8 +163,25 @@ public partial class PlayView : Page
 
         var dpi = System.Windows.Media.VisualTreeHelper.GetDpi(NowPlayingGrid);
         var visual = new System.Windows.Media.DrawingVisual();
+        // Capture exactly the layout box at 1:1. A plain VisualBrush would fit the content's
+        // *visual* bounds (the cover's shadow, overflowing lyrics) into the box instead, which
+        // shrinks and shifts the snapshot so the old cover appeared to jump sideways.
+        // The brush's viewbox is measured from the parent's origin, so it starts at the grid's own
+        // offset (its margin); otherwise the margin would be applied twice.
+        var area = new System.Windows.Rect(0, 0, width, height);
+        var offset = System.Windows.Media.VisualTreeHelper.GetOffset(NowPlayingGrid);
+        var brush = new System.Windows.Media.VisualBrush(NowPlayingGrid)
+        {
+            ViewboxUnits = System.Windows.Media.BrushMappingMode.Absolute,
+            Viewbox = new System.Windows.Rect(offset.X, offset.Y, width, height),
+            ViewportUnits = System.Windows.Media.BrushMappingMode.Absolute,
+            Viewport = area,
+            Stretch = System.Windows.Media.Stretch.None,
+            AlignmentX = System.Windows.Media.AlignmentX.Left,
+            AlignmentY = System.Windows.Media.AlignmentY.Top,
+        };
         using (var dc = visual.RenderOpen())
-            dc.DrawRectangle(new System.Windows.Media.VisualBrush(NowPlayingGrid), null, new System.Windows.Rect(0, 0, width, height));
+            dc.DrawRectangle(brush, null, area);
         var bitmap = new System.Windows.Media.Imaging.RenderTargetBitmap(
             (int)Math.Ceiling(width * dpi.DpiScaleX), (int)Math.Ceiling(height * dpi.DpiScaleY),
             dpi.PixelsPerInchX, dpi.PixelsPerInchY, System.Windows.Media.PixelFormats.Pbgra32);
@@ -364,6 +485,10 @@ public partial class PlayView : Page
             case nameof(PlaybackViewModel.IsQueueVisible):
             case nameof(PlaybackViewModel.IsLyricsVisible):
                 ApplyResponsiveLayout();
+                ApplyIntroStage(animate: false);
+                break;
+            case nameof(PlaybackViewModel.IsIntroVisible):
+                ApplyIntroStage(animate: true);
                 break;
         }
     }
@@ -379,23 +504,47 @@ public partial class PlayView : Page
 
     private bool? _compact;
 
-    /// <summary>Adapts to the window width: the queue narrows first, then (when the lyrics no
-    /// longer have room beside the big cover) the cover shrinks into a strip above the lyrics.</summary>
-    private void ApplyResponsiveLayout()
+    /// <summary>Adapts to the window width: the queue switches between two widths, and when the
+    /// lyrics no longer have room beside the big cover, the cover glides up into a strip above
+    /// the lyrics. Switching back needs a little more room than switching in, so dragging around
+    /// the threshold doesn't make it flip back and forth. While the window edge is being dragged,
+    /// the layout switch waits until the drag pauses (see <see cref="_layoutSettle"/>), so the
+    /// drag itself never stalls on building the other layout.</summary>
+    private void ApplyResponsiveLayout(bool resizing = false)
     {
         var width = ActualWidth;
         if (width <= 0) return;
         var playback = _viewModel.Playback;
 
-        QueuePanel.Width = width < 1150 ? 300 : 360;
+        // The queue keeps one fixed width (QueuePanel, 320): re-laying out its grouped list at a
+        // new width cost ~100ms in one frame, which was the stutter felt while resizing.
         var content = width - (playback.IsQueueVisible ? QueuePanel.Width : 0);
-        var compact = playback.IsLyricsVisible && content < 760;
+        var compact = playback.IsLyricsVisible && (_compact == true ? content < 800 : content < 760);
 
         // Lyrics hidden: the big cover alone, never wider than the space it has.
         NowPlayingPanel.MaxWidth = Math.Max(200, content - 64);
 
-        if (_compact == compact) return;
+        if (_compact == compact)
+        {
+            _layoutSettle?.Stop();
+            return;
+        }
+        if (resizing && _compact is not null)
+        {
+            // Mid-drag: switch once the window has stayed put for a moment.
+            _layoutSettle ??= CreateSettleTimer();
+            _layoutSettle.Stop();
+            _layoutSettle.Start();
+            return;
+        }
+        _layoutSettle?.Stop();
+
+        var animate = _compact is not null && IsLoaded && NowPlayingGrid.IsVisible;
         _compact = compact;
+
+        // Where the cover is now, before the layout changes.
+        var from = compact ? BigCover : SmallCover;
+        System.Windows.Rect? fromRect = animate && from.IsVisible ? BoundsInLayer(from) : null;
 
         NowPlayingGrid.Margin = compact ? new System.Windows.Thickness(24, 16, 24, 16) : new System.Windows.Thickness(48, 24, 32, 24);
         CompactHeader.Visibility = compact ? System.Windows.Visibility.Visible : System.Windows.Visibility.Collapsed;
@@ -406,7 +555,131 @@ public partial class PlayView : Page
         Grid.SetColumnSpan(LyricsArea, compact ? 2 : 1);
         Grid.SetRow(LyricsArea, compact ? 1 : 0);
         Grid.SetRowSpan(LyricsArea, compact ? 1 : 2);
+
+        if (animate)
+        {
+            UpdateLayout();
+            var to = compact ? SmallCover : BigCover;
+            if (fromRect is { } start && to.IsVisible && _viewModel.Playback.CurrentCover is { } cover)
+                GlideCover(cover, start, BoundsInLayer(to), to, compact ? 8 : 10);
+
+            // Text and lyrics settle into place with a soft fade and slide. Lyrics only slide
+            // (no fade): fading the whole lyrics area means drawing every line into an extra
+            // full-size layer.
+            FadeSlideIn(compact ? CompactHeader : NowPlayingPanel, compact ? 0 : -16, compact ? -10 : 0);
+            FadeSlideIn(LyricsArea, compact ? 0 : 24, compact ? 24 : 0, fade: false);
+        }
+        ApplyIntroStage(animate: false); // hero card (wide) vs. pulse (narrow) during an intro
         Dispatcher.BeginInvoke(FollowCurrentLyric, System.Windows.Threading.DispatcherPriority.Loaded);
+    }
+
+    private System.Windows.Threading.DispatcherTimer? _layoutSettle;
+
+    private System.Windows.Threading.DispatcherTimer CreateSettleTimer()
+    {
+        var timer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(160) };
+        timer.Tick += (_, _) =>
+        {
+            timer.Stop();
+            ApplyResponsiveLayout();
+        };
+        return timer;
+    }
+
+    /// <summary>Starts transition animations one frame late. The frame right after a layout
+    /// switch is a slow one (WPF builds the new arrangement), so animations started at once lost
+    /// their first part to it and visibly jumped; started a frame later they play from the top.</summary>
+    private static void OnNextFrame(Action start)
+    {
+        var frames = 0;
+        EventHandler? handler = null;
+        handler = (_, _) =>
+        {
+            if (++frames < 2) return;
+            System.Windows.Media.CompositionTarget.Rendering -= handler;
+            start();
+        };
+        System.Windows.Media.CompositionTarget.Rendering += handler;
+    }
+
+    private static readonly TimeSpan LayoutTransition = TimeSpan.FromMilliseconds(450);
+
+    // TransformToVisual, not TransformToAncestor: the layer is a sibling of the covers, not a parent.
+    private System.Windows.Rect BoundsInLayer(System.Windows.FrameworkElement element) =>
+        element.TransformToVisual(TransitionLayer).TransformBounds(new System.Windows.Rect(element.RenderSize));
+
+    /// <summary>A copy of the cover flies from its old rectangle to its new one (like Android's
+    /// shared-element transition) while the real one stays hidden until it lands.</summary>
+    private void GlideCover(System.Windows.Media.ImageSource cover, System.Windows.Rect from, System.Windows.Rect to,
+                            System.Windows.FrameworkElement target, double cornerRadius, TimeSpan? duration = null)
+    {
+        var length = duration ?? LayoutTransition;
+        foreach (var old in TransitionLayer.Children.OfType<System.Windows.FrameworkElement>().ToList())
+            TransitionLayer.Children.Remove(old);
+        BigCover.Opacity = 1;
+        SmallCover.Opacity = 1;
+
+        var flyer = new System.Windows.Controls.Border
+        {
+            CornerRadius = new System.Windows.CornerRadius(cornerRadius),
+            Background = new System.Windows.Media.ImageBrush(cover) { Stretch = System.Windows.Media.Stretch.UniformToFill },
+            Width = from.Width,
+            Height = from.Height,
+        };
+        Canvas.SetLeft(flyer, from.Left);
+        Canvas.SetTop(flyer, from.Top);
+        TransitionLayer.Children.Add(flyer);
+        target.Opacity = 0;
+
+        var ease = new System.Windows.Media.Animation.CubicEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseInOut };
+        System.Windows.Media.Animation.DoubleAnimation Anim(double a, double b) => new(a, b, length) { EasingFunction = ease };
+        var move = Anim(from.Left, to.Left);
+        move.Completed += (_, _) =>
+        {
+            if (!TransitionLayer.Children.Contains(flyer)) return; // superseded by a newer switch
+            TransitionLayer.Children.Remove(flyer);
+            target.Opacity = 1;
+        };
+        // The flyer waits at its start for the slow layout frame to pass, then moves.
+        OnNextFrame(() =>
+        {
+            flyer.BeginAnimation(Canvas.LeftProperty, move);
+            flyer.BeginAnimation(Canvas.TopProperty, Anim(from.Top, to.Top));
+            flyer.BeginAnimation(WidthProperty, Anim(from.Width, to.Width));
+            flyer.BeginAnimation(HeightProperty, Anim(from.Height, to.Height));
+        });
+    }
+
+    private static void FadeSlideIn(System.Windows.UIElement element, double fromX, double fromY, bool fade = true)
+    {
+        // Show the start state right away; the motion starts a frame later (OnNextFrame).
+        var shift = new System.Windows.Media.TranslateTransform(fromX, fromY);
+        element.RenderTransform = shift;
+        if (fade) element.BeginAnimation(OpacityProperty, new System.Windows.Media.Animation.DoubleAnimation(0, 0, TimeSpan.Zero));
+        var ease = new System.Windows.Media.Animation.CubicEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut };
+        OnNextFrame(() =>
+        {
+            if (fade)
+                element.BeginAnimation(OpacityProperty, new System.Windows.Media.Animation.DoubleAnimation(0, 1, LayoutTransition)
+                {
+                    EasingFunction = ease,
+                    FillBehavior = System.Windows.Media.Animation.FillBehavior.Stop,
+                });
+            shift.BeginAnimation(System.Windows.Media.TranslateTransform.XProperty, new System.Windows.Media.Animation.DoubleAnimation(fromX, 0, LayoutTransition) { EasingFunction = ease });
+            shift.BeginAnimation(System.Windows.Media.TranslateTransform.YProperty, new System.Windows.Media.Animation.DoubleAnimation(fromY, 0, LayoutTransition) { EasingFunction = ease });
+        });
+    }
+
+    /// <summary>Resizing: keep the lyrics padded by half the viewport and the current line
+    /// pinned in the middle, in the same layout pass (so nothing shakes while dragging).</summary>
+    private void LyricsScrollViewer_SizeChanged(object sender, System.Windows.SizeChangedEventArgs e)
+    {
+        var half = LyricsScrollViewer.ActualHeight / 2;
+        LyricsItems.Margin = new System.Windows.Thickness(0, half, 0, half);
+        if (DateTime.UtcNow < _followPausedUntil) return;
+        // No forced UpdateLayout here: the lines are already arranged for this size, and the
+        // centering offset doesn't depend on the margin just set.
+        LyricsScroller.SnapTo(LyricsScrollViewer, LyricsItems, _viewModel.Playback.CurrentLyricsIndex);
     }
 
     private void OpenCurrentInTagManager_Click(object sender, System.Windows.RoutedEventArgs e)

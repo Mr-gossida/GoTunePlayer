@@ -57,6 +57,34 @@ public static class PlayerPalette
         Set(PanelKey, dark ? Color.FromArgb(0x38, 0, 0, 0) : Color.FromArgb(0x55, 0xFF, 0xFF, 0xFF), animate: false);
         Set(TrackKey, dark ? Color.FromArgb(0x40, 0xFF, 0xFF, 0xFF) : Color.FromArgb(0x30, 0, 0, 0), animate: false);
         Set(HoverKey, dark ? Color.FromArgb(0x14, 0xFF, 0xFF, 0xFF) : Color.FromArgb(0x10, 0, 0, 0), animate: false);
+        SetScrim(tint, animate);
+    }
+
+    public const string ScrimKey = "PlayerScrimBrush";
+    private static readonly (double Offset, byte Alpha)[] ScrimStops = [(0, 0x8C), (0.55, 0xB3), (1, 0xEB)];
+
+    /// <summary>The tint deepening toward the bottom over the cover backdrop, as one gradient
+    /// fill. (An OpacityMask did the same but cost an extra full-window pass on every frame,
+    /// which showed as stutter while resizing.)</summary>
+    private static void SetScrim(Color tint, bool animate)
+    {
+        if (Application.Current is not { } app) return;
+        var current = app.Resources[ScrimKey] as LinearGradientBrush;
+        var brush = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(0, 1) };
+        for (var i = 0; i < ScrimStops.Length; i++)
+        {
+            var (offset, alpha) = ScrimStops[i];
+            var target = Color.FromArgb(alpha, tint.R, tint.G, tint.B);
+            var stop = new GradientStop(animate && current is not null ? current.GradientStops[i].Color : target, offset);
+            if (animate && current is not null)
+                stop.BeginAnimation(GradientStop.ColorProperty, new ColorAnimation(target, TimeSpan.FromMilliseconds(700))
+                {
+                    EasingFunction = new CubicEase { EasingMode = EasingMode.EaseInOut },
+                });
+            brush.GradientStops.Add(stop);
+        }
+        if (!animate || current is null) brush.Freeze();
+        app.Resources[ScrimKey] = brush;
     }
 
     /// <summary>Brushes in the app's resources get frozen, so each change puts in a new brush

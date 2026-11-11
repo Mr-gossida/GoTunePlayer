@@ -36,6 +36,23 @@ internal static class LyricsScroller
     /// <summary>Cancels a glide in progress (e.g. the user grabbed the wheel, or the track changed).</summary>
     public static void Stop(ScrollViewer viewer) => viewer.BeginAnimation(AnimatedOffsetProperty, null);
 
+    /// <summary>Keeps the current line centered with no glide while the view is being resized.
+    /// The list is padded by half the viewport above and below, so the offset that centers a line
+    /// is simply its own middle within the list - it doesn't depend on the viewport height.</summary>
+    public static void SnapTo(ScrollViewer viewer, ItemsControl items, int index)
+    {
+        viewer.BeginAnimation(AnimatedOffsetProperty, null);
+        var target = 0.0;
+        if (index >= 0 && index < items.Items.Count
+            && items.ItemContainerGenerator.ContainerFromIndex(index) is FrameworkElement container
+            && container.IsDescendantOf(items))
+        {
+            target = container.TransformToAncestor(items).Transform(new Point(0, 0)).Y + container.ActualHeight / 2;
+        }
+        viewer.SetValue(AnimatedOffsetProperty, target);
+        viewer.ScrollToVerticalOffset(target);
+    }
+
     /// <summary>Back to the first line with no glide (a new song). Clears the held end value of
     /// the last glide too, so the next one starts from here instead of jumping back.</summary>
     public static void Reset(ScrollViewer viewer)

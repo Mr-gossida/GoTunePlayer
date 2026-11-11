@@ -52,6 +52,26 @@ public static class TagService
         return file.Properties?.Duration ?? TimeSpan.Zero;
     }
 
+    public static AudioQuality? ReadAudioQuality(string path)
+    {
+        using var file = TagLib.File.Create(path);
+        if (file.Properties is not { } p) return null;
+
+        var ext = Path.GetExtension(path).TrimStart('.').ToLowerInvariant();
+        var codec = string.Join(" ", p.Codecs.Where(c => c is not null).Select(c => c.Description ?? ""));
+        var isAlac = codec.Contains("ALAC", StringComparison.OrdinalIgnoreCase)
+                     || codec.Contains("Apple Lossless", StringComparison.OrdinalIgnoreCase);
+        var format = ext switch
+        {
+            "m4a" or "mp4" => isAlac ? "ALAC" : "AAC",
+            "ogg" => "OGG",
+            "wma" => codec.Contains("Lossless", StringComparison.OrdinalIgnoreCase) ? "WMA Lossless" : "WMA",
+            _ => ext.ToUpperInvariant(),
+        };
+        var lossless = ext is "flac" or "wav" or "aiff" or "aif" || isAlac || format == "WMA Lossless";
+        return new AudioQuality(format, p.AudioBitrate, p.AudioSampleRate, p.BitsPerSample, p.AudioChannels, lossless);
+    }
+
     public static string? ReadLyrics(string path)
     {
         using var file = TagLib.File.Create(path);

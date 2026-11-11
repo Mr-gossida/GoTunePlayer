@@ -57,8 +57,7 @@
                 <Rectangle.Fill>
                     <ImageBrush ImageSource="{Binding BackdropCover}" Stretch="UniformToFill" RenderOptions.BitmapScalingMode="Linear"/>
                 </Rectangle.Fill>
-                <Rectangle.RenderTransform><ScaleTransform ScaleX="1.4" ScaleY="1.4"/></Rectangle.RenderTransform>
-                <Rectangle.Effect><BlurEffect Radius="50" KernelType="Gaussian" RenderingBias="Performance"/></Rectangle.Effect>
+                <Rectangle.RenderTransform><ScaleTransform ScaleX="1.15" ScaleY="1.15"/></Rectangle.RenderTransform>
             </Rectangle>
         </Grid>
         <Rectangle Fill="{DynamicResource PlayerTintBrush}" Opacity="0.72" IsHitTestVisible="False"/>
@@ -78,7 +77,7 @@
                 </Border>
                 <Border CornerRadius="6">
                     <Border.Background>
-                        <ImageBrush ImageSource="{Binding CurrentCover}" Stretch="UniformToFill" RenderOptions.BitmapScalingMode="HighQuality"/>
+                        <ImageBrush ImageSource="{Binding CurrentCoverSmall}" Stretch="UniformToFill" RenderOptions.BitmapScalingMode="HighQuality"/>
                     </Border.Background>
                 </Border>
             </Grid>

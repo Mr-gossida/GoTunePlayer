@@ -46,9 +46,15 @@ public sealed partial class PlaybackViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private System.Windows.Media.Imaging.BitmapImage? _currentCover;
 
-    /// <summary>A tiny copy of the cover, stretched and blurred behind the player.</summary>
+    /// <summary>The same cover decoded at 256px, for the small spots (bottom bar, narrow-layout
+    /// header, mini player strip). Scaling the 1000px original down to ~60-90px in high quality
+    /// is CPU work WPF repeats whenever such an element reappears, which caused a visible hitch.</summary>
     [ObservableProperty]
-    private System.Windows.Media.Imaging.BitmapImage? _backdropCover;
+    private System.Windows.Media.Imaging.BitmapImage? _currentCoverSmall;
+
+    /// <summary>A tiny pre-blurred copy of the cover, stretched behind the player.</summary>
+    [ObservableProperty]
+    private System.Windows.Media.Imaging.BitmapSource? _backdropCover;
 
     /// <summary>The queue panel on the right of the full player.</summary>
     [ObservableProperty]
@@ -104,8 +110,42 @@ public sealed partial class PlaybackViewModel : ObservableObject, IDisposable
 
     /// <summary>"앨범 · 2024 · FLAC" under the big title.</summary>
     public string NowPlayingDetails => CurrentFile is not { } f ? "" : string.Join(" · ",
-        new[] { f.Album, f.YearText, System.IO.Path.GetExtension(f.Path).TrimStart('.').ToUpperInvariant() }
-            .Where(x => !string.IsNullOrWhiteSpace(x)));
+        new[] { f.Album, f.YearText }.Where(x => !string.IsNullOrWhiteSpace(x)));
+
+    // --- audio quality: "FLAC · 24bit · 96kHz · 2,304kbps" with a Hi-Res / Lossless badge ---
+
+    private int _qualityVersion;
+
+    [ObservableProperty]
+    private string _qualityText = "";
+
+    /// <summary>"Hi-Res", "Lossless", or empty for lossy formats.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasQualityBadge))]
+    private string _qualityBadge = "";
+
+    public bool HasQualityBadge => QualityBadge.Length > 0;
+
+    /// <summary>Read off the UI thread (it opens the file); a placeholder from the extension
+    /// shows meanwhile so the line never flickers empty.</summary>
+    private async void LoadQuality(LibraryFileViewModel file)
+    {
+        var version = ++_qualityVersion;
+        QualityText = System.IO.Path.GetExtension(file.Path).TrimStart('.').ToUpperInvariant();
+        QualityBadge = "";
+        AudioQuality? quality;
+        try
+        {
+            quality = await Task.Run(() => TagService.ReadAudioQuality(PlayablePath.ResolveForReading(file.Path)));
+        }
+        catch
+        {
+            return; // unreadable right now: keep the format alone
+        }
+        if (version != _qualityVersion || quality is null) return;
+        QualityText = quality.Summary;
+        QualityBadge = quality.Badge ?? "";
+    }
 
     /// <summary>The playing track's real loudness over time (for the seek bar); null while it's
     /// being analyzed or when the format can't be decoded.</summary>
@@ -285,6 +325,7 @@ public sealed partial class PlaybackViewModel : ObservableObject, IDisposable
         LoadLyrics(file);
         LoadWaveform(file.Path);
         LoadCover(file);
+        LoadQuality(file);
 
         var path = file.Path;
         if (PlayablePath.NeedsWorkaround(path))
@@ -380,6 +421,7 @@ public sealed partial class PlaybackViewModel : ObservableObject, IDisposable
     {
         var version = ++_coverVersion;
         CurrentCover = file.CoverThumbnail;
+        CurrentCoverSmall = file.CoverThumbnail;
         if (!file.HasCover)
         {
             BackdropCover = null;
@@ -387,26 +429,31 @@ public sealed partial class PlaybackViewModel : ObservableObject, IDisposable
             return;
         }
 
-        (System.Windows.Media.Imaging.BitmapImage? Full, System.Windows.Media.Imaging.BitmapImage? Small, System.Windows.Media.Color? Key) result;
+        (System.Windows.Media.Imaging.BitmapImage? Full, System.Windows.Media.Imaging.BitmapImage? Small,
+         System.Windows.Media.Imaging.BitmapSource? Backdrop, System.Windows.Media.Color? Key) result;
+        var thumbnail = file.CoverThumbnail;
         try
         {
             result = await Task.Run(() =>
             {
                 var bytes = CoverArtService.GetCover(PlayablePath.ResolveForReading(file.Path));
                 var full = ImageHelper.ToBitmapImage(bytes, decodePixelWidth: 1000);
-                var small = ImageHelper.ToBitmapImage(bytes, decodePixelWidth: 64);
-                return (full, small, small is null ? (System.Windows.Media.Color?)null : PlayerPalette.ExtractKeyColor(small));
+                var small = ImageHelper.ToBitmapImage(bytes, decodePixelWidth: 256);
+                System.Windows.Media.Imaging.BitmapSource? source = ImageHelper.ToBitmapImage(bytes, decodePixelWidth: 64) ?? thumbnail;
+                return (full, small, ImageHelper.BlurredBackdrop(source), source is null ? (System.Windows.Media.Color?)null : PlayerPalette.ExtractKeyColor(source));
             });
         }
         catch
         {
-            result = (null, null, null); // unreadable right now (file locked/share offline): keep the thumbnail
+            // Unreadable right now (file locked/share offline): keep the thumbnail.
+            result = (null, null, ImageHelper.BlurredBackdrop(thumbnail), thumbnail is null ? null : PlayerPalette.ExtractKeyColor(thumbnail));
         }
         if (version != _coverVersion) return;
 
         if (result.Full is not null) CurrentCover = result.Full;
-        BackdropCover = result.Small ?? file.CoverThumbnail;
-        PlayerPalette.Apply(result.Key ?? (BackdropCover is { } b ? PlayerPalette.ExtractKeyColor(b) : null));
+        if (result.Small is not null) CurrentCoverSmall = result.Small;
+        BackdropCover = result.Backdrop;
+        PlayerPalette.Apply(result.Key);
     }
 
     /// <summary>Clears position/duration so a new (or failed) track never shows the previous
@@ -679,6 +726,7 @@ public sealed partial class PlaybackViewModel : ObservableObject, IDisposable
     public void EndSeek(double seconds)
     {
         _isSeeking = false;
+        _introUntil = null; // the intro is only for a song's natural start, never after a seek
         ApplySeek(TimeSpan.FromSeconds(seconds));
     }
 
@@ -692,6 +740,7 @@ public sealed partial class PlaybackViewModel : ObservableObject, IDisposable
             _player.Play();
             IsPlaying = true;
         }
+        _introUntil = null;
         ApplySeek(time);
     }
 
@@ -763,6 +812,7 @@ public sealed partial class PlaybackViewModel : ObservableObject, IDisposable
     private void UpdateIntro(TimeSpan pos)
     {
         var show = HasSyncedLyrics && _introUntil is { } until && pos < until;
+        if (!show) _introUntil = null; // once over, it stays over: rewinding shows the lyrics
         IsIntroVisible = show;
         IntroProgress = show && _introUntil is { } u ? Math.Clamp(pos / u, 0, 1) : 0;
     }

@@ -15,9 +15,22 @@
          so every page sets it explicitly. The background is the window's cover-tinted backdrop. -->
     <Page.Resources>
         <conv:EnumToVisibilityConverter x:Key="EnumToVisibilityConverter"/>
-        <conv:HalfHeightPaddingConverter x:Key="HalfHeightPaddingConverter"/>
         <conv:PathLeafConverter x:Key="PathLeafConverter"/>
         <conv:GroupIconConverter x:Key="GroupIconConverter"/>
+
+        <!-- Audio quality line: [Hi-Res | Lossless] FLAC · 24bit · 96kHz · 2,304kbps.
+             Content is the PlaybackViewModel. -->
+        <DataTemplate x:Key="QualityLineTemplate">
+            <StackPanel Orientation="Horizontal">
+                <Border CornerRadius="4" Padding="6,1" Margin="0,0,8,0" VerticalAlignment="Center"
+                        BorderThickness="1" BorderBrush="{DynamicResource PlayerAccentBrush}"
+                        Visibility="{Binding HasQualityBadge, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}">
+                    <TextBlock Text="{Binding QualityBadge}" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource PlayerAccentBrush}"/>
+                </Border>
+                <TextBlock Text="{Binding QualityText}" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                           Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
+            </StackPanel>
+        </DataTemplate>
 
         <!-- Queue rows: flat, rounded hover/selection instead of the default accent block. -->
         <Style x:Key="QueueItemStyle" TargetType="ListBoxItem">
@@ -68,13 +81,13 @@
                     <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
-                <Grid Width="88" Height="88" Margin="0,0,16,0">
+                <Grid x:Name="SmallCover" Width="88" Height="88" Margin="0,0,16,0">
                     <Border CornerRadius="8" Background="{DynamicResource PlayerHoverBrush}">
                         <ui:SymbolIcon Symbol="MusicNote224" FontSize="32" Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
                     </Border>
                     <Border CornerRadius="8">
                         <Border.Background>
-                            <ImageBrush ImageSource="{Binding CurrentCover}" Stretch="UniformToFill" RenderOptions.BitmapScalingMode="HighQuality"/>
+                            <ImageBrush ImageSource="{Binding CurrentCoverSmall}" Stretch="UniformToFill" RenderOptions.BitmapScalingMode="HighQuality"/>
                         </Border.Background>
                     </Border>
                 </Grid>
@@ -85,6 +98,7 @@
                                Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
                     <TextBlock Text="{Binding NowPlayingDetails}" FontSize="12" Margin="0,2,0,0" TextTrimming="CharacterEllipsis"
                                Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
+                    <ContentControl Content="{Binding}" ContentTemplate="{StaticResource QualityLineTemplate}" Margin="0,4,0,0" Focusable="False"/>
                 </StackPanel>
             </Grid>
 
@@ -105,7 +119,7 @@
                         </Style.Triggers>
                     </Style>
                 </StackPanel.Style>
-                <Grid Height="{Binding ActualWidth, RelativeSource={RelativeSource Self}}">
+                <Grid x:Name="BigCover" Height="{Binding ActualWidth, RelativeSource={RelativeSource Self}}">
                     <Border CornerRadius="10" Background="{DynamicResource PlayerHoverBrush}">
                         <ui:SymbolIcon Symbol="MusicNote224" FontSize="80" Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
                     </Border>
@@ -124,15 +138,27 @@
                            Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
                 <TextBlock Text="{Binding NowPlayingDetails}" FontSize="12" TextWrapping="Wrap" Margin="0,4,0,0"
                            Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
+                <ContentControl Content="{Binding}" ContentTemplate="{StaticResource QualityLineTemplate}" Margin="0,8,0,0" Focusable="False"/>
+                <!-- Intro (hero card, PlayView.ApplyIntroStage): how far the opening has played. -->
+                <Grid Height="3" Margin="0,24,0,0"
+                      Visibility="{Binding IsIntroVisible, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}">
+                    <Border CornerRadius="1.5" Background="{DynamicResource PlayerTrackBrush}"/>
+                    <Border CornerRadius="1.5" Background="{DynamicResource PlayerAccentBrush}" RenderTransformOrigin="0,0.5">
+                        <Border.RenderTransform>
+                            <ScaleTransform ScaleX="{Binding IntroProgress}"/>
+                        </Border.RenderTransform>
+                    </Border>
+                </Grid>
             </StackPanel>
 
             <Grid x:Name="LyricsArea" Grid.Column="1" Grid.RowSpan="2"
                   Visibility="{Binding IsLyricsVisible, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}">
                 <!-- Synced lyrics: the current line glides to the center (LyricsScroller) while it
                      grows and brightens; the rest stay dim and the edges fade out. -->
-                <!-- Intro: during a long instrumental opening, the song's details stand in for the
-                     lyrics and hand over just before the first line (PlaybackViewModel.IsIntroVisible). -->
-                <StackPanel VerticalAlignment="Center" Margin="14,0" IsHitTestVisible="False" Opacity="0">
+                <!-- Intro in the narrow layout (the song info is already in the strip above): a big
+                     equalizer pulse and the opening's progress until the first line. In the wide
+                     layout this whole area steps aside for the hero card instead. -->
+                <StackPanel x:Name="IntroPulse" VerticalAlignment="Center" HorizontalAlignment="Center" IsHitTestVisible="False" Opacity="0">
                     <StackPanel.RenderTransform>
                         <TranslateTransform Y="16"/>
                     </StackPanel.RenderTransform>
@@ -164,61 +190,50 @@
                             </Style.Triggers>
                         </Style>
                     </StackPanel.Style>
-                    <TextBlock Text="♪  지금 재생 중" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource PlayerAccentBrush}"/>
-                    <TextBlock Text="{Binding NowPlayingTitle}" FontSize="40" FontWeight="Bold" TextWrapping="Wrap" Margin="0,10,0,0"
-                               Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
-                    <TextBlock Text="{Binding NowPlayingSubtitle}" FontSize="20" TextWrapping="Wrap" Margin="0,8,0,0"
-                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-                    <TextBlock Text="{Binding NowPlayingDetails}" FontSize="14" TextWrapping="Wrap" Margin="0,4,0,0"
-                               Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
-                    <Grid Width="180" Height="3" HorizontalAlignment="Left" Margin="0,28,0,0">
+                    <views:EqualizerBars BarBrush="{DynamicResource PlayerAccentBrush}" IsActive="{Binding IsPlaying}">
+                        <views:EqualizerBars.LayoutTransform>
+                            <ScaleTransform ScaleX="3.5" ScaleY="3.5"/>
+                        </views:EqualizerBars.LayoutTransform>
+                    </views:EqualizerBars>
+                    <Grid Width="160" Height="3" Margin="0,32,0,0">
                         <Border CornerRadius="1.5" Background="{DynamicResource PlayerTrackBrush}"/>
                         <Border CornerRadius="1.5" Background="{DynamicResource PlayerAccentBrush}" RenderTransformOrigin="0,0.5">
                             <Border.RenderTransform>
                                 <ScaleTransform ScaleX="{Binding IntroProgress}"/>
                             </Border.RenderTransform>
                         </Border>
-                    </Grid>
-                    <TextBlock Text="가사가 곧 시작됩니다" FontSize="12" Margin="0,8,0,0" Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
-                </StackPanel>
+                    </Grid>                </StackPanel>
 
                 <ScrollViewer x:Name="LyricsScrollViewer"
                               VerticalScrollBarVisibility="Hidden" HorizontalScrollBarVisibility="Disabled" CanContentScroll="False"
                               PreviewMouseWheel="LyricsScrollViewer_PreviewMouseWheel"
+                              SizeChanged="LyricsScrollViewer_SizeChanged"
                               Visibility="{Binding HasSyncedLyrics, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}">
                     <ScrollViewer.Style>
                         <Style TargetType="ScrollViewer" BasedOn="{StaticResource {x:Type ScrollViewer}}">
                             <Style.Triggers>
-                                <!-- Lyrics step aside for the intro and fade back in as it ends. -->
+                                <!-- Hidden during the intro (PlayView.ApplyIntroStage handles the
+                                     dramatic reveal afterwards); ignore the mouse meanwhile so no
+                                     hover highlight or "click to play from here" tooltip shows. -->
                                 <DataTrigger Binding="{Binding IsIntroVisible}" Value="True">
-                                    <DataTrigger.EnterActions>
-                                        <BeginStoryboard>
-                                            <Storyboard>
-                                                <DoubleAnimation Storyboard.TargetProperty="Opacity" To="0" Duration="0:0:0.25"/>
-                                            </Storyboard>
-                                        </BeginStoryboard>
-                                    </DataTrigger.EnterActions>
-                                    <DataTrigger.ExitActions>
-                                        <BeginStoryboard>
-                                            <Storyboard>
-                                                <DoubleAnimation Storyboard.TargetProperty="Opacity" To="1" BeginTime="0:0:0.3" Duration="0:0:0.8"/>
-                                            </Storyboard>
-                                        </BeginStoryboard>
-                                    </DataTrigger.ExitActions>
+                                    <Setter Property="IsHitTestVisible" Value="False"/>
                                 </DataTrigger>
                             </Style.Triggers>
                         </Style>
                     </ScrollViewer.Style>
                     <ScrollViewer.OpacityMask>
                         <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                            <!-- Only a thin fade at the very edges, so lines near the top stay readable. -->
                             <GradientStop Color="Transparent" Offset="0"/>
-                            <GradientStop Color="Black" Offset="0.2"/>
-                            <GradientStop Color="Black" Offset="0.8"/>
+                            <GradientStop Color="Black" Offset="0.07"/>
+                            <GradientStop Color="Black" Offset="0.93"/>
                             <GradientStop Color="Transparent" Offset="1"/>
                         </LinearGradientBrush>
                     </ScrollViewer.OpacityMask>
-                    <ItemsControl x:Name="LyricsItems" ItemsSource="{Binding LyricsLines}"
-                                  Margin="{Binding ActualHeight, ElementName=LyricsScrollViewer, Converter={StaticResource HalfHeightPaddingConverter}}">
+                    <!-- Margin (half the viewport above and below, so any line can sit in the middle)
+                         is set from code in the same layout pass as a resize: a binding updated it
+                         a frame late, which made the lines shake while the window was resized. -->
+                    <ItemsControl x:Name="LyricsItems" ItemsSource="{Binding LyricsLines}">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
                                 <Border Padding="14,8" Margin="0,2" CornerRadius="8" Cursor="Hand"
@@ -399,6 +414,9 @@
         <Image x:Name="CrossfadeSnapshot" Grid.Column="0" HorizontalAlignment="Left" VerticalAlignment="Top"
                Stretch="Fill" IsHitTestVisible="False" Visibility="Collapsed"/>
 
+        <!-- Layout switch (wide <-> narrow): the cover glides here from its old spot to its new one. -->
+        <Canvas x:Name="TransitionLayer" Grid.Column="0" IsHitTestVisible="False"/>
+
         <!-- ========== Empty library: one clear way in ========== -->
         <StackPanel Grid.Column="0" HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="420"
                     Visibility="{Binding Library.HasNoFiles, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}">
@@ -419,7 +437,7 @@
         </StackPanel>
 
         <!-- ========== Queue panel (its sort/grouping also decides playback order) ========== -->
-        <Border x:Name="QueuePanel" Grid.Column="1" Width="360" Background="{DynamicResource PlayerPanelBrush}" Padding="12,14,12,10"
+        <Border x:Name="QueuePanel" Grid.Column="1" Width="320" Background="{DynamicResource PlayerPanelBrush}" Padding="12,14,12,10"
                 Visibility="{Binding Playback.IsQueueVisible, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}">
             <Grid DataContext="{Binding Library}">
                 <Grid.RowDefinitions>

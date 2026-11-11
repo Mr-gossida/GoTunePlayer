@@ -31,36 +31,24 @@
         <!-- Backdrop: the cover's own color, the cover itself stretched and blurred over it, and a
              scrim that deepens toward the bottom so text always stays readable. -->
         <Rectangle Grid.RowSpan="3" Fill="{DynamicResource PlayerTintBrush}"/>
+        <!-- BackdropCover is already blurred (ImageHelper.BlurredBackdrop): stretching it is all the
+             work left, so resizing the window stays smooth. -->
         <Grid Grid.RowSpan="3" ClipToBounds="True" IsHitTestVisible="False">
             <!-- The previous song's cover, fading out under the new one (ShellWindow code). -->
             <Image x:Name="BackdropPrevious" Stretch="UniformToFill" Opacity="0"
                    RenderOptions.BitmapScalingMode="Linear" RenderTransformOrigin="0.5,0.5">
                 <Image.RenderTransform>
-                    <ScaleTransform ScaleX="1.3" ScaleY="1.3"/>
+                    <ScaleTransform ScaleX="1.15" ScaleY="1.15"/>
                 </Image.RenderTransform>
-                <Image.Effect>
-                    <BlurEffect Radius="90" KernelType="Gaussian" RenderingBias="Performance"/>
-                </Image.Effect>
             </Image>
             <Image x:Name="BackdropImage" Source="{Binding BackdropCover}" Stretch="UniformToFill" Opacity="0.55"
                    RenderOptions.BitmapScalingMode="Linear" RenderTransformOrigin="0.5,0.5">
                 <Image.RenderTransform>
-                    <ScaleTransform ScaleX="1.3" ScaleY="1.3"/>
+                    <ScaleTransform ScaleX="1.15" ScaleY="1.15"/>
                 </Image.RenderTransform>
-                <Image.Effect>
-                    <BlurEffect Radius="90" KernelType="Gaussian" RenderingBias="Performance"/>
-                </Image.Effect>
             </Image>
         </Grid>
-        <Rectangle Grid.RowSpan="3" Fill="{DynamicResource PlayerTintBrush}" IsHitTestVisible="False">
-            <Rectangle.OpacityMask>
-                <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
-                    <GradientStop Color="#8C000000" Offset="0"/>
-                    <GradientStop Color="#B3000000" Offset="0.55"/>
-                    <GradientStop Color="#EB000000" Offset="1"/>
-                </LinearGradientBrush>
-            </Rectangle.OpacityMask>
-        </Rectangle>
+        <Rectangle Grid.RowSpan="3" Fill="{DynamicResource PlayerScrimBrush}" IsHitTestVisible="False"/>
 
         <ui:TitleBar Grid.Row="0" Title="TuneSync">
             <ui:TitleBar.Icon>
@@ -118,7 +106,7 @@
                         </Border>
                         <Border CornerRadius="6">
                             <Border.Background>
-                                <ImageBrush ImageSource="{Binding CurrentCover}" Stretch="UniformToFill" RenderOptions.BitmapScalingMode="HighQuality"/>
+                                <ImageBrush ImageSource="{Binding CurrentCoverSmall}" Stretch="UniformToFill" RenderOptions.BitmapScalingMode="HighQuality"/>
                             </Border.Background>
                         </Border>
                     </Grid>
