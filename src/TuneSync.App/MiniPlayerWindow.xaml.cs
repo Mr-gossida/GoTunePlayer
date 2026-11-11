@@ -29,6 +29,7 @@ public partial class MiniPlayerWindow : FluentWindow
         _shell = shell;
         DataContext = playback;
         TaskbarControls.Attach(this, playback);
+        WindowSnapper.Attach(this); // magnetic screen edges while dragging
 
         playback.PropertyChanged += Playback_PropertyChanged;
         SizeChanged += (_, _) => KeepOnScreen();

@@ -58,6 +58,10 @@ public sealed class AppSettings
     /// reopens on it, paused at that spot.</summary>
     public string? LastFilePath { get; set; }
     public double LastPositionSeconds { get; set; }
+
+    /// <summary>While music is playing, keep the display on and the PC awake (so the lyrics stay
+    /// on screen). Released as soon as playback pauses or stops.</summary>
+    public bool KeepScreenOnWhilePlaying { get; set; } = true;
 }
 
 public enum PlayerMode

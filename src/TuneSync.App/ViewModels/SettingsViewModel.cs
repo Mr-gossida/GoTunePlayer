@@ -14,10 +14,11 @@ public sealed partial class SettingsViewModel : ObservableObject
     private readonly AppSettings _settings;
     private readonly MergeViewModel _merge;
 
-    public SettingsViewModel(AppSettings settings, MergeViewModel merge)
+    public SettingsViewModel(AppSettings settings, MergeViewModel merge, PlaybackViewModel playback)
     {
         _settings = settings;
         _merge = merge;
+        Playback = playback;
         _theme = settings.Theme;
         _quarantineFolderName = settings.MergeQuarantineFolderName;
     }
@@ -28,6 +29,9 @@ public sealed partial class SettingsViewModel : ObservableObject
         new(AppTheme.Light, "라이트"),
         new(AppTheme.Dark, "다크"),
     ];
+
+    /// <summary>For playback options (the switch binds straight to it, which also saves).</summary>
+    public PlaybackViewModel Playback { get; }
 
     [ObservableProperty]
     private AppTheme _theme;

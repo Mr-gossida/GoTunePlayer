@@ -163,6 +163,31 @@ public sealed partial class PlaybackViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private bool _isPlaying;
 
+    /// <summary>Settings › 재생 중 화면 켜짐 유지.</summary>
+    [ObservableProperty]
+    private bool _keepScreenOn;
+
+    partial void OnIsPlayingChanged(bool value) => UpdateKeepAwake();
+
+    partial void OnKeepScreenOnChanged(bool value)
+    {
+        _settings.KeepScreenOnWhilePlaying = value;
+        AppSettingsStore.Save(_settings);
+        UpdateKeepAwake();
+    }
+
+    /// <summary>While playing (and the option is on), tells Windows not to turn the display off
+    /// or sleep; any other time, gives that back. Always called on the UI thread, which owns the
+    /// request for as long as the app runs.</summary>
+    private void UpdateKeepAwake()
+    {
+        const uint EsContinuous = 0x80000000, EsSystemRequired = 0x1, EsDisplayRequired = 0x2;
+        SetThreadExecutionState(KeepScreenOn && IsPlaying ? EsContinuous | EsSystemRequired | EsDisplayRequired : EsContinuous);
+    }
+
+    [System.Runtime.InteropServices.DllImport("kernel32.dll")]
+    private static extern uint SetThreadExecutionState(uint flags);
+
     [ObservableProperty]
     private double _positionSeconds;
 
@@ -202,6 +227,7 @@ public sealed partial class PlaybackViewModel : ObservableObject, IDisposable
         _isLyricsVisible = settings.ShowLyrics;
         _isMiniTopmost = settings.MiniTopmost;
         _isMiniQueueExpanded = settings.MiniQueueExpanded;
+        _keepScreenOn = settings.KeepScreenOnWhilePlaying;
         WatchForSessionToResume();
         _player.Volume = _volume;
 

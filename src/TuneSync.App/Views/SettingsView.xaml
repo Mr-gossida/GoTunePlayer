@@ -26,6 +26,18 @@
                       SelectedValuePath="Value" SelectedValue="{Binding Theme}"/>
         </ui:CardControl>
 
+        <ui:TextBlock Text="재생" FontTypography="BodyStrong" Margin="0,20,0,8"/>
+        <ui:CardControl Margin="0,0,0,4" Icon="{ui:SymbolIcon Desktop24}">
+            <ui:CardControl.Header>
+                <StackPanel>
+                    <ui:TextBlock Text="재생 중 화면 켜짐 유지" FontTypography="Body"/>
+                    <ui:TextBlock Text="음악이 재생되는 동안 화면이 꺼지거나 PC가 절전 모드로 들어가지 않게 합니다. 일시정지하거나 멈추면 원래대로 돌아갑니다."
+                                  FontSize="12" TextWrapping="Wrap" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                </StackPanel>
+            </ui:CardControl.Header>
+            <ui:ToggleSwitch IsChecked="{Binding Playback.KeepScreenOn}" OnContent="켬" OffContent="끔"/>
+        </ui:CardControl>
+
         <ui:TextBlock Text="폴더 합치기" FontTypography="BodyStrong" Margin="0,20,0,8"/>
         <ui:CardControl Margin="0,0,0,4" Icon="{ui:SymbolIcon FolderProhibited24}">
             <ui:CardControl.Header>
