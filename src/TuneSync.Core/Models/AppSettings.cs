@@ -53,6 +53,11 @@ public sealed class AppSettings
     /// <summary>Last spot of each mini player (only Left/Top are used).</summary>
     public WindowPlacement? MiniHorizontal { get; set; }
     public WindowPlacement? MiniVertical { get; set; }
+
+    /// <summary>The song loaded when the app was last closed, and how far into it - the app
+    /// reopens on it, paused at that spot.</summary>
+    public string? LastFilePath { get; set; }
+    public double LastPositionSeconds { get; set; }
 }
 
 public enum PlayerMode

@@ -42,7 +42,6 @@
     </Window.Resources>
     <Window.InputBindings>
         <KeyBinding Key="MediaPlayPause" Command="{Binding TogglePlayPauseCommand}"/>
-        <KeyBinding Key="Space" Command="{Binding TogglePlayPauseCommand}"/>
         <KeyBinding Key="MediaStop" Command="{Binding StopCommand}"/>
         <KeyBinding Key="MediaNextTrack" Command="{Binding PlayNextCommand}"/>
         <KeyBinding Key="MediaPreviousTrack" Command="{Binding PlayPreviousCommand}"/>

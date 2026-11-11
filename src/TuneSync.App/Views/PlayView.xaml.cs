@@ -478,6 +478,7 @@ public partial class PlayView : Page
                 FollowCurrentLyric();
                 break;
             case nameof(PlaybackViewModel.CurrentFile):
+                HideBackToLyric();
                 ResetLyricsScroll();
                 _followPausedUntil = DateTime.MinValue;
                 SyncPlaylistToCurrentTrack();
@@ -700,13 +701,86 @@ public partial class PlayView : Page
     {
         LyricsScroller.Stop(LyricsScrollViewer);
         _followPausedUntil = DateTime.UtcNow.AddSeconds(4);
+        ShowBackToLyric();
     }
 
     private void LyricLine_Click(object sender, MouseButtonEventArgs e)
     {
         if (sender is not System.Windows.FrameworkElement { DataContext: LyricsLineViewModel line }) return;
         _followPausedUntil = DateTime.MinValue;
+        HideBackToLyric();
         _viewModel.Playback.SeekTo(line.Time);
+    }
+
+    // --- "현재 가사로": after scrolling the lyrics by hand, a way straight back ---
+
+    private System.Windows.Threading.DispatcherTimer? _backToLyricTimer;
+
+    private void ShowBackToLyric()
+    {
+        if (!_viewModel.Playback.HasSyncedLyrics) return;
+        if (BackToLyricButton.Visibility != System.Windows.Visibility.Visible)
+        {
+            BackToLyricButton.Visibility = System.Windows.Visibility.Visible;
+            FadeSlideIn(BackToLyricButton, 0, 12);
+        }
+        // Auto-follow comes back by itself after a few seconds; the button goes with it.
+        _backToLyricTimer ??= CreateBackToLyricTimer();
+        _backToLyricTimer.Stop();
+        _backToLyricTimer.Start();
+    }
+
+    private System.Windows.Threading.DispatcherTimer CreateBackToLyricTimer()
+    {
+        var timer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(4) };
+        timer.Tick += (_, _) =>
+        {
+            HideBackToLyric();
+            FollowCurrentLyric();
+        };
+        return timer;
+    }
+
+    private void HideBackToLyric()
+    {
+        _backToLyricTimer?.Stop();
+        BackToLyricButton.Visibility = System.Windows.Visibility.Collapsed;
+    }
+
+    private void BackToLyric_Click(object sender, System.Windows.RoutedEventArgs e)
+    {
+        _followPausedUntil = DateTime.MinValue;
+        HideBackToLyric();
+        FollowCurrentLyric();
+    }
+
+    // --- "지금 재생 중": the playing song is scrolled out of view in the queue ---
+
+    private void PlaylistBox_ScrollChanged(object sender, ScrollChangedEventArgs e) => UpdateBackToCurrent();
+
+    private void UpdateBackToCurrent()
+    {
+        var show = false;
+        if (_viewModel.Playback.CurrentFile is { } current && PlaylistBox.ActualHeight > 0)
+        {
+            show = true;
+            if (PlaylistBox.ItemContainerGenerator.ContainerFromItem(current) is System.Windows.FrameworkElement row && row.IsVisible)
+            {
+                var top = row.TransformToAncestor(PlaylistBox).Transform(new System.Windows.Point(0, 0)).Y;
+                show = top + row.ActualHeight < 0 || top > PlaylistBox.ActualHeight - 8;
+            }
+        }
+        var visibility = show ? System.Windows.Visibility.Visible : System.Windows.Visibility.Collapsed;
+        if (BackToCurrentButton.Visibility == visibility) return;
+        BackToCurrentButton.Visibility = visibility;
+        if (show) FadeSlideIn(BackToCurrentButton, 0, 12);
+    }
+
+    private void BackToCurrent_Click(object sender, System.Windows.RoutedEventArgs e)
+    {
+        if (_viewModel.Playback.CurrentFile is not { } current) return;
+        PlaylistBox.SelectedItem = current;
+        PlaylistBox.ScrollIntoView(current);
     }
 
     /// <summary>Keeps the playlist highlight on the playing track, including when it changes via
@@ -717,6 +791,10 @@ public partial class PlayView : Page
         PlaylistBox.SelectedItem = current;
         // After layout: right after a sort/rescan or at startup the list may not be measured yet.
         if (IsLoaded)
-            Dispatcher.BeginInvoke(() => PlaylistBox.ScrollIntoView(current), System.Windows.Threading.DispatcherPriority.Loaded);
+            Dispatcher.BeginInvoke(() =>
+            {
+                PlaylistBox.ScrollIntoView(current);
+                UpdateBackToCurrent();
+            }, System.Windows.Threading.DispatcherPriority.Loaded);
     }
 }

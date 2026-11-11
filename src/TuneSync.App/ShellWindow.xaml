@@ -124,12 +124,12 @@
                                    Tag="{Binding IsShuffle}" Command="{Binding ToggleShuffleCommand}" ToolTip="{Binding ShuffleToolTip}"
                                    Icon="{ui:SymbolIcon ArrowShuffle24}"/>
                         <ui:Button Style="{StaticResource PlayerIconButtonStyle}" Margin="0,0,8,0" Icon="{ui:SymbolIcon Previous24, Filled=True}"
-                                   Command="{Binding PlayPreviousCommand}" ToolTip="이전 곡"/>
+                                   Command="{Binding PlayPreviousCommand}" ToolTip="이전 곡 (Ctrl+←)"/>
                         <ui:Button Style="{StaticResource PlayerPlayButtonStyle}"
                                    Icon="{Binding IsPlaying, Converter={StaticResource PlayPauseIconConverter}}"
-                                   Command="{Binding TogglePlayPauseCommand}" ToolTip="재생 / 일시정지"/>
+                                   Command="{Binding TogglePlayPauseCommand}" ToolTip="재생 / 일시정지 (Space)"/>
                         <ui:Button Style="{StaticResource PlayerIconButtonStyle}" Margin="8,0,0,0" Icon="{ui:SymbolIcon Next24, Filled=True}"
-                                   Command="{Binding PlayNextCommand}" ToolTip="다음 곡"/>
+                                   Command="{Binding PlayNextCommand}" ToolTip="다음 곡 (Ctrl+→)"/>
                         <ui:Button Margin="12,0,0,0" Command="{Binding CycleRepeatCommand}" ToolTip="{Binding RepeatToolTip}">
                             <ui:Button.Style>
                                 <Style TargetType="ui:Button" BasedOn="{StaticResource PlayerIconButtonStyle}">
@@ -187,9 +187,9 @@
                             </Style>
                         </ui:Button.Style>
                     </ui:Button>
-                    <Slider x:Name="VolumeSlider" Width="96" Margin="4,0,0,0" VerticalAlignment="Center" IsMoveToPointEnabled="True"
+                    <Slider x:Name="VolumeSlider" PreviewMouseWheel="Volume_PreviewMouseWheel" Width="96" Margin="4,0,0,0" VerticalAlignment="Center" IsMoveToPointEnabled="True"
                             Minimum="0" Maximum="1" SmallChange="0.05" LargeChange="0.1"
-                            Value="{Binding Volume}" ToolTip="볼륨"/>
+                            Value="{Binding Volume}" ToolTip="볼륨 (Ctrl+↑/↓, 마우스 휠)"/>
                     <TextBlock x:Name="VolumeText" Text="{Binding VolumePercent}" Width="26" Margin="6,0,0,0" TextAlignment="Right" FontSize="11"
                                VerticalAlignment="Center" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
                 </StackPanel>

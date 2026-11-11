@@ -28,6 +28,7 @@ public partial class MiniPlayerWindow : FluentWindow
         _settings = settings;
         _shell = shell;
         DataContext = playback;
+        TaskbarControls.Attach(this, playback);
 
         playback.PropertyChanged += Playback_PropertyChanged;
         SizeChanged += (_, _) => KeepOnScreen();
@@ -111,6 +112,11 @@ public partial class MiniPlayerWindow : FluentWindow
         if (e.Key == Key.M && Keyboard.Modifiers == ModifierKeys.Control)
         {
             _shell.ExitMiniMode();
+            e.Handled = true;
+            return;
+        }
+        if (PlayerShortcuts.Handle(e, _playback))
+        {
             e.Handled = true;
             return;
         }

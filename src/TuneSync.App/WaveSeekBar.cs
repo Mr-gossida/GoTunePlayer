@@ -151,6 +151,38 @@ public sealed class WaveSeekBar : FrameworkElement
 
         var radius = _hover || _dragging ? ThumbRadius + 1.5 : ThumbRadius;
         dc.DrawEllipse(new SolidColorBrush(accent), new Pen(Brushes.White, 2.5), new Point(thumbX, mid), radius, radius);
+
+        if ((_hover || _dragging) && Maximum > 1) DrawTimePreview(dc, mid);
+    }
+
+    private double _hoverX;
+
+    /// <summary>Hovering (or dragging): a thin marker at the pointer and a small bubble above the
+    /// bar with the time it points at, so a jump can be aimed precisely.</summary>
+    private void DrawTimePreview(DrawingContext dc, double mid)
+    {
+        var x = _dragging ? Left + (Right - Left) * Math.Clamp(_dragValue / Maximum, 0, 1) : Math.Clamp(_hoverX, Left, Right);
+        var seconds = _dragging ? _dragValue : ValueFromX(x);
+
+        if (!_dragging)
+        {
+            var marker = new Pen(new SolidColorBrush(Color.FromArgb(0x90, 0xFF, 0xFF, 0xFF)), 1.5);
+            dc.DrawLine(marker, new Point(x, mid - 7), new Point(x, mid + 7));
+        }
+
+        var time = TimeSpan.FromSeconds(seconds);
+        var label = time.TotalHours >= 1 ? time.ToString(@"h\:mm\:ss") : time.ToString(@"m\:ss");
+        var text = new FormattedText(label, System.Globalization.CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
+            new Typeface(new FontFamily("Segoe UI Variable Text, Segoe UI"), FontStyles.Normal, FontWeights.SemiBold, FontStretches.Normal),
+            11, Brushes.White, VisualTreeHelper.GetDpi(this).PixelsPerDip);
+        var w = text.Width + 14;
+        var h = text.Height + 6;
+        // Above the bar, kept inside the bar's horizontal extent.
+        var left = Math.Clamp(x - w / 2, 0, Math.Max(0, ActualWidth - w));
+        var top = mid - 14 - h;
+        var bubble = new SolidColorBrush(Color.FromArgb(0xE6, 0x1C, 0x1C, 0x1C));
+        dc.DrawRoundedRectangle(bubble, null, new Rect(left, top, w, h), 6, 6);
+        dc.DrawText(text, new Point(left + 7, top + 3));
     }
 
     /// <summary>One translucent layer of drifting hills above the played line: a short ripple
@@ -280,8 +312,8 @@ public sealed class WaveSeekBar : FrameworkElement
 
     protected override void OnMouseMove(MouseEventArgs e)
     {
-        if (!_dragging) return;
-        _dragValue = ValueFromX(e.GetPosition(this).X);
+        _hoverX = e.GetPosition(this).X;
+        if (_dragging) _dragValue = ValueFromX(_hoverX);
         InvalidateVisual();
     }
 

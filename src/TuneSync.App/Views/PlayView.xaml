@@ -294,6 +294,14 @@
                     </ItemsControl>
                 </ScrollViewer>
 
+                <!-- Shown after scrolling the lyrics away by hand: back to the line being sung. -->
+                <ui:Button x:Name="BackToLyricButton" Content="현재 가사로" Icon="{ui:SymbolIcon ArrowSync24}"
+                           HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,16" Panel.ZIndex="10"
+                           Padding="14,6" CornerRadius="16" BorderThickness="0" FontWeight="SemiBold" Visibility="Collapsed"
+                           Background="{DynamicResource PlayerAccentBrush}" Foreground="{DynamicResource PlayerOnAccentBrush}"
+                           MouseOverBackground="{DynamicResource PlayerAccentBrush}" PressedBackground="{DynamicResource PlayerAccentBrush}"
+                           PressedForeground="{DynamicResource PlayerOnAccentBrush}" Click="BackToLyric_Click"/>
+
                 <!-- No lyrics: hovering reveals "가사 찾기", which searches online for this song and
                      offers the result to save right here (PlayPageViewModel). -->
                 <Border x:Name="NoLyricsCard" HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="460"
@@ -483,7 +491,8 @@
                          VirtualizingPanel.IsVirtualizingWhenGrouping="True"
                          VirtualizingPanel.ScrollUnit="Pixel"
                          MouseDoubleClick="PlaylistBox_MouseDoubleClick" KeyDown="PlaylistBox_KeyDown"
-                         ContextMenuOpening="PlaylistBox_ContextMenuOpening">
+                         ContextMenuOpening="PlaylistBox_ContextMenuOpening"
+                         ScrollViewer.ScrollChanged="PlaylistBox_ScrollChanged">
                     <ListBox.ContextMenu>
                         <ContextMenu/>
                     </ListBox.ContextMenu>
@@ -574,6 +583,14 @@
                            Foreground="{DynamicResource TextFillColorTertiaryBrush}" VerticalAlignment="Top"
                            Text="아래 + 버튼으로 폴더나 음악 파일을 추가하세요."
                            Visibility="{Binding HasNoFiles, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}"/>
+
+                <!-- Shown while the playing song is scrolled out of view: back to it. -->
+                <ui:Button x:Name="BackToCurrentButton" Grid.Row="2" Content="지금 재생 중" Icon="{ui:SymbolIcon MusicNote224}"
+                           HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,10"
+                           Padding="14,6" CornerRadius="16" BorderThickness="0" FontWeight="SemiBold" Visibility="Collapsed"
+                           Background="{DynamicResource PlayerAccentBrush}" Foreground="{DynamicResource PlayerOnAccentBrush}"
+                           MouseOverBackground="{DynamicResource PlayerAccentBrush}" PressedBackground="{DynamicResource PlayerAccentBrush}"
+                           PressedForeground="{DynamicResource PlayerOnAccentBrush}" Click="BackToCurrent_Click"/>
 
                 <views:LibrarySourceBar Grid.Row="3" Margin="0,8,0,0"/>
             </Grid>

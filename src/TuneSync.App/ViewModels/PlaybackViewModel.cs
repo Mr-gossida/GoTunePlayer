@@ -202,6 +202,7 @@ public sealed partial class PlaybackViewModel : ObservableObject, IDisposable
         _isLyricsVisible = settings.ShowLyrics;
         _isMiniTopmost = settings.MiniTopmost;
         _isMiniQueueExpanded = settings.MiniQueueExpanded;
+        WatchForSessionToResume();
         _player.Volume = _volume;
 
         _player.MediaOpened += (_, _) =>
@@ -300,6 +301,62 @@ public sealed partial class PlaybackViewModel : ObservableObject, IDisposable
     }
 
     public void PlayFile(LibraryFileViewModel file) => PlayFile(file, fromHistory: false);
+
+    // --- session: reopen on the last song, paused where it was left ---
+
+    /// <summary>As the library streams in at startup, picks up the song that was loaded when the
+    /// app was last closed and loads it paused at the same spot (nothing plays by itself).</summary>
+    private void WatchForSessionToResume()
+    {
+        if (string.IsNullOrEmpty(_settings.LastFilePath)) return;
+        var path = _settings.LastFilePath;
+        var position = TimeSpan.FromSeconds(Math.Max(0, _settings.LastPositionSeconds));
+
+        System.Collections.Specialized.NotifyCollectionChangedEventHandler? onFiles = null;
+        System.ComponentModel.PropertyChangedEventHandler? onScan = null;
+        void StopWatching()
+        {
+            _library.Files.CollectionChanged -= onFiles;
+            _library.PropertyChanged -= onScan;
+        }
+        onFiles = (_, e) =>
+        {
+            if (CurrentFile is not null) { StopWatching(); return; } // the user already picked something
+            if (e.NewItems?.OfType<LibraryFileViewModel>().FirstOrDefault(f =>
+                    string.Equals(f.Path, path, StringComparison.OrdinalIgnoreCase)) is not { } file) return;
+            StopWatching();
+            // After the current batch of adds, so the queue can select and scroll to it.
+            System.Windows.Application.Current?.Dispatcher.BeginInvoke(() => ResumeSession(file, position),
+                System.Windows.Threading.DispatcherPriority.Background);
+        };
+        onScan = (_, e) =>
+        {
+            if (e.PropertyName == nameof(LibraryViewModel.IsScanning) && !_library.IsScanning) StopWatching(); // not in the library anymore
+        };
+        _library.Files.CollectionChanged += onFiles;
+        _library.PropertyChanged += onScan;
+    }
+
+    private void ResumeSession(LibraryFileViewModel file, TimeSpan position)
+    {
+        if (CurrentFile is not null) return;
+        PlayFile(file);
+        // PlayFile starts playing once the file opens; ask it to stay paused at the saved spot.
+        _pendingRestore = (position, false);
+        if (position > TimeSpan.FromSeconds(1))
+        {
+            _introUntil = null; // picking up mid-song: straight to the lyrics
+            ShowPosition(position);
+        }
+    }
+
+    /// <summary>Remembers the loaded song and position for next time (called on close).</summary>
+    public void SaveSession()
+    {
+        _settings.LastFilePath = CurrentFile?.Path;
+        _settings.LastPositionSeconds = CurrentFile is null ? 0 : (_seekTarget ?? _player.Position).TotalSeconds;
+        AppSettingsStore.Save(_settings);
+    }
 
     private async void PlayFile(LibraryFileViewModel file, bool fromHistory)
     {
@@ -744,6 +801,19 @@ public sealed partial class PlaybackViewModel : ObservableObject, IDisposable
         ApplySeek(time);
     }
 
+    /// <summary>Keyboard ←/→: jumps back or ahead without changing play/pause.</summary>
+    public void SeekBy(double seconds)
+    {
+        if (CurrentFile is null) return;
+        var current = _seekTarget?.TotalSeconds ?? PositionSeconds;
+        var target = Math.Clamp(current + seconds, 0, Math.Max(0, DurationSeconds - 0.5));
+        _introUntil = null;
+        ApplySeek(TimeSpan.FromSeconds(target));
+    }
+
+    /// <summary>Keyboard Ctrl+↑/↓ and the mouse wheel on the volume slider: 5% steps.</summary>
+    public void ChangeVolume(double delta) => Volume = Math.Round(Math.Clamp(Volume + delta, 0, 1), 2);
+
     private void ApplySeek(TimeSpan target)
     {
         if (CurrentFile is null) return;
@@ -839,27 +909,36 @@ public sealed partial class PlaybackViewModel : ObservableObject, IDisposable
     {
         if (CurrentFile is not { } file) return;
         LoadLyrics(file);
-        if (_player.Source is not null) ShowPosition(_player.Position);
     }
 
-    private void LoadLyrics(LibraryFileViewModel file)
+    private int _lyricsVersion;
+    private bool _isLoadingLyrics;
+
+    /// <summary>Reads the song's lyrics off the UI thread: the library lives on a network share,
+    /// and a slow read there used to freeze the whole window right as a song started.</summary>
+    private async void LoadLyrics(LibraryFileViewModel file)
     {
+        var version = ++_lyricsVersion;
         LyricsLines.Clear();
         PlainLyrics = null;
         PlainLyricsLines = [];
         HasSyncedLyrics = false;
         CurrentLyricsIndex = -1;
         _introUntil = null;
+        _isLoadingLyrics = true;
+        OnPropertyChanged(nameof(HasNoLyrics)); // not "no lyrics" yet - still reading
 
         string? lyrics;
         try
         {
-            lyrics = TagService.ReadLyrics(file.Path);
+            lyrics = await Task.Run(() => TagService.ReadLyrics(PlayablePath.ResolveForReading(file.Path)));
         }
         catch
         {
             lyrics = null;
         }
+        if (version != _lyricsVersion) return; // another song (or reload) took over meanwhile
+        _isLoadingLyrics = false;
 
         if (!string.IsNullOrWhiteSpace(lyrics))
         {
@@ -880,10 +959,14 @@ public sealed partial class PlaybackViewModel : ObservableObject, IDisposable
                 PlainLyricsLines = lyrics.Replace("\r", "").Split('\n').Select(l => l.Trim()).ToList();
             }
         }
-        UpdateIntro(_player.Source is null ? TimeSpan.Zero : _player.Position);
 
+        // Where the song is by now (or where a resume/seek is taking it): the intro only plays
+        // from the very start, and the current line is picked from this position.
+        var position = _pendingRestore?.Position ?? _seekTarget ?? TimeSpan.FromSeconds(PositionSeconds);
+        if (position > TimeSpan.FromSeconds(1)) _introUntil = null;
         OnPropertyChanged(nameof(HasPlainLyricsOnly));
         OnPropertyChanged(nameof(HasNoLyrics));
+        ShowPosition(position);
         RaiseLyricTexts();
     }
 
@@ -891,7 +974,7 @@ public sealed partial class PlaybackViewModel : ObservableObject, IDisposable
     /// fallback (rather than the synced, auto-scrolling list) is what the view should show.</summary>
     public bool HasPlainLyricsOnly => !HasSyncedLyrics && !string.IsNullOrWhiteSpace(PlainLyrics);
 
-    public bool HasNoLyrics => CurrentFile is not null && !HasSyncedLyrics && string.IsNullOrWhiteSpace(PlainLyrics);
+    public bool HasNoLyrics => CurrentFile is not null && !_isLoadingLyrics && !HasSyncedLyrics && string.IsNullOrWhiteSpace(PlainLyrics);
 
     private static string FormatTime(TimeSpan t) =>
         t.TotalHours >= 1 ? t.ToString(@"h\:mm\:ss") : t.ToString(@"mm\:ss");

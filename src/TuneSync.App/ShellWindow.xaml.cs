@@ -35,6 +35,7 @@ public partial class ShellWindow : FluentWindow
         Toast.Register(this, snackbar);
 
         PlayerFrame.Navigate(services.GetRequiredService<PlayView>());
+        TaskbarControls.Attach(this, playback);
 
         // Cover backdrop: the old picture fades out while the new one fades in, instead of a cut.
         playback.PropertyChanging += (_, e) =>
@@ -76,7 +77,19 @@ public partial class ShellWindow : FluentWindow
                     return;
             }
         }
+        if (PlayerShortcuts.Handle(e, _playback))
+        {
+            e.Handled = true;
+            return;
+        }
         base.OnPreviewKeyDown(e);
+    }
+
+    /// <summary>Mouse wheel over the volume slider: 5% per notch.</summary>
+    private void Volume_PreviewMouseWheel(object sender, System.Windows.Input.MouseWheelEventArgs e)
+    {
+        _playback.ChangeVolume(e.Delta > 0 ? 0.05 : -0.05);
+        e.Handled = true;
     }
 
     private void FocusSearch()
@@ -184,6 +197,7 @@ public partial class ShellWindow : FluentWindow
     protected override void OnClosing(CancelEventArgs e)
     {
         IsClosing = true;
+        _playback.SaveSession(); // reopen on this song, at this spot
         var bounds = WindowState == WindowState.Normal ? new Rect(Left, Top, Width, Height) : RestoreBounds;
         // (Never shown - started and closed in the mini player - leaves NaN bounds: keep the old ones.)
         if (!bounds.IsEmpty && !double.IsNaN(bounds.Left) && !double.IsNaN(bounds.Width))
