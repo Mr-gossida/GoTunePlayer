@@ -93,13 +93,13 @@
         <!-- Transport bar: what's playing | controls + seek | view toggles + volume. DataContext is
              the PlaybackViewModel singleton, set on the Window. -->
         <Border Grid.Row="2" Background="{DynamicResource PlayerPanelBrush}" Padding="16,10,16,12">
-            <Grid>
+            <Grid x:Name="TransportGrid" SizeChanged="Transport_SizeChanged">
                 <Grid.ColumnDefinitions>
-                    <!-- Right column sizes to its controls (timer, toggles, volume) so none get
-                         clipped; the seek area in the middle gives way instead. -->
-                    <ColumnDefinition Width="*" MinWidth="160"/>
-                    <ColumnDefinition Width="2*" MaxWidth="720"/>
-                    <ColumnDefinition Width="Auto"/>
+                    <!-- Widths set by LayoutTransport: equal sides so the controls sit in the exact
+                         middle, the right side never narrower than its buttons. -->
+                    <ColumnDefinition x:Name="TransportLeft" Width="*" MinWidth="160"/>
+                    <ColumnDefinition x:Name="TransportCenter" Width="2*"/>
+                    <ColumnDefinition x:Name="TransportRight" Width="Auto"/>
                 </Grid.ColumnDefinitions>
 
                 <Grid Grid.Column="0" VerticalAlignment="Center">
@@ -174,7 +174,8 @@
                     </Grid>
                 </StackPanel>
 
-                <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                <StackPanel x:Name="TransportTools" Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center"
+                            SizeChanged="Transport_SizeChanged">
                     <!-- 예약 종료: lit while a shutdown is scheduled, with the time left beside it.
                          DataContext is the SleepTimerViewModel (set in code). -->
                     <ui:Button x:Name="SleepTimerButton" Margin="0,0,2,0" Click="SleepTimer_Click"

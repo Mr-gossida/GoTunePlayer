@@ -32,14 +32,15 @@ float4 main(float2 uv : TEXCOORD) : COLOR
         p.y += 0.55 / fi * cos(fi * p.x * 0.8 + t * 0.23 + 0.5 * fi);
     }
 
-    // Broad bands of light, fine rippling filaments (like light through water) and a soft haze.
-    float bands = ridge(p.x * 1.5 + p.y * 0.4 + t * 0.08, 3.5);
-    float bands2 = ridge(p.y * 1.3 - p.x * 0.7 - t * 0.11 + 1.7, 3.5);
-    float fine = ridge(p.x * 3.3 + p.y * 1.9 - t * 0.06, 9.0) + ridge(p.y * 2.9 - p.x * 1.7 + t * 0.07 + 0.8, 9.0);
-    float glow = 0.5 + 0.5 * sin(p.x * 0.6 + p.y * 0.8 + t * 0.17);
+    // Wide, soft bands of light over a gentle haze; the fine ripples only faintly. Low ridge
+    // sharpness keeps the edges blurred, like light diffused onto a ceiling.
+    float bands = ridge(p.x * 1.2 + p.y * 0.35 + t * 0.08, 2.2);
+    float bands2 = ridge(p.y * 1.1 - p.x * 0.6 - t * 0.11 + 1.7, 2.2);
+    float fine = ridge(p.x * 2.6 + p.y * 1.5 - t * 0.06, 3.0);
+    float glow = 0.5 + 0.5 * sin(p.x * 0.5 + p.y * 0.7 + t * 0.17);
 
-    float m1 = bands * 0.75 + fine * 0.28 * glow + glow * 0.3;
-    float m2 = bands2 * 0.7 + fine * 0.24 * (1.0 - glow) + (1.0 - glow) * 0.2;
+    float m1 = bands * 0.7 * (0.6 + 0.4 * glow) + fine * 0.08 + glow * 0.22;
+    float m2 = bands2 * 0.65 * (1.0 - 0.4 * glow) + fine * 0.06 + (1.0 - glow) * 0.16;
     float3 light = color1.rgb * m1 + color2.rgb * m2;
 
     // Brightest at the top, like light thrown onto a ceiling.

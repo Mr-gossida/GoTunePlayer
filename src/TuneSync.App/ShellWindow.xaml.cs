@@ -294,6 +294,47 @@ public partial class ShellWindow : FluentWindow
         if (p.IsMaximized) WindowState = WindowState.Maximized;
     }
 
+    // --- transport bar ---
+
+    private const double TransportMaxCenter = 720; // controls + seek bar never wider than this
+    private const double TransportMinCenter = 320;
+    private const double TransportMinLeft = 160;
+
+    private void Transport_SizeChanged(object sender, SizeChangedEventArgs e) => LayoutTransport();
+
+    /// <summary>Keeps play/pause and the seek bar in the middle of the window: both sides get the
+    /// same width whenever there's room (the controls used to drift right on a wide window,
+    /// because all the spare width went to the left column). When the window is too narrow for
+    /// that, the right side keeps the room its buttons need and the left side gives way first.</summary>
+    private void LayoutTransport()
+    {
+        var total = TransportGrid.ActualWidth;
+        if (total <= 0) return;
+        var tools = TransportTools.ActualWidth;
+
+        double side;
+        var center = Math.Min(TransportMaxCenter, total - 2 * tools);
+        if (center >= TransportMinCenter)
+        {
+            side = (total - center) / 2;
+            SetTransportColumns(side, side);
+            return;
+        }
+
+        // Too narrow to balance: buttons on the right keep their room, the rest is shared.
+        center = Math.Max(TransportMinCenter, total - tools - TransportMinLeft);
+        var left = Math.Max(TransportMinLeft, total - tools - center);
+        SetTransportColumns(left, tools);
+    }
+
+    private void SetTransportColumns(double left, double right)
+    {
+        TransportLeft.MinWidth = 0;
+        TransportLeft.Width = new GridLength(Math.Max(0, left));
+        TransportRight.Width = new GridLength(Math.Max(0, right));
+        TransportCenter.Width = new GridLength(1, GridUnitType.Star);
+    }
+
     private bool _discardConfirmed;
 
     protected override void OnClosing(CancelEventArgs e)

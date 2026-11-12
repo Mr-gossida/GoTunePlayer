@@ -20,7 +20,7 @@
              on the GPU). The near-transparent fill only gives the effect an area to draw on. -->
         <Rectangle x:Name="AuroraLayer" Fill="#01000000" IsHitTestVisible="False" SizeChanged="AuroraLayer_SizeChanged">
             <Rectangle.Effect>
-                <effects:AuroraEffect x:Name="AuroraLight" Intensity="0.8"/>
+                <effects:AuroraEffect x:Name="AuroraLight" Intensity="0.7"/>
             </Rectangle.Effect>
         </Rectangle>
 
