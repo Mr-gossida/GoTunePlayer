@@ -9,6 +9,10 @@ public sealed class AppSettings
     /// player), added/removed via the +/- buttons rather than a single "current folder".</summary>
     public List<LibraryFolderEntry> LibraryFolders { get; set; } = [];
 
+    /// <summary>What adding folders/files does to the existing list: ask each time, add to it, or
+    /// replace it.</summary>
+    public LibraryAddMode LibraryAddMode { get; set; } = LibraryAddMode.Ask;
+
     public string? LastMergeSourceFolder { get; set; }
     public string? LastMergeTargetFolder { get; set; }
     public MergeConflictResolution MergeConflictResolution { get; set; } = MergeConflictResolution.KeepLargerFile;
@@ -70,6 +74,18 @@ public sealed class AppSettings
     /// plays, a full-screen "now playing" view takes over.</summary>
     public bool ScreenSaverEnabled { get; set; } = true;
     public int ScreenSaverMinutes { get; set; } = 5;
+}
+
+public enum LibraryAddMode
+{
+    /// <summary>Ask each time (기존 목록에 추가 / 새로 등록).</summary>
+    Ask,
+
+    /// <summary>Add to the folders/files already in the list.</summary>
+    Append,
+
+    /// <summary>Replace the whole list with the new selection.</summary>
+    Replace,
 }
 
 public enum PlayerMode

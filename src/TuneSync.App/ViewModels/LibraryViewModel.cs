@@ -180,6 +180,27 @@ public sealed partial class LibraryViewModel : ObservableObject
         var picked = FileSystemPicker.PickFoldersAndFiles("추가할 음악 폴더/파일 선택 (여러 개 선택 가능)");
         if (picked is null || picked.Count == 0) return;
 
+        // Add to the current list, or replace it (asked, unless an answer was remembered).
+        var mode = Folders.Count == 0 ? LibraryAddMode.Append : _settings.LibraryAddMode;
+        if (mode == LibraryAddMode.Ask)
+        {
+            if (await Dialogs.ChooseAddModeAsync(Folders.Count, picked.Count) is not { } choice) return;
+            mode = choice.Mode;
+            if (choice.Remember)
+            {
+                _settings.LibraryAddMode = choice.Mode;
+                AppSettingsStore.Save(_settings);
+                OnPropertyChanged(nameof(AddMode));
+            }
+        }
+
+        var replaced = false;
+        if (mode == LibraryAddMode.Replace)
+        {
+            Folders.Clear();
+            replaced = true;
+        }
+
         var added = false;
         foreach (var path in picked)
         {
@@ -197,10 +218,30 @@ public sealed partial class LibraryViewModel : ObservableObject
             added = true;
         }
 
-        if (!added) return;
+        if (!added && !replaced) return;
         SaveFolders();
         await RescanAsync();
     }
+
+    /// <summary>Settings › 폴더·파일을 추가할 때.</summary>
+    public LibraryAddMode AddMode
+    {
+        get => _settings.LibraryAddMode;
+        set
+        {
+            if (_settings.LibraryAddMode == value) return;
+            _settings.LibraryAddMode = value;
+            AppSettingsStore.Save(_settings);
+            OnPropertyChanged();
+        }
+    }
+
+    public IReadOnlyList<Choice<LibraryAddMode>> AddModeOptions { get; } =
+    [
+        new(LibraryAddMode.Ask, "매번 묻기"),
+        new(LibraryAddMode.Append, "기존 목록에 추가"),
+        new(LibraryAddMode.Replace, "새로 등록"),
+    ];
 
     public async void RemoveAllFolders()
     {

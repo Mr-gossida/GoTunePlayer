@@ -26,6 +26,19 @@
                       SelectedValuePath="Value" SelectedValue="{Binding Theme}"/>
         </ui:CardControl>
 
+        <ui:TextBlock Text="라이브러리" FontTypography="BodyStrong" Margin="0,20,0,8"/>
+        <ui:CardControl Margin="0,0,0,4" Icon="{ui:SymbolIcon FolderAdd24}">
+            <ui:CardControl.Header>
+                <StackPanel>
+                    <ui:TextBlock Text="폴더·파일을 추가할 때" FontTypography="Body"/>
+                    <ui:TextBlock Text="이미 등록된 목록이 있을 때, 새로 고른 항목을 기존 목록에 더할지 목록을 새로 만들지 정합니다."
+                                  FontSize="12" TextWrapping="Wrap" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                </StackPanel>
+            </ui:CardControl.Header>
+            <ComboBox Width="200" ItemsSource="{Binding Library.AddModeOptions}" DisplayMemberPath="Label"
+                      SelectedValuePath="Value" SelectedValue="{Binding Library.AddMode}"/>
+        </ui:CardControl>
+
         <ui:TextBlock Text="재생" FontTypography="BodyStrong" Margin="0,20,0,8"/>
         <ui:CardControl Margin="0,0,0,4" Icon="{ui:SymbolIcon Desktop24}">
             <ui:CardControl.Header>

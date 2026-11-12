@@ -19,6 +19,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         _settings = settings;
         _merge = merge;
         Playback = playback;
+        Library = playback.Library;
         _theme = settings.Theme;
         _quarantineFolderName = settings.MergeQuarantineFolderName;
         _screenSaverEnabled = settings.ScreenSaverEnabled;
@@ -67,6 +68,9 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     /// <summary>For playback options (the switch binds straight to it, which also saves).</summary>
     public PlaybackViewModel Playback { get; }
+
+    /// <summary>For library options (폴더·파일을 추가할 때).</summary>
+    public LibraryViewModel Library { get; }
 
     [ObservableProperty]
     private AppTheme _theme;
