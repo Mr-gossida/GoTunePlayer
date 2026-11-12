@@ -89,7 +89,8 @@ public static class MediaLibraryScanner
     /// folder). Returns null if the file is missing, unsupported, or unreadable.</summary>
     public static LibraryFile? ScanFile(string path)
     {
-        if (!TagService.IsSupported(path) || !File.Exists(path)) return null;
+        if (!TagService.IsSupported(path)) return null;
+        if (!RemotePath.IsRemote(path) && !File.Exists(path)) return null;
         try
         {
             return ReadLibraryFile(path);
@@ -102,10 +103,8 @@ public static class MediaLibraryScanner
 
     private static LibraryFile ReadLibraryFile(string path)
     {
-        var tags = TagService.Read(path);
-        var cover = CoverArtService.GetCover(path);
-        var lyrics = TagService.ReadLyrics(path);
-        var duration = TagService.ReadDuration(path);
+        // One open for everything (a network file is then read once, not four times).
+        var (tags, cover, lyrics, duration) = TagService.ReadForLibrary(path);
 
         return new LibraryFile
         {
@@ -114,9 +113,173 @@ public static class MediaLibraryScanner
             HasCover = cover is { Length: > 0 },
             HasLyrics = !string.IsNullOrWhiteSpace(lyrics),
             IsLyricsSynced = LrcParser.IsSynced(lyrics),
-            CoverBytes = cover,
+            // Only the small thumbnail is kept: holding every full-size cover in memory cost
+            // hundreds of MB on a big library (the player reads the full cover when it plays).
             ThumbnailBytes = CoverArtService.GetThumbnail(cover)?.JpegBytes,
             Duration = duration,
         };
+    }
+
+    // --- network sources (WebDAV / FTP / SFTP) ---
+
+    /// <summary>Walks a remote folder (and its subfolders) and reads each song's tags over the
+    /// network - only the few hundred KB that hold them. Songs already in <paramref name="index"/>
+    /// with the same size and date are taken from it without touching the server again.</summary>
+    public static async IAsyncEnumerable<LibraryFile> ScanRemoteAsync(
+        Remote.IRemoteClient client,
+        string sourceId,
+        string folder,
+        bool includeSubfolders,
+        RemoteLibraryIndex index,
+        [EnumeratorCancellation] CancellationToken ct = default)
+    {
+        var files = new List<RemoteEntry>();
+        var pending = new Queue<string>([folder]);
+        while (pending.Count > 0)
+        {
+            ct.ThrowIfCancellationRequested();
+            var current = pending.Dequeue();
+            IReadOnlyList<RemoteEntry> entries;
+            try
+            {
+                entries = await client.ListAsync(current, ct);
+            }
+            catch (Exception) when (current != folder)
+            {
+                continue; // an unreadable subfolder shouldn't sink the whole scan
+            }
+            foreach (var entry in entries)
+            {
+                if (entry.IsDirectory)
+                {
+                    if (includeSubfolders && !entry.Name.StartsWith('.') && !entry.Name.StartsWith('@')) pending.Enqueue(entry.Path);
+                }
+                else if (TagService.IsSupported(entry.Name))
+                {
+                    files.Add(entry);
+                }
+            }
+        }
+
+        var toRead = new List<string>();
+        foreach (var entry in files)
+        {
+            var path = RemotePath.Build(sourceId, entry.Path);
+            Remote.RemoteFiles.RememberSize(path, entry.Size);
+            if (index.TryGet(path, entry.Size, entry.Modified) is { } known) yield return known;
+            else toRead.Add(path);
+        }
+
+        var stamps = files.ToDictionary(f => RemotePath.Build(sourceId, f.Path), f => (f.Size, f.Modified));
+        await foreach (var item in ScanFilesAsync(toRead, ct))
+        {
+            if (stamps.TryGetValue(item.Path, out var stamp)) index.Put(item, stamp.Size, stamp.Modified);
+            yield return item;
+        }
+    }
+
+    /// <summary>A single song registered directly from a remote source.</summary>
+    public static LibraryFile? ScanRemoteFile(string path) => ScanFile(path);
+}
+
+/// <summary>What was read from each network song last time (tags, thumbnail, length), saved to
+/// disk and reused while the file's size and date are unchanged - so a remote library opens in
+/// seconds instead of re-reading every file over the network at each start.</summary>
+public sealed class RemoteLibraryIndex
+{
+    private readonly string _file;
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, Entry> _entries;
+    private bool _dirty;
+
+    public sealed class Entry
+    {
+        public long Size { get; set; }
+        public DateTime Modified { get; set; }
+        public TrackTags? Tags { get; set; }
+        public bool HasCover { get; set; }
+        public bool HasLyrics { get; set; }
+        public bool IsLyricsSynced { get; set; }
+        public byte[]? Thumbnail { get; set; }
+        public double DurationSeconds { get; set; }
+    }
+
+    public RemoteLibraryIndex(string file)
+    {
+        _file = file;
+        try
+        {
+            var loaded = File.Exists(file)
+                ? System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, Entry>>(File.ReadAllText(file))
+                : null;
+            _entries = new(loaded ?? [], StringComparer.Ordinal);
+        }
+        catch
+        {
+            _entries = new(StringComparer.Ordinal); // unreadable index: just rebuild it
+        }
+    }
+
+    public LibraryFile? TryGet(string path, long size, DateTime modified)
+    {
+        if (!_entries.TryGetValue(path, out var e) || e.Size != size || e.Modified != modified || e.Tags is not { } t) return null;
+        return new LibraryFile
+        {
+            Path = path,
+            Tags = new TrackTags
+            {
+                Path = path,
+                Title = t.Title,
+                Artist = t.Artist,
+                AlbumArtist = t.AlbumArtist,
+                Album = t.Album,
+                Composer = t.Composer,
+                Genre = t.Genre,
+                Track = t.Track,
+                Disc = t.Disc,
+                Year = t.Year,
+            },
+            HasCover = e.HasCover,
+            HasLyrics = e.HasLyrics,
+            IsLyricsSynced = e.IsLyricsSynced,
+            ThumbnailBytes = e.Thumbnail,
+            Duration = TimeSpan.FromSeconds(e.DurationSeconds),
+        };
+    }
+
+    public void Put(LibraryFile file, long size, DateTime modified)
+    {
+        _entries[file.Path] = new Entry
+        {
+            Size = size,
+            Modified = modified,
+            Tags = file.Tags,
+            HasCover = file.HasCover,
+            HasLyrics = file.HasLyrics,
+            IsLyricsSynced = file.IsLyricsSynced,
+            Thumbnail = file.ThumbnailBytes,
+            DurationSeconds = file.Duration.TotalSeconds,
+        };
+        _dirty = true;
+    }
+
+    /// <summary>After an edit was uploaded the stored entry is stale: drop it so it's re-read.</summary>
+    public void Forget(string path)
+    {
+        if (_entries.TryRemove(path, out _)) _dirty = true;
+    }
+
+    public void Save()
+    {
+        if (!_dirty) return;
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(_file)!);
+            File.WriteAllText(_file, System.Text.Json.JsonSerializer.Serialize(_entries));
+            _dirty = false;
+        }
+        catch
+        {
+            // a missed save only costs a slower next start
+        }
     }
 }

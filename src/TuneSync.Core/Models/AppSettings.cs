@@ -13,6 +13,16 @@ public sealed class AppSettings
     /// replace it.</summary>
     public LibraryAddMode LibraryAddMode { get; set; } = LibraryAddMode.Ask;
 
+    /// <summary>Network locations (WebDAV, FTP, SFTP, Samba). Passwords live in Windows
+    /// Credential Manager, not here.</summary>
+    public List<RemoteSource> RemoteSources { get; set; } = [];
+
+    /// <summary>How much disk the streaming cache of network songs may use.</summary>
+    public int StreamCacheMegabytes { get; set; } = 2048;
+
+    /// <summary>Start TuneSync (minimized) when signing in to Windows.</summary>
+    public bool StartWithWindows { get; set; }
+
     public string? LastMergeSourceFolder { get; set; }
     public string? LastMergeTargetFolder { get; set; }
     public MergeConflictResolution MergeConflictResolution { get; set; } = MergeConflictResolution.KeepLargerFile;

@@ -66,9 +66,12 @@ public sealed partial class LibraryViewModel : ObservableObject
 
     private CancellationTokenSource? _scanCts;
 
-    public LibraryViewModel(AppSettings settings)
+    private readonly Network.NetworkLibrary _network;
+
+    public LibraryViewModel(AppSettings settings, Network.NetworkLibrary network)
     {
         _settings = settings;
+        _network = network;
         FilesView = CollectionViewSource.GetDefaultView(Files);
         FilesView.Filter = o => o is LibraryFileViewModel vm && Filter.Matches(vm);
         // Files stream in from parallel readers in no particular order; keep the list (and so
@@ -180,11 +183,26 @@ public sealed partial class LibraryViewModel : ObservableObject
         var picked = FileSystemPicker.PickFoldersAndFiles("추가할 음악 폴더/파일 선택 (여러 개 선택 가능)");
         if (picked is null || picked.Count == 0) return;
 
-        // Add to the current list, or replace it (asked, unless an answer was remembered).
+        var entries = new List<LibraryFolderEntry>();
+        foreach (var path in picked)
+        {
+            var isFile = File.Exists(path);
+            if (!isFile && !Directory.Exists(path)) continue; // vanished between picking and here
+            entries.Add(new LibraryFolderEntry { Path = path, IncludeSubfolders = !isFile, IsFile = isFile });
+        }
+        await AddSourcesAsync(entries);
+    }
+
+    /// <summary>Registers new folders/files (local or from a network location), adding to the list
+    /// or replacing it - asked, unless an answer was remembered - and rescans.</summary>
+    public async Task AddSourcesAsync(IReadOnlyList<LibraryFolderEntry> entries)
+    {
+        if (entries.Count == 0) return;
+
         var mode = Folders.Count == 0 ? LibraryAddMode.Append : _settings.LibraryAddMode;
         if (mode == LibraryAddMode.Ask)
         {
-            if (await Dialogs.ChooseAddModeAsync(Folders.Count, picked.Count) is not { } choice) return;
+            if (await Dialogs.ChooseAddModeAsync(Folders.Count, entries.Count) is not { } choice) return;
             mode = choice.Mode;
             if (choice.Remember)
             {
@@ -202,23 +220,35 @@ public sealed partial class LibraryViewModel : ObservableObject
         }
 
         var added = false;
-        foreach (var path in picked)
+        foreach (var entry in entries)
         {
-            if (Folders.Any(f => string.Equals(f.Path, path, StringComparison.OrdinalIgnoreCase))) continue;
-
-            var isFile = File.Exists(path);
-            if (!isFile && !Directory.Exists(path)) continue; // vanished between picking and here
-
-            Folders.Add(new LibraryFolderViewModel(new LibraryFolderEntry
-            {
-                Path = path,
-                IncludeSubfolders = !isFile,
-                IsFile = isFile,
-            }));
+            if (Folders.Any(f => string.Equals(f.Path, entry.Path, StringComparison.OrdinalIgnoreCase)
+                                 && f.Entry.RemoteSourceId == entry.RemoteSourceId)) continue;
+            Folders.Add(new LibraryFolderViewModel(entry));
             added = true;
         }
 
         if (!added && !replaced) return;
+        SaveFolders();
+        await RescanAsync();
+    }
+
+    /// <summary>"네트워크 위치 추가": the setup wizard, then the chosen folder joins the library.</summary>
+    [RelayCommand]
+    private async Task AddNetworkLocationAsync()
+    {
+        var owner = System.Windows.Application.Current.Windows.OfType<System.Windows.Window>().FirstOrDefault(w => w.IsActive)
+                    ?? System.Windows.Application.Current.MainWindow;
+        if (Network.RemoteSourceWindow.Run(owner, _network) is { } folder)
+            await AddSourcesAsync([folder]);
+    }
+
+    /// <summary>A network location was removed: drop its folders/songs from the library.</summary>
+    public async Task RemoveSourceAsync(string sourceId)
+    {
+        var gone = Folders.Where(f => f.Entry.RemoteSourceId == sourceId).ToList();
+        if (gone.Count == 0) return;
+        foreach (var f in gone) Folders.Remove(f);
         SaveFolders();
         await RescanAsync();
     }
@@ -325,7 +355,13 @@ public sealed partial class LibraryViewModel : ObservableObject
         {
             // Individually added files are read together in parallel (one at a time over a network
             // share was very slow); folders are walked and read in parallel by the scanner itself.
-            var filePaths = sources.Where(s => s.IsFile).Select(s => s.Path).ToList();
+            // Samba shares with saved sign-in details are connected first (in the background).
+            var smb = sources.Where(s => s.Entry.RemoteSourceId is not null && !s.Entry.IsRemote).ToList();
+            if (smb.Count > 0) await Task.Run(() => smb.ForEach(s => _network.EnsureConnected(s.Entry)), cts.Token);
+
+            var filePaths = sources.Where(s => s.IsFile)
+                .Select(s => s.Entry.IsRemote ? RemotePath.Build(s.Entry.RemoteSourceId!, s.Path) : s.Path)
+                .ToList();
             await foreach (var file in MediaLibraryScanner.ScanFilesAsync(filePaths, cts.Token))
                 Add(file);
             var foundFromFileSources = count;
@@ -334,6 +370,30 @@ public sealed partial class LibraryViewModel : ObservableObject
             foreach (var folder in sources.Where(s => !s.IsFile))
             {
                 if (cts.IsCancellationRequested) break;
+
+                if (folder.Entry.IsRemote)
+                {
+                    // WebDAV / FTP / SFTP: walked over the network, known songs come from the index.
+                    var client = _network.ClientFor(folder.Entry.RemoteSourceId!);
+                    if (client is null)
+                    {
+                        unreachableFolders++;
+                        continue;
+                    }
+                    StatusText = $"{_network.Find(folder.Entry.RemoteSourceId)?.Name} 읽는 중...";
+                    try
+                    {
+                        await foreach (var file in MediaLibraryScanner.ScanRemoteAsync(client, folder.Entry.RemoteSourceId!,
+                                           folder.Path, folder.Entry.IncludeSubfolders, _network.Index, cts.Token))
+                            Add(file);
+                    }
+                    catch (Exception ex) when (ex is not OperationCanceledException)
+                    {
+                        unreachableFolders++;
+                    }
+                    continue;
+                }
+
                 var path = folder.Path;
                 if (!await Task.Run(() => Directory.Exists(path), cts.Token))
                 {
@@ -344,6 +404,7 @@ public sealed partial class LibraryViewModel : ObservableObject
                 await foreach (var file in MediaLibraryScanner.ScanAsync(path, folder.Entry.IncludeSubfolders, cts.Token))
                     Add(file);
             }
+            _network.Index.Save();
 
             if (!cts.IsCancellationRequested)
             {

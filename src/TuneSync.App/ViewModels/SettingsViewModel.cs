@@ -14,16 +14,120 @@ public sealed partial class SettingsViewModel : ObservableObject
     private readonly AppSettings _settings;
     private readonly MergeViewModel _merge;
 
-    public SettingsViewModel(AppSettings settings, MergeViewModel merge, PlaybackViewModel playback)
+    private readonly Network.NetworkLibrary _network;
+
+    public SettingsViewModel(AppSettings settings, MergeViewModel merge, PlaybackViewModel playback, Network.NetworkLibrary network)
     {
         _settings = settings;
         _merge = merge;
+        _network = network;
         Playback = playback;
         Library = playback.Library;
         _theme = settings.Theme;
         _quarantineFolderName = settings.MergeQuarantineFolderName;
         _screenSaverEnabled = settings.ScreenSaverEnabled;
         _screenSaverMinutes = settings.ScreenSaverMinutes;
+        _cacheMegabytes = settings.StreamCacheMegabytes;
+        _startWithWindows = AutoStart.IsEnabled();
+        RefreshNetwork();
+    }
+
+    // --- network ---
+
+    public System.Collections.ObjectModel.ObservableCollection<RemoteSource> NetworkSources { get; } = [];
+
+    public bool HasNetworkSources => NetworkSources.Count > 0;
+
+    /// <summary>Called when the settings page is shown (and after changes).</summary>
+    public void RefreshNetwork()
+    {
+        NetworkSources.Clear();
+        foreach (var source in _network.Sources) NetworkSources.Add(source);
+        OnPropertyChanged(nameof(HasNetworkSources));
+        _ = RefreshCacheUsageAsync();
+    }
+
+    [RelayCommand]
+    private async Task AddNetworkSourceAsync()
+    {
+        await Library.AddNetworkLocationCommand.ExecuteAsync(null);
+        RefreshNetwork();
+    }
+
+    [RelayCommand]
+    private async Task RemoveNetworkSourceAsync(RemoteSource? source)
+    {
+        if (source is null) return;
+        var confirmed = await Dialogs.ConfirmAsync("네트워크 위치 제거",
+            $"'{source.Name}'을(를) 제거합니다.\n이 위치에서 추가한 음악은 재생 목록에서 빠지고, 저장된 비밀번호도 지워집니다.\n서버의 파일은 그대로 남습니다.",
+            "제거");
+        if (!confirmed) return;
+        _network.Remove(source.Id);
+        await Library.RemoveSourceAsync(source.Id);
+        RefreshNetwork();
+        Toast.Success("네트워크 위치를 제거했습니다", source.Name);
+    }
+
+    [ObservableProperty]
+    private int _cacheMegabytes;
+
+    public IReadOnlyList<Choice<int>> CacheSizeOptions { get; } =
+    [
+        new(1024, "1 GB"),
+        new(2048, "2 GB"),
+        new(5120, "5 GB"),
+        new(10240, "10 GB"),
+        new(20480, "20 GB"),
+    ];
+
+    [ObservableProperty]
+    private string _cacheUsageText = "";
+
+    partial void OnCacheMegabytesChanged(int value)
+    {
+        _settings.StreamCacheMegabytes = value;
+        AppSettingsStore.Save(_settings);
+        Task.Run(_network.Cache.Trim).ContinueWith(_ => RefreshCacheUsageAsync(), TaskScheduler.FromCurrentSynchronizationContext());
+    }
+
+    private async Task RefreshCacheUsageAsync()
+    {
+        var used = await Task.Run(() => _network.Cache.UsedBytes);
+        CacheUsageText = used < 1024 * 1024 ? "비어 있음" : $"{used / 1024d / 1024d / 1024d:0.##} GB 사용 중";
+    }
+
+    [RelayCommand]
+    private async Task ClearCacheAsync()
+    {
+        await Task.Run(_network.Cache.Clear);
+        await RefreshCacheUsageAsync();
+        Toast.Info("캐시를 비웠습니다", "네트워크 음악은 다음에 재생할 때 다시 내려받습니다.");
+    }
+
+    [RelayCommand]
+    private static void OpenCacheFolder()
+    {
+        Directory.CreateDirectory(Network.StreamingCache.Folder);
+        Process.Start(new ProcessStartInfo("explorer.exe", $"\"{Network.StreamingCache.Folder}\"") { UseShellExecute = true });
+    }
+
+    // --- start with Windows ---
+
+    [ObservableProperty]
+    private bool _startWithWindows;
+
+    partial void OnStartWithWindowsChanged(bool value)
+    {
+        try
+        {
+            AutoStart.Set(value);
+            _settings.StartWithWindows = value;
+            AppSettingsStore.Save(_settings);
+        }
+        catch (Exception ex)
+        {
+            Toast.Error("자동 실행을 설정하지 못했습니다", ex.Message);
+        }
     }
 
     // --- screen saver ---

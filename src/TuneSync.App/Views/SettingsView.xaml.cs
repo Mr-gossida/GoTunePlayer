@@ -12,5 +12,7 @@ public partial class SettingsView : Page
     {
         InitializeComponent();
         DataContext = viewModel;
+        // Locations can be added from the player too: show the current list and cache use.
+        Loaded += (_, _) => viewModel.RefreshNetwork();
     }
 }

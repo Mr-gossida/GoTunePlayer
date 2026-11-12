@@ -38,8 +38,18 @@ public partial class App : Application
             var shell = _host.Services.GetRequiredService<ShellWindow>();
             MainWindow = shell;
             var settings = _host.Services.GetRequiredService<AppSettings>();
-            if (settings.PlayerMode == PlayerMode.Full) shell.Show();
-            else shell.EnterMiniMode(settings.PlayerMode); // reopen in the mini player last used
+            // Started by Windows at sign-in (Settings › Windows 시작 시 자동 실행): quietly, minimized.
+            var autoStarted = e.Args.Contains(AutoStart.Argument, StringComparer.OrdinalIgnoreCase);
+            if (settings.PlayerMode == PlayerMode.Full)
+            {
+                if (autoStarted) shell.WindowState = WindowState.Minimized;
+                shell.Show();
+            }
+            else
+            {
+                shell.EnterMiniMode(settings.PlayerMode); // reopen in the mini player last used
+            }
+            try { AutoStart.Refresh(); } catch { /* registry unavailable - the toggle shows its state */ }
         }
         catch (Exception ex)
         {
@@ -89,6 +99,7 @@ public partial class App : Application
         services.AddSingleton<ShellWindow>();
 
         services.AddSingleton(_ => AppSettingsStore.Load());
+        services.AddSingleton<Network.NetworkLibrary>();
 
         services.AddSingleton<IMusicBrainzService, MusicBrainzService>();
         services.AddSingleton<ILyricsService, LrcLibLyricsService>();

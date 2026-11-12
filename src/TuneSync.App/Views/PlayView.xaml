@@ -435,13 +435,20 @@
                        Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
             <TextBlock FontSize="14" Margin="0,8,0,0" TextAlignment="Center" TextWrapping="Wrap"
                        Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                       Text="음악 폴더나 파일을 추가하면 태그·커버·가사를 읽어 재생 대기열을 만듭니다. 폴더는 다음에 열 때 자동으로 다시 읽습니다."/>
-            <ui:Button Content="폴더 또는 파일 추가" Icon="{ui:SymbolIcon Add24}" HorizontalAlignment="Center" Margin="0,24,0,0"
-                       Padding="20,10" CornerRadius="20" BorderThickness="0" FontWeight="SemiBold"
-                       Background="{DynamicResource PlayerAccentBrush}" Foreground="{DynamicResource PlayerOnAccentBrush}"
-                       MouseOverBackground="{DynamicResource PlayerAccentBrush}" PressedBackground="{DynamicResource PlayerAccentBrush}"
-                       PressedForeground="{DynamicResource PlayerOnAccentBrush}"
-                       Command="{Binding Library.AddFoldersCommand}"/>
+                       Text="이 PC의 음악 폴더나 파일, 또는 NAS·서버·클라우드(WebDAV, Samba, SFTP, FTP)의 음악을 추가하면 태그·커버·가사를 읽어 재생 대기열을 만듭니다."/>
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,24,0,0">
+                <ui:Button Content="폴더 또는 파일 추가" Icon="{ui:SymbolIcon FolderAdd24}"
+                           Padding="20,10" CornerRadius="20" BorderThickness="0" FontWeight="SemiBold"
+                           Background="{DynamicResource PlayerAccentBrush}" Foreground="{DynamicResource PlayerOnAccentBrush}"
+                           MouseOverBackground="{DynamicResource PlayerAccentBrush}" PressedBackground="{DynamicResource PlayerAccentBrush}"
+                           PressedForeground="{DynamicResource PlayerOnAccentBrush}"
+                           Command="{Binding Library.AddFoldersCommand}"/>
+                <ui:Button Content="네트워크 위치 추가" Icon="{ui:SymbolIcon CloudAdd24}" Margin="10,0,0,0"
+                           Padding="20,10" CornerRadius="20" FontWeight="SemiBold"
+                           Background="{DynamicResource PlayerHoverBrush}" BorderBrush="{DynamicResource PlayerAccentBrush}" BorderThickness="1"
+                           MouseOverBackground="{DynamicResource PlayerHoverBrush}" Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                           Command="{Binding Library.AddNetworkLocationCommand}"/>
+            </StackPanel>
         </StackPanel>
 
         <!-- ========== Queue panel (its sort/grouping also decides playback order) ========== -->

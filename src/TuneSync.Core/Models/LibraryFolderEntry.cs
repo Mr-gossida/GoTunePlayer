@@ -10,4 +10,13 @@ public sealed class LibraryFolderEntry
     /// <summary>True when <see cref="Path"/> is a single audio file registered directly
     /// (picked via "음악 파일 추가"), rather than a folder to scan.</summary>
     public bool IsFile { get; set; } = false;
+
+    /// <summary>Set when the folder lives on a <see cref="RemoteSource"/>. For WebDAV/FTP/SFTP,
+    /// <see cref="Path"/> is the folder on that server ("/Music/KPop"); Samba folders stay plain
+    /// UNC paths and carry this only so the share can be signed in to at startup.</summary>
+    public string? RemoteSourceId { get; set; }
+
+    /// <summary>Read through a remote client (not the file system).</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool IsRemote => RemoteSourceId is not null && !Path.StartsWith(@"\\", StringComparison.Ordinal);
 }

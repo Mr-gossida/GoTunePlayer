@@ -12,23 +12,23 @@ public static class CoverArtService
 {
     public static byte[]? GetCover(string path)
     {
-        using var file = TagLib.File.Create(path);
+        using var file = Remote.RemoteFiles.Open(path); // local or network file
         var pic = file.Tag.Pictures.FirstOrDefault();
         return pic?.Data?.Data;
     }
 
-    public static void SetCover(string path, byte[] imageBytes, string mimeType = "image/jpeg")
-    {
-        using var file = TagLib.File.Create(path);
-        var picture = new Picture(new ByteVector(imageBytes))
+    /// <summary>Embeds the front cover; for a network file the change is written back to the server.</summary>
+    public static void SetCover(string path, byte[] imageBytes, string mimeType = "image/jpeg") =>
+        Remote.RemoteFiles.Edit(path, file =>
         {
-            Type = PictureType.FrontCover,
-            Description = "Front Cover",
-            MimeType = mimeType,
-        };
-        file.Tag.Pictures = [picture];
-        file.Save();
-    }
+            var picture = new Picture(new ByteVector(imageBytes))
+            {
+                Type = PictureType.FrontCover,
+                Description = "Front Cover",
+                MimeType = mimeType,
+            };
+            file.Tag.Pictures = [picture];
+        });
 
     public static BitmapImageBytes? GetThumbnail(byte[]? imageBytes, int size = 160)
     {

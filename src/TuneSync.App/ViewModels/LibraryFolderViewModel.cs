@@ -17,5 +17,6 @@ public sealed partial class LibraryFolderViewModel : ObservableObject
     public string Path => Entry.Path;
     public bool IsFile => Entry.IsFile;
 
-    public bool Exists => IsFile ? File.Exists(Path) : Directory.Exists(Path);
+    /// <summary>Network folders (WebDAV/FTP/SFTP) are checked by the scan itself, not here.</summary>
+    public bool Exists => Entry.IsRemote || (IsFile ? File.Exists(Path) : Directory.Exists(Path));
 }

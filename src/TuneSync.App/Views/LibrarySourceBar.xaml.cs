@@ -13,6 +13,20 @@ public partial class LibrarySourceBar : UserControl
 
     private LibraryViewModel? Library => DataContext as LibraryViewModel;
 
+    /// <summary>"+": local folders/files or a network location.</summary>
+    private void AddButton_Click(object sender, RoutedEventArgs e)
+    {
+        var button = (Button)sender;
+        if (button.ContextMenu is not { } menu) return;
+        menu.PlacementTarget = button;
+        menu.Placement = System.Windows.Controls.Primitives.PlacementMode.Top;
+        menu.IsOpen = true;
+    }
+
+    private void AddLocal_Click(object sender, RoutedEventArgs e) => Library?.AddFoldersCommand.Execute(null);
+
+    private void AddNetwork_Click(object sender, RoutedEventArgs e) => Library?.AddNetworkLocationCommand.Execute(null);
+
     private void RemoveButton_Click(object sender, RoutedEventArgs e)
     {
         var button = (Button)sender;

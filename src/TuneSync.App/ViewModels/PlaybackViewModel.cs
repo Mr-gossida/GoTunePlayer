@@ -216,10 +216,13 @@ public sealed partial class PlaybackViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private int _currentLyricsIndex = -1;
 
-    public PlaybackViewModel(LibraryViewModel library, AppSettings settings)
+    private readonly Network.NetworkLibrary _network;
+
+    public PlaybackViewModel(LibraryViewModel library, AppSettings settings, Network.NetworkLibrary network)
     {
         _library = library;
         _settings = settings;
+        _network = network;
         _volume = Math.Clamp(settings.Volume, 0, 1);
         _isShuffle = settings.Shuffle;
         _repeat = settings.Repeat;
@@ -323,7 +326,36 @@ public sealed partial class PlaybackViewModel : ObservableObject, IDisposable
 
         _pendingRestore = (position, play);
         _isReleased = false;
-        _player.Open(new Uri(resolved));
+        _player.Open(UriFor(resolved));
+    }
+
+    /// <summary>What the player opens: a network song is streamed from the local cache server
+    /// (it starts playing while it downloads); everything else is the file itself.</summary>
+    private Uri UriFor(string path)
+    {
+        if (!TuneSync.Core.Models.RemotePath.IsRemote(path)) return new Uri(path);
+        return _network.Server.UrlFor(_network.Cache.Open(path));
+    }
+
+    /// <summary>Fetches the song that will play next (if it's a network song) so it starts at once.</summary>
+    private void PrefetchNext()
+    {
+        try
+        {
+            LibraryFileViewModel? next = _upNext.FirstOrDefault();
+            if (next is null && !IsShuffle)
+            {
+                var files = CurrentList();
+                var index = CurrentFile is null ? -1 : files.IndexOf(CurrentFile);
+                if (index >= 0 && files.Count > 1) next = files[(index + 1) % files.Count];
+            }
+            if (next is not null && TuneSync.Core.Models.RemotePath.IsRemote(next.Path))
+                _network.Cache.Prefetch(next.Path);
+        }
+        catch
+        {
+            // best effort
+        }
     }
 
     public void PlayFile(LibraryFileViewModel file) => PlayFile(file, fromHistory: false);
@@ -426,7 +458,16 @@ public sealed partial class PlaybackViewModel : ObservableObject, IDisposable
             if (version != _openVersion) return; // another track was picked while this one resolved
         }
 
-        _player.Open(new Uri(path));
+        try
+        {
+            _player.Open(UriFor(path));
+        }
+        catch (Exception ex)
+        {
+            Toast.Error("재생할 수 없습니다", file.FileName + Environment.NewLine + ex.Message);
+            return;
+        }
+        PrefetchNext();
         // Play() happens once MediaOpened fires - opening is async.
     }
 
@@ -461,11 +502,19 @@ public sealed partial class PlaybackViewModel : ObservableObject, IDisposable
         WaveformData? result;
         try
         {
-            result = await Task.Run(() => WaveformAnalyzer.Analyze(PlayablePath.ResolveForReading(path), cts.Token), cts.Token);
+            // A network song is analyzed from its cached copy once the download has finished.
+            var readable = TuneSync.Core.Models.RemotePath.IsRemote(path)
+                ? await _network.Cache.CompletedPathAsync(path)
+                : PlayablePath.ResolveForReading(path);
+            result = await Task.Run(() => WaveformAnalyzer.Analyze(readable, cts.Token), cts.Token);
         }
         catch (OperationCanceledException)
         {
             return; // another track started; its own analysis takes over
+        }
+        catch (Exception)
+        {
+            return; // network song couldn't be fetched: the seek bar just keeps its plain wave
         }
 
         _waveformCache[path] = result;

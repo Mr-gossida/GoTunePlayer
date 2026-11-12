@@ -59,7 +59,16 @@ public sealed partial class LibraryFileViewModel : ObservableObject
 
     // Playlist sort/group keys.
     public TimeSpan Duration => Model.Duration;
-    public string Folder => System.IO.Path.GetDirectoryName(Path) ?? "";
+    /// <summary>The folder (group key and header). A network song's folder reads
+    /// "거실 NAS › Music/KPop" rather than its internal remote:// address.</summary>
+    public string Folder => TuneSync.Core.Models.RemotePath.TryParse(Path, out var sourceId, out var remotePath)
+        ? $"{RemoteSourceName?.Invoke(sourceId) ?? "네트워크"} › {remotePath[..Math.Max(0, remotePath.LastIndexOf('/'))].TrimStart('/')}"
+        : System.IO.Path.GetDirectoryName(Path) ?? "";
+
+    /// <summary>Source id → its display name (set by the app's network library).</summary>
+    public static Func<string, string?>? RemoteSourceName { get; set; }
+
+    public bool IsRemote => TuneSync.Core.Models.RemotePath.IsRemote(Path);
     public string ArtistGroup => string.IsNullOrWhiteSpace(Artist) ? "(알 수 없는 아티스트)" : Artist;
     public string AlbumGroup => string.IsNullOrWhiteSpace(Album) ? "(알 수 없는 앨범)" : Album;
 

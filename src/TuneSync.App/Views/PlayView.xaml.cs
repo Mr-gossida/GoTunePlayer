@@ -380,6 +380,11 @@ public partial class PlayView : Page
 
     private static void RevealInExplorer(string path)
     {
+        if (TuneSync.Core.Models.RemotePath.IsRemote(path))
+        {
+            Toast.Info("네트워크 위치의 곡입니다", "서버에 있는 파일이라 탐색기로 열 수 없습니다. 태그·가사·커버는 TuneSync에서 바로 고칠 수 있습니다.");
+            return;
+        }
         try
         {
             if (System.IO.File.Exists(path))

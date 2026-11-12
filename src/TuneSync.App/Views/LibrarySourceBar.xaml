@@ -23,7 +23,18 @@
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
             <ui:Button Grid.Column="0" Style="{StaticResource PlayerIconButtonStyle}" Width="32" Height="32" FontSize="16" Margin="0,0,4,0" Icon="{ui:SymbolIcon Add24}"
-                       Command="{Binding AddFoldersCommand}" ToolTip="폴더/파일 추가"/>
+                       Click="AddButton_Click" ToolTip="음악 추가 (폴더·파일 / 네트워크 위치)">
+                <ui:Button.ContextMenu>
+                    <ContextMenu>
+                        <MenuItem Header="폴더·파일 추가…" Click="AddLocal_Click">
+                            <MenuItem.Icon><ui:SymbolIcon Symbol="FolderAdd24"/></MenuItem.Icon>
+                        </MenuItem>
+                        <MenuItem Header="네트워크 위치 추가…" Click="AddNetwork_Click">
+                            <MenuItem.Icon><ui:SymbolIcon Symbol="CloudAdd24"/></MenuItem.Icon>
+                        </MenuItem>
+                    </ContextMenu>
+                </ui:Button.ContextMenu>
+            </ui:Button>
             <ui:Button Grid.Column="1" Style="{StaticResource PlayerIconButtonStyle}" Width="32" Height="32" FontSize="16" Margin="0,0,4,0" Icon="{ui:SymbolIcon Subtract24}"
                        Click="RemoveButton_Click" ToolTip="목록 정리">
                 <ui:Button.ContextMenu>
