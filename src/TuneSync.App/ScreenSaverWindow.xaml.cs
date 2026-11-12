@@ -40,6 +40,7 @@ public partial class ScreenSaverWindow : Window
         _clock.Tick += (_, _) => UpdateClock();
         _drift = new DispatcherTimer { Interval = TimeSpan.FromSeconds(30) };
         _drift.Tick += (_, _) => DriftSomewhere();
+        _lyricsGate.Tick += LyricsGate_Tick;
 
         Loaded += (_, _) =>
         {
@@ -50,6 +51,7 @@ public partial class ScreenSaverWindow : Window
                 DispatcherPriority.Loaded);
             _clock.Start();
             _drift.Start();
+            if (_playback.IsIntroVisible) HideLyrics(instant: true);
             Root.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(900)));
             Hint.BeginAnimation(OpacityProperty, new DoubleAnimation(1, 0, TimeSpan.FromSeconds(1.5)) { BeginTime = TimeSpan.FromSeconds(4) });
         };
@@ -59,6 +61,7 @@ public partial class ScreenSaverWindow : Window
             PlayerPalette.Changed -= RecolorAurora;
             AuroraLight.BeginAnimation(Effects.AuroraEffect.TimeProperty, null);
             Views.LyricsScroller.Stop(LyricsViewer);
+            _lyricsGate.Stop();
             _clock.Stop();
             _drift.Stop();
         };
@@ -73,8 +76,49 @@ public partial class ScreenSaverWindow : Window
                 break;
             case nameof(PlaybackViewModel.CurrentFile):
                 Views.LyricsScroller.Reset(LyricsViewer); // a new song starts from its first line
+                HideLyrics(instant: true);
+                ScheduleLyricsReveal();
+                break;
+            case nameof(PlaybackViewModel.IsIntroVisible):
+                if (_playback.IsIntroVisible) HideLyrics(instant: false);
+                ScheduleLyricsReveal();
                 break;
         }
+    }
+
+    // --- synced lyrics wait for the singing ---
+    // During a song's opening (the player's intro) the lines stay hidden; a few seconds before the
+    // first one they rise in out of a blur, like in the player. A new song starts hidden too, and
+    // is shown only once it's clear there's no intro (the intro is known a moment after loading).
+
+    private bool _lyricsHidden;
+    private readonly DispatcherTimer _lyricsGate = new() { Interval = TimeSpan.FromMilliseconds(500) };
+
+    private void HideLyrics(bool instant)
+    {
+        if (_lyricsHidden) return;
+        _lyricsHidden = true;
+        LyricsViewer.Effect = null;
+        LyricsViewer.BeginAnimation(OpacityProperty, instant ? null
+            : new DoubleAnimation(LyricsViewer.Opacity, 0, TimeSpan.FromMilliseconds(500)));
+        if (instant) LyricsViewer.Opacity = 0;
+    }
+
+    private void ScheduleLyricsReveal()
+    {
+        if (_lyricsGate is null) return;
+        _lyricsGate.Stop();
+        if (!_playback.IsIntroVisible) _lyricsGate.Start();
+    }
+
+    private void LyricsGate_Tick(object? sender, EventArgs e)
+    {
+        _lyricsGate.Stop();
+        if (!_lyricsHidden || _playback.IsIntroVisible) return;
+        _lyricsHidden = false;
+        // Land on the line about to be sung before showing anything.
+        Views.LyricsScroller.SnapTo(LyricsViewer, LyricsItems, _playback.CurrentLyricsIndex);
+        Views.PlayView.RevealLyrics(LyricsViewer, originX: 0.5, rise: 40);
     }
 
     /// <summary>Half the view of space above and below the lines, so the first and last can

@@ -167,8 +167,8 @@
                 <!-- Spectrum analyzer of what's playing (SpectrumView): transparent, in the cover's color. -->
                 <views:SpectrumView Playback="{Binding}" BarBrush="{DynamicResource PlayerAccentBrush}" Height="42" Margin="0,18,0,0"/>
                 <!-- Intro (hero card, PlayView.ApplyIntroStage): how far the opening has played. -->
-                <Grid Height="3" Margin="0,24,0,0"
-                      Visibility="{Binding IsIntroVisible, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}">
+                <!-- Shown/hidden from code (ApplyIntroStage), before the card is measured for its glide. -->
+                <Grid x:Name="HeroGauge" Height="3" Margin="0,24,0,0" Visibility="Collapsed">
                     <Border CornerRadius="1.5" Background="{DynamicResource PlayerTrackBrush}"/>
                     <Border CornerRadius="1.5" Background="{DynamicResource PlayerAccentBrush}" RenderTransformOrigin="0,0.5">
                         <Border.RenderTransform>

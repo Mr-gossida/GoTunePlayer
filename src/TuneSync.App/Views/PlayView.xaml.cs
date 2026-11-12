@@ -73,10 +73,15 @@ public partial class PlayView : Page
         animate = animate && IsLoaded && !_trackChanging;
         // Only while an intro is actually on (it holds looping animations).
         IntroPulse.Visibility = _compact == true && intro ? System.Windows.Visibility.Visible : System.Windows.Visibility.Collapsed;
+        // The card's progress bar, set here rather than by binding: a binding would hide it only
+        // after this method has measured where the card goes, and the card - vertically centered -
+        // would then drop by half the bar's height at the start of its glide.
+        System.Windows.Rect? before = animate && _hero && !intro && NowPlayingPanel.IsVisible ? BoundsInLayer(NowPlayingPanel) : null;
+        HeroGauge.Visibility = intro ? System.Windows.Visibility.Visible : System.Windows.Visibility.Collapsed;
 
         if (hero != _hero)
         {
-            System.Windows.Rect? from = animate && !hero && NowPlayingPanel.IsVisible ? BoundsInLayer(NowPlayingPanel) : null;
+            var from = before;
             _hero = hero;
             if (hero)
             {
@@ -123,7 +128,7 @@ public partial class PlayView : Page
 
     /// <summary>The lyrics' entrance after the intro: they rise from below, grow to full size and
     /// come into focus out of a heavy blur, all at once.</summary>
-    private static void RevealLyrics(System.Windows.FrameworkElement element, TimeSpan? delay = null)
+    internal static void RevealLyrics(System.Windows.FrameworkElement element, TimeSpan? delay = null, double originX = 0, double rise = 70)
     {
         var duration = TimeSpan.FromMilliseconds(1300);
         var begin = delay ?? TimeSpan.Zero;
@@ -134,9 +139,9 @@ public partial class PlayView : Page
             RenderingBias = System.Windows.Media.Effects.RenderingBias.Performance,
         };
         var scale = new System.Windows.Media.ScaleTransform(0.88, 0.88);
-        var shift = new System.Windows.Media.TranslateTransform(0, 70);
+        var shift = new System.Windows.Media.TranslateTransform(0, rise);
         element.Effect = blur;
-        element.RenderTransformOrigin = new System.Windows.Point(0, 0.5);
+        element.RenderTransformOrigin = new System.Windows.Point(originX, 0.5);
         element.RenderTransform = new System.Windows.Media.TransformGroup { Children = { scale, shift } };
 
         System.Windows.Media.Animation.DoubleAnimation Anim(double from, double to, TimeSpan length) =>
@@ -155,7 +160,7 @@ public partial class PlayView : Page
         blur.BeginAnimation(System.Windows.Media.Effects.BlurEffect.RadiusProperty, focus);
         scale.BeginAnimation(System.Windows.Media.ScaleTransform.ScaleXProperty, Anim(0.88, 1, duration));
         scale.BeginAnimation(System.Windows.Media.ScaleTransform.ScaleYProperty, Anim(0.88, 1, duration));
-        shift.BeginAnimation(System.Windows.Media.TranslateTransform.YProperty, Anim(70, 0, duration));
+        shift.BeginAnimation(System.Windows.Media.TranslateTransform.YProperty, Anim(rise, 0, duration));
     }
 
     // --- crossfade between songs ---
