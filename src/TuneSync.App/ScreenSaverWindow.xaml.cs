@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Globalization;
 using System.Windows;
 using System.Windows.Input;
@@ -14,13 +15,16 @@ public partial class ScreenSaverWindow : Window
 {
     private readonly DispatcherTimer _clock;
     private readonly DispatcherTimer _drift;
+    private readonly PlaybackViewModel _playback;
     private Point? _firstMouse;
     private bool _closing;
 
     public ScreenSaverWindow(PlaybackViewModel playback, Rect screen)
     {
         InitializeComponent();
+        _playback = playback;
         DataContext = playback;
+        playback.PropertyChanged += Playback_PropertyChanged;
         Left = screen.Left;
         Top = screen.Top;
         Width = screen.Width;
@@ -34,6 +38,9 @@ public partial class ScreenSaverWindow : Window
         Loaded += (_, _) =>
         {
             UpdateClock();
+            // Open on the line being sung, without a glide (once the lines are laid out).
+            Dispatcher.BeginInvoke(() => Views.LyricsScroller.SnapTo(LyricsViewer, LyricsItems, _playback.CurrentLyricsIndex),
+                DispatcherPriority.Loaded);
             _clock.Start();
             _drift.Start();
             Root.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(900)));
@@ -41,9 +48,33 @@ public partial class ScreenSaverWindow : Window
         };
         Closed += (_, _) =>
         {
+            playback.PropertyChanged -= Playback_PropertyChanged;
+            Views.LyricsScroller.Stop(LyricsViewer);
             _clock.Stop();
             _drift.Stop();
         };
+    }
+
+    private void Playback_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        switch (e.PropertyName)
+        {
+            case nameof(PlaybackViewModel.CurrentLyricsIndex):
+                Views.LyricsScroller.CenterOn(LyricsViewer, LyricsItems, _playback.CurrentLyricsIndex);
+                break;
+            case nameof(PlaybackViewModel.CurrentFile):
+                Views.LyricsScroller.Reset(LyricsViewer); // a new song starts from its first line
+                break;
+        }
+    }
+
+    /// <summary>Half the view of space above and below the lines, so the first and last can
+    /// sit in the middle too.</summary>
+    private void LyricsViewer_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        var half = LyricsViewer.ActualHeight / 2;
+        LyricsItems.Margin = new Thickness(0, half, 0, half);
+        Views.LyricsScroller.SnapTo(LyricsViewer, LyricsItems, _playback.CurrentLyricsIndex);
     }
 
     private void UpdateClock()
