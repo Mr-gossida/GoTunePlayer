@@ -1,94 +1,487 @@
-﻿<Page x:Class="TuneSync.App.Views.MergeView"
+<Page x:Class="TuneSync.App.Views.MergeView"
       xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
       xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
       xmlns:vm="clr-namespace:TuneSync.App.ViewModels"
       xmlns:conv="clr-namespace:TuneSync.App.Converters"
-      d:DataContext="{d:DesignInstance Type=vm:MergeViewModel}"
       xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-      mc:Ignorable="d"
       xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+      mc:Ignorable="d"
+      d:DataContext="{d:DesignInstance Type=vm:MergeViewModel}"
       Title="폴더 합치기"
       Foreground="{DynamicResource TextFillColorPrimaryBrush}">
     <Page.Resources>
-        <conv:InverseBooleanConverter x:Key="InverseBooleanConverter"/>
-        <conv:EnumToVisibilityConverter x:Key="EnumToVisibilityConverter"/>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="ToolStyles.xaml"/>
+            </ResourceDictionary.MergedDictionaries>
+            <conv:InverseBooleanConverter x:Key="InverseBooleanConverter"/>
+            <conv:EnumToBooleanConverter x:Key="EnumToBooleanConverter"/>
+            <conv:EnumToVisibilityConverter x:Key="EnumToVisibilityConverter"/>
+            <conv:PathLeafConverter x:Key="PathLeafConverter"/>
+            <BooleanToVisibilityConverter x:Key="BoolToVisibility"/>
+
+            <!-- A summary tile that is also a filter: big number, label underneath. -->
+            <Style x:Key="SummaryTile" TargetType="RadioButton">
+                <Setter Property="Cursor" Value="Hand"/>
+                <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+                <Setter Property="Margin" Value="0,0,8,0"/>
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="RadioButton">
+                            <Border x:Name="Bd" CornerRadius="8" Padding="14,8" BorderThickness="1" MinWidth="118"
+                                    Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+                                    BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}">
+                                <ContentPresenter/>
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource ControlStrokeColorDefaultBrush}"/>
+                                    <Setter TargetName="Bd" Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}"/>
+                                </Trigger>
+                                <Trigger Property="IsChecked" Value="True">
+                                    <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource TagChangeBrush}"/>
+                                    <Setter TargetName="Bd" Property="Background" Value="{DynamicResource TagChangeBackgroundBrush}"/>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+            <Style x:Key="TileNumber" TargetType="TextBlock">
+                <Setter Property="FontSize" Value="22"/>
+                <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}"/>
+                <Setter Property="FontWeight" Value="SemiBold"/>
+            </Style>
+            <Style x:Key="TileLabel" TargetType="TextBlock">
+                <Setter Property="FontSize" Value="12"/>
+                <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}"/>
+            </Style>
+
+            <!-- One side of a conflict: cover, name, then figures; the better figure is blue. -->
+            <DataTemplate x:Key="FactsTemplate" DataType="{x:Type vm:MergeFileFacts}">
+                <StackPanel>
+                    <Border Width="84" Height="84" CornerRadius="6" HorizontalAlignment="Left" ClipToBounds="True"
+                            Background="{DynamicResource ControlFillColorSecondaryBrush}">
+                        <Grid>
+                            <ui:SymbolIcon Symbol="MusicNote224" FontSize="28" Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
+                            <Image Source="{Binding Cover}" Stretch="UniformToFill"/>
+                        </Grid>
+                    </Border>
+                    <TextBlock Text="{Binding FileName}" Margin="0,8,0,0" FontWeight="SemiBold" TextWrapping="Wrap" MaxHeight="40"
+                               TextTrimming="CharacterEllipsis" ToolTip="{Binding FileName}"/>
+                    <TextBlock Text="{Binding Tags}" FontSize="11" TextTrimming="CharacterEllipsis" ToolTip="{Binding Tags}"
+                               Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
+                    <Grid Margin="0,8,0,0" TextElement.FontSize="12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="44"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+                        <TextBlock Text="음질" Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
+                        <TextBlock x:Name="Q" Grid.Column="1" Text="{Binding Quality}" TextTrimming="CharacterEllipsis"/>
+                        <TextBlock Grid.Row="1" Text="크기" Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
+                        <TextBlock x:Name="S" Grid.Row="1" Grid.Column="1" Text="{Binding Size}"/>
+                        <TextBlock Grid.Row="2" Text="길이" Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
+                        <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding Duration}"/>
+                        <TextBlock Grid.Row="3" Text="수정일" Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
+                        <TextBlock x:Name="M" Grid.Row="3" Grid.Column="1" Text="{Binding Modified}"/>
+                        <TextBlock Grid.Row="4" Text="커버" Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
+                        <TextBlock x:Name="C" Grid.Row="4" Grid.Column="1" Text="없음" Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
+                        <TextBlock Grid.Row="5" Text="가사" Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
+                        <TextBlock x:Name="L" Grid.Row="5" Grid.Column="1" Text="없음" Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
+                    </Grid>
+                </StackPanel>
+                <DataTemplate.Triggers>
+                    <DataTrigger Binding="{Binding BetterQuality}" Value="True">
+                        <Setter TargetName="Q" Property="Foreground" Value="{DynamicResource TagChangeBrush}"/>
+                        <Setter TargetName="Q" Property="FontWeight" Value="SemiBold"/>
+                    </DataTrigger>
+                    <DataTrigger Binding="{Binding Larger}" Value="True">
+                        <Setter TargetName="S" Property="Foreground" Value="{DynamicResource TagChangeBrush}"/>
+                    </DataTrigger>
+                    <DataTrigger Binding="{Binding Newer}" Value="True">
+                        <Setter TargetName="M" Property="Foreground" Value="{DynamicResource TagChangeBrush}"/>
+                    </DataTrigger>
+                    <DataTrigger Binding="{Binding HasCover}" Value="True">
+                        <Setter TargetName="C" Property="Text" Value="있음"/>
+                        <Setter TargetName="C" Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}"/>
+                    </DataTrigger>
+                    <DataTrigger Binding="{Binding HasLyrics}" Value="True">
+                        <Setter TargetName="L" Property="Text" Value="있음"/>
+                        <Setter TargetName="L" Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}"/>
+                    </DataTrigger>
+                </DataTemplate.Triggers>
+            </DataTemplate>
+        </ResourceDictionary>
     </Page.Resources>
-    <Grid Margin="20,16,20,24">
+
+    <Grid Margin="20,14,20,16">
         <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <StackPanel Grid.Row="0" Margin="0,0,0,8">
-            <ui:TextBlock Text="폴더 합치기" FontTypography="TitleLarge"/>
-            <ui:TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" Margin="0,4,0,0"
-                          Text="소스 폴더의 음원을 타겟 폴더로 이동합니다. 실행 전 미리보기로 전체 계획을 검토할 수 있고, 충돌한 파일은 삭제하지 않고 격리 폴더로 이동합니다."/>
+        <StackPanel Margin="0,0,0,12">
+            <ui:TextBlock Text="폴더 합치기" FontTypography="Subtitle"/>
+            <TextBlock Style="{StaticResource HintText}" Margin="0,2,0,0"
+                       Text="한 폴더의 곡을 다른 폴더로 옮겨 합칩니다. 겹치는 곡은 비교해서 남길 쪽을 고르고, 밀려난 파일은 지우지 않고 격리 폴더에 둡니다."/>
         </StackPanel>
 
-        <StackPanel Grid.Row="1" Margin="0,8,0,12" IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBooleanConverter}}">
-            <Grid Margin="0,0,0,8">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="Auto"/>
-                </Grid.ColumnDefinitions>
-                <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                    <ui:TextBlock FontTypography="BodyStrong" Text="소스 폴더 (이동할 파일이 있는 폴더)"/>
-                    <ui:TextBlock Text="{Binding SourceFolder, TargetNullValue='선택되지 않음'}" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+        <!-- ===== folder cards ===== -->
+        <Grid Grid.Row="1" IsEnabled="{Binding IsIdle}">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <Border x:Name="SourceCard" Style="{StaticResource ToolCard}" AllowDrop="True"
+                    DragEnter="Card_DragOver" DragOver="Card_DragOver" DragLeave="Card_DragLeave" Drop="SourceCard_Drop">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <ui:SymbolIcon Symbol="FolderArrowRight24" FontSize="28" Margin="0,0,12,0" VerticalAlignment="Center"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                        <TextBlock Text="옮길 폴더" Style="{StaticResource StepCaption}" Margin="0"/>
+                        <TextBlock Text="{Binding SourceTitle}"
+                                   FontSize="16" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                        <TextBlock Text="{Binding SourceFolder}" FontSize="11" TextTrimming="CharacterEllipsis" ToolTip="{Binding SourceFolder}"
+                                   Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
+                        <TextBlock Text="{Binding SourceStats}" FontSize="12" Margin="0,2,0,0" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                    </StackPanel>
+                    <ui:Button Grid.Column="2" Content="선택…" Padding="10,4" VerticalAlignment="Center" Command="{Binding BrowseSourceCommand}"/>
+                </Grid>
+            </Border>
+
+            <ui:Button Grid.Column="1" Icon="{ui:SymbolIcon ArrowSwap24}" Margin="8,0" Padding="8" VerticalAlignment="Center"
+                       Command="{Binding SwapCommand}" ToolTip="두 폴더 바꾸기"/>
+
+            <Border x:Name="TargetCard" Grid.Column="2" Style="{StaticResource ToolCard}" AllowDrop="True"
+                    DragEnter="Card_DragOver" DragOver="Card_DragOver" DragLeave="Card_DragLeave" Drop="TargetCard_Drop">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <ui:SymbolIcon Symbol="FolderArrowLeft24" FontSize="28" Margin="0,0,12,0" VerticalAlignment="Center"
+                                   Foreground="{DynamicResource TagChangeBrush}"/>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                        <TextBlock Text="받을 폴더" Style="{StaticResource StepCaption}" Margin="0"/>
+                        <TextBlock Text="{Binding TargetTitle}"
+                                   FontSize="16" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                        <TextBlock Text="{Binding TargetFolder}" FontSize="11" TextTrimming="CharacterEllipsis" ToolTip="{Binding TargetFolder}"
+                                   Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
+                        <TextBlock Text="{Binding TargetStats}" FontSize="12" Margin="0,2,0,0" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                    </StackPanel>
+                    <ui:Button Grid.Column="2" Content="선택…" Padding="10,4" VerticalAlignment="Center" Command="{Binding BrowseTargetCommand}"/>
+                </Grid>
+            </Border>
+        </Grid>
+
+        <!-- ===== rule + options ===== -->
+        <WrapPanel Grid.Row="2" Margin="0,10,0,12" IsEnabled="{Binding IsIdle}">
+            <TextBlock Text="겹치는 곡" VerticalAlignment="Center" Margin="0,0,8,0" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+            <ComboBox Width="230" ItemsSource="{Binding ConflictResolutionOptions}" DisplayMemberPath="Label"
+                      SelectedValuePath="Value" SelectedValue="{Binding ConflictResolution}" Margin="0,0,18,0"
+                      ToolTip="같은 곡(아티스트+제목)이 받을 폴더에 이미 있을 때 기본으로 남길 쪽. 곡마다 따로 바꿀 수 있습니다"/>
+            <CheckBox Content="옮길 폴더의 하위 폴더 포함" IsChecked="{Binding IncludeSubfolders}" Margin="0,0,18,0" VerticalAlignment="Center"/>
+            <CheckBox Content="다 옮긴 뒤 빈 폴더 정리" IsChecked="{Binding RemoveEmptyFolders}" VerticalAlignment="Center"
+                      ToolTip="옮길 폴더에 남은 빈 폴더를 지웁니다 (파일이 남아 있는 폴더는 그대로)"/>
+            <ui:Button Icon="{ui:SymbolIcon ArrowClockwise24}" Appearance="Transparent" Padding="6" Margin="10,0,0,0"
+                       Command="{Binding RefreshCommand}" ToolTip="두 폴더를 다시 비교"/>
+        </WrapPanel>
+
+        <!-- ===== summary tiles (filters) ===== -->
+        <StackPanel Grid.Row="3" Orientation="Horizontal" Margin="0,0,0,10"
+                    Visibility="{Binding HasRows, Converter={StaticResource BoolToVisibility}}">
+            <RadioButton Style="{StaticResource SummaryTile}" GroupName="MergeFilter"
+                         IsChecked="{Binding Filter, Converter={StaticResource EnumToBooleanConverter}, ConverterParameter=All}">
+                <StackPanel>
+                    <TextBlock Style="{StaticResource TileNumber}" Text="{Binding TotalCount}"/>
+                    <TextBlock Style="{StaticResource TileLabel}"><Run Text="전체 · "/><Run Text="{Binding IncomingSize, Mode=OneWay}"/></TextBlock>
                 </StackPanel>
-                <ui:Button Grid.Column="1" Content="소스 선택" Icon="{ui:SymbolIcon FolderOpen24}" Command="{Binding BrowseSourceCommand}"/>
-            </Grid>
-
-            <Grid Margin="0,0,0,8">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="Auto"/>
-                </Grid.ColumnDefinitions>
-                <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                    <ui:TextBlock FontTypography="BodyStrong" Text="타겟 폴더 (이동 받을 폴더)"/>
-                    <ui:TextBlock Text="{Binding TargetFolder, TargetNullValue='선택되지 않음'}" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+            </RadioButton>
+            <RadioButton Style="{StaticResource SummaryTile}" GroupName="MergeFilter"
+                         IsChecked="{Binding Filter, Converter={StaticResource EnumToBooleanConverter}, ConverterParameter=Move}">
+                <StackPanel>
+                    <TextBlock Style="{StaticResource TileNumber}" Text="{Binding MoveCount}" Foreground="{DynamicResource TagChangeBrush}"/>
+                    <TextBlock Style="{StaticResource TileLabel}" Text="새로 이동"/>
                 </StackPanel>
-                <ui:Button Grid.Column="1" Content="타겟 선택" Icon="{ui:SymbolIcon FolderOpen24}" Command="{Binding BrowseTargetCommand}"/>
-            </Grid>
-
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="Auto"/>
-                </Grid.ColumnDefinitions>
-
-                <ui:TextBlock Grid.Column="0" Text="충돌 규칙:" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                <ComboBox Grid.Column="1" Width="200" VerticalAlignment="Center"
-                          ItemsSource="{Binding ConflictResolutionOptions}" DisplayMemberPath="Label"
-                          SelectedValuePath="Value" SelectedValue="{Binding ConflictResolution}" Margin="0,0,16,0"/>
-                <CheckBox Grid.Column="2" Content="하위 폴더 포함" IsChecked="{Binding IncludeSubfolders}" VerticalAlignment="Center"/>
-
-                <ui:Button Grid.Column="3" Content="미리보기" Icon="{ui:SymbolIcon Eye24}" Command="{Binding BuildPreviewCommand}" Margin="0,0,8,0"/>
-                <ui:Button Grid.Column="4" Content="실행" Icon="{ui:SymbolIcon FolderSync24}"
-                           Command="{Binding ExecuteCommand}" IsEnabled="{Binding IsPlanReady}"/>
-            </Grid>
+            </RadioButton>
+            <RadioButton Style="{StaticResource SummaryTile}" GroupName="MergeFilter"
+                         IsChecked="{Binding Filter, Converter={StaticResource EnumToBooleanConverter}, ConverterParameter=Replace}">
+                <StackPanel>
+                    <TextBlock Style="{StaticResource TileNumber}" Text="{Binding ReplaceCount}" Foreground="{DynamicResource SystemFillColorSuccessBrush}"/>
+                    <TextBlock Style="{StaticResource TileLabel}" Text="더 좋은 쪽으로 교체"/>
+                </StackPanel>
+            </RadioButton>
+            <RadioButton Style="{StaticResource SummaryTile}" GroupName="MergeFilter"
+                         IsChecked="{Binding Filter, Converter={StaticResource EnumToBooleanConverter}, ConverterParameter=Skip}">
+                <StackPanel>
+                    <TextBlock Style="{StaticResource TileNumber}" Text="{Binding SkipCount}" Foreground="{DynamicResource SystemFillColorCautionBrush}"/>
+                    <TextBlock Style="{StaticResource TileLabel}" Text="중복 · 건너뜀 (격리)"/>
+                </StackPanel>
+            </RadioButton>
+            <RadioButton Style="{StaticResource SummaryTile}" GroupName="MergeFilter"
+                         IsChecked="{Binding Filter, Converter={StaticResource EnumToBooleanConverter}, ConverterParameter=Rename}">
+                <StackPanel>
+                    <TextBlock Style="{StaticResource TileNumber}" Text="{Binding RenameCount}"/>
+                    <TextBlock Style="{StaticResource TileLabel}" Text="이름 바꿔 이동"/>
+                </StackPanel>
+            </RadioButton>
         </StackPanel>
 
-        <DataGrid Grid.Row="2" ItemsSource="{Binding Plan}" AutoGenerateColumns="False"
-                  IsReadOnly="True" GridLinesVisibility="Horizontal" HorizontalScrollBarVisibility="Auto"
-                  HeadersVisibility="Column" SelectionUnit="FullRow" CellStyle="{StaticResource GridCellStyle}">
-            <DataGrid.Columns>
-                <DataGridTextColumn Header="소스 파일" Binding="{Binding SourceFileName}" Width="2*" MinWidth="160" ElementStyle="{StaticResource GridTrimmedText}"/>
-                <DataGridTextColumn Header="작업" Binding="{Binding ActionLabel}" Width="170" MinWidth="140" ElementStyle="{StaticResource GridTrimmedText}"/>
-                <DataGridTextColumn Header="타겟 파일명" Binding="{Binding DestFileName}" Width="2*" MinWidth="160" ElementStyle="{StaticResource GridTrimmedText}"/>
-                <DataGridTextColumn Header="사유" Binding="{Binding Reason}" Width="2*" MinWidth="160" ElementStyle="{StaticResource GridSecondaryText}"/>
-            </DataGrid.Columns>
-        </DataGrid>
+        <!-- ===== plan list + comparison ===== -->
+        <Grid Grid.Row="4">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="12"/>
+                <ColumnDefinition Width="430"/>
+            </Grid.ColumnDefinitions>
 
-        <Grid Grid.Row="3" Margin="0,8,0,0">
-            <ui:TextBlock Text="{Binding StatusText}" TextWrapping="Wrap" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-            <ui:ProgressRing IsIndeterminate="True" Width="16" Height="16" HorizontalAlignment="Right"
-                              Visibility="{Binding IsBusy, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}"/>
+            <Border Style="{StaticResource ToolCard}" Padding="0">
+                <Grid>
+                    <ListBox ItemsSource="{Binding RowsView}" SelectedItem="{Binding SelectedRow}"
+                             BorderThickness="0" Background="Transparent" Padding="0"
+                             ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                             VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling"
+                             VirtualizingPanel.ScrollUnit="Pixel" IsEnabled="{Binding IsIdle}">
+                        <ListBox.ItemContainerStyle>
+                            <Style TargetType="ListBoxItem">
+                                <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                                <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+                                <Setter Property="Template">
+                                    <Setter.Value>
+                                        <ControlTemplate TargetType="ListBoxItem">
+                                            <Grid>
+                                                <Border x:Name="Bd" Background="Transparent" BorderThickness="0,0,0,1"
+                                                        BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}" Padding="14,7,16,7">
+                                                    <ContentPresenter/>
+                                                </Border>
+                                                <Border x:Name="Pill" Width="3" CornerRadius="1.5" HorizontalAlignment="Left" Margin="3,10"
+                                                        Background="{DynamicResource TagChangeBrush}" Visibility="Collapsed"/>
+                                            </Grid>
+                                            <ControlTemplate.Triggers>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter TargetName="Bd" Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}"/>
+                                                </Trigger>
+                                                <Trigger Property="IsSelected" Value="True">
+                                                    <Setter TargetName="Bd" Property="Background" Value="{DynamicResource TagChangeBackgroundBrush}"/>
+                                                    <Setter TargetName="Pill" Property="Visibility" Value="Visible"/>
+                                                </Trigger>
+                                            </ControlTemplate.Triggers>
+                                        </ControlTemplate>
+                                    </Setter.Value>
+                                </Setter>
+                            </Style>
+                        </ListBox.ItemContainerStyle>
+                        <ListBox.ItemTemplate>
+                            <DataTemplate DataType="{x:Type vm:MergeActionViewModel}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock Text="{Binding SourceFileName}" TextTrimming="CharacterEllipsis" ToolTip="{Binding SourceFileName}"/>
+                                        <TextBlock FontSize="11" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextFillColorTertiaryBrush}">
+                                            <Run Text="→ "/><Run Text="{Binding DestLabel, Mode=OneWay}"/>
+                                        </TextBlock>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="10,0,0,0">
+                                        <TextBlock Text="직접 선택" FontSize="11" Margin="0,0,6,0" VerticalAlignment="Center"
+                                                   Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                                   Visibility="{Binding IsOverridden, Converter={StaticResource BoolToVisibility}}"/>
+                                        <Border x:Name="Badge" Style="{StaticResource Badge}">
+                                            <TextBlock x:Name="BadgeText" Text="{Binding ActionLabel}" FontSize="11"/>
+                                        </Border>
+                                    </StackPanel>
+                                </Grid>
+                                <DataTemplate.Triggers>
+                                    <DataTrigger Binding="{Binding ActionType}" Value="Move">
+                                        <Setter TargetName="BadgeText" Property="Foreground" Value="{DynamicResource TagChangeBrush}"/>
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding ActionType}" Value="Replace">
+                                        <Setter TargetName="BadgeText" Property="Foreground" Value="{DynamicResource SystemFillColorSuccessBrush}"/>
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding ActionType}" Value="Quarantine">
+                                        <Setter TargetName="BadgeText" Property="Foreground" Value="{DynamicResource SystemFillColorCautionBrush}"/>
+                                    </DataTrigger>
+                                </DataTemplate.Triggers>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+
+                    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Margin="24"
+                                Visibility="{Binding IsEmptyState, Converter={StaticResource BoolToVisibility}}">
+                        <ui:SymbolIcon Symbol="FolderArrowRight24" FontSize="36" HorizontalAlignment="Center" Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
+                        <TextBlock Text="{Binding StatusText}" Style="{StaticResource HintText}" TextAlignment="Center" Margin="0,8,0,0" MaxWidth="360"/>
+                    </StackPanel>
+                    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"
+                                Visibility="{Binding IsAnalyzing, Converter={StaticResource BoolToVisibility}}">
+                        <ui:ProgressRing IsIndeterminate="True" Width="28" Height="28"/>
+                        <TextBlock Text="두 폴더의 곡을 비교하는 중…" Style="{StaticResource HintText}" Margin="0,10,0,0"/>
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <!-- comparison -->
+            <Border Grid.Column="2" Style="{StaticResource ToolCard}">
+                <Grid>
+                    <!-- nothing picked -->
+                    <TextBlock Style="{StaticResource HintText}" TextAlignment="Center" VerticalAlignment="Center" Margin="12"
+                               Text="목록에서 곡을 고르면 두 파일을 나란히 비교합니다.">
+                        <TextBlock.Visibility>
+                            <Binding Path="SelectedRow" Converter="{StaticResource EnumToVisibilityConverter}" ConverterParameter="{x:Null}"/>
+                        </TextBlock.Visibility>
+                    </TextBlock>
+
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" DataContext="{Binding SelectedRow}"
+                                  Visibility="{Binding IsConflict, Converter={StaticResource BoolToVisibility}, FallbackValue=Collapsed}">
+                        <StackPanel Margin="0,0,14,0">
+                            <TextBlock Style="{StaticResource StepCaption}" Text="겹치는 곡 비교"/>
+                            <TextBlock Text="어느 쪽을 남길까요?" Margin="0,0,0,6" FontWeight="SemiBold"/>
+                            <Border Style="{StaticResource SegmentTray}">
+                                <StackPanel Orientation="Horizontal">
+                                    <RadioButton Style="{StaticResource Segment}" GroupName="MergeKeep" Content="옮길 쪽"
+                                                 ToolTip="받을 폴더의 기존 파일을 격리하고 이 파일로 교체"
+                                                 IsChecked="{Binding ActionType, Converter={StaticResource EnumToBooleanConverter}, ConverterParameter=Replace}"/>
+                                    <RadioButton Style="{StaticResource Segment}" GroupName="MergeKeep" Content="받을 쪽"
+                                                 ToolTip="기존 파일을 두고 옮길 파일은 격리"
+                                                 IsChecked="{Binding ActionType, Converter={StaticResource EnumToBooleanConverter}, ConverterParameter=Quarantine}"/>
+                                    <RadioButton Style="{StaticResource Segment}" GroupName="MergeKeep" Content="둘 다"
+                                                 ToolTip="옮길 파일 이름에 번호를 붙여 둘 다 남김"
+                                                 IsChecked="{Binding ActionType, Converter={StaticResource EnumToBooleanConverter}, ConverterParameter=RenameAndMove}"/>
+                                </StackPanel>
+                            </Border>
+                            <TextBlock Text="{Binding Reason}" Style="{StaticResource HintText}" Margin="0,6,0,14"/>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="14"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel>
+                                    <Grid Margin="0,0,0,6">
+                                        <TextBlock Text="옮길 폴더 쪽" FontSize="12" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                        <Border Style="{StaticResource Badge}" HorizontalAlignment="Right" Background="{DynamicResource TagChangeBackgroundBrush}"
+                                                Visibility="{Binding SourceWins, Converter={StaticResource BoolToVisibility}}">
+                                            <TextBlock Text="남김" FontSize="11" Foreground="{DynamicResource TagChangeBrush}"/>
+                                        </Border>
+                                    </Grid>
+                                    <ContentControl Content="{Binding SourceFacts}" ContentTemplate="{StaticResource FactsTemplate}" Focusable="False"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="2">
+                                    <Grid Margin="0,0,0,6">
+                                        <TextBlock Text="받을 폴더 쪽" FontSize="12" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                        <Border Style="{StaticResource Badge}" HorizontalAlignment="Right" Background="{DynamicResource TagChangeBackgroundBrush}"
+                                                Visibility="{Binding TargetWins, Converter={StaticResource BoolToVisibility}}">
+                                            <TextBlock Text="남김" FontSize="11" Foreground="{DynamicResource TagChangeBrush}"/>
+                                        </Border>
+                                    </Grid>
+                                    <ContentControl Content="{Binding TargetFacts}" ContentTemplate="{StaticResource FactsTemplate}" Focusable="False"/>
+                                </StackPanel>
+                            </Grid>
+
+                        </StackPanel>
+                    </ScrollViewer>
+
+                    <!-- a plain move -->
+                    <StackPanel DataContext="{Binding SelectedRow}" VerticalAlignment="Top">
+                        <StackPanel.Style>
+                            <Style TargetType="StackPanel">
+                                <Setter Property="Visibility" Value="Visible"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding}" Value="{x:Null}">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding IsConflict}" Value="True">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </StackPanel.Style>
+                        <TextBlock Style="{StaticResource StepCaption}" Text="옮길 곡"/>
+                        <ContentControl Content="{Binding SourceFacts}" ContentTemplate="{StaticResource FactsTemplate}" Focusable="False"/>
+                        <TextBlock Text="{Binding Reason}" Style="{StaticResource HintText}" Margin="0,12,0,0"/>
+                        <TextBlock Style="{StaticResource HintText}" Margin="0,4,0,0">
+                            <Run Text="받을 폴더에서의 이름: "/><Run Text="{Binding DestFileName, Mode=OneWay}" Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                        </TextBlock>
+                        <TextBlock Style="{StaticResource HintText}" Margin="0,4,0,0" Text="가사 파일(.lrc)도 함께 옮깁니다."
+                                   Visibility="{Binding HasLyricsSidecar, Converter={StaticResource BoolToVisibility}}"/>
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </Grid>
+
+        <!-- ===== action bar ===== -->
+        <Grid Grid.Row="5" Margin="0,12,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- progress while running -->
+            <Grid VerticalAlignment="Center" Margin="0,0,16,0" Visibility="{Binding IsRunning, Converter={StaticResource BoolToVisibility}}">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <ProgressBar Value="{Binding ProgressValue}" Maximum="{Binding ProgressMax}" Height="4" VerticalAlignment="Center"/>
+                <TextBlock Grid.Column="1" Text="{Binding ProgressText}" Margin="10,0,0,0" FontSize="12" VerticalAlignment="Center"
+                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+            </Grid>
+
+            <!-- result after a run, or the status line -->
+            <StackPanel VerticalAlignment="Center" Margin="0,0,16,0" Visibility="{Binding IsIdle, Converter={StaticResource BoolToVisibility}}">
+                <StackPanel Orientation="Horizontal" Visibility="{Binding HasResult, Converter={StaticResource BoolToVisibility}}">
+                    <ui:SymbolIcon Symbol="CheckmarkCircle24" FontSize="18" Margin="0,0,8,0" Foreground="{DynamicResource SystemFillColorSuccessBrush}"/>
+                    <TextBlock Text="{Binding ResultSummary}" VerticalAlignment="Center" TextWrapping="Wrap"/>
+                </StackPanel>
+                <TextBlock Text="{Binding StatusText}" FontSize="12" TextWrapping="Wrap" Foreground="{DynamicResource TextFillColorSecondaryBrush}">
+                    <TextBlock.Style>
+                        <Style TargetType="TextBlock">
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsEmptyState}" Value="True">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding HasResult}" Value="True">
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBlock.Style>
+                </TextBlock>
+            </StackPanel>
+
+            <StackPanel Grid.Column="1" Orientation="Horizontal">
+                <ui:Button Content="격리 폴더 열기" Icon="{ui:SymbolIcon FolderOpen24}" Appearance="Transparent" Margin="0,0,8,0"
+                           Command="{Binding OpenQuarantineCommand}" ToolTip="{Binding QuarantinePath}"/>
+                <ui:Button Content="되돌리기" Icon="{ui:SymbolIcon ArrowUndo24}" Margin="0,0,8,0" Command="{Binding UndoCommand}"
+                           Visibility="{Binding CanUndo, Converter={StaticResource BoolToVisibility}}"
+                           ToolTip="방금 옮긴 파일을 모두 원래 자리로 돌립니다"/>
+                <ui:Button Content="멈추기" Icon="{ui:SymbolIcon Stop24}" Command="{Binding CancelCommand}"
+                           Visibility="{Binding IsRunning, Converter={StaticResource BoolToVisibility}}"/>
+                <ui:Button Appearance="Primary" MinWidth="150" Padding="16,6" Command="{Binding ExecuteCommand}"
+                           Content="{Binding ExecuteLabel}"/>
+            </StackPanel>
         </Grid>
     </Grid>
 </Page>

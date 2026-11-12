@@ -147,4 +147,64 @@ public class MergeServiceTests : IDisposable
         Assert.True(File.Exists(Path.Combine(_target, "new.lrc")));
         Assert.False(File.Exists(lrcPath));
     }
+
+    [Fact]
+    public void KeepBetterQuality_PrefersLosslessSource()
+    {
+        PlaceFixture(_source, "sample.flac", "song.flac", "IU", "Good Day");
+        PlaceFixture(_target, "sample.mp3", "song.mp3", "IU", "Good Day");
+
+        var plan = MergeService.BuildPlan(_source, _target, new MergeRuleSet { ConflictResolution = MergeConflictResolution.KeepBetterQuality });
+
+        Assert.Equal(MergeActionType.Replace, Assert.Single(plan).ActionType);
+    }
+
+    [Fact]
+    public void KeepBetterQuality_KeepsLosslessTarget()
+    {
+        PlaceFixture(_source, "sample.mp3", "song.mp3", "IU", "Good Day");
+        PlaceFixture(_target, "sample.flac", "song.flac", "IU", "Good Day");
+
+        var plan = MergeService.BuildPlan(_source, _target, new MergeRuleSet { ConflictResolution = MergeConflictResolution.KeepBetterQuality });
+
+        Assert.Equal(MergeActionType.Quarantine, Assert.Single(plan).ActionType);
+    }
+
+    [Fact]
+    public void Override_KeepBoth_GetsUniqueName()
+    {
+        PlaceFixture(_source, "sample.mp3", "song.mp3", "IU", "Good Day");
+        PlaceFixture(_target, "sample.mp3", "song.mp3", "IU", "Good Day");
+        var plan = MergeService.BuildPlan(_source, _target, new MergeRuleSet());
+
+        var both = MergeService.Override(plan[0], MergeActionType.RenameAndMove);
+
+        Assert.Equal(MergeActionType.RenameAndMove, both.ActionType);
+        Assert.Equal("song (2).mp3", both.DestFileName);
+    }
+
+    [Fact]
+    public void Undo_PutsEverythingBack_AndEmptyFoldersCanBeRemoved()
+    {
+        var sub = Path.Combine(_source, "sub");
+        Directory.CreateDirectory(sub);
+        var moved = PlaceFixture(sub, "sample.mp3", "new.mp3", "IU", "Good Day");
+        var srcLoser = PlaceFixture(_source, "sample.mp3", "dup.mp3", "IU", "Blueming");
+        var tgt = PlaceFixture(_target, "sample.flac", "dup.flac", "IU", "Blueming");
+        var plan = MergeService.BuildPlan(_source, _target, new MergeRuleSet { ConflictResolution = MergeConflictResolution.KeepTargetAlways });
+
+        var manifest = new List<(string From, string To)>();
+        MergeService.ExecutePlan(plan, _target, _quarantine, manifest);
+        Assert.False(File.Exists(moved));
+        Assert.True(File.Exists(Path.Combine(_quarantine, "dup.mp3")));
+
+        Assert.Equal(1, MergeService.RemoveEmptyFolders(_source, keepRoot: true));
+        Assert.False(Directory.Exists(sub));
+
+        Assert.Empty(MergeService.Undo(manifest));
+        Assert.True(File.Exists(moved));
+        Assert.True(File.Exists(srcLoser));
+        Assert.True(File.Exists(tgt));
+        Assert.False(File.Exists(Path.Combine(_target, "new.mp3")));
+    }
 }

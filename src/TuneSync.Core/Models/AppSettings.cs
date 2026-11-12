@@ -32,6 +32,8 @@ public sealed class AppSettings
     public string? LastRenameFolder { get; set; }
     public bool RenameIncludeSubfolders { get; set; }
     public bool RenameIsAlbumMode { get; set; }
+    public RenameMode RenameMode { get; set; } = RenameMode.Auto;
+    public bool MergeRemoveEmptyFolders { get; set; }
     public string RenameSingleTrackPattern { get; set; } = "{Artist} - {Title}";
     public string RenameAlbumTrackPattern { get; set; } = "{Track} {Title}";
 

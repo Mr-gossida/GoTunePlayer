@@ -19,6 +19,10 @@ public enum MergeConflictResolution
     /// <summary>Not a real conflict - both copies are kept, the source gets a " (2)", " (3)", ...
     /// suffix so it lands in the target without overwriting anything.</summary>
     RenameWithSuffix,
+
+    /// <summary>Keep whichever sounds better: lossless first, then bit depth x sample rate, then
+    /// bitrate; a tie goes to the larger file. The loser is quarantined.</summary>
+    KeepBetterQuality,
 }
 
 /// <summary>A user-editable policy for <see cref="Services.MergeService"/>. Persisted as JSON so

@@ -95,6 +95,9 @@ public sealed partial class TagEditorViewModel : ObservableObject
     public bool IsEmpty => Count == 0;
     public bool HasSelection => Count > 0;
 
+    /// <summary>The songs selected in the tag manager (이름 변경 can work on them).</summary>
+    public IReadOnlyList<LibraryFileViewModel> Selection => _selection;
+
     [ObservableProperty]
     private string _headerTitle = "";
 
