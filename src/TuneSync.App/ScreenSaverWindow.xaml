@@ -25,16 +25,19 @@
             </Rectangle.Effect>
         </Rectangle>
 
-        <!-- Everything drifts a little now and then, so nothing sits still long enough to burn in. -->
+        <!-- The clock stays put in its corner (drifting, it could slide off the screen); its
+             digits change every minute anyway. -->
+        <StackPanel HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,56,72,0">
+            <TextBlock x:Name="ClockText" FontSize="72" FontWeight="Light" Foreground="White" HorizontalAlignment="Right"/>
+            <TextBlock x:Name="DateText" FontSize="18" Foreground="#B3FFFFFF" HorizontalAlignment="Right" Margin="0,0,4,0"/>
+        </StackPanel>
+
+        <!-- The cover, song and lyrics drift a little now and then, so nothing sits still long
+             enough to burn in. -->
         <Grid x:Name="Stage">
             <Grid.RenderTransform>
                 <TranslateTransform x:Name="Drift"/>
             </Grid.RenderTransform>
-
-            <StackPanel HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,56,72,0">
-                <TextBlock x:Name="ClockText" FontSize="72" FontWeight="Light" Foreground="White" HorizontalAlignment="Right"/>
-                <TextBlock x:Name="DateText" FontSize="18" Foreground="#B3FFFFFF" HorizontalAlignment="Right" Margin="0,0,4,0"/>
-            </StackPanel>
 
             <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="900">
                 <Border Width="340" Height="340" CornerRadius="14" HorizontalAlignment="Center" Background="#22FFFFFF">
