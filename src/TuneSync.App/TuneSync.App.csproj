@@ -24,6 +24,7 @@
   <ItemGroup>
     <Resource Include="Assets\TuneSync.png" />
     <Resource Include="Assets\TuneSync.ico" />
+    <Resource Include="Effects\Aurora.ps" />
   </ItemGroup>
 
 </Project>

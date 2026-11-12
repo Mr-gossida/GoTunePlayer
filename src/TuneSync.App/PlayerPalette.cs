@@ -1,4 +1,4 @@
-using System.Windows;
+﻿using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Media.Imaging;
@@ -58,6 +58,20 @@ public static class PlayerPalette
         Set(TrackKey, dark ? Color.FromArgb(0x40, 0xFF, 0xFF, 0xFF) : Color.FromArgb(0x30, 0, 0, 0), animate: false);
         Set(HoverKey, dark ? Color.FromArgb(0x14, 0xFF, 0xFF, 0xFF) : Color.FromArgb(0x10, 0, 0, 0), animate: false);
         SetScrim(tint, animate);
+        Changed?.Invoke();
+    }
+
+    /// <summary>Raised after the palette changed (a new cover, or the theme).</summary>
+    public static event Action? Changed;
+
+    /// <summary>Two vivid light colors for the screen saver's aurora: the cover's hue, and a
+    /// neighboring hue for the second band (like the two-tone light of an aurora lamp). A
+    /// black-and-white cover gets violet and pink.</summary>
+    public static (Color Main, Color Second) AuroraColors()
+    {
+        var (h, s, _) = ToHsl(_source ?? SystemAccent());
+        if (s < 0.12) h = 0.74;
+        return (FromHsl(h, 0.85, 0.62), FromHsl((h + 0.16) % 1, 0.9, 0.6));
     }
 
     public const string ScrimKey = "PlayerScrimBrush";

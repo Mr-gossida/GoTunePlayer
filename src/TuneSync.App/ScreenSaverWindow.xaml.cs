@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Globalization;
 using System.Windows;
 using System.Windows.Input;
+using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Threading;
 using TuneSync.App.ViewModels;
@@ -25,6 +26,11 @@ public partial class ScreenSaverWindow : Window
         _playback = playback;
         DataContext = playback;
         playback.PropertyChanged += Playback_PropertyChanged;
+        PlayerPalette.Changed += RecolorAurora;
+
+        // The aurora needs pixel shader 3.0 (any GPU from the last ~15 years); without it the
+        // backdrop is shown as before.
+        if (!RenderCapability.IsPixelShaderVersionSupported(3, 0)) AuroraLayer.Visibility = Visibility.Collapsed;
         Left = screen.Left;
         Top = screen.Top;
         Width = screen.Width;
@@ -38,6 +44,7 @@ public partial class ScreenSaverWindow : Window
         Loaded += (_, _) =>
         {
             UpdateClock();
+            StartAurora();
             // Open on the line being sung, without a glide (once the lines are laid out).
             Dispatcher.BeginInvoke(() => Views.LyricsScroller.SnapTo(LyricsViewer, LyricsItems, _playback.CurrentLyricsIndex),
                 DispatcherPriority.Loaded);
@@ -49,6 +56,8 @@ public partial class ScreenSaverWindow : Window
         Closed += (_, _) =>
         {
             playback.PropertyChanged -= Playback_PropertyChanged;
+            PlayerPalette.Changed -= RecolorAurora;
+            AuroraLight.BeginAnimation(Effects.AuroraEffect.TimeProperty, null);
             Views.LyricsScroller.Stop(LyricsViewer);
             _clock.Stop();
             _drift.Stop();
@@ -75,6 +84,34 @@ public partial class ScreenSaverWindow : Window
         var half = LyricsViewer.ActualHeight / 2;
         LyricsItems.Margin = new Thickness(0, half, 0, half);
         Views.LyricsScroller.SnapTo(LyricsViewer, LyricsItems, _playback.CurrentLyricsIndex);
+    }
+
+    // --- aurora light ---
+
+    private void StartAurora()
+    {
+        var (main, second) = PlayerPalette.AuroraColors();
+        AuroraLight.Color1 = main;
+        AuroraLight.Color2 = second;
+        // Endless slow drift, from a random point so it never opens on the same picture.
+        var start = Random.Shared.Next(0, 10_000);
+        AuroraLight.BeginAnimation(Effects.AuroraEffect.TimeProperty,
+            new DoubleAnimation(start, start + 1_000_000, TimeSpan.FromSeconds(1_000_000)));
+        AuroraLayer.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromSeconds(2.5)));
+    }
+
+    /// <summary>A new song: the light slowly takes on its cover's colors.</summary>
+    private void RecolorAurora()
+    {
+        var (main, second) = PlayerPalette.AuroraColors();
+        var duration = TimeSpan.FromSeconds(2);
+        AuroraLight.BeginAnimation(Effects.AuroraEffect.Color1Property, new ColorAnimation(main, duration));
+        AuroraLight.BeginAnimation(Effects.AuroraEffect.Color2Property, new ColorAnimation(second, duration));
+    }
+
+    private void AuroraLayer_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        if (e.NewSize.Height > 0) AuroraLight.Aspect = e.NewSize.Width / e.NewSize.Height;
     }
 
     private void UpdateClock()
