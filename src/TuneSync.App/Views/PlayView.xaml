@@ -39,7 +39,8 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="ListBoxItem">
-                        <Border x:Name="Bd" Background="Transparent" CornerRadius="6" Padding="6,5" Margin="0,1">
+                        <!-- Right margin: room for the overlay scrollbar, so it never covers the durations. -->
+                        <Border x:Name="Bd" Background="Transparent" CornerRadius="6" Padding="6,5" Margin="0,1,12,1">
                             <ContentPresenter/>
                         </Border>
                         <ControlTemplate.Triggers>
@@ -507,7 +508,7 @@
                         <GroupStyle>
                             <GroupStyle.HeaderTemplate>
                                 <DataTemplate>
-                                    <Grid Margin="6,14,6,4" ToolTip="{Binding Name}">
+                                    <Grid Margin="6,14,18,4" ToolTip="{Binding Name}">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="Auto"/>
                                             <ColumnDefinition Width="*"/>
