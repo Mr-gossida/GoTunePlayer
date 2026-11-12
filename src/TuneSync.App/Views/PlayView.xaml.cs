@@ -1,4 +1,4 @@
-using System.ComponentModel;
+﻿using System.ComponentModel;
 using System.Windows.Controls;
 using System.Windows.Input;
 using TuneSync.App.ViewModels;
@@ -510,20 +510,27 @@ public partial class PlayView : Page
     /// and still corrects itself against the real position.</summary>
     private void GlideIntroGauge()
     {
+        // Two bars show the intro: under the lyrics-area equalizer, and on the hero card.
+        GlideGauge(IntroGaugeScale);
+        GlideGauge(HeroGaugeScale);
+    }
+
+    private void GlideGauge(System.Windows.Media.ScaleTransform gauge)
+    {
         var playback = _viewModel.Playback;
-        var shown = IntroGaugeScale.ScaleX;
+        var shown = gauge.ScaleX;
         var target = playback.IntroProgress;
         if (!playback.IsIntroVisible)
         {
             // Fading out: freeze where it is rather than snapping back to 0 mid-fade.
-            IntroGaugeScale.BeginAnimation(System.Windows.Media.ScaleTransform.ScaleXProperty, null);
-            IntroGaugeScale.ScaleX = shown;
+            gauge.BeginAnimation(System.Windows.Media.ScaleTransform.ScaleXProperty, null);
+            gauge.ScaleX = shown;
             return;
         }
         if (!playback.IsPlaying || playback.IntroLength <= TimeSpan.Zero)
         {
-            IntroGaugeScale.BeginAnimation(System.Windows.Media.ScaleTransform.ScaleXProperty, null);
-            IntroGaugeScale.ScaleX = target;
+            gauge.BeginAnimation(System.Windows.Media.ScaleTransform.ScaleXProperty, null);
+            gauge.ScaleX = target;
             return;
         }
         // A new song or a seek: start from the real position instead of gliding across.
@@ -531,11 +538,11 @@ public partial class PlayView : Page
         var remaining = (1 - target) * playback.IntroLength.TotalSeconds;
         if (remaining <= 0.01)
         {
-            IntroGaugeScale.BeginAnimation(System.Windows.Media.ScaleTransform.ScaleXProperty, null);
-            IntroGaugeScale.ScaleX = 1;
+            gauge.BeginAnimation(System.Windows.Media.ScaleTransform.ScaleXProperty, null);
+            gauge.ScaleX = 1;
             return;
         }
-        IntroGaugeScale.BeginAnimation(System.Windows.Media.ScaleTransform.ScaleXProperty,
+        gauge.BeginAnimation(System.Windows.Media.ScaleTransform.ScaleXProperty,
             new System.Windows.Media.Animation.DoubleAnimation(from, 1, TimeSpan.FromSeconds(remaining)));
     }
 

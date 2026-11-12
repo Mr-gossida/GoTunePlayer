@@ -146,7 +146,8 @@
                     <Border CornerRadius="1.5" Background="{DynamicResource PlayerTrackBrush}"/>
                     <Border CornerRadius="1.5" Background="{DynamicResource PlayerAccentBrush}" RenderTransformOrigin="0,0.5">
                         <Border.RenderTransform>
-                            <ScaleTransform ScaleX="{Binding IntroProgress}"/>
+                            <!-- driven from code (GlideIntroGauge), like the bar in the lyrics area -->
+                            <ScaleTransform x:Name="HeroGaugeScale" ScaleX="0"/>
                         </Border.RenderTransform>
                     </Border>
                 </Grid>
