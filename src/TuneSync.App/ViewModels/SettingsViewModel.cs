@@ -163,6 +163,17 @@ public sealed partial class SettingsViewModel : ObservableObject
         }
     }
 
+    public bool ShowIntroGauge
+    {
+        get => Playback.ShowIntroGauge;
+        set
+        {
+            if (Playback.ShowIntroGauge == value) return;
+            Playback.ShowIntroGauge = value;
+            OnPropertyChanged();
+        }
+    }
+
     // --- screen saver ---
 
     [ObservableProperty]

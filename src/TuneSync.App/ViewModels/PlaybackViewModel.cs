@@ -1043,6 +1043,19 @@ public sealed partial class PlaybackViewModel : ObservableObject, IDisposable
     /// updates (they come only every 200 ms) instead of stepping.</summary>
     public TimeSpan IntroLength { get; private set; }
 
+    /// <summary>설정 › 인트로 진행 게이지: whether the intro shows its progress bar.</summary>
+    public bool ShowIntroGauge
+    {
+        get => _settings.ShowIntroGauge;
+        set
+        {
+            if (_settings.ShowIntroGauge == value) return;
+            _settings.ShowIntroGauge = value;
+            AppSettingsStore.Save(_settings);
+            OnPropertyChanged();
+        }
+    }
+
     private void UpdateIntro(TimeSpan pos)
     {
         var show = HasSyncedLyrics && _introUntil is { } until && pos < until;

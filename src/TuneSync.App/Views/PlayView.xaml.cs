@@ -71,13 +71,15 @@ public partial class PlayView : Page
         var intro = playback.IsIntroVisible;
         var hero = intro && playback.IsLyricsVisible && _compact != true;
         animate = animate && IsLoaded && !_trackChanging;
-        // Only while an intro is actually on (it holds looping animations).
-        IntroPulse.Visibility = _compact == true && intro ? System.Windows.Visibility.Visible : System.Windows.Visibility.Collapsed;
-        // The card's progress bar, set here rather than by binding: a binding would hide it only
-        // after this method has measured where the card goes, and the card - vertically centered -
-        // would then drop by half the bar's height at the start of its glide.
+        // Only while an intro is on (it holds looping animations) - and, after it, until its
+        // fade-out (the style's exit animation) has played instead of vanishing at once.
+        var pulse = _compact == true && intro;
+        if (pulse) IntroPulse.Visibility = System.Windows.Visibility.Visible;
+        else if (animate && IntroPulse.IsVisible) CollapseAfter(IntroPulse, TimeSpan.FromMilliseconds(550), () => _viewModel.Playback.IsIntroVisible);
+        else IntroPulse.Visibility = System.Windows.Visibility.Collapsed;
+
         System.Windows.Rect? before = animate && _hero && !intro && NowPlayingPanel.IsVisible ? BoundsInLayer(NowPlayingPanel) : null;
-        HeroGauge.Visibility = intro ? System.Windows.Visibility.Visible : System.Windows.Visibility.Collapsed;
+        ShowHeroGauge(intro && playback.ShowIntroGauge, animate);
 
         if (hero != _hero)
         {
@@ -124,6 +126,51 @@ public partial class PlayView : Page
                 LyricsScrollViewer.Opacity = 1;
             }
         }
+    }
+
+    /// <summary>The intro card's progress bar: shown at once, faded out when the intro ends (it
+    /// fills up first, so it ends complete rather than cut off). It takes no room in the card, so
+    /// this never moves the card.</summary>
+    private void ShowHeroGauge(bool show, bool animate)
+    {
+        if (show)
+        {
+            HeroGauge.BeginAnimation(OpacityProperty, null);
+            HeroGauge.Opacity = 1;
+            HeroGauge.Visibility = System.Windows.Visibility.Visible;
+            return;
+        }
+        if (!animate || !HeroGauge.IsVisible)
+        {
+            HeroGauge.BeginAnimation(OpacityProperty, null);
+            HeroGauge.Visibility = System.Windows.Visibility.Collapsed;
+            return;
+        }
+        var fade = new System.Windows.Media.Animation.DoubleAnimation(0, TimeSpan.FromMilliseconds(700))
+        {
+            BeginTime = TimeSpan.FromMilliseconds(150),
+            EasingFunction = new System.Windows.Media.Animation.QuadraticEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut },
+        };
+        fade.Completed += (_, _) =>
+        {
+            if (_viewModel.Playback.IsIntroVisible) return; // a new intro began meanwhile
+            HeroGauge.BeginAnimation(OpacityProperty, null);
+            HeroGauge.Visibility = System.Windows.Visibility.Collapsed;
+        };
+        HeroGauge.BeginAnimation(OpacityProperty, fade);
+    }
+
+    /// <summary>Collapses an element once its own fade-out has had time to play, unless it is
+    /// wanted again by then.</summary>
+    private void CollapseAfter(System.Windows.UIElement element, TimeSpan delay, Func<bool> stillWanted)
+    {
+        var timer = new System.Windows.Threading.DispatcherTimer { Interval = delay };
+        timer.Tick += (_, _) =>
+        {
+            timer.Stop();
+            if (!stillWanted()) element.Visibility = System.Windows.Visibility.Collapsed;
+        };
+        timer.Start();
     }
 
     /// <summary>The lyrics' entrance after the intro: they rise from below, grow to full size and
@@ -514,6 +561,9 @@ public partial class PlayView : Page
             case nameof(PlaybackViewModel.IsPlaying):
                 GlideIntroGauge();
                 break;
+            case nameof(PlaybackViewModel.ShowIntroGauge):
+                ShowHeroGauge(_viewModel.Playback.IsIntroVisible && _viewModel.Playback.ShowIntroGauge, animate: false);
+                break;
         }
     }
 
@@ -535,9 +585,10 @@ public partial class PlayView : Page
         var target = playback.IntroProgress;
         if (!playback.IsIntroVisible)
         {
-            // Fading out: freeze where it is rather than snapping back to 0 mid-fade.
-            gauge.BeginAnimation(System.Windows.Media.ScaleTransform.ScaleXProperty, null);
-            gauge.ScaleX = shown;
+            // The intro is over: fill up (it may be a hair short) and hold there while it fades
+            // out, rather than snapping back to 0 mid-fade.
+            gauge.BeginAnimation(System.Windows.Media.ScaleTransform.ScaleXProperty,
+                new System.Windows.Media.Animation.DoubleAnimation(shown, 1, TimeSpan.FromMilliseconds(250)));
             return;
         }
         if (!playback.IsPlaying || playback.IntroLength <= TimeSpan.Zero)

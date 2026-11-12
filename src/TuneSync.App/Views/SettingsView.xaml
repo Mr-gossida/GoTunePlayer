@@ -156,6 +156,16 @@
         </ui:CardControl>
 
         <ui:TextBlock Text="재생" FontTypography="BodyStrong" Margin="0,20,0,8"/>
+        <ui:CardControl Margin="0,0,0,4" Icon="{ui:SymbolIcon Timer24}">
+            <ui:CardControl.Header>
+                <StackPanel>
+                    <ui:TextBlock Text="인트로 진행 게이지" FontTypography="Body"/>
+                    <ui:TextBlock Text="싱크 가사가 시작되기 전 인트로 동안, 가사가 나오기까지 얼마나 남았는지 가는 막대로 보여 줍니다. 인트로가 끝나면 부드럽게 사라집니다."
+                                  FontSize="12" TextWrapping="Wrap" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                </StackPanel>
+            </ui:CardControl.Header>
+            <ui:ToggleSwitch IsChecked="{Binding ShowIntroGauge}" OnContent="표시" OffContent="숨김"/>
+        </ui:CardControl>
         <ui:CardControl Margin="0,0,0,4" Icon="{ui:SymbolIcon Desktop24}">
             <ui:CardControl.Header>
                 <StackPanel>

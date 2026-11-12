@@ -60,6 +60,9 @@ public sealed class AppSettings
     public bool ShowQueue { get; set; } = true;
     public bool ShowLyrics { get; set; } = true;
 
+    /// <summary>The small bar showing how far a song's intro has played before the lyrics start.</summary>
+    public bool ShowIntroGauge { get; set; } = true;
+
     /// <summary>Mini player stays above other windows.</summary>
     public bool MiniTopmost { get; set; } = true;
 
