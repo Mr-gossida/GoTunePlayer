@@ -13,8 +13,6 @@ public sealed partial class LibraryPageViewModel : ObservableObject
         AutoMatch = autoMatch;
         Playback = playback;
         Editor = editor;
-        // Tags, cover or lyrics just written by auto-fill show up in the editor right away.
-        autoMatch.Applied += (_, _) => editor.Reload();
     }
 
     public TagEditorViewModel Editor { get; }

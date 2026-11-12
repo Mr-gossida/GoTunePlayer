@@ -61,7 +61,7 @@ public sealed class AutoFillService(IMusicBrainzService musicBrainz, ILyricsServ
             }
 
             if (wantTags && match is not null)
-                FillProposedTagFields(proposal, file.Tags, match);
+                FillProposedTagFields(proposal, file.Tags, match, opt.ReplaceTags);
 
             if (wantCover && !string.IsNullOrWhiteSpace(match?.ReleaseMbid))
             {
@@ -91,20 +91,21 @@ public sealed class AutoFillService(IMusicBrainzService musicBrainz, ILyricsServ
         return proposals;
     }
 
-    private static void FillProposedTagFields(AutoFillProposal proposal, TrackTags current, MusicBrainzMatch match)
+    /// <summary>Empty fields get the match's values; with <paramref name="replace"/>, fields whose
+    /// value differs from the match's do too.</summary>
+    private static void FillProposedTagFields(AutoFillProposal proposal, TrackTags current, MusicBrainzMatch match, bool replace)
     {
-        if (string.IsNullOrWhiteSpace(current.Title) && !string.IsNullOrWhiteSpace(match.Title))
-            proposal.ProposedTitle = match.Title;
-        if (string.IsNullOrWhiteSpace(current.Artist) && !string.IsNullOrWhiteSpace(match.Artist))
-            proposal.ProposedArtist = match.Artist;
-        if (string.IsNullOrWhiteSpace(current.Album) && !string.IsNullOrWhiteSpace(match.Album))
-            proposal.ProposedAlbum = match.Album;
-        if (string.IsNullOrWhiteSpace(current.AlbumArtist) && !string.IsNullOrWhiteSpace(match.AlbumArtist))
-            proposal.ProposedAlbumArtist = match.AlbumArtist;
-        if (current.Track == 0 && match.Track is > 0)
-            proposal.ProposedTrack = match.Track;
-        if (current.Disc == 0 && match.Disc is > 0)
-            proposal.ProposedDisc = match.Disc;
+        bool Text(string now, string? found) =>
+            !string.IsNullOrWhiteSpace(found) && (string.IsNullOrWhiteSpace(now)
+                || replace && !string.Equals(now.Trim(), found.Trim(), StringComparison.OrdinalIgnoreCase)); // not for capitalization alone
+        bool Number(uint now, uint? found) => found is > 0 && (now == 0 || replace && now != found);
+
+        if (Text(current.Title, match.Title)) proposal.ProposedTitle = match.Title;
+        if (Text(current.Artist, match.Artist)) proposal.ProposedArtist = match.Artist;
+        if (Text(current.Album, match.Album)) proposal.ProposedAlbum = match.Album;
+        if (Text(current.AlbumArtist, match.AlbumArtist)) proposal.ProposedAlbumArtist = match.AlbumArtist;
+        if (Number(current.Track, match.Track)) proposal.ProposedTrack = match.Track;
+        if (Number(current.Disc, match.Disc)) proposal.ProposedDisc = match.Disc;
     }
 
     private static (string Artist, string Title) ResolveSearchKey(LibraryFile file)

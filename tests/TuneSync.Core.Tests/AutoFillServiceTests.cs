@@ -32,6 +32,25 @@ public class AutoFillServiceTests
     }
 
     [Fact]
+    public async Task BuildProposalsAsync_ReplaceTags_AlsoProposesDifferingValues()
+    {
+        var file = MakeFile("x.mp3", new TrackTags { Path = "x.mp3", Artist = "IU", Title = "Good Day", Album = "Old", Track = 3 });
+        var mb = new FakeMusicBrainzService
+        {
+            NextMatch = new MusicBrainzMatch { Title = "Good Day", Artist = "IU", Album = "Real", Track = 1 },
+        };
+        var service = new AutoFillService(mb, new FakeLyricsService());
+
+        var proposals = await service.BuildProposalsAsync([file], options: new AutoFillOptions(Tags: true, Cover: false, Lyrics: false, ReplaceTags: true));
+
+        var proposal = Assert.Single(proposals);
+        Assert.Null(proposal.ProposedTitle);   // same value: nothing to change
+        Assert.Null(proposal.ProposedArtist);
+        Assert.Equal("Real", proposal.ProposedAlbum); // differs: proposed
+        Assert.Equal(1u, proposal.ProposedTrack);
+    }
+
+    [Fact]
     public async Task BuildProposalsAsync_UsesFilenameAsSearchKey_WhenTagsAreEmpty()
     {
         var file = MakeFile(@"C:\music\[IU] Good Day.mp3", new TrackTags { Path = @"C:\music\[IU] Good Day.mp3" });

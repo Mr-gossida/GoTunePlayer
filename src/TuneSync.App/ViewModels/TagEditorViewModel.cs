@@ -46,10 +46,13 @@ public sealed partial class TagEditorViewModel : ObservableObject
     private string? _lyricsOriginal;
     private bool _lyricsLoading;
 
-    public TagEditorViewModel(LibraryViewModel library, PlaybackViewModel playback)
+    private readonly IAutoFillService _autoFill;
+
+    public TagEditorViewModel(LibraryViewModel library, PlaybackViewModel playback, IAutoFillService autoFill)
     {
         _library = library;
         _playback = playback;
+        _autoFill = autoFill;
 
         TitleField = new(this, TagField.Title);
         ArtistField = new(this, TagField.Artist, usesSuggestions: true);
@@ -123,6 +126,7 @@ public sealed partial class TagEditorViewModel : ObservableObject
         _selectionVersion++;
         Count = selection.Count;
         IsReviewing = false;
+        if (!IsSearching) SearchStatus = "";
         Reload();
     }
 
@@ -311,6 +315,98 @@ public sealed partial class TagEditorViewModel : ObservableObject
             foreach (LibraryFileViewModel file in e.OldItems) _pending.Remove(file);
             UpdatePendingSummary();
         }
+    }
+
+    // ---- online search (each tab's "찾기" button) ----
+
+    [ObservableProperty]
+    private bool _isSearching;
+
+    [ObservableProperty]
+    private string _searchStatus = "";
+
+    private CancellationTokenSource? _searchCts;
+
+    /// <summary>Looks the selected songs up online and puts what it finds in as unsaved edits -
+    /// highlighted, with the previous values shown, reviewed and saved like any other edit.</summary>
+    [RelayCommand]
+    private Task SearchTagsAsync() => SearchAsync(new AutoFillOptions(Tags: true, Cover: false, Lyrics: false, ReplaceExisting: true, ReplaceTags: true), "태그");
+
+    [RelayCommand]
+    private Task SearchCoverAsync() => SearchAsync(new AutoFillOptions(Tags: false, Cover: true, Lyrics: false, ReplaceExisting: true), "커버");
+
+    [RelayCommand]
+    private Task SearchLyricsAsync() => SearchAsync(new AutoFillOptions(Tags: false, Cover: false, Lyrics: true, ReplaceExisting: true), "가사");
+
+    [RelayCommand]
+    private void CancelSearch() => _searchCts?.Cancel();
+
+    private async Task SearchAsync(AutoFillOptions options, string what)
+    {
+        if (IsSearching || _selection.Count == 0) return;
+        var files = _selection.ToList();
+        _searchCts = new CancellationTokenSource();
+        IsSearching = true;
+        SearchStatus = files.Count == 1 ? $"{what}를 찾는 중…" : $"{files.Count}곡의 {what}를 찾는 중…";
+        try
+        {
+            var done = 0;
+            var progress = new Progress<string>(_ =>
+            {
+                if (files.Count > 1) SearchStatus = $"{files.Count}곡의 {what}를 찾는 중… ({++done}/{files.Count})";
+            });
+            var proposals = await _autoFill.BuildProposalsAsync(files.Select(f => f.Model), progress, _searchCts.Token, options);
+            var (songs, items) = Stage(proposals);
+            SearchStatus = items > 0
+                ? (files.Count == 1 ? $"{what}를 찾아 채웠습니다. 확인한 뒤 저장하세요." : $"{songs}곡의 {what}를 찾아 채웠습니다. 확인한 뒤 저장하세요.")
+                : files.Count == 1 ? $"{what}를 찾지 못했습니다 ({proposals.FirstOrDefault()?.Status ?? "결과 없음"})."
+                : $"{files.Count}곡 모두 새로 채울 {what}를 찾지 못했습니다.";
+        }
+        catch (OperationCanceledException)
+        {
+            SearchStatus = "검색을 취소했습니다.";
+        }
+        catch (Exception ex)
+        {
+            SearchStatus = $"검색하지 못했습니다: {ex.Message}";
+        }
+        finally
+        {
+            IsSearching = false;
+        }
+    }
+
+    /// <summary>Search results (from a tab's button or 통합 검색) as unsaved edits on their songs.
+    /// Returns how many songs and items changed.</summary>
+    public (int Songs, int Items) Stage(IEnumerable<AutoFillProposal> proposals)
+    {
+        var rows = _library.Files.ToDictionary(f => f.Model);
+        int songs = 0, items = 0;
+        foreach (var p in proposals)
+        {
+            if (!rows.TryGetValue(p.File, out var file)) continue; // the library was rescanned meanwhile
+            var before = file.PendingChangeCount;
+            void Text(TagField field, string? value)
+            {
+                if (value is not null && TagFields.TryNormalize(field, value, out var normalized, out _)) file.SetPending(field, normalized);
+            }
+            Text(TagField.Title, p.ProposedTitle);
+            Text(TagField.Artist, p.ProposedArtist);
+            Text(TagField.Album, p.ProposedAlbum);
+            Text(TagField.AlbumArtist, p.ProposedAlbumArtist);
+            Text(TagField.Track, p.ProposedTrack?.ToString());
+            Text(TagField.Disc, p.ProposedDisc?.ToString());
+            if (p.ProposedCoverBytes is { Length: > 0 } cover) file.SetPendingCover(cover);
+            if (!string.IsNullOrWhiteSpace(p.ProposedLyrics)) file.SetPendingLyrics(p.ProposedLyrics.Trim());
+            var added = file.PendingChangeCount - before;
+            if (added > 0 || p.ProposedCoverBytes is { Length: > 0 } || !string.IsNullOrWhiteSpace(p.ProposedLyrics))
+            {
+                songs++;
+                items += Math.Max(added, 1);
+            }
+        }
+        Reload();
+        return (songs, items);
     }
 
     // ---- Cover ----

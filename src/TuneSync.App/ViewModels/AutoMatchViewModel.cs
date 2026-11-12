@@ -18,6 +18,7 @@ public sealed partial class AutoMatchViewModel : ObservableObject
     private readonly PlaybackViewModel _playback;
     private readonly IAutoFillService _autoFillService;
     private readonly AppSettings _settings;
+    private readonly TagEditorViewModel _editor;
 
     public ObservableCollection<AutoMatchItemViewModel> Results { get; } = [];
 
@@ -49,10 +50,6 @@ public sealed partial class AutoMatchViewModel : ObservableObject
 
     private IReadOnlyList<LibraryFileViewModel> _selection = [];
 
-    /// <summary>Raised after proposals were written to files, so views showing a file's
-    /// tags/cover/lyrics can reload them.</summary>
-    public event EventHandler? Applied;
-
     /// <summary>The list selection changed: retarget, and pre-check what those songs are missing.</summary>
     public void OnSelectionChanged(IReadOnlyList<LibraryFileViewModel> selection)
     {
@@ -72,8 +69,10 @@ public sealed partial class AutoMatchViewModel : ObservableObject
         FillLyrics = selection.Any(f => f.IsMissingLyrics);
     }
 
-    public AutoMatchViewModel(LibraryViewModel library, PlaybackViewModel playback, IAutoFillService autoFillService, AppSettings settings)
+    public AutoMatchViewModel(LibraryViewModel library, PlaybackViewModel playback, IAutoFillService autoFillService, AppSettings settings,
+        TagEditorViewModel editor)
     {
+        _editor = editor;
         _library = library;
         _playback = playback;
         _autoFillService = autoFillService;
@@ -145,71 +144,35 @@ public sealed partial class AutoMatchViewModel : ObservableObject
 
         if (IsAutomaticMode && withProposal > 0)
         {
-            var errors = await ApplyAsync(proposals.Where(p => p.HasAnyProposal).ToList());
-            StatusText = errors.Count == 0
-                ? $"완전 자동 적용 완료: {proposals.Count}개 중 {withProposal}개 파일에 반영했습니다."
-                : $"{withProposal - errors.Count}개 반영, {errors.Count}개 실패: {string.Join("; ", errors)}";
+            var (songs, items) = _editor.Stage(proposals.Where(p => p.HasAnyProposal));
+            StatusText = $"{songs}곡의 변경 {items}개를 편집에 넣었습니다. 아래 저장 바에서 확인하고 저장하세요.";
         }
         else
         {
             StatusText = withProposal == 0
-                ? $"검색 완료: {proposals.Count}개 파일에서 채울 수 있는 항목을 찾지 못했습니다."
-                : $"검색 완료: {proposals.Count}개 중 {withProposal}개 제안. 체크한 항목만 '선택 항목 적용'으로 반영됩니다.";
+                ? $"검색 완료: {proposals.Count}곡에서 채울 수 있는 항목을 찾지 못했습니다."
+                : $"검색 완료: {proposals.Count}곡 중 {withProposal}곡에서 찾았습니다. 체크한 항목을 '편집에 넣기'로 넣은 뒤 저장하세요.";
         }
     }
 
     private bool CanApplySelected() => !IsRunning;
 
     [RelayCommand(CanExecute = nameof(CanApplySelected))]
-    private async Task ApplySelectedAsync()
+    private void ApplySelected()
     {
         var chosen = Results.Where(r => r.IsSelected && r.HasProposal).ToList();
         foreach (var item in chosen) item.ApplyChoices();
         var selected = chosen.Select(r => r.Proposal).Where(p => p.HasAnyProposal).ToList();
         if (selected.Count == 0)
         {
-            StatusText = "적용할 항목이 없습니다. 체크박스로 적용할 항목을 선택해 주세요.";
+            StatusText = "넣을 항목이 없습니다. 체크박스로 넣을 항목을 고르세요.";
             return;
         }
 
-        var errors = await ApplyAsync(selected);
-        StatusText = errors.Count == 0
-            ? $"{selected.Count}개 항목을 적용했습니다."
-            : $"{selected.Count - errors.Count}개 적용, {errors.Count}개 실패: {string.Join("; ", errors)}";
-    }
-
-    /// <summary>Writes the proposals to the files off the UI thread (tag/cover writes over a network
-    /// share can take a while), then refreshes the affected library rows.</summary>
-    private async Task<List<string>> ApplyAsync(List<AutoFillProposal> proposals)
-    {
-        var undoDir = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "TuneSync", "autofill-history");
-
-        IsRunning = true;
-        StatusText = "파일에 적용하는 중...";
-        List<string> errors;
-        // The playing file is locked by the player; release it for the write and resume after.
-        var resume = await _playback.ReleaseIfPlayingAsync(proposals.Select(p => p.File.Path));
-        try
-        {
-            errors = await Task.Run(() => _autoFillService.ApplyProposals(proposals, undoDir));
-        }
-        finally
-        {
-            resume?.Invoke(null);
-            IsRunning = false;
-        }
-
-        foreach (var item in Results) item.NotifyStatusChanged();
-        _library.RefreshRows(proposals.Select(p => p.File));
-        Applied?.Invoke(this, EventArgs.Empty);
-
-        var applied = proposals.Count - errors.Count;
-        if (errors.Count == 0)
-            Toast.Success("자동 채움 적용 완료", $"{applied}개 파일에 반영했습니다.");
-        else
-            Toast.Warning("일부 파일에 적용하지 못했습니다", $"{applied}개 반영, {errors.Count}개 실패. 결과 표의 상태를 확인해 주세요.");
-        return errors;
+        // Into the editor as unsaved edits: highlighted in the list, reviewed and saved (with undo)
+        // the same way as edits made by hand.
+        var (songs, items) = _editor.Stage(selected);
+        foreach (var item in chosen) Results.Remove(item);
+        StatusText = $"{songs}곡의 변경 {items}개를 편집에 넣었습니다. 아래 저장 바에서 확인하고 저장하세요.";
     }
 }

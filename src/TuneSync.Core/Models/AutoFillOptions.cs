@@ -8,4 +8,6 @@ namespace TuneSync.Core.Models;
 /// <param name="ReplaceExisting">For cover and lyrics: also search when the file already has one
 /// (the user explicitly asked for it), so the result can replace it after review. When false,
 /// only missing covers/lyrics are searched.</param>
-public sealed record AutoFillOptions(bool Tags = true, bool Cover = true, bool Lyrics = true, bool ReplaceExisting = false);
+/// <param name="ReplaceTags">Also propose a tag value that differs from one already there (the
+/// tag editor's "태그 찾기": results only become unsaved edits, reviewed before saving).</param>
+public sealed record AutoFillOptions(bool Tags = true, bool Cover = true, bool Lyrics = true, bool ReplaceExisting = false, bool ReplaceTags = false);

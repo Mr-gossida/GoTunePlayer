@@ -1,3 +1,4 @@
+using System.Net;
 using System.Net.Http.Headers;
 using System.Text.Json.Nodes;
 using TuneSync.Core.Models;
@@ -39,17 +40,22 @@ public sealed class MusicBrainzService : IMusicBrainzService, IDisposable
         var query = $"artist:\"{EscapeLucene(artist)}\" AND recording:\"{EscapeLucene(title)}\"";
         var url = $"recording?query={Uri.EscapeDataString(query)}&fmt=json&limit=5";
 
+        // A failed request is an error, not "no match": the caller shows it (검색 오류: …) instead
+        // of telling the user the song doesn't exist.
         JsonNode? root;
         try
         {
             using var resp = await RateLimitedGetAsync(url, ct);
-            if (!resp.IsSuccessStatusCode) return null;
+            if (!resp.IsSuccessStatusCode)
+                throw new HttpRequestException(resp.StatusCode is HttpStatusCode.ServiceUnavailable or HttpStatusCode.TooManyRequests
+                    ? "MusicBrainz가 요청이 많아 잠시 응답하지 않습니다. 조금 뒤 다시 시도하세요."
+                    : $"MusicBrainz 응답 오류 ({(int)resp.StatusCode})");
             var json = await resp.Content.ReadAsStringAsync(ct);
             root = JsonNode.Parse(json);
         }
-        catch (Exception) when (ct.IsCancellationRequested == false)
+        catch (Exception ex) when (!ct.IsCancellationRequested && ex is not HttpRequestException { InnerException: null })
         {
-            return null;
+            throw new HttpRequestException("MusicBrainz에 연결하지 못했습니다. 인터넷 연결을 확인하세요.", ex);
         }
 
         var recordings = root?["recordings"]?.AsArray();
@@ -136,9 +142,13 @@ public sealed class MusicBrainzService : IMusicBrainzService, IDisposable
     {
         try
         {
-            using var resp = await _caaHttp.GetAsync($"release/{releaseMbid}/front-500", ct);
-            if (!resp.IsSuccessStatusCode) return null;
-            return await resp.Content.ReadAsByteArrayAsync(ct);
+            // 1200 px when the archive has it (most releases), else 500 px.
+            foreach (var size in new[] { "front-1200", "front-500" })
+            {
+                using var resp = await _caaHttp.GetAsync($"release/{releaseMbid}/{size}", ct);
+                if (resp.IsSuccessStatusCode) return await resp.Content.ReadAsByteArrayAsync(ct);
+            }
+            return null;
         }
         catch (Exception) when (ct.IsCancellationRequested == false)
         {
@@ -146,10 +156,18 @@ public sealed class MusicBrainzService : IMusicBrainzService, IDisposable
         }
     }
 
+    /// <summary>One request per second (MusicBrainz's limit); when it still answers "busy" (503 /
+    /// 429), waits a little longer and tries again, twice.</summary>
     private async Task<HttpResponseMessage> RateLimitedGetAsync(string url, CancellationToken ct)
     {
-        await _rateLimiter.WaitAsync(ct);
-        return await _mbHttp.GetAsync(url, ct);
+        for (var attempt = 0; ; attempt++)
+        {
+            await _rateLimiter.WaitAsync(ct);
+            var resp = await _mbHttp.GetAsync(url, ct);
+            if (resp.StatusCode is not (HttpStatusCode.ServiceUnavailable or HttpStatusCode.TooManyRequests) || attempt == 2) return resp;
+            resp.Dispose();
+            await Task.Delay(TimeSpan.FromSeconds(1.5 * (attempt + 1)), ct);
+        }
     }
 
     private static string EscapeLucene(string value) =>
