@@ -132,6 +132,16 @@ public class LyricsAlignerTests
         Assert.Equal(["첫 줄", "둘째 줄"], LrcWriter.PlainLines("첫 줄\r\n\r\n[00:12.00]둘째 줄\n   \n"));
     }
 
+    [Fact]
+    public void Lyrics_with_any_line_break_style_split_into_lines()
+    {
+        // Some taggers separate lines with a lone CR (old Mac style) - those used to run together.
+        const string lyrics = "사랑이란 대체 뭘까\r더 멀어지기 위해\r\n내게 왔던가\u2028적당한 거리라도";
+        Assert.Equal(["사랑이란 대체 뭘까", "더 멀어지기 위해", "내게 왔던가", "적당한 거리라도"], LrcParser.SplitLines(lyrics));
+        Assert.Equal(4, LrcWriter.PlainLines(lyrics).Count);
+        Assert.Equal(2, LrcParser.Parse("[00:01.00]첫 줄\r[00:02.00]둘째 줄").Count);
+    }
+
     [Theory]
     [InlineData("당신은 날 설레게 만들어 baby", "ko")]
     [InlineData("I could take it to the top", "en")]

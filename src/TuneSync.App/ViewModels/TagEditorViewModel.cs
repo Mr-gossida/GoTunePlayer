@@ -399,6 +399,21 @@ public sealed partial class TagEditorViewModel : ObservableObject
     private static BitmapImage? PendingCoverImage(LibraryFileViewModel file) =>
         file.PendingCover is { Length: > 0 } bytes ? ImageHelper.ToBitmapImage(bytes, 256) : null;
 
+    /// <summary>What clicking the cover shows large: one song's cover, and its new cover when one
+    /// is waiting to be saved. Empty for several songs or no cover at all.</summary>
+    public CoverPreviewItem[] CoverPreviewItems()
+    {
+        if (_selection.Count != 1) return [];
+        var file = _selection[0];
+        var items = new List<CoverPreviewItem>();
+        if (file.HasCover)
+            items.Add(new CoverPreviewItem(file.PendingCover is null ? "커버" : "현재 커버",
+                () => Task.Run(() => CoverArtService.GetCover(file.Path))));
+        if (file.PendingCover is { Length: > 0 } pending)
+            items.Add(new CoverPreviewItem("새 커버 (저장 전)", () => Task.FromResult<byte[]?>(pending)));
+        return [.. items];
+    }
+
     [RelayCommand]
     private void PickCover()
     {
@@ -521,7 +536,8 @@ public sealed partial class TagEditorViewModel : ObservableObject
         if (version != _selectionVersion) return;
         IsLyricsLoading = false;
 
-        _lyricsOriginal = lyrics ?? "";
+        // Shown with ordinary line breaks (a file may use lone CRs, which run together otherwise).
+        _lyricsOriginal = LrcParser.NormalizeNewlines(lyrics).Replace("\n", Environment.NewLine);
         SetLyricsText(file.PendingLyrics ?? _lyricsOriginal);
         UpdateLyricsState();
     }
@@ -544,7 +560,7 @@ public sealed partial class TagEditorViewModel : ObservableObject
         UpdateLyricsState();
     }
 
-    private static string Normalize(string? text) => (text ?? "").Replace("\r\n", "\n").Trim();
+    private static string Normalize(string? text) => LrcParser.NormalizeNewlines(text).Trim();
 
     private void UpdateLyricsState()
     {

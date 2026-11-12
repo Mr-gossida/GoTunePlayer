@@ -20,6 +20,10 @@ public partial class PlayView : Page
         DataContext = viewModel;
 
         _viewModel.Playback.PropertyChanged += Playback_PropertyChanged;
+        // The queue emptied or changed (folders removed, a rescan, a search): the "지금 재생 중"
+        // button only makes sense while the playing song is in it.
+        ((System.Collections.Specialized.INotifyCollectionChanged)PlaylistBox.Items).CollectionChanged += (_, _) =>
+            Dispatcher.BeginInvoke(UpdateBackToCurrent, System.Windows.Threading.DispatcherPriority.Loaded);
         // A new song's lyrics replace the old ones: start again from the top once the new lines
         // are laid out (resetting earlier is undone by the old lines' layout still being there).
         _viewModel.Playback.LyricsLines.CollectionChanged += (_, e) =>
@@ -729,6 +733,7 @@ public partial class PlayView : Page
     {
         var half = LyricsScrollViewer.ActualHeight / 2;
         LyricsItems.Margin = new System.Windows.Thickness(0, half, 0, half);
+        LyricsFade.EndPoint = new System.Windows.Point(0, Math.Max(1, LyricsScrollViewer.ActualHeight));
         if (DateTime.UtcNow < _followPausedUntil) return;
         // No forced UpdateLayout here: the lines are already arranged for this size, and the
         // centering offset doesn't depend on the margin just set.
@@ -817,10 +822,22 @@ public partial class PlayView : Page
 
     private void PlaylistBox_ScrollChanged(object sender, ScrollChangedEventArgs e) => UpdateBackToCurrent();
 
+    /// <summary>The queue row of the playing song: the same object, or - after a rescan rebuilt
+    /// the rows - the row for the same file. Null when the queue doesn't have it (cleared,
+    /// removed, or hidden by the search).</summary>
+    private LibraryFileViewModel? CurrentRow()
+    {
+        if (_viewModel.Playback.CurrentFile is not { } current) return null;
+        if (PlaylistBox.Items.Contains(current)) return current;
+        foreach (var item in PlaylistBox.Items)
+            if (item is LibraryFileViewModel row && string.Equals(row.Path, current.Path, StringComparison.OrdinalIgnoreCase)) return row;
+        return null;
+    }
+
     private void UpdateBackToCurrent()
     {
         var show = false;
-        if (_viewModel.Playback.CurrentFile is { } current && PlaylistBox.ActualHeight > 0)
+        if (CurrentRow() is { } current && PlaylistBox.ActualHeight > 0)
         {
             show = true;
             if (PlaylistBox.ItemContainerGenerator.ContainerFromItem(current) is System.Windows.FrameworkElement row && row.IsVisible)
@@ -837,7 +854,7 @@ public partial class PlayView : Page
 
     private void BackToCurrent_Click(object sender, System.Windows.RoutedEventArgs e)
     {
-        if (_viewModel.Playback.CurrentFile is not { } current) return;
+        if (CurrentRow() is not { } current) return;
         PlaylistBox.SelectedItem = current;
         PlaylistBox.ScrollIntoView(current);
     }

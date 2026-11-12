@@ -95,7 +95,7 @@ public sealed partial class PlayPageViewModel : ObservableObject
         FoundSummary = $"{(synced ? "싱크 가사" : "일반 가사")} · {result.ArtistName} - {result.TrackName}";
         var lines = synced
             ? LrcParser.Parse(text).Select(l => l.Text)
-            : text.Split('\n').Select(l => l.Trim());
+            : LrcParser.SplitLines(text);
         FoundPreview = string.Join("\n", lines.Where(l => l.Length > 0).Take(6));
         FindState = LyricsFindState.Found;
     }

@@ -97,7 +97,7 @@ public sealed partial class AutoMatchItemViewModel : ObservableObject
         var synced = LrcParser.Parse(lyrics);
         var lines = synced.Count > 0
             ? synced.Select(l => l.Text)
-            : lyrics.Split('\n').Select(l => l.Trim());
+            : LrcParser.SplitLines(lyrics);
         var preview = string.Join("\n", lines.Where(l => l.Length > 0).Take(4));
         return (synced.Count > 0 ? "싱크 가사" : "일반 가사", preview);
     }

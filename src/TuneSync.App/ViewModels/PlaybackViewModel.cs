@@ -1040,7 +1040,7 @@ public sealed partial class PlaybackViewModel : ObservableObject, IDisposable
             else
             {
                 PlainLyrics = lyrics;
-                PlainLyricsLines = lyrics.Replace("\r", "").Split('\n').Select(l => l.Trim()).ToList();
+                PlainLyricsLines = LrcParser.SplitLines(lyrics); // any line-break style (some files use a lone CR)
             }
         }
 

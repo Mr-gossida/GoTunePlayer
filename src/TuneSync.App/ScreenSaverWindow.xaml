@@ -58,8 +58,10 @@
                               VerticalScrollBarVisibility="Hidden" HorizontalScrollBarVisibility="Disabled" CanContentScroll="False"
                               SizeChanged="LyricsViewer_SizeChanged"
                               Visibility="{Binding HasSyncedLyrics, Converter={StaticResource BoolToVisibility}}">
+                    <!-- Absolute, matching the view's Height: a relative mask is sized to the drawn
+                         lines and would fade the first/last line itself (see PlayView). -->
                     <ScrollViewer.OpacityMask>
-                        <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                        <LinearGradientBrush MappingMode="Absolute" StartPoint="0,0" EndPoint="0,160">
                             <GradientStop Color="Transparent" Offset="0"/>
                             <GradientStop Color="Black" Offset="0.12"/>
                             <GradientStop Color="Black" Offset="0.88"/>

@@ -12,12 +12,21 @@ public static partial class LrcParser
     [GeneratedRegex(@"\[(\d{2}):(\d{2})(?:[.:](\d{1,3}))?\]")]
     private static partial Regex TimeTag();
 
+    /// <summary>Every kind of line break as "\n": Windows (CR LF), old Mac (a lone CR - some
+    /// taggers write lyrics this way), and the Unicode line/paragraph separators.</summary>
+    public static string NormalizeNewlines(string? text) =>
+        (text ?? "").Replace("\r\n", "\n").Replace('\r', '\n').Replace('\u2028', '\n').Replace('\u2029', '\n').Replace('\u0085', '\n');
+
+    /// <summary>The text's lines, trimmed (blank lines kept, so stanza breaks survive).</summary>
+    public static List<string> SplitLines(string? text) =>
+        [.. NormalizeNewlines(text).Split('\n').Select(l => l.Trim())];
+
     public static List<LyricsLine> Parse(string? lyricsText)
     {
         var lines = new List<LyricsLine>();
         if (string.IsNullOrWhiteSpace(lyricsText)) return lines;
 
-        foreach (var rawLine in lyricsText.Replace("\r\n", "\n").Split('\n'))
+        foreach (var rawLine in NormalizeNewlines(lyricsText).Split('\n'))
         {
             var matches = TimeTag().Matches(rawLine);
             if (matches.Count == 0) continue;

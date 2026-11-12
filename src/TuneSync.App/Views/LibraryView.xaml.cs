@@ -131,6 +131,28 @@ public partial class LibraryView : Page
         e.Handled = true;
     }
 
+    /// <summary>An auto-fill result's covers, large: the current one (full size, read from the
+    /// file) next to the proposed one.</summary>
+    private void AutoFillCover_Click(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is not FrameworkElement { DataContext: AutoMatchItemViewModel item }) return;
+        var proposed = item.Proposal.ProposedCoverBytes;
+        var items = new List<CoverPreviewItem>();
+        if (item.Proposal.File.HasCover)
+            items.Add(new CoverPreviewItem("현재 커버", () => Task.Run(() => Core.Services.CoverArtService.GetCover(item.Path))));
+        items.Add(new CoverPreviewItem("새 커버", () => Task.FromResult(proposed)));
+        CoverPreviewWindow.Open(Window.GetWindow(this), [.. items]);
+        e.Handled = true;
+    }
+
+    /// <summary>The editor's cover tab: the cover large (and, with a new one waiting to be saved,
+    /// the current one beside it).</summary>
+    private void EditorCover_Click(object sender, MouseButtonEventArgs e)
+    {
+        if (_viewModel.Editor.CoverPreviewItems() is not { Length: > 0 } items) return;
+        CoverPreviewWindow.Open(Window.GetWindow(this), items);
+    }
+
     private static string? DroppedImage(DragEventArgs e) =>
         e.Data.GetData(DataFormats.FileDrop) is string[] files ? files.FirstOrDefault(TagEditorViewModel.IsImageFile) : null;
 

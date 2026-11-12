@@ -24,7 +24,7 @@ public static class LrcWriter
 
     /// <summary>The lines of plain lyrics worth timing (blank lines and any timestamps dropped).</summary>
     public static List<string> PlainLines(string lyrics) =>
-        [.. lyrics.Replace("\r\n", "\n").Split('\n')
+        [.. LrcParser.NormalizeNewlines(lyrics).Split('\n')
             .Select(l => System.Text.RegularExpressions.Regex.Replace(l, @"^\s*(\[\d{1,3}:\d{2}(?:[.:]\d{1,3})?\]\s*)+", "").Trim())
             .Where(l => l.Length > 0)];
 }

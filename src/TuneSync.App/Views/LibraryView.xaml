@@ -495,6 +495,7 @@
                         <StackPanel Visibility="{Binding HasSelection, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}">
                             <!-- Drop zone: the cover itself (drag an image file onto it) -->
                             <Border x:Name="CoverDropZone" CornerRadius="8" Background="{DynamicResource ControlFillColorSecondaryBrush}"
+                                    Cursor="Hand" ToolTip="클릭하면 크게 봅니다" MouseLeftButtonUp="EditorCover_Click"
                                     BorderThickness="1" BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
                                     Height="{Binding ActualWidth, RelativeSource={RelativeSource Self}}" MaxHeight="340"
                                     AllowDrop="True" DragEnter="CoverDrop_DragOver" DragOver="CoverDrop_DragOver" DragLeave="CoverDrop_DragLeave" Drop="CoverDrop_Drop">
@@ -670,11 +671,11 @@
                                                     <DataTemplate>
                                                         <Grid Margin="0,2">
                                                             <Grid.ColumnDefinitions>
-                                                                <ColumnDefinition Width="28"/>
+                                                                <ColumnDefinition Width="Auto"/>
                                                                 <ColumnDefinition Width="78"/>
                                                                 <ColumnDefinition Width="*"/>
                                                             </Grid.ColumnDefinitions>
-                                                            <CheckBox MinWidth="0" Padding="0" VerticalAlignment="Top" IsChecked="{Binding IsChecked}"/>
+                                                            <CheckBox MinWidth="0" Padding="0" Margin="0,0,6,0" VerticalAlignment="Top" IsChecked="{Binding IsChecked}"/>
                                                             <TextBlock Grid.Column="1" Text="{Binding Label}" FontSize="12" Margin="0,4,0,0"
                                                                        Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
                                                             <StackPanel Grid.Column="2" Margin="0,4,0,0">
@@ -691,13 +692,14 @@
                                             <Grid Margin="0,8,0,0" IsEnabled="{Binding IsSelected}"
                                                   Visibility="{Binding HasProposedCover, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}">
                                                 <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="28"/>
+                                                    <ColumnDefinition Width="Auto"/>
                                                     <ColumnDefinition Width="78"/>
                                                     <ColumnDefinition Width="*"/>
                                                 </Grid.ColumnDefinitions>
-                                                <CheckBox MinWidth="0" VerticalAlignment="Top" IsChecked="{Binding IncludeCover}"/>
+                                                <CheckBox MinWidth="0" Padding="0" Margin="0,0,6,0" VerticalAlignment="Top" IsChecked="{Binding IncludeCover}"/>
                                                 <TextBlock Grid.Column="1" Text="커버" FontSize="12" Margin="0,4,0,0" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-                                                <StackPanel Grid.Column="2" Orientation="Horizontal">
+                                                <StackPanel Grid.Column="2" Orientation="Horizontal" Background="Transparent" Cursor="Hand"
+                                                            ToolTip="클릭하면 크게 비교해 봅니다" MouseLeftButtonUp="AutoFillCover_Click">
                                                     <Border Width="52" Height="52" CornerRadius="4" Background="{DynamicResource ControlFillColorSecondaryBrush}">
                                                         <Border CornerRadius="4" Opacity="0.6">
                                                             <Border.Background>
@@ -718,11 +720,11 @@
                                             <Grid Margin="0,8,0,0" IsEnabled="{Binding IsSelected}"
                                                   Visibility="{Binding HasProposedLyrics, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}">
                                                 <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="28"/>
+                                                    <ColumnDefinition Width="Auto"/>
                                                     <ColumnDefinition Width="78"/>
                                                     <ColumnDefinition Width="*"/>
                                                 </Grid.ColumnDefinitions>
-                                                <CheckBox MinWidth="0" VerticalAlignment="Top" IsChecked="{Binding IncludeLyrics}"/>
+                                                <CheckBox MinWidth="0" Padding="0" Margin="0,0,6,0" VerticalAlignment="Top" IsChecked="{Binding IncludeLyrics}"/>
                                                 <TextBlock Grid.Column="1" Text="{Binding LyricsLabel}" FontSize="12" Margin="0,4,0,0"
                                                            Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
                                                 <TextBlock Grid.Column="2" Text="{Binding LyricsPreview}" FontSize="12" Margin="0,4,0,0" TextWrapping="Wrap" LineHeight="18"
