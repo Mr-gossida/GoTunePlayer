@@ -4,5 +4,7 @@ namespace TuneSync.Core.Services;
 
 public interface ILyricsService
 {
-    Task<LyricsResult?> FindAsync(string artist, string title, CancellationToken ct = default);
+    /// <summary>The lyrics that best fit the song (title, artist, and - when given - album and
+    /// length), or null when nothing matches well enough.</summary>
+    Task<LyricsResult?> FindAsync(LyricsQuery query, CancellationToken ct = default);
 }

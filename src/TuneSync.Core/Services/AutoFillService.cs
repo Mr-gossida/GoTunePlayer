@@ -73,7 +73,10 @@ public sealed class AutoFillService(IMusicBrainzService musicBrainz, ILyricsServ
             {
                 try
                 {
-                    var lyricsResult = await lyrics.FindAsync(match?.Artist ?? artist, match?.Title ?? title, ct);
+                    // Album and length tell versions apart (live, remix, a foreign-language release).
+                    var album = string.IsNullOrWhiteSpace(file.Tags.Album) ? match?.Album : file.Tags.Album;
+                    var lyricsResult = await lyrics.FindAsync(
+                        new LyricsQuery(match?.Artist ?? artist, match?.Title ?? title, album, file.Duration), ct);
                     proposal.ProposedLyrics = lyricsResult?.BestLyrics;
                 }
                 catch (Exception) when (ct.IsCancellationRequested == false) { /* best-effort */ }

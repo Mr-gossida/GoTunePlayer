@@ -25,6 +25,11 @@ internal sealed class FakeLyricsService : ILyricsService
 {
     public LyricsResult? NextResult { get; set; }
 
-    public Task<LyricsResult?> FindAsync(string artist, string title, CancellationToken ct = default) =>
-        Task.FromResult(NextResult);
+    public LyricsQuery? LastQuery { get; private set; }
+
+    public Task<LyricsResult?> FindAsync(LyricsQuery query, CancellationToken ct = default)
+    {
+        LastQuery = query;
+        return Task.FromResult(NextResult);
+    }
 }

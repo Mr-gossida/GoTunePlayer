@@ -68,7 +68,7 @@ public sealed partial class PlayPageViewModel : ObservableObject
         LyricsResult? result;
         try
         {
-            result = await _lyrics.FindAsync(file.Artist, title, cts.Token);
+            result = await _lyrics.FindAsync(new LyricsQuery(file.Artist, title, file.Album, file.Duration), cts.Token);
         }
         catch (OperationCanceledException)
         {
