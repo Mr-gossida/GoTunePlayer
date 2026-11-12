@@ -133,6 +133,27 @@
             </ui:CardControl.Header>
             <ui:ToggleSwitch IsChecked="{Binding StartWithWindows}" OnContent="켬" OffContent="끔"/>
         </ui:CardControl>
+        <ui:CardControl Margin="0,0,0,4" Icon="{ui:SymbolIcon History24}">
+            <ui:CardControl.Header>
+                <StackPanel>
+                    <ui:TextBlock Text="시작할 때 이어 듣기" FontTypography="Body"/>
+                    <ui:TextBlock Text="TuneSync를 열면 마지막으로 듣던 곡을 어디서부터 준비할지 정합니다."
+                                  FontSize="12" TextWrapping="Wrap" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                </StackPanel>
+            </ui:CardControl.Header>
+            <ComboBox Width="200" ItemsSource="{Binding StartupResumeOptions}" DisplayMemberPath="Label"
+                      SelectedValuePath="Value" SelectedValue="{Binding StartupResume}"/>
+        </ui:CardControl>
+        <ui:CardControl Margin="0,0,0,4" Icon="{ui:SymbolIcon Play24}">
+            <ui:CardControl.Header>
+                <StackPanel>
+                    <ui:TextBlock Text="시작하면 바로 재생" FontTypography="Body"/>
+                    <ui:TextBlock Text="켜면 일시정지 상태로 기다리지 않고 바로 재생합니다. 이어 들을 곡이 없으면 재생 대기열의 첫 곡(셔플이 켜져 있으면 무작위 곡)부터 재생합니다."
+                                  FontSize="12" TextWrapping="Wrap" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                </StackPanel>
+            </ui:CardControl.Header>
+            <ui:ToggleSwitch IsChecked="{Binding AutoPlayOnStartup}" OnContent="켬" OffContent="끔"/>
+        </ui:CardControl>
 
         <ui:TextBlock Text="재생" FontTypography="BodyStrong" Margin="0,20,0,8"/>
         <ui:CardControl Margin="0,0,0,4" Icon="{ui:SymbolIcon Desktop24}">

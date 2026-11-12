@@ -363,12 +363,22 @@ public sealed partial class PlaybackViewModel : ObservableObject, IDisposable
     // --- session: reopen on the last song, paused where it was left ---
 
     /// <summary>As the library streams in at startup, picks up the song that was loaded when the
-    /// app was last closed and loads it paused at the same spot (nothing plays by itself).</summary>
+    /// app was last closed (설정 › 시작: at the same spot, or from its beginning, or not at all) and
+    /// either waits, paused, or - with 시작하면 바로 재생 - plays it. With auto-play and no song to
+    /// pick up, the queue's first song plays once the library has loaded.</summary>
     private void WatchForSessionToResume()
     {
-        if (string.IsNullOrEmpty(_settings.LastFilePath)) return;
-        var path = _settings.LastFilePath;
-        var position = TimeSpan.FromSeconds(Math.Max(0, _settings.LastPositionSeconds));
+        var mode = _settings.StartupResume;
+        var autoPlay = _settings.AutoPlayOnStartup;
+        var path = mode == StartupResume.Nothing ? null : _settings.LastFilePath;
+        if (string.IsNullOrEmpty(path))
+        {
+            if (autoPlay) PlayFirstWhenLoaded();
+            return;
+        }
+        var position = mode == StartupResume.LastPosition
+            ? TimeSpan.FromSeconds(Math.Max(0, _settings.LastPositionSeconds))
+            : TimeSpan.Zero;
 
         System.Collections.Specialized.NotifyCollectionChangedEventHandler? onFiles = null;
         System.ComponentModel.PropertyChangedEventHandler? onScan = null;
@@ -387,23 +397,49 @@ public sealed partial class PlaybackViewModel : ObservableObject, IDisposable
             if (added.FirstOrDefault(f => string.Equals(f.Path, path, StringComparison.OrdinalIgnoreCase)) is not { } file) return;
             StopWatching();
             // After the current batch of adds, so the queue can select and scroll to it.
-            System.Windows.Application.Current?.Dispatcher.BeginInvoke(() => ResumeSession(file, position),
+            System.Windows.Application.Current?.Dispatcher.BeginInvoke(() => ResumeSession(file, position, autoPlay),
                 System.Windows.Threading.DispatcherPriority.Background);
         };
         onScan = (_, e) =>
         {
-            if (e.PropertyName == nameof(LibraryViewModel.IsScanning) && !_library.IsScanning) StopWatching(); // not in the library anymore
+            if (e.PropertyName != nameof(LibraryViewModel.IsScanning) || _library.IsScanning) return;
+            StopWatching(); // the last song isn't in the library anymore
+            if (autoPlay) PlayFirstWhenLoaded();
         };
         _library.Files.CollectionChanged += onFiles;
         _library.PropertyChanged += onScan;
     }
 
-    private void ResumeSession(LibraryFileViewModel file, TimeSpan position)
+    /// <summary>Auto-play with nothing to pick up: once the library has loaded, the queue's first
+    /// song (a random one with shuffle on) - unless something was chosen meanwhile.</summary>
+    private void PlayFirstWhenLoaded()
+    {
+        void Go()
+        {
+            if (CurrentFile is null && _library.Files.Count > 0) PlayNext();
+        }
+        if (!_library.IsScanning && _library.Files.Count > 0)
+        {
+            System.Windows.Application.Current?.Dispatcher.BeginInvoke(Go, System.Windows.Threading.DispatcherPriority.Background);
+            return;
+        }
+        System.ComponentModel.PropertyChangedEventHandler? onScan = null;
+        onScan = (_, e) =>
+        {
+            if (e.PropertyName != nameof(LibraryViewModel.IsScanning) || _library.IsScanning) return;
+            _library.PropertyChanged -= onScan;
+            System.Windows.Application.Current?.Dispatcher.BeginInvoke(Go, System.Windows.Threading.DispatcherPriority.Background);
+        };
+        _library.PropertyChanged += onScan;
+    }
+
+    private void ResumeSession(LibraryFileViewModel file, TimeSpan position, bool play)
     {
         if (CurrentFile is not null) return;
         PlayFile(file);
-        // PlayFile starts playing once the file opens; ask it to stay paused at the saved spot.
-        _pendingRestore = (position, false);
+        // PlayFile starts playing once the file opens; ask it to go to the saved spot and either
+        // wait there, paused, or carry on playing (시작하면 바로 재생).
+        _pendingRestore = (position, play);
         if (position > TimeSpan.FromSeconds(1))
         {
             _introUntil = null; // picking up mid-song: straight to the lyrics

@@ -80,6 +80,12 @@ public sealed class AppSettings
     /// on screen). Released as soon as playback pauses or stops.</summary>
     public bool KeepScreenOnWhilePlaying { get; set; } = true;
 
+    /// <summary>What the player opens with when the app starts.</summary>
+    public StartupResume StartupResume { get; set; } = StartupResume.LastPosition;
+
+    /// <summary>Start playing right away when the app opens (instead of waiting, paused).</summary>
+    public bool AutoPlayOnStartup { get; set; }
+
     /// <summary>The player's screen saver: after this many minutes without input while music
     /// plays, a full-screen "now playing" view takes over.</summary>
     public bool ScreenSaverEnabled { get; set; } = true;
@@ -122,6 +128,16 @@ public enum RepeatMode
 
     /// <summary>Keep replaying the current track.</summary>
     One,
+}
+
+public enum StartupResume
+{
+    /// <summary>The last song, at the spot where it was left.</summary>
+    LastPosition,
+    /// <summary>The last song, from its beginning.</summary>
+    SongStart,
+    /// <summary>Nothing loaded (with auto-play: the first song of the queue).</summary>
+    Nothing,
 }
 
 public enum PlaylistSortKey

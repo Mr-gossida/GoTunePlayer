@@ -130,6 +130,39 @@ public sealed partial class SettingsViewModel : ObservableObject
         }
     }
 
+    // --- what plays when the app starts ---
+
+    public IReadOnlyList<Choice<StartupResume>> StartupResumeOptions { get; } =
+    [
+        new(StartupResume.LastPosition, "마지막으로 듣던 위치부터"),
+        new(StartupResume.SongStart, "마지막 곡을 처음부터"),
+        new(StartupResume.Nothing, "이어 듣지 않음"),
+    ];
+
+    public StartupResume StartupResume
+    {
+        get => _settings.StartupResume;
+        set
+        {
+            if (_settings.StartupResume == value) return;
+            _settings.StartupResume = value;
+            AppSettingsStore.Save(_settings);
+            OnPropertyChanged();
+        }
+    }
+
+    public bool AutoPlayOnStartup
+    {
+        get => _settings.AutoPlayOnStartup;
+        set
+        {
+            if (_settings.AutoPlayOnStartup == value) return;
+            _settings.AutoPlayOnStartup = value;
+            AppSettingsStore.Save(_settings);
+            OnPropertyChanged();
+        }
+    }
+
     // --- screen saver ---
 
     [ObservableProperty]
