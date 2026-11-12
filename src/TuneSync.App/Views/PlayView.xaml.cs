@@ -76,7 +76,7 @@ public partial class PlayView : Page
 
         if (hero != _hero)
         {
-            System.Windows.Rect? from = animate && !hero && BigCover.IsVisible ? BoundsInLayer(BigCover) : null;
+            System.Windows.Rect? from = animate && !hero && NowPlayingPanel.IsVisible ? BoundsInLayer(NowPlayingPanel) : null;
             _hero = hero;
             if (hero)
             {
@@ -91,12 +91,12 @@ public partial class PlayView : Page
                 NowPlayingPanel.ClearValue(HorizontalAlignmentProperty);
                 NowPlayingPanel.ClearValue(WidthProperty);
                 NowPlayingPanel.ClearValue(MarginProperty);
-                if (from is { } start && playback.CurrentCover is { } cover)
+                if (from is { } start)
                 {
                     UpdateLayout();
-                    // Unhurried: the intro ends a few seconds before the singing, so there's time.
-                    GlideCover(cover, start, BoundsInLayer(BigCover), BigCover, 10, TimeSpan.FromMilliseconds(1400));
-                    FadeSlideIn(NowPlayingPanel, 60, 0, duration: TimeSpan.FromMilliseconds(1100), delay: TimeSpan.FromMilliseconds(250));
+                    // Cover, song info and spectrum travel together, as one card. Unhurried: the
+                    // intro ends a few seconds before the singing, so there's time.
+                    GlideElement(NowPlayingPanel, start, BoundsInLayer(NowPlayingPanel), TimeSpan.FromMilliseconds(1400));
                 }
             }
         }
@@ -708,6 +708,36 @@ public partial class PlayView : Page
             flyer.BeginAnimation(Canvas.TopProperty, Anim(from.Top, to.Top));
             flyer.BeginAnimation(WidthProperty, Anim(from.Width, to.Width));
             flyer.BeginAnimation(HeightProperty, Anim(from.Height, to.Height));
+        });
+    }
+
+    /// <summary>Moves an element that has just been laid out somewhere else from where it was to
+    /// where it is now, scaling it from its old size - the whole thing as one piece.</summary>
+    private void GlideElement(System.Windows.FrameworkElement element, System.Windows.Rect from, System.Windows.Rect to, TimeSpan length)
+    {
+        if (to.Width <= 0 || from.Width <= 0) return;
+        foreach (var old in TransitionLayer.Children.OfType<System.Windows.FrameworkElement>().ToList())
+            TransitionLayer.Children.Remove(old);
+        BigCover.Opacity = 1;
+        element.BeginAnimation(OpacityProperty, null);
+        element.Opacity = 1;
+
+        var start = from.Width / to.Width;
+        var scale = new System.Windows.Media.ScaleTransform(start, start);
+        var shift = new System.Windows.Media.TranslateTransform(from.Left - to.Left, from.Top - to.Top);
+        var group = new System.Windows.Media.TransformGroup();
+        group.Children.Add(scale);
+        group.Children.Add(shift);
+        element.RenderTransformOrigin = new System.Windows.Point(0, 0);
+        element.RenderTransform = group;
+
+        var ease = new System.Windows.Media.Animation.CubicEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseInOut };
+        OnNextFrame(() =>
+        {
+            scale.BeginAnimation(System.Windows.Media.ScaleTransform.ScaleXProperty, new System.Windows.Media.Animation.DoubleAnimation(start, 1, length) { EasingFunction = ease });
+            scale.BeginAnimation(System.Windows.Media.ScaleTransform.ScaleYProperty, new System.Windows.Media.Animation.DoubleAnimation(start, 1, length) { EasingFunction = ease });
+            shift.BeginAnimation(System.Windows.Media.TranslateTransform.XProperty, new System.Windows.Media.Animation.DoubleAnimation(shift.X, 0, length) { EasingFunction = ease });
+            shift.BeginAnimation(System.Windows.Media.TranslateTransform.YProperty, new System.Windows.Media.Animation.DoubleAnimation(shift.Y, 0, length) { EasingFunction = ease });
         });
     }
 

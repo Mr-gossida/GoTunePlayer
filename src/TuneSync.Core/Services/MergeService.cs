@@ -17,7 +17,7 @@ public static class MergeService
         // File names the target root will hold: what's there now plus what this plan moves in, so
         // two songs that happen to share a file name never collide (everything lands in the root).
         var claimed = new HashSet<string>(
-            Directory.Exists(targetFolder) ? Directory.EnumerateFiles(targetFolder).Select(Path.GetFileName)! : [],
+            Directory.Exists(targetFolder) ? Directory.EnumerateFiles(targetFolder).Select(p => Path.GetFileName(p)) : [],
             StringComparer.OrdinalIgnoreCase);
 
         var sourceOption = rules.IncludeSubfolders ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;

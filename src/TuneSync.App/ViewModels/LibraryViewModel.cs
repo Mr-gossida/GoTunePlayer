@@ -88,7 +88,8 @@ public sealed partial class LibraryViewModel : ObservableObject
         _playlistGroup = settings.PlaylistGroup;
         ApplyPlaylistOrder();
 
-        Files.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasNoFiles));
+        Files.CollectionChanged += (_, _) => NotifyLibraryState();
+        Folders.CollectionChanged += (_, _) => NotifyLibraryState();
 
         foreach (var entry in settings.LibraryFolders)
             Folders.Add(new LibraryFolderViewModel(entry));
@@ -97,6 +98,129 @@ public sealed partial class LibraryViewModel : ObservableObject
     }
 
     public bool HasNoFiles => Files.Count == 0;
+
+    /// <summary>Nothing registered yet: the welcome screen.</summary>
+    public bool IsWelcome => Folders.Count == 0 && Files.Count == 0;
+
+    /// <summary>Folders registered, their songs still on the way (the first load).</summary>
+    public bool IsLoadingEmpty => Folders.Count > 0 && Files.Count == 0 && IsScanning;
+
+    /// <summary>Folders registered but none could be reached - typically a NAS or server that is
+    /// switched off. Watched in the background; the list comes back by itself once it's reachable.</summary>
+    public bool IsOffline => Folders.Count > 0 && Files.Count == 0 && !IsScanning && UnreachableCount > 0;
+
+    /// <summary>Folders registered and reachable, but without any songs in them.</summary>
+    public bool IsNoSongs => Folders.Count > 0 && Files.Count == 0 && !IsScanning && UnreachableCount == 0;
+
+    /// <summary>Registered folders/files the last scan couldn't reach.</summary>
+    [ObservableProperty]
+    private int _unreachableCount;
+
+    [ObservableProperty]
+    private string _unreachableNames = "";
+
+    private void NotifyLibraryState()
+    {
+        OnPropertyChanged(nameof(HasNoFiles));
+        OnPropertyChanged(nameof(IsWelcome));
+        OnPropertyChanged(nameof(IsLoadingEmpty));
+        OnPropertyChanged(nameof(IsOffline));
+        OnPropertyChanged(nameof(IsNoSongs));
+    }
+
+    partial void OnIsScanningChanged(bool value) => NotifyLibraryState();
+    partial void OnUnreachableCountChanged(int value) => NotifyLibraryState();
+
+    // ---- coming back after a server / NAS / drive was unreachable ----
+
+    private List<LibraryFolderViewModel> _unreachable = [];
+    private System.Windows.Threading.DispatcherTimer? _reconnectTimer;
+    private bool _probing;
+
+    /// <summary>"다시 연결": reads the registered folders again.</summary>
+    [RelayCommand]
+    private Task ReconnectAsync() => RescanAsync();
+
+    private string DisplayName(LibraryFolderViewModel f)
+    {
+        var leaf = Path.GetFileName(f.Path.TrimEnd('\\', '/'));
+        if (string.IsNullOrEmpty(leaf)) leaf = f.Path;
+        return f.Entry.RemoteSourceId is { } id && _network.Find(id) is { } source ? $"{source.Name} › {leaf}" : leaf;
+    }
+
+    /// <summary>After a scan: remembers what couldn't be reached and, while anything is missing,
+    /// checks every 20 seconds (and whenever the network changes) whether it's back - then
+    /// reloads the list on its own.</summary>
+    private void WatchForReconnect(List<LibraryFolderViewModel> unreachable)
+    {
+        _unreachable = unreachable;
+        var names = unreachable.Select(DisplayName).Distinct().ToList();
+        UnreachableNames = string.Join(", ", names.Take(3)) + (names.Count > 3 ? $" 외 {names.Count - 3}개" : "");
+        UnreachableCount = unreachable.Count;
+        if (unreachable.Count == 0)
+        {
+            _reconnectTimer?.Stop();
+            return;
+        }
+        if (_reconnectTimer is null)
+        {
+            _reconnectTimer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(20) };
+            _reconnectTimer.Tick += async (_, _) => await ProbeAsync();
+            void Changed() => System.Windows.Application.Current?.Dispatcher.BeginInvoke(async () => await ProbeAsync());
+            System.Net.NetworkInformation.NetworkChange.NetworkAvailabilityChanged += (_, e) => { if (e.IsAvailable) Changed(); };
+            System.Net.NetworkInformation.NetworkChange.NetworkAddressChanged += (_, _) => Changed();
+        }
+        _reconnectTimer.Start();
+    }
+
+    private async Task ProbeAsync()
+    {
+        if (_probing || IsScanning || _unreachable.Count == 0) return;
+        _probing = true;
+        try
+        {
+            var items = _unreachable.ToList();
+            var back = false;
+            foreach (var item in items)
+                if (await IsReachableAsync(item)) { back = true; break; }
+            if (back && !IsScanning)
+            {
+                _reconnectTimer?.Stop();
+                Toast.Info("다시 연결되었습니다", "음악 목록을 다시 불러옵니다.");
+                await RescanAsync();
+            }
+        }
+        finally
+        {
+            _probing = false;
+        }
+    }
+
+    /// <summary>Whether a registered folder/file answers now - with a time limit, since a
+    /// switched-off server can keep a check waiting for a long time.</summary>
+    private async Task<bool> IsReachableAsync(LibraryFolderViewModel f)
+    {
+        try
+        {
+            if (f.Entry.IsRemote)
+            {
+                if (_network.ClientFor(f.Entry.RemoteSourceId!) is not { } client) return false;
+                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+                await client.TestAsync(cts.Token);
+                return true;
+            }
+            var check = Task.Run(() =>
+            {
+                if (f.Entry.RemoteSourceId is not null) _network.EnsureConnected(f.Entry);
+                return f.IsFile ? File.Exists(f.Path) : Directory.Exists(f.Path);
+            });
+            return await Task.WhenAny(check, Task.Delay(TimeSpan.FromSeconds(10))) == check && check.Result;
+        }
+        catch
+        {
+            return false;
+        }
+    }
 
     partial void OnPlaylistSortChanged(PlaylistSortKey value) => SavePlaylistOrder();
     partial void OnPlaylistSortDescendingChanged(bool value) => SavePlaylistOrder();
@@ -260,10 +384,22 @@ public sealed partial class LibraryViewModel : ObservableObject
     {
         if (entries.Count == 0) return;
 
+        // Picking folders that are already registered (e.g. after a NAS was off) isn't a request
+        // to change the list - it's "load them again".
+        bool Registered(LibraryFolderEntry entry) => Folders.Any(f =>
+            string.Equals(f.Path, entry.Path, StringComparison.OrdinalIgnoreCase) && f.Entry.RemoteSourceId == entry.RemoteSourceId);
+        var fresh = entries.Where(e => !Registered(e)).ToList();
+        if (fresh.Count == 0)
+        {
+            Toast.Info("이미 등록된 항목입니다", entries.Count == 1 ? "목록을 다시 불러옵니다." : $"{entries.Count}개 모두 등록되어 있어 목록을 다시 불러옵니다.");
+            await RescanAsync();
+            return;
+        }
+
         var mode = Folders.Count == 0 ? LibraryAddMode.Append : _settings.LibraryAddMode;
         if (mode == LibraryAddMode.Ask)
         {
-            if (await Dialogs.ChooseAddModeAsync(Folders.Count, entries.Count) is not { } choice) return;
+            if (await Dialogs.ChooseAddModeAsync(Folders.Count, fresh.Count) is not { } choice) return;
             mode = choice.Mode;
             if (choice.Remember)
             {
@@ -454,6 +590,13 @@ public sealed partial class LibraryViewModel : ObservableObject
                 await Add(file);
             await FlushAsync();
             var foundFromFileSources = count;
+            var unreachableList = new List<LibraryFolderViewModel>();
+            if (foundFromFileSources < filePaths.Count)
+            {
+                var found = Files.Select(f => f.Path).ToHashSet(StringComparer.OrdinalIgnoreCase);
+                unreachableList.AddRange(sources.Where(s => s.IsFile && !found.Contains(
+                    s.Entry.IsRemote ? RemotePath.Build(s.Entry.RemoteSourceId!, s.Path) : s.Path)));
+            }
 
             var unreachableFolders = 0;
             foreach (var folder in sources.Where(s => !s.IsFile))
@@ -467,6 +610,7 @@ public sealed partial class LibraryViewModel : ObservableObject
                     if (client is null)
                     {
                         unreachableFolders++;
+                        unreachableList.Add(folder);
                         continue;
                     }
                     StatusText = $"{_network.Find(folder.Entry.RemoteSourceId)?.Name} 읽는 중...";
@@ -479,6 +623,7 @@ public sealed partial class LibraryViewModel : ObservableObject
                     catch (Exception ex) when (ex is not OperationCanceledException)
                     {
                         unreachableFolders++;
+                        unreachableList.Add(folder);
                     }
                     continue;
                 }
@@ -487,6 +632,7 @@ public sealed partial class LibraryViewModel : ObservableObject
                 if (!await Task.Run(() => Directory.Exists(path), cts.Token))
                 {
                     unreachableFolders++;
+                    unreachableList.Add(folder);
                     continue;
                 }
 
@@ -501,7 +647,9 @@ public sealed partial class LibraryViewModel : ObservableObject
             {
                 StatusText = BuildScanSummary(count, sources.Count, filePaths.Count, foundFromFileSources, unreachableFolders);
                 var unreachable = unreachableFolders + Math.Max(0, filePaths.Count - foundFromFileSources);
-                if (unreachable > 0)
+                WatchForReconnect(unreachableList);
+                // With nothing reachable at all the player itself explains it (and offers 다시 연결).
+                if (unreachable > 0 && count > 0)
                     Toast.Warning("일부 항목에 접근할 수 없습니다",
                         $"{unreachable}개 폴더/파일을 읽지 못했습니다. 네트워크 드라이브나 외장 디스크 연결을 확인해 주세요.");
             }
