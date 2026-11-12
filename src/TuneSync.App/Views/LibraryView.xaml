@@ -583,9 +583,15 @@
                                                  Visibility="{Binding IsLyricsLoading, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}"/>
                                 <TextBlock Text="{Binding LyricsInfo}" FontSize="12" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
                             </StackPanel>
-                            <ui:Button HorizontalAlignment="Right" Content="되돌리기" Icon="{ui:SymbolIcon ArrowUndo16}" Appearance="Transparent"
-                                       Padding="8,3" FontSize="12" Command="{Binding RevertLyricsCommand}"
-                                       Visibility="{Binding IsLyricsPending, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}"/>
+                            <StackPanel HorizontalAlignment="Right" Orientation="Horizontal">
+                                <ui:Button Content="싱크 가사 만들기" Icon="{ui:SymbolIcon Sparkle24}" Padding="10,4" FontSize="12" Margin="0,0,4,0"
+                                           Command="{Binding MakeSyncedCommand}"
+                                           ToolTip="음성 인식으로 각 줄의 시간을 자동으로 맞추고, 들어보며 고칠 수 있습니다"
+                                           Visibility="{Binding CanMakeSynced, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}"/>
+                                <ui:Button Content="되돌리기" Icon="{ui:SymbolIcon ArrowUndo16}" Appearance="Transparent"
+                                           Padding="8,3" FontSize="12" Command="{Binding RevertLyricsCommand}"
+                                           Visibility="{Binding IsLyricsPending, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}"/>
+                            </StackPanel>
                         </Grid>
                         <ui:TextBox Grid.Row="1" Text="{Binding LyricsText, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" AcceptsTab="False"
                                     TextWrapping="Wrap" VerticalContentAlignment="Top" VerticalScrollBarVisibility="Auto" FontSize="13"

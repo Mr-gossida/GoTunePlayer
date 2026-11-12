@@ -531,7 +531,10 @@ public sealed partial class TagEditorViewModel : ObservableObject
         _lyricsLoading = true;
         LyricsText = text;
         _lyricsLoading = false;
+        OnPropertyChanged(nameof(CanMakeSynced));
     }
+
+    partial void OnIsLyricsLoadingChanged(bool value) => OnPropertyChanged(nameof(CanMakeSynced));
 
     partial void OnLyricsTextChanged(string value)
     {
@@ -552,6 +555,24 @@ public sealed partial class TagEditorViewModel : ObservableObject
             : LrcParser.Parse(text).Count > 0 ? "싱크 가사 (LRC)"
             : "일반 가사";
         if (IsLyricsPending) LyricsInfo += " · 저장 전";
+        OnPropertyChanged(nameof(CanMakeSynced));
+    }
+
+    /// <summary>One song whose lyrics (as shown, edits included) are plain text.</summary>
+    public bool CanMakeSynced => _selection.Count == 1 && !IsLyricsLoading
+        && Normalize(LyricsText).Length > 0 && LrcParser.Parse(Normalize(LyricsText)).Count == 0;
+
+    /// <summary>Opens the sync editor on the shown lyrics; once synced lyrics are saved, any
+    /// unsaved lyrics edit here is replaced by them.</summary>
+    [RelayCommand]
+    private void MakeSynced()
+    {
+        if (!CanMakeSynced) return;
+        var file = _selection[0];
+        var owner = Application.Current.Windows.OfType<Window>().FirstOrDefault(w => w.IsActive);
+        if (!LyricsSyncWindow.Run(owner, file, LyricsText)) return;
+        file.SetPendingLyrics(null);
+        Reload();
     }
 
     [RelayCommand]

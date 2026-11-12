@@ -311,6 +311,14 @@
                     </ItemsControl>
                 </ScrollViewer>
 
+                <!-- Plain lyrics: offer to time them (LyricsSyncWindow). -->
+                <ui:Button Content="싱크 가사 만들기" Icon="{ui:SymbolIcon Sparkle24}" Click="MakeSyncedLyrics_Click"
+                           HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,16,24,0" Panel.ZIndex="10"
+                           Padding="12,6" CornerRadius="16" BorderThickness="0"
+                           Background="{DynamicResource PlayerHoverBrush}" MouseOverBackground="{DynamicResource PlayerTrackBrush}"
+                           ToolTip="음성 인식으로 각 줄의 시간을 자동으로 맞추고, 들어보며 고칠 수 있습니다"
+                           Visibility="{Binding HasPlainLyricsOnly, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}"/>
+
                 <!-- Shown after scrolling the lyrics away by hand: back to the line being sung. -->
                 <ui:Button x:Name="BackToLyricButton" Content="현재 가사로" Icon="{ui:SymbolIcon ArrowSync24}"
                            HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,16" Panel.ZIndex="10"

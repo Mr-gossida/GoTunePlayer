@@ -735,6 +735,13 @@ public partial class PlayView : Page
         LyricsScroller.SnapTo(LyricsScrollViewer, LyricsItems, _viewModel.Playback.CurrentLyricsIndex);
     }
 
+    private void MakeSyncedLyrics_Click(object sender, System.Windows.RoutedEventArgs e)
+    {
+        var playback = _viewModel.Playback;
+        if (playback.CurrentFile is not { } file || string.IsNullOrWhiteSpace(playback.PlainLyrics)) return;
+        LyricsSyncWindow.Run(System.Windows.Window.GetWindow(this), file, playback.PlainLyrics);
+    }
+
     private void OpenCurrentInTagManager_Click(object sender, System.Windows.RoutedEventArgs e)
     {
         if (_viewModel.Playback.CurrentFile is not { } file) return;

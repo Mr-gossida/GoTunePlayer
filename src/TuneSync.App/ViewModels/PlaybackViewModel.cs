@@ -862,6 +862,10 @@ public sealed partial class PlaybackViewModel : ObservableObject, IDisposable
         ApplySeek(TimeSpan.FromSeconds(seconds));
     }
 
+    /// <summary>Where playback is right now, read straight from the player (PositionSeconds only
+    /// updates every 200 ms - too coarse for tapping lyric lines in time).</summary>
+    public TimeSpan CurrentPosition => _seekTarget ?? _player.Position;
+
     /// <summary>Jumps to a point in the current track and makes sure it's playing - used when a
     /// synced lyrics line is clicked.</summary>
     public void SeekTo(TimeSpan time)

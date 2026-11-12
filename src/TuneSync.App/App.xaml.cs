@@ -16,6 +16,9 @@ public partial class App : Application
 {
     private IHost? _host;
 
+    /// <summary>The app's services, for windows opened outside dependency injection.</summary>
+    public IServiceProvider Services => _host!.Services;
+
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
