@@ -22,7 +22,7 @@ public sealed class NetworkLibrary : IDisposable
         _settings = settings;
         Cache = new StreamingCache(() => Math.Max(256, _settings.StreamCacheMegabytes) * 1024L * 1024L);
         Server = new LocalStreamServer();
-        Index = new RemoteLibraryIndex(Path.Combine(
+        Index = new LibraryIndex(Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "TuneSync", "remote-index.json"));
 
         RemoteFiles.ClientFor = ClientFor;
@@ -37,7 +37,7 @@ public sealed class NetworkLibrary : IDisposable
 
     public StreamingCache Cache { get; }
     public LocalStreamServer Server { get; }
-    public RemoteLibraryIndex Index { get; }
+    public LibraryIndex Index { get; }
 
     public IReadOnlyList<RemoteSource> Sources => _settings.RemoteSources;
 

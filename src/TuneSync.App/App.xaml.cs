@@ -81,7 +81,7 @@ public partial class App : Application
 
     /// <summary>Appends the full exception to %LocalAppData%\TuneSync\error.log, so a problem a
     /// user reports can actually be diagnosed afterwards.</summary>
-    private static void LogError(Exception ex)
+    internal static void LogError(Exception ex)
     {
         try
         {

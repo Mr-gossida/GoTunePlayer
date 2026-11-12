@@ -162,7 +162,7 @@ public class RemoteFilesTests : IDisposable
         client.Files["/Music/a.mp3"] = Asset("sample.mp3");
         client.Files["/Music/b.flac"] = Asset("sample.flac");
         RemoteFiles.ClientFor = _ => client;
-        var index = new RemoteLibraryIndex(Path.Combine(_temp, "index.json"));
+        var index = new LibraryIndex(Path.Combine(_temp, "index.json"));
 
         var first = new List<LibraryFile>();
         await foreach (var f in MediaLibraryScanner.ScanRemoteAsync(client, "src", "/Music", true, index))
@@ -171,7 +171,7 @@ public class RemoteFilesTests : IDisposable
         index.Save();
 
         client.Opens = 0;
-        var reloaded = new RemoteLibraryIndex(Path.Combine(_temp, "index.json"));
+        var reloaded = new LibraryIndex(Path.Combine(_temp, "index.json"));
         var second = new List<LibraryFile>();
         await foreach (var f in MediaLibraryScanner.ScanRemoteAsync(client, "src", "/Music", true, reloaded))
             second.Add(f);
@@ -250,5 +250,44 @@ public class RemoteFilesTests : IDisposable
         var move = handler.Requests.Single(r => r.Method.Method == "MOVE");
         Assert.Equal("https://nas.local/dav/Music/a%20b.mp3", move.Headers.GetValues("Destination").Single());
         Assert.Equal("T", move.Headers.GetValues("Overwrite").Single());
+    }
+}
+
+public class LibraryIndexFolderTests
+{
+    [Fact]
+    public async Task Folder_scan_reuses_unchanged_songs_from_the_index()
+    {
+        var folder = Path.Combine(Path.GetTempPath(), "tunesync-index-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(folder);
+        var song = Path.Combine(folder, "song.mp3");
+        File.Copy(TestFixtures.CopyFixture("sample.mp3"), song);
+        var index = new TuneSync.Core.Services.LibraryIndex(Path.Combine(folder, "index.json"));
+        try
+        {
+            var first = new List<TuneSync.Core.Models.LibraryFile>();
+            await foreach (var f in TuneSync.Core.Services.MediaLibraryScanner.ScanAsync(folder, false, index)) first.Add(f);
+            Assert.Single(first);
+            var title = first[0].Tags.Title;
+
+            // Same size and date, unreadable content: only the index can still produce the song.
+            var stamp = File.GetLastWriteTimeUtc(song);
+            File.WriteAllBytes(song, new byte[new FileInfo(song).Length]);
+            File.SetLastWriteTimeUtc(song, stamp);
+            var second = new List<TuneSync.Core.Models.LibraryFile>();
+            await foreach (var f in TuneSync.Core.Services.MediaLibraryScanner.ScanAsync(folder, false, index)) second.Add(f);
+            Assert.Single(second);
+            Assert.Equal(title, second[0].Tags.Title);
+
+            // Changed date: read again (and the zeroed file can't be read, so it drops out).
+            File.SetLastWriteTimeUtc(song, stamp.AddMinutes(1));
+            var third = new List<TuneSync.Core.Models.LibraryFile>();
+            await foreach (var f in TuneSync.Core.Services.MediaLibraryScanner.ScanAsync(folder, false, index)) third.Add(f);
+            Assert.Empty(third);
+        }
+        finally
+        {
+            Directory.Delete(folder, true);
+        }
     }
 }

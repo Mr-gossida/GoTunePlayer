@@ -38,6 +38,15 @@ public sealed partial class LibraryFileViewModel : ObservableObject
 
     public bool IsUpNext => UpNextOrder > 0;
 
+    /// <summary>Set on the first song of each group in the queue: the group's name (its heading
+    /// is drawn above this row); null for every other row.</summary>
+    [ObservableProperty]
+    private string? _groupHeader;
+
+    /// <summary>How many songs the group starting here has.</summary>
+    [ObservableProperty]
+    private int _groupCount;
+
     public string FileName => Model.FileName;
     public string Path => Model.Path;
     public string Title => Model.Tags.Title;
@@ -61,9 +70,12 @@ public sealed partial class LibraryFileViewModel : ObservableObject
     public TimeSpan Duration => Model.Duration;
     /// <summary>The folder (group key and header). A network song's folder reads
     /// "거실 NAS › Music/KPop" rather than its internal remote:// address.</summary>
-    public string Folder => TuneSync.Core.Models.RemotePath.TryParse(Path, out var sourceId, out var remotePath)
+    /// (Worked out once: the queue sorts and groups by it, reading it thousands of times.)
+    public string Folder => _folder ??= TuneSync.Core.Models.RemotePath.TryParse(Path, out var sourceId, out var remotePath)
         ? $"{RemoteSourceName?.Invoke(sourceId) ?? "네트워크"} › {remotePath[..Math.Max(0, remotePath.LastIndexOf('/'))].TrimStart('/')}"
         : System.IO.Path.GetDirectoryName(Path) ?? "";
+
+    private string? _folder;
 
     /// <summary>Source id → its display name (set by the app's network library).</summary>
     public static Func<string, string?>? RemoteSourceName { get; set; }

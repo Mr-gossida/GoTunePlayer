@@ -19,7 +19,9 @@ public sealed partial class LibraryViewModel : ObservableObject
 {
     private readonly AppSettings _settings;
 
-    public ObservableCollection<LibraryFileViewModel> Files { get; } = [];
+    /// <summary>Every song. Filled in batches (<see cref="BulkObservableCollection{T}.AddRange"/>):
+    /// listeners see a Reset per batch rather than an Add per song.</summary>
+    public BulkObservableCollection<LibraryFileViewModel> Files { get; } = [];
     public ICollectionView FilesView { get; }
     public ListCollectionView PlaylistView { get; }
 
@@ -80,6 +82,7 @@ public sealed partial class LibraryViewModel : ObservableObject
         Filter.FilterChanged += (_, _) => FilesView.Refresh();
 
         PlaylistView = new ListCollectionView(Files);
+        ((System.Collections.Specialized.INotifyCollectionChanged)PlaylistView).CollectionChanged += (_, _) => ScheduleGroupHeaders();
         _playlistSort = settings.PlaylistSort;
         _playlistSortDescending = settings.PlaylistSortDescending;
         _playlistGroup = settings.PlaylistGroup;
@@ -115,36 +118,94 @@ public sealed partial class LibraryViewModel : ObservableObject
     /// follows) is: group by group, then the chosen sort inside each group.</summary>
     private void ApplyPlaylistOrder()
     {
-        var groupProperty = PlaylistGroup switch
+        Func<LibraryFileViewModel, string>? group = PlaylistGroup switch
         {
-            PlaylistGroupKey.Folder => nameof(LibraryFileViewModel.Folder),
-            PlaylistGroupKey.Artist => nameof(LibraryFileViewModel.ArtistGroup),
-            PlaylistGroupKey.Album => nameof(LibraryFileViewModel.AlbumGroup),
+            PlaylistGroupKey.Folder => f => f.Folder,
+            PlaylistGroupKey.Artist => f => f.ArtistGroup,
+            PlaylistGroupKey.Album => f => f.AlbumGroup,
             _ => null,
         };
-        var sortProperty = PlaylistSort switch
+        var text = StringComparer.CurrentCultureIgnoreCase;
+        Comparison<LibraryFileViewModel> sort = PlaylistSort switch
         {
-            PlaylistSortKey.Path => nameof(LibraryFileViewModel.Path),
-            PlaylistSortKey.Artist => nameof(LibraryFileViewModel.Artist),
-            PlaylistSortKey.Title => nameof(LibraryFileViewModel.DisplayTitle),
-            PlaylistSortKey.Album => nameof(LibraryFileViewModel.Album),
-            PlaylistSortKey.Duration => nameof(LibraryFileViewModel.Duration),
-            _ => nameof(LibraryFileViewModel.FileName),
+            PlaylistSortKey.Path => (a, b) => text.Compare(a.Path, b.Path),
+            PlaylistSortKey.Artist => (a, b) => text.Compare(a.Artist, b.Artist),
+            PlaylistSortKey.Title => (a, b) => text.Compare(a.DisplayTitle, b.DisplayTitle),
+            PlaylistSortKey.Album => (a, b) => text.Compare(a.Album, b.Album),
+            PlaylistSortKey.Duration => (a, b) => a.Duration.CompareTo(b.Duration),
+            _ => (a, b) => text.Compare(a.FileName, b.FileName),
         };
-        var direction = PlaylistSortDescending ? ListSortDirection.Descending : ListSortDirection.Ascending;
 
+        // Groups aren't WPF groups: grouping switched off the list's virtualization (a row was
+        // built for every song on every refresh - seconds for a big library). The sort keeps each
+        // group together, and UpdateGroupHeaders marks where each one starts.
+        _groupKey = group;
         using (PlaylistView.DeferRefresh())
         {
             PlaylistView.GroupDescriptions.Clear();
             PlaylistView.SortDescriptions.Clear();
-            if (groupProperty is not null)
+            // A comparer rather than SortDescriptions: those read every property by reflection on
+            // every comparison, which made re-sorting a 1,200-song library take seconds.
+            PlaylistView.CustomSort = new PlaylistOrder(group, sort, PlaylistSortDescending);
+        }
+        ScheduleGroupHeaders();
+    }
+
+    private Func<LibraryFileViewModel, string>? _groupKey;
+    private bool _groupHeadersPending;
+
+    /// <summary>Re-marks group starts once the queue has changed (coalesced: a batch of changes
+    /// costs one pass), before the next frame is drawn.</summary>
+    private void ScheduleGroupHeaders()
+    {
+        if (_groupHeadersPending) return;
+        _groupHeadersPending = true;
+        System.Windows.Application.Current?.Dispatcher.BeginInvoke(UpdateGroupHeaders, System.Windows.Threading.DispatcherPriority.DataBind);
+    }
+
+    private void UpdateGroupHeaders()
+    {
+        _groupHeadersPending = false;
+        var rows = PlaylistView.Cast<LibraryFileViewModel>().ToList();
+        if (_groupKey is not { } key)
+        {
+            foreach (var row in rows) row.GroupHeader = null;
+            return;
+        }
+        var names = StringComparer.CurrentCultureIgnoreCase;
+        var counts = new Dictionary<string, int>(names);
+        foreach (var row in rows)
+        {
+            var name = key(row);
+            counts[name] = counts.TryGetValue(name, out var n) ? n + 1 : 1;
+        }
+        string? previous = null;
+        foreach (var row in rows)
+        {
+            var name = key(row);
+            var starts = previous is null || !names.Equals(name, previous);
+            row.GroupHeader = starts ? name : null;
+            row.GroupCount = counts[name];
+            previous = name;
+        }
+    }
+
+    /// <summary>The queue order: by group (ascending - the order groups are listed in), then the
+    /// chosen key in the chosen direction, then file name.</summary>
+    private sealed class PlaylistOrder(Func<LibraryFileViewModel, string>? group, Comparison<LibraryFileViewModel> sort, bool descending)
+        : System.Collections.IComparer
+    {
+        public int Compare(object? x, object? y)
+        {
+            if (x is not LibraryFileViewModel a || y is not LibraryFileViewModel b) return 0;
+            if (group is not null)
             {
-                PlaylistView.GroupDescriptions.Add(new PropertyGroupDescription(groupProperty));
-                PlaylistView.SortDescriptions.Add(new SortDescription(groupProperty, ListSortDirection.Ascending));
+                var byGroup = StringComparer.CurrentCultureIgnoreCase.Compare(group(a), group(b));
+                if (byGroup != 0) return byGroup;
             }
-            PlaylistView.SortDescriptions.Add(new SortDescription(sortProperty, direction));
-            if (sortProperty != nameof(LibraryFileViewModel.FileName))
-                PlaylistView.SortDescriptions.Add(new SortDescription(nameof(LibraryFileViewModel.FileName), ListSortDirection.Ascending));
+            var byKey = sort(a, b);
+            if (byKey != 0) return descending ? -byKey : byKey;
+            return StringComparer.CurrentCultureIgnoreCase.Compare(a.FileName, b.FileName);
         }
     }
 
@@ -331,6 +392,10 @@ public sealed partial class LibraryViewModel : ObservableObject
         AppSettingsStore.Save(_settings);
     }
 
+    /// <summary>Songs read last time, reused while unchanged (local and network-share folders).</summary>
+    private readonly LibraryIndex _index = new(Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "TuneSync", "library-index.json"));
+
     [RelayCommand]
     private async Task RescanAsync()
     {
@@ -344,11 +409,30 @@ public sealed partial class LibraryViewModel : ObservableObject
         var count = 0;
         var sources = Folders.ToList();
 
-        void Add(LibraryFile file)
+        // Songs reach the list in batches, a few times a second, built off the UI thread (their
+        // thumbnails are decoded there) and added with one change notification per batch:
+        // adding them one by one made the sorted, grouped views re-sort and the window redraw
+        // for every song, freezing the player for seconds while a big library loaded.
+        var pending = new List<LibraryFile>();
+        var sinceFlush = System.Diagnostics.Stopwatch.StartNew();
+
+        async Task Add(LibraryFile file)
         {
-            Files.Add(new LibraryFileViewModel(file));
+            pending.Add(file);
             count++;
-            if (count % 20 == 0) StatusText = $"스캔 중... ({count}개)";
+            if (sinceFlush.ElapsedMilliseconds >= 300) await FlushAsync();
+        }
+
+        async Task FlushAsync()
+        {
+            sinceFlush.Restart();
+            if (pending.Count == 0) return;
+            var batch = pending.ToList();
+            pending.Clear();
+            var models = await Task.Run(() => batch.Select(f => new LibraryFileViewModel(f)).ToList());
+            if (cts.IsCancellationRequested) return;
+            Files.AddRange(models);
+            StatusText = $"스캔 중... ({count}개)";
         }
 
         try
@@ -362,8 +446,13 @@ public sealed partial class LibraryViewModel : ObservableObject
             var filePaths = sources.Where(s => s.IsFile)
                 .Select(s => s.Entry.IsRemote ? RemotePath.Build(s.Entry.RemoteSourceId!, s.Path) : s.Path)
                 .ToList();
-            await foreach (var file in MediaLibraryScanner.ScanFilesAsync(filePaths, cts.Token))
-                Add(file);
+            // Files on disk / a network share: unchanged ones come from the index. Files on a
+            // WebDAV/FTP/SFTP source are read over the network.
+            await foreach (var file in MediaLibraryScanner.ScanFilesAsync(filePaths.Where(p => !RemotePath.IsRemote(p)).ToList(), _index, cts.Token))
+                await Add(file);
+            await foreach (var file in MediaLibraryScanner.ScanFilesAsync(filePaths.Where(RemotePath.IsRemote).ToList(), cts.Token))
+                await Add(file);
+            await FlushAsync();
             var foundFromFileSources = count;
 
             var unreachableFolders = 0;
@@ -385,7 +474,7 @@ public sealed partial class LibraryViewModel : ObservableObject
                     {
                         await foreach (var file in MediaLibraryScanner.ScanRemoteAsync(client, folder.Entry.RemoteSourceId!,
                                            folder.Path, folder.Entry.IncludeSubfolders, _network.Index, cts.Token))
-                            Add(file);
+                            await Add(file);
                     }
                     catch (Exception ex) when (ex is not OperationCanceledException)
                     {
@@ -401,10 +490,12 @@ public sealed partial class LibraryViewModel : ObservableObject
                     continue;
                 }
 
-                await foreach (var file in MediaLibraryScanner.ScanAsync(path, folder.Entry.IncludeSubfolders, cts.Token))
-                    Add(file);
+                await foreach (var file in MediaLibraryScanner.ScanAsync(path, folder.Entry.IncludeSubfolders, _index, cts.Token))
+                    await Add(file);
             }
+            await FlushAsync();
             _network.Index.Save();
+            await Task.Run(_index.Save);
 
             if (!cts.IsCancellationRequested)
             {
@@ -418,6 +509,13 @@ public sealed partial class LibraryViewModel : ObservableObject
         catch (OperationCanceledException)
         {
             // superseded by a newer scan - nothing to report
+        }
+        catch (Exception ex)
+        {
+            // Never end silently with a half-filled list.
+            App.LogError(ex);
+            StatusText = $"{count}개 파일 (스캔 중 오류: {ex.Message})";
+            Toast.Error("음악 목록을 끝까지 읽지 못했습니다", ex.Message);
         }
         finally
         {

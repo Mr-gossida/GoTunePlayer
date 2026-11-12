@@ -294,9 +294,16 @@ public sealed partial class TagEditorViewModel : ObservableObject
         _suggestionsDirty = true;
         if (e.Action == NotifyCollectionChangedAction.Reset)
         {
-            _pending.Clear(); // a rescan replaced every row (and its unsaved edits)
-            _lastSave = [];
-            HideUndo();
+            // A batch of songs arrived, or a rescan cleared the list: drop only the edits (and the
+            // undo) of songs that are no longer in it.
+            if (_pending.Count == 0 && _lastSave.Count == 0) return;
+            var present = new HashSet<LibraryFileViewModel>(_library.Files);
+            _pending.RemoveWhere(f => !present.Contains(f));
+            if (_lastSave.Count > 0 && !_library.Files.Any(f => _lastSave.Any(u => u.File == f.Model)))
+            {
+                _lastSave = [];
+                HideUndo();
+            }
             UpdatePendingSummary();
         }
         else if (e.OldItems is not null)

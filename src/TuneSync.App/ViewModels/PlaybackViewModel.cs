@@ -380,8 +380,11 @@ public sealed partial class PlaybackViewModel : ObservableObject, IDisposable
         onFiles = (_, e) =>
         {
             if (CurrentFile is not null) { StopWatching(); return; } // the user already picked something
-            if (e.NewItems?.OfType<LibraryFileViewModel>().FirstOrDefault(f =>
-                    string.Equals(f.Path, path, StringComparison.OrdinalIgnoreCase)) is not { } file) return;
+            // Songs arrive in batches (a Reset each), so look through the whole list.
+            var added = e.Action == System.Collections.Specialized.NotifyCollectionChangedAction.Reset
+                ? _library.Files
+                : e.NewItems?.OfType<LibraryFileViewModel>() ?? [];
+            if (added.FirstOrDefault(f => string.Equals(f.Path, path, StringComparison.OrdinalIgnoreCase)) is not { } file) return;
             StopWatching();
             // After the current batch of adds, so the queue can select and scroll to it.
             System.Windows.Application.Current?.Dispatcher.BeginInvoke(() => ResumeSession(file, position),

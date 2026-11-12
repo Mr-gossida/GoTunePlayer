@@ -22,6 +22,81 @@ public static class MediaLibraryScanner
             yield return item;
     }
 
+    /// <summary>Like <see cref="ScanAsync(string, bool, CancellationToken)"/>, but songs whose size and
+    /// date match <paramref name="index"/> come straight from it: the folder listing (which carries
+    /// both) is all that crosses the network for them, instead of opening every file again.</summary>
+    public static async IAsyncEnumerable<LibraryFile> ScanAsync(
+        string rootFolder,
+        bool includeSubfolders,
+        LibraryIndex index,
+        [EnumeratorCancellation] CancellationToken ct = default)
+    {
+        var files = await Task.Run(() => EnumerateAudioFileInfos(rootFolder, includeSubfolders), ct);
+        await foreach (var item in ScanIndexedAsync(files, index, ct))
+            yield return item;
+    }
+
+    /// <summary>Individually added (local or network-share) files, reusing <paramref name="index"/>
+    /// for the unchanged ones. Missing files are skipped.</summary>
+    public static async IAsyncEnumerable<LibraryFile> ScanFilesAsync(
+        IReadOnlyCollection<string> paths,
+        LibraryIndex index,
+        [EnumeratorCancellation] CancellationToken ct = default)
+    {
+        var files = await Task.Run(() => paths
+            .Where(TagService.IsSupported)
+            .Select(p => new FileInfo(p))
+            .Where(f => f.Exists)
+            .Select(f => (f.FullName, f.Length, f.LastWriteTimeUtc))
+            .ToList(), ct);
+        await foreach (var item in ScanIndexedAsync(files, index, ct))
+            yield return item;
+    }
+
+    /// <summary>Known songs first (from the index, instantly), then the new or changed ones read
+    /// from disk - and remembered for next time.</summary>
+    private static async IAsyncEnumerable<LibraryFile> ScanIndexedAsync(
+        List<(string Path, long Size, DateTime Modified)> files,
+        LibraryIndex index,
+        [EnumeratorCancellation] CancellationToken ct)
+    {
+        var toRead = new List<string>();
+        var stamps = new Dictionary<string, (long Size, DateTime Modified)>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (path, size, modified) in files)
+        {
+            if (!stamps.TryAdd(path, (size, modified))) continue;
+            if (index.TryGet(path, size, modified) is { } known) yield return known;
+            else toRead.Add(path);
+        }
+        await foreach (var item in ScanFilesAsync(toRead, ct))
+        {
+            if (stamps.TryGetValue(item.Path, out var stamp)) index.Put(item, stamp.Size, stamp.Modified);
+            yield return item;
+        }
+    }
+
+    /// <summary>Supported audio files under the folder with their size and date, straight from the
+    /// directory listing (no per-file round trip on a network share).</summary>
+    private static List<(string Path, long Size, DateTime Modified)> EnumerateAudioFileInfos(string rootFolder, bool includeSubfolders)
+    {
+        var options = new EnumerationOptions
+        {
+            RecurseSubdirectories = includeSubfolders,
+            IgnoreInaccessible = true,
+            AttributesToSkip = FileAttributes.System,
+        };
+        try
+        {
+            return [.. new DirectoryInfo(rootFolder).EnumerateFiles("*", options)
+                .Where(f => TagService.IsSupported(f.Name))
+                .Select(f => (f.FullName, f.Length, f.LastWriteTimeUtc))];
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return [];
+        }
+    }
+
     /// <summary>Reads the given audio files with bounded parallelism, streaming each back as it
     /// finishes. Missing/unsupported/unreadable files are skipped.</summary>
     public static async IAsyncEnumerable<LibraryFile> ScanFilesAsync(
@@ -130,7 +205,7 @@ public static class MediaLibraryScanner
         string sourceId,
         string folder,
         bool includeSubfolders,
-        RemoteLibraryIndex index,
+        LibraryIndex index,
         [EnumeratorCancellation] CancellationToken ct = default)
     {
         var files = new List<RemoteEntry>();
@@ -182,10 +257,11 @@ public static class MediaLibraryScanner
     public static LibraryFile? ScanRemoteFile(string path) => ScanFile(path);
 }
 
-/// <summary>What was read from each network song last time (tags, thumbnail, length), saved to
-/// disk and reused while the file's size and date are unchanged - so a remote library opens in
-/// seconds instead of re-reading every file over the network at each start.</summary>
-public sealed class RemoteLibraryIndex
+/// <summary>What was read from each song last time (tags, thumbnail, length), saved to disk and
+/// reused while the file's size and date are unchanged - so the library opens in seconds instead
+/// of re-reading every file (over the network, for a NAS) at each start. Used for network sources
+/// and for local / network-share folders alike.</summary>
+public sealed class LibraryIndex
 {
     private readonly string _file;
     private readonly System.Collections.Concurrent.ConcurrentDictionary<string, Entry> _entries;
@@ -203,7 +279,7 @@ public sealed class RemoteLibraryIndex
         public double DurationSeconds { get; set; }
     }
 
-    public RemoteLibraryIndex(string file)
+    public LibraryIndex(string file)
     {
         _file = file;
         try
