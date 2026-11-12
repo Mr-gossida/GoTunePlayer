@@ -94,8 +94,9 @@ public partial class PlayView : Page
                 if (from is { } start && playback.CurrentCover is { } cover)
                 {
                     UpdateLayout();
-                    GlideCover(cover, start, BoundsInLayer(BigCover), BigCover, 10, TimeSpan.FromMilliseconds(800));
-                    FadeSlideIn(NowPlayingPanel, 40, 0);
+                    // Unhurried: the intro ends a few seconds before the singing, so there's time.
+                    GlideCover(cover, start, BoundsInLayer(BigCover), BigCover, 10, TimeSpan.FromMilliseconds(1400));
+                    FadeSlideIn(NowPlayingPanel, 60, 0, duration: TimeSpan.FromMilliseconds(1100), delay: TimeSpan.FromMilliseconds(250));
                 }
             }
         }
@@ -110,7 +111,7 @@ public partial class PlayView : Page
             }
             else if (animate)
             {
-                RevealLyrics(LyricsScrollViewer);
+                RevealLyrics(LyricsScrollViewer, delay: TimeSpan.FromMilliseconds(450));
             }
             else
             {
@@ -122,9 +123,10 @@ public partial class PlayView : Page
 
     /// <summary>The lyrics' entrance after the intro: they rise from below, grow to full size and
     /// come into focus out of a heavy blur, all at once.</summary>
-    private static void RevealLyrics(System.Windows.FrameworkElement element)
+    private static void RevealLyrics(System.Windows.FrameworkElement element, TimeSpan? delay = null)
     {
-        var duration = TimeSpan.FromMilliseconds(1100);
+        var duration = TimeSpan.FromMilliseconds(1300);
+        var begin = delay ?? TimeSpan.Zero;
         var ease = new System.Windows.Media.Animation.QuarticEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut };
         var blur = new System.Windows.Media.Effects.BlurEffect
         {
@@ -137,12 +139,14 @@ public partial class PlayView : Page
         element.RenderTransformOrigin = new System.Windows.Point(0, 0.5);
         element.RenderTransform = new System.Windows.Media.TransformGroup { Children = { scale, shift } };
 
-        System.Windows.Media.Animation.DoubleAnimation Anim(double from, double to, TimeSpan length) => new(from, to, length) { EasingFunction = ease };
-        element.BeginAnimation(OpacityProperty, new System.Windows.Media.Animation.DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(700))
+        System.Windows.Media.Animation.DoubleAnimation Anim(double from, double to, TimeSpan length) =>
+            new(from, to, length) { EasingFunction = ease, BeginTime = begin };
+        // Invisible until the (possibly delayed) fade starts; the fade then holds full opacity.
+        element.Opacity = 0;
+        element.BeginAnimation(OpacityProperty, new System.Windows.Media.Animation.DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(800))
         {
-            FillBehavior = System.Windows.Media.Animation.FillBehavior.Stop,
+            BeginTime = begin,
         });
-        element.Opacity = 1;
         var focus = Anim(30, 0, duration);
         focus.Completed += (_, _) =>
         {
@@ -707,8 +711,11 @@ public partial class PlayView : Page
         });
     }
 
-    private static void FadeSlideIn(System.Windows.UIElement element, double fromX, double fromY, bool fade = true)
+    private static void FadeSlideIn(System.Windows.UIElement element, double fromX, double fromY, bool fade = true,
+        TimeSpan? duration = null, TimeSpan? delay = null)
     {
+        var length = duration ?? LayoutTransition;
+        var begin = delay ?? TimeSpan.Zero;
         // Show the start state right away; the motion starts a frame later (OnNextFrame).
         var shift = new System.Windows.Media.TranslateTransform(fromX, fromY);
         element.RenderTransform = shift;
@@ -717,13 +724,14 @@ public partial class PlayView : Page
         OnNextFrame(() =>
         {
             if (fade)
-                element.BeginAnimation(OpacityProperty, new System.Windows.Media.Animation.DoubleAnimation(0, 1, LayoutTransition)
+                element.BeginAnimation(OpacityProperty, new System.Windows.Media.Animation.DoubleAnimation(0, 1, length)
                 {
                     EasingFunction = ease,
+                    BeginTime = begin,
                     FillBehavior = System.Windows.Media.Animation.FillBehavior.Stop,
                 });
-            shift.BeginAnimation(System.Windows.Media.TranslateTransform.XProperty, new System.Windows.Media.Animation.DoubleAnimation(fromX, 0, LayoutTransition) { EasingFunction = ease });
-            shift.BeginAnimation(System.Windows.Media.TranslateTransform.YProperty, new System.Windows.Media.Animation.DoubleAnimation(fromY, 0, LayoutTransition) { EasingFunction = ease });
+            shift.BeginAnimation(System.Windows.Media.TranslateTransform.XProperty, new System.Windows.Media.Animation.DoubleAnimation(fromX, 0, length) { EasingFunction = ease, BeginTime = begin });
+            shift.BeginAnimation(System.Windows.Media.TranslateTransform.YProperty, new System.Windows.Media.Animation.DoubleAnimation(fromY, 0, length) { EasingFunction = ease, BeginTime = begin });
         });
     }
 

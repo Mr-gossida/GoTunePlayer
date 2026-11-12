@@ -18,7 +18,22 @@ public static class Dialogs
             IsPrimaryButtonEnabled = true,
             IsSecondaryButtonEnabled = false,
         };
+        FitButtons(box, confirmText, "취소");
         return await box.ShowDialogAsync() == MessageBoxResult.Primary;
+    }
+
+    /// <summary>The dialog splits its width evenly between its buttons, so a long label
+    /// ("저장하지 않고 닫기") was cut off: widen the dialog until every label fits.</summary>
+    private static void FitButtons(MessageBox box, params string[] labels)
+    {
+        var typeface = new System.Windows.Media.Typeface(new System.Windows.Media.FontFamily("Segoe UI Variable, Malgun Gothic"),
+            System.Windows.FontStyles.Normal, System.Windows.FontWeights.Normal, System.Windows.FontStretches.Normal);
+        var widest = labels.Max(label => new System.Windows.Media.FormattedText(label, System.Globalization.CultureInfo.CurrentUICulture,
+            System.Windows.FlowDirection.LeftToRight, typeface, 14, System.Windows.Media.Brushes.Black, 1.0).WidthIncludingTrailingWhitespace);
+        // button padding + spacing between buttons + the dialog's own margins
+        var needed = labels.Length * (widest + 56) + (labels.Length - 1) * 8 + 48;
+        box.MinWidth = Math.Max(box.MinWidth, needed);
+        if (double.IsNaN(box.Width) || box.Width < needed) box.Width = Math.Max(400, needed);
     }
 
     /// <summary>Adding folders/files to a non-empty list: add to it, or start over with only the
@@ -52,6 +67,7 @@ public static class Dialogs
             CloseButtonText = "취소",
             MaxWidth = 560,
         };
+        FitButtons(box, "기존 목록에 추가", "새로 등록", "취소");
         var mode = await box.ShowDialogAsync() switch
         {
             MessageBoxResult.Primary => TuneSync.Core.Models.LibraryAddMode.Append,

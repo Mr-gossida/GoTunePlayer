@@ -442,6 +442,7 @@ public sealed partial class PlaybackViewModel : ObservableObject, IDisposable
         CurrentFile = file;
         LoadLyrics(file);
         LoadWaveform(file.Path);
+        LoadSpectrum(file.Path);
         LoadCover(file);
         LoadQuality(file);
 
@@ -490,6 +491,47 @@ public sealed partial class PlaybackViewModel : ObservableObject, IDisposable
 
     /// <summary>Decodes the track in the background (about a second for a typical song) so the
     /// seek bar can draw its real waveform. Recently played tracks come from a small cache.</summary>
+    /// <summary>The playing song's spectrum over time, for the analyzer bars (null until it has
+    /// been worked out, about a second after the song starts).</summary>
+    [ObservableProperty]
+    private TuneSync.Core.Services.SpectrumData? _spectrum;
+
+    private CancellationTokenSource? _spectrumCts;
+    private readonly Dictionary<string, TuneSync.Core.Services.SpectrumData> _spectrumCache = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Queue<string> _spectrumCacheOrder = new();
+
+    /// <summary>Works out the spectrum in the background, like the waveform (and from the same
+    /// downloaded copy for a network song). Recently played songs come from a small cache.</summary>
+    private async void LoadSpectrum(string path)
+    {
+        _spectrumCts?.Cancel();
+        if (_spectrumCache.TryGetValue(path, out var cached))
+        {
+            Spectrum = cached;
+            return;
+        }
+        Spectrum = null;
+        var cts = new CancellationTokenSource();
+        _spectrumCts = cts;
+        TuneSync.Core.Services.SpectrumData result;
+        try
+        {
+            var readable = TuneSync.Core.Models.RemotePath.IsRemote(path)
+                ? await _network.Cache.CompletedPathAsync(path)
+                : PlayablePath.ResolveForReading(path);
+            result = await Task.Run(() => TuneSync.Core.Services.SpectrumAnalyzer.Analyze(readable, ct: cts.Token), cts.Token);
+        }
+        catch (Exception)
+        {
+            return; // cancelled (another song) or unreadable: the bars just stay down
+        }
+        _spectrumCache[path] = result;
+        _spectrumCacheOrder.Enqueue(path);
+        while (_spectrumCacheOrder.Count > 10) _spectrumCache.Remove(_spectrumCacheOrder.Dequeue());
+        if (!cts.IsCancellationRequested && string.Equals(CurrentFile?.Path, path, StringComparison.OrdinalIgnoreCase))
+            Spectrum = result;
+    }
+
     private async void LoadWaveform(string path)
     {
         _waveformCts?.Cancel();
@@ -1038,7 +1080,11 @@ public sealed partial class PlaybackViewModel : ObservableObject, IDisposable
                 // Worth an intro only when there's real time before the first line.
                 var sung = parsed.Where(l => !string.IsNullOrWhiteSpace(l.Text)).ToList();
                 var first = (sung.Count > 0 ? sung[0] : parsed[0]).Time;
-                if (first >= TimeSpan.FromSeconds(5)) _introUntil = first - TimeSpan.FromSeconds(0.8);
+                // It hands over well before the first line (about a third of the intro, 2-3 s): the
+                // cover's glide and the lyrics' entrance take ~1.8 s, so they've settled by the time
+                // the singing starts. An intro still lasts at least 3 s.
+                if (first >= TimeSpan.FromSeconds(5))
+                    _introUntil = first - TimeSpan.FromSeconds(Math.Clamp(first.TotalSeconds * 0.35, 2.0, 3.0));
             }
             else
             {

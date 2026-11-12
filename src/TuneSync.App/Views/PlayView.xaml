@@ -123,6 +123,7 @@
                     <TextBlock Text="{Binding NowPlayingDetails}" FontSize="12" Margin="0,2,0,0" TextTrimming="CharacterEllipsis"
                                Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
                     <ContentControl Content="{Binding}" ContentTemplate="{StaticResource QualityLineTemplate}" Margin="0,4,0,0" Focusable="False"/>
+                    <views:SpectrumView Playback="{Binding}" BarBrush="{DynamicResource PlayerAccentBrush}" Height="21" Margin="0,8,0,0"/>
                 </StackPanel>
             </Grid>
 
@@ -163,6 +164,8 @@
                 <TextBlock Text="{Binding NowPlayingDetails}" FontSize="12" TextWrapping="Wrap" Margin="0,4,0,0"
                            Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
                 <ContentControl Content="{Binding}" ContentTemplate="{StaticResource QualityLineTemplate}" Margin="0,8,0,0" Focusable="False"/>
+                <!-- Spectrum analyzer of what's playing (SpectrumView): transparent, in the cover's color. -->
+                <views:SpectrumView Playback="{Binding}" BarBrush="{DynamicResource PlayerAccentBrush}" Height="42" Margin="0,18,0,0"/>
                 <!-- Intro (hero card, PlayView.ApplyIntroStage): how far the opening has played. -->
                 <Grid Height="3" Margin="0,24,0,0"
                       Visibility="{Binding IsIntroVisible, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}">
