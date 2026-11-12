@@ -163,7 +163,9 @@ public sealed partial class AutoMatchViewModel : ObservableObject
     [RelayCommand(CanExecute = nameof(CanApplySelected))]
     private async Task ApplySelectedAsync()
     {
-        var selected = Results.Where(r => r.IsSelected && r.HasProposal).Select(r => r.Proposal).ToList();
+        var chosen = Results.Where(r => r.IsSelected && r.HasProposal).ToList();
+        foreach (var item in chosen) item.ApplyChoices();
+        var selected = chosen.Select(r => r.Proposal).Where(p => p.HasAnyProposal).ToList();
         if (selected.Count == 0)
         {
             StatusText = "적용할 항목이 없습니다. 체크박스로 적용할 항목을 선택해 주세요.";

@@ -294,8 +294,28 @@ public partial class ShellWindow : FluentWindow
         if (p.IsMaximized) WindowState = WindowState.Maximized;
     }
 
+    private bool _discardConfirmed;
+
     protected override void OnClosing(CancelEventArgs e)
     {
+        // Unsaved tag edits: ask before they're lost.
+        var editor = (ViewModels.TagEditorViewModel?)_services.GetService(typeof(ViewModels.TagEditorViewModel));
+        if (!_discardConfirmed && editor is { HasPending: true })
+        {
+            e.Cancel = true;
+            Dispatcher.BeginInvoke(async () =>
+            {
+                if (WindowState == WindowState.Minimized) WindowState = WindowState.Normal;
+                Activate();
+                if (!await Dialogs.ConfirmAsync("저장하지 않은 태그 변경",
+                        $"저장하지 않은 변경 내용이 {editor.PendingFileCount}곡 있습니다. 저장하지 않고 닫을까요?", "저장하지 않고 닫기"))
+                    return;
+                _discardConfirmed = true;
+                Close();
+            });
+            return;
+        }
+
         IsClosing = true;
         _playback.SaveSession(); // reopen on this song, at this spot
         var bounds = WindowState == WindowState.Normal ? new Rect(Left, Top, Width, Height) : RestoreBounds;

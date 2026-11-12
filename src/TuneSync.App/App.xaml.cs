@@ -109,6 +109,7 @@ public partial class App : Application
         // selections/previews/typed-in values, so every page and view model lives for the app.
         services.AddSingleton<LibraryViewModel>();
         services.AddSingleton<AutoMatchViewModel>();
+        services.AddSingleton<TagEditorViewModel>();
         services.AddSingleton<PlaybackViewModel>();
         services.AddSingleton<LibraryPageViewModel>();
         services.AddSingleton<PlayPageViewModel>();

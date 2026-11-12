@@ -112,6 +112,93 @@ public sealed partial class LibraryFileViewModel : ObservableObject
         }
     }
 
+    // ---- Unsaved edits (태그 관리 editor) ----
+    // Edits wait here until saved, per song, so they survive moving the selection around and the
+    // list can preview them. Values are already normalized (TagFields.TryNormalize).
+
+    private readonly Dictionary<TagField, string> _pendingTags = [];
+
+    /// <summary>Raised whenever a song's unsaved edits change (the editor keeps the global count).</summary>
+    public static event Action<LibraryFileViewModel>? PendingChanged;
+
+    public IReadOnlyDictionary<TagField, string> PendingTags => _pendingTags;
+
+    /// <summary>New cover waiting to be saved; an empty array means "remove the cover".</summary>
+    public byte[]? PendingCover { get; private set; }
+
+    /// <summary>New lyrics waiting to be saved; "" means "remove the lyrics".</summary>
+    public string? PendingLyrics { get; private set; }
+
+    public bool HasPendingChanges => _pendingTags.Count > 0 || PendingCover is not null || PendingLyrics is not null;
+
+    public int PendingChangeCount => _pendingTags.Count + (PendingCover is null ? 0 : 1) + (PendingLyrics is null ? 0 : 1);
+
+    public string Original(TagField field) => TagFields.Get(Model.Tags, field);
+
+    /// <summary>The value the song will have after saving: the unsaved edit, else what's in the file.</summary>
+    public string Effective(TagField field) => _pendingTags.TryGetValue(field, out var value) ? value : Original(field);
+
+    public void SetPending(TagField field, string value)
+    {
+        bool changed;
+        if (value == Original(field))
+        {
+            changed = _pendingTags.Remove(field);
+        }
+        else
+        {
+            changed = !_pendingTags.TryGetValue(field, out var old) || old != value;
+            _pendingTags[field] = value;
+        }
+        if (changed) NotifyPending();
+    }
+
+    public void ClearPending(TagField field)
+    {
+        if (_pendingTags.Remove(field)) NotifyPending();
+    }
+
+    public void SetPendingCover(byte[]? cover)
+    {
+        PendingCover = cover;
+        NotifyPending();
+    }
+
+    public void SetPendingLyrics(string? lyrics)
+    {
+        PendingLyrics = lyrics;
+        NotifyPending();
+    }
+
+    public void ClearAllPending()
+    {
+        if (!HasPendingChanges) return;
+        _pendingTags.Clear();
+        PendingCover = null;
+        PendingLyrics = null;
+        NotifyPending();
+    }
+
+    private void NotifyPending()
+    {
+        OnPropertyChanged(nameof(HasPendingChanges));
+        OnPropertyChanged(nameof(ShownTitle));
+        OnPropertyChanged(nameof(ShownArtist));
+        OnPropertyChanged(nameof(ShownAlbum));
+        OnPropertyChanged(nameof(IsTitlePending));
+        OnPropertyChanged(nameof(IsArtistPending));
+        OnPropertyChanged(nameof(IsAlbumPending));
+        PendingChanged?.Invoke(this);
+    }
+
+    // List columns show the value-to-be (in accent italics while unsaved).
+    public string ShownTitle => Effective(TagField.Title);
+    public string ShownArtist => Effective(TagField.Artist);
+    public string ShownAlbum => Effective(TagField.Album);
+    public bool IsTitlePending => _pendingTags.ContainsKey(TagField.Title);
+    public bool IsArtistPending => _pendingTags.ContainsKey(TagField.Artist);
+    public bool IsAlbumPending => _pendingTags.ContainsKey(TagField.Album);
+
     /// <summary>Re-reads everything from <see cref="Model"/> after it was changed in place.</summary>
     public void Refresh()
     {

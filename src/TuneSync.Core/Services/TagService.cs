@@ -1,4 +1,4 @@
-using TuneSync.Core.Models;
+﻿using TuneSync.Core.Models;
 using TuneSync.Core.Services.Remote;
 
 namespace TuneSync.Core.Services;
@@ -48,7 +48,11 @@ public static class TagService
         return (ReadTags(file, path), cover, string.IsNullOrEmpty(lyrics) ? null : lyrics, file.Properties?.Duration ?? TimeSpan.Zero);
     }
 
-    public static void Write(TrackTags tags) => RemoteFiles.Edit(tags.Path, file =>
+    public static void Write(TrackTags tags) => RemoteFiles.Edit(tags.Path, file => ApplyTo(file, tags));
+
+    /// <summary>Copies the text tags onto an open file (saved by the caller), so several edits
+    /// can share one save - for a network file that's one upload instead of several.</summary>
+    public static void ApplyTo(TagLib.File file, TrackTags tags)
     {
         var t = file.Tag;
         t.Title = tags.Title;
@@ -60,7 +64,7 @@ public static class TagService
         t.Track = tags.Track;
         t.Disc = tags.Disc;
         t.Year = tags.Year;
-    });
+    }
 
     public static TimeSpan ReadDuration(string path)
     {

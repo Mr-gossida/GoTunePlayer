@@ -1,3 +1,6 @@
+﻿using System.IO;
+using System.Linq;
+using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using TuneSync.App.ViewModels;
@@ -89,5 +92,62 @@ public partial class LibraryView : Page
             if (current is DataGridRow) return false;
         }
         return false;
+    }
+
+    // ---- Tag editor ----
+
+    /// <summary>Ctrl+S saves the editor's changes; Alt+↑/↓ moves to the previous/next song while
+    /// typing in the editor (edits wait on each song, so nothing is lost).</summary>
+    private void Page_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        var editor = _viewModel.Editor;
+        if (e.Key == Key.S && Keyboard.Modifiers == ModifierKeys.Control)
+        {
+            if (editor.SaveCommand.CanExecute(null)) editor.SaveCommand.Execute(null);
+            e.Handled = true;
+            return;
+        }
+
+        var key = e.Key == Key.System ? e.SystemKey : e.Key;
+        if (Keyboard.Modifiers == ModifierKeys.Alt && key is Key.Up or Key.Down
+            && _viewModel.Library.ViewMode == LibraryViewMode.List && FileListGrid.Items.Count > 0)
+        {
+            var index = FileListGrid.SelectedIndex;
+            var next = Math.Clamp(index + (key == Key.Down ? 1 : -1), 0, FileListGrid.Items.Count - 1);
+            if (index < 0) next = 0;
+            FileListGrid.SelectedItems.Clear();
+            FileListGrid.SelectedIndex = next;
+            FileListGrid.ScrollIntoView(FileListGrid.SelectedItem);
+            e.Handled = true;
+        }
+    }
+
+    /// <summary>Esc in a tag field puts it back the way it was (when it was changed).</summary>
+    private void Field_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Escape || sender is not FrameworkElement { DataContext: TagFieldViewModel field }) return;
+        if (!field.IsChanged && !field.HasError) return;
+        field.RevertCommand.Execute(null);
+        e.Handled = true;
+    }
+
+    private static string? DroppedImage(DragEventArgs e) =>
+        e.Data.GetData(DataFormats.FileDrop) is string[] files ? files.FirstOrDefault(TagEditorViewModel.IsImageFile) : null;
+
+    private void CoverDrop_DragOver(object sender, DragEventArgs e)
+    {
+        var ok = _viewModel.Editor.HasSelection && DroppedImage(e) is not null;
+        e.Effects = ok ? DragDropEffects.Copy : DragDropEffects.None;
+        CoverDropHighlight.Visibility = ok ? Visibility.Visible : Visibility.Collapsed;
+        e.Handled = true;
+    }
+
+    private void CoverDrop_DragLeave(object sender, DragEventArgs e) => CoverDropHighlight.Visibility = Visibility.Collapsed;
+
+    private void CoverDrop_Drop(object sender, DragEventArgs e)
+    {
+        CoverDropHighlight.Visibility = Visibility.Collapsed;
+        if (_viewModel.Editor.HasSelection && DroppedImage(e) is { } path) _viewModel.Editor.SetCoverFromFile(path);
+        e.Handled = true;
     }
 }

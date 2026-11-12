@@ -30,6 +30,16 @@ public static class CoverArtService
             file.Tag.Pictures = [picture];
         });
 
+    /// <summary>Removes every embedded picture (written back to the server for a network file).</summary>
+    public static void RemoveCover(string path) =>
+        Remote.RemoteFiles.Edit(path, file => file.Tag.Pictures = []);
+
+    /// <summary>"image/png" for PNG bytes, otherwise "image/jpeg".</summary>
+    public static string MimeTypeOf(byte[] imageBytes) =>
+        imageBytes.Length > 4 && imageBytes[0] == 0x89 && imageBytes[1] == 0x50 && imageBytes[2] == 0x4E && imageBytes[3] == 0x47
+            ? "image/png"
+            : "image/jpeg";
+
     public static BitmapImageBytes? GetThumbnail(byte[]? imageBytes, int size = 160)
     {
         if (imageBytes is null || imageBytes.Length == 0) return null;

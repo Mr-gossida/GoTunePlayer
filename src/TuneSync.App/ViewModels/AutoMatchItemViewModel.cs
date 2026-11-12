@@ -20,6 +20,36 @@ public sealed partial class AutoMatchItemViewModel : ObservableObject
         ProposedCover = ImageHelper.ToBitmapImage(proposal.ProposedCoverBytes);
         CurrentCover = ImageHelper.ToBitmapImage(proposal.File.ThumbnailBytes);
         (LyricsLabel, LyricsPreview) = DescribeLyrics(proposal.ProposedLyrics);
+
+        var tags = proposal.File.Tags;
+        void Add(string label, string current, string? proposed, Action clear)
+        {
+            if (proposed is not null)
+                TagChangeRows.Add(new AutoFillChangeViewModel(label, string.IsNullOrWhiteSpace(current) ? "(비어 있음)" : current, proposed, clear));
+        }
+        Add("제목", tags.Title, proposal.ProposedTitle, () => proposal.ProposedTitle = null);
+        Add("아티스트", tags.Artist, proposal.ProposedArtist, () => proposal.ProposedArtist = null);
+        Add("앨범", tags.Album, proposal.ProposedAlbum, () => proposal.ProposedAlbum = null);
+        Add("앨범 아티스트", tags.AlbumArtist, proposal.ProposedAlbumArtist, () => proposal.ProposedAlbumArtist = null);
+        Add("트랙", tags.Track > 0 ? tags.Track.ToString() : "", proposal.ProposedTrack?.ToString(), () => proposal.ProposedTrack = null);
+        Add("디스크", tags.Disc > 0 ? tags.Disc.ToString() : "", proposal.ProposedDisc?.ToString(), () => proposal.ProposedDisc = null);
+    }
+
+    /// <summary>Each proposed tag as its own before → after row, ticked off one by one.</summary>
+    public List<AutoFillChangeViewModel> TagChangeRows { get; } = [];
+
+    [ObservableProperty]
+    private bool _includeCover = true;
+
+    [ObservableProperty]
+    private bool _includeLyrics = true;
+
+    /// <summary>Drops whatever was unticked from the proposal, right before it's applied.</summary>
+    public void ApplyChoices()
+    {
+        foreach (var row in TagChangeRows.Where(r => !r.IsChecked)) row.Clear();
+        if (!IncludeCover) Proposal.ProposedCoverBytes = null;
+        if (!IncludeLyrics) Proposal.ProposedLyrics = null;
     }
 
     [ObservableProperty]
@@ -38,7 +68,7 @@ public sealed partial class AutoMatchItemViewModel : ObservableObject
     public string LyricsPreview { get; }
     public bool HasProposedLyrics => LyricsPreview.Length > 0;
 
-    /// <summary>One line per changed tag: "앨범: (없음) → Real Album".</summary>
+    /// <summary>One line per changed tag: "앨범: (없음) → Real Album" (tooltips and logs).</summary>
     public string TagChanges
     {
         get
@@ -73,4 +103,16 @@ public sealed partial class AutoMatchItemViewModel : ObservableObject
     }
 
     public void NotifyStatusChanged() => OnPropertyChanged(nameof(Status));
+}
+
+/// <summary>One proposed tag change in an auto-fill result.</summary>
+public sealed partial class AutoFillChangeViewModel(string label, string before, string after, Action clear) : ObservableObject
+{
+    public string Label { get; } = label;
+    public string Before { get; } = before;
+    public string After { get; } = after;
+    public Action Clear { get; } = clear;
+
+    [ObservableProperty]
+    private bool _isChecked = true;
 }
