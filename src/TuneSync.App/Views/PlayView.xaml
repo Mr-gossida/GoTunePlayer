@@ -200,7 +200,8 @@
                         <Border CornerRadius="1.5" Background="{DynamicResource PlayerTrackBrush}"/>
                         <Border CornerRadius="1.5" Background="{DynamicResource PlayerAccentBrush}" RenderTransformOrigin="0,0.5">
                             <Border.RenderTransform>
-                                <ScaleTransform ScaleX="{Binding IntroProgress}"/>
+                                <!-- driven from code (GlideIntroGauge): smooth between position updates -->
+                                <ScaleTransform x:Name="IntroGaugeScale" ScaleX="0"/>
                             </Border.RenderTransform>
                         </Border>
                     </Grid>                </StackPanel>
@@ -237,7 +238,7 @@
                     <ItemsControl x:Name="LyricsItems" ItemsSource="{Binding LyricsLines}">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
-                                <Border Padding="14,8" Margin="0,2" CornerRadius="8" Cursor="Hand"
+                                <Border Padding="14,3" Margin="0,2" CornerRadius="8" Cursor="Hand"
                                         ToolTip="클릭하면 이 위치부터 재생합니다" MouseLeftButtonUp="LyricLine_Click">
                                     <Border.Style>
                                         <Style TargetType="Border">
@@ -249,9 +250,17 @@
                                             </Style.Triggers>
                                         </Style>
                                     </Border.Style>
+                                    <!-- Every line is laid out at the current-line size and drawn scaled down
+                                         when not current. Growing is then a pure scale: the line breaks never
+                                         change mid-animation (animating FontSize re-wrapped the text every
+                                         frame and shifted everything below it). -->
                                     <TextBlock x:Name="LineText" Text="{Binding Text}" TextWrapping="Wrap"
-                                               FontSize="20" FontWeight="Bold" Opacity="0.32"
-                                               Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                                               FontSize="28" FontWeight="Bold" Opacity="0.32" RenderTransformOrigin="0,0.5"
+                                               Foreground="{DynamicResource TextFillColorPrimaryBrush}">
+                                        <TextBlock.RenderTransform>
+                                            <ScaleTransform ScaleX="0.72" ScaleY="0.72"/>
+                                        </TextBlock.RenderTransform>
+                                    </TextBlock>
                                 </Border>
                                 <DataTemplate.Triggers>
                                     <DataTrigger Binding="{Binding IsCurrent}" Value="True">
@@ -259,7 +268,10 @@
                                             <BeginStoryboard>
                                                 <Storyboard>
                                                     <DoubleAnimation Storyboard.TargetName="LineText" Storyboard.TargetProperty="Opacity" To="1" Duration="0:0:0.4"/>
-                                                    <DoubleAnimation Storyboard.TargetName="LineText" Storyboard.TargetProperty="FontSize" To="28" Duration="0:0:0.45">
+                                                    <DoubleAnimation Storyboard.TargetName="LineText" Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleX)" To="1" Duration="0:0:0.45">
+                                                        <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut"/></DoubleAnimation.EasingFunction>
+                                                    </DoubleAnimation>
+                                                    <DoubleAnimation Storyboard.TargetName="LineText" Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)" To="1" Duration="0:0:0.45">
                                                         <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut"/></DoubleAnimation.EasingFunction>
                                                     </DoubleAnimation>
                                                 </Storyboard>
@@ -269,7 +281,10 @@
                                             <BeginStoryboard>
                                                 <Storyboard>
                                                     <DoubleAnimation Storyboard.TargetName="LineText" Storyboard.TargetProperty="Opacity" To="0.32" Duration="0:0:0.5"/>
-                                                    <DoubleAnimation Storyboard.TargetName="LineText" Storyboard.TargetProperty="FontSize" To="20" Duration="0:0:0.5">
+                                                    <DoubleAnimation Storyboard.TargetName="LineText" Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleX)" To="0.72" Duration="0:0:0.5">
+                                                        <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseInOut"/></DoubleAnimation.EasingFunction>
+                                                    </DoubleAnimation>
+                                                    <DoubleAnimation Storyboard.TargetName="LineText" Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)" To="0.72" Duration="0:0:0.5">
                                                         <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseInOut"/></DoubleAnimation.EasingFunction>
                                                     </DoubleAnimation>
                                                 </Storyboard>

@@ -495,8 +495,48 @@ public partial class PlayView : Page
                 break;
             case nameof(PlaybackViewModel.IsIntroVisible):
                 ApplyIntroStage(animate: true);
+                GlideIntroGauge();
+                break;
+            case nameof(PlaybackViewModel.IntroProgress):
+            case nameof(PlaybackViewModel.IsPlaying):
+                GlideIntroGauge();
                 break;
         }
+    }
+
+    /// <summary>The intro's "lyrics start soon" bar. Position updates come every 200 ms, so binding
+    /// the bar to them made it step; instead each update starts a linear glide from where the bar
+    /// is now to the end, timed to the intro's remaining length - which keeps it moving every frame
+    /// and still corrects itself against the real position.</summary>
+    private void GlideIntroGauge()
+    {
+        var playback = _viewModel.Playback;
+        var shown = IntroGaugeScale.ScaleX;
+        var target = playback.IntroProgress;
+        if (!playback.IsIntroVisible)
+        {
+            // Fading out: freeze where it is rather than snapping back to 0 mid-fade.
+            IntroGaugeScale.BeginAnimation(System.Windows.Media.ScaleTransform.ScaleXProperty, null);
+            IntroGaugeScale.ScaleX = shown;
+            return;
+        }
+        if (!playback.IsPlaying || playback.IntroLength <= TimeSpan.Zero)
+        {
+            IntroGaugeScale.BeginAnimation(System.Windows.Media.ScaleTransform.ScaleXProperty, null);
+            IntroGaugeScale.ScaleX = target;
+            return;
+        }
+        // A new song or a seek: start from the real position instead of gliding across.
+        var from = Math.Abs(shown - target) > 0.05 ? target : shown;
+        var remaining = (1 - target) * playback.IntroLength.TotalSeconds;
+        if (remaining <= 0.01)
+        {
+            IntroGaugeScale.BeginAnimation(System.Windows.Media.ScaleTransform.ScaleXProperty, null);
+            IntroGaugeScale.ScaleX = 1;
+            return;
+        }
+        IntroGaugeScale.BeginAnimation(System.Windows.Media.ScaleTransform.ScaleXProperty,
+            new System.Windows.Media.Animation.DoubleAnimation(from, 1, TimeSpan.FromSeconds(remaining)));
     }
 
     private void ResetLyricsScroll()

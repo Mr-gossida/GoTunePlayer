@@ -954,10 +954,15 @@ public sealed partial class PlaybackViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private double _introProgress;
 
+    /// <summary>How long the whole intro lasts, so the view can glide the bar between position
+    /// updates (they come only every 200 ms) instead of stepping.</summary>
+    public TimeSpan IntroLength { get; private set; }
+
     private void UpdateIntro(TimeSpan pos)
     {
         var show = HasSyncedLyrics && _introUntil is { } until && pos < until;
         if (!show) _introUntil = null; // once over, it stays over: rewinding shows the lyrics
+        IntroLength = _introUntil ?? TimeSpan.Zero;
         IsIntroVisible = show;
         IntroProgress = show && _introUntil is { } u ? Math.Clamp(pos / u, 0, 1) : 0;
     }
