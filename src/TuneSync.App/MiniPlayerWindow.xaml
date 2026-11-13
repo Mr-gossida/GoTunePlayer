@@ -6,7 +6,7 @@
         xmlns:conv="clr-namespace:TuneSync.App.Converters"
         xmlns:views="clr-namespace:TuneSync.App.Views"
         xmlns:sys="clr-namespace:System;assembly=System.Runtime"
-        Title="TuneSync 미니 플레이어"
+        Title="GoTune 미니 플레이어"
         Icon="pack://application:,,,/Assets/TuneSync.ico"
         Width="500" Height="104" MinWidth="0" MinHeight="0" ResizeMode="CanResize" SizeToContent="Manual"
         WindowStartupLocation="Manual"
@@ -127,7 +127,7 @@
                 <ui:Button Style="{StaticResource MiniChromeButton}" Icon="{ui:SymbolIcon ArrowRotateClockwise24}" Click="Rotate_Click"
                            ToolTip="세로 미니 플레이어로"/>
                 <ui:Button Style="{StaticResource MiniChromeButton}" Icon="{ui:SymbolIcon Dismiss24}" Click="Close_Click"
-                           ToolTip="TuneSync 종료"/>
+                           ToolTip="GoTune 종료"/>
             </UniformGrid>
         </Grid>
 
@@ -153,7 +153,7 @@
                 <ui:Button Style="{StaticResource MiniChromeButton}" Icon="{ui:SymbolIcon ArrowMaximize24}" Click="Expand_Click"
                            ToolTip="전체 플레이어 (Ctrl+M)"/>
                 <ui:Button Style="{StaticResource MiniChromeButton}" Icon="{ui:SymbolIcon Dismiss24}" Click="Close_Click"
-                           ToolTip="TuneSync 종료"/>
+                           ToolTip="GoTune 종료"/>
             </StackPanel>
 
             <Grid Grid.Row="1" Height="{Binding ActualWidth, RelativeSource={RelativeSource Self}}">

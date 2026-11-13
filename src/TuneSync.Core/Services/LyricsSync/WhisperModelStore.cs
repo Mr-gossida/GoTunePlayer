@@ -22,7 +22,7 @@ public static class WhisperModelStore
         Directory.CreateDirectory(Folder);
         var part = ModelPath + ".part";
         using var http = new HttpClient { Timeout = TimeSpan.FromMinutes(30) };
-        http.DefaultRequestHeaders.UserAgent.ParseAdd("TuneSync/0.1");
+        http.DefaultRequestHeaders.UserAgent.ParseAdd("GoTunePlayer/1.0");
         using var response = await http.GetAsync(Url, HttpCompletionOption.ResponseHeadersRead, ct);
         response.EnsureSuccessStatusCode();
         var total = response.Content.Headers.ContentLength ?? ExpectedBytes;

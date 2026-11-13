@@ -4,7 +4,7 @@
         xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
         xmlns:local="clr-namespace:TuneSync.App"
         xmlns:conv="clr-namespace:TuneSync.App.Converters"
-        Title="TuneSync" Height="760" Width="1320"
+        Title="GoTune Player" Height="760" Width="1320"
         Icon="pack://application:,,,/Assets/TuneSync.ico"
         MinHeight="560" MinWidth="900"
         WindowStartupLocation="CenterScreen"
@@ -51,7 +51,7 @@
         </Grid>
         <Rectangle Grid.RowSpan="3" Fill="{DynamicResource PlayerScrimBrush}" IsHitTestVisible="False"/>
 
-        <ui:TitleBar Grid.Row="0" Title="TuneSync">
+        <ui:TitleBar Grid.Row="0" Title="GoTune Player">
             <ui:TitleBar.Icon>
                 <ui:ImageIcon Source="pack://application:,,,/Assets/TuneSync.png"/>
             </ui:TitleBar.Icon>

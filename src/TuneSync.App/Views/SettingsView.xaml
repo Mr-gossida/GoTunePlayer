@@ -127,7 +127,7 @@
             <ui:CardControl.Header>
                 <StackPanel>
                     <ui:TextBlock Text="Windows 시작 시 자동 실행" FontTypography="Body"/>
-                    <ui:TextBlock Text="Windows에 로그인하면 TuneSync가 작업 표시줄에 최소화된 상태로 시작합니다. 작업 관리자 › 시작 앱에서도 끌 수 있습니다."
+                    <ui:TextBlock Text="Windows에 로그인하면 GoTune Player가 작업 표시줄에 최소화된 상태로 시작합니다. 작업 관리자 › 시작 앱에서도 끌 수 있습니다."
                                   FontSize="12" TextWrapping="Wrap" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
                 </StackPanel>
             </ui:CardControl.Header>
@@ -147,7 +147,7 @@
             <ui:CardControl.Header>
                 <StackPanel>
                     <ui:TextBlock Text="마지막 곡 이어 듣기" FontTypography="Body"/>
-                    <ui:TextBlock Text="TuneSync를 열면 마지막으로 듣던 곡을 어디서부터 준비할지 정합니다."
+                    <ui:TextBlock Text="GoTune Player를 열면 마지막으로 듣던 곡을 어디서부터 준비할지 정합니다."
                                   FontSize="12" TextWrapping="Wrap" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
                 </StackPanel>
             </ui:CardControl.Header>
@@ -245,7 +245,10 @@
                 <StackPanel Orientation="Horizontal">
                     <Image Source="pack://application:,,,/Assets/TuneSync.png" Width="40" Height="40" Margin="0,0,12,0"/>
                     <StackPanel VerticalAlignment="Center">
-                        <ui:TextBlock Text="TuneSync" FontTypography="BodyStrong"/>
+                        <!-- the wordmark: "Go" in the accent color -->
+                        <TextBlock FontSize="14" FontWeight="SemiBold" Foreground="{DynamicResource TextFillColorPrimaryBrush}">
+                            <Run Text="Go" Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}"/><Run Text="Tune Player"/>
+                        </TextBlock>
                         <ui:TextBlock Text="{Binding VersionText}" FontSize="12" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
                     </StackPanel>
                 </StackPanel>

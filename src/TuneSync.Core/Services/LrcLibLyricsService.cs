@@ -28,7 +28,7 @@ public sealed class LrcLibLyricsService : ILyricsService, IDisposable
     public LrcLibLyricsService(HttpMessageHandler handler)
     {
         _http = new HttpClient(handler) { BaseAddress = new Uri("https://lrclib.net/api/") };
-        _http.DefaultRequestHeaders.UserAgent.ParseAdd("TuneSync/0.1 (+https://github.com/)");
+        _http.DefaultRequestHeaders.UserAgent.ParseAdd("GoTunePlayer/1.0");
     }
 
     public async Task<LyricsResult?> FindAsync(LyricsQuery query, CancellationToken ct = default)

@@ -12,7 +12,7 @@ namespace TuneSync.Core.Services;
 /// See https://musicbrainz.org/doc/MusicBrainz_API/Rate_Limiting.</summary>
 public sealed class MusicBrainzService : IMusicBrainzService, IDisposable
 {
-    private const string UserAgentString = "TuneSync/0.1 (+https://github.com/)";
+    private const string UserAgentString = "GoTunePlayer/1.0";
     private static readonly TimeSpan MinRequestInterval = TimeSpan.FromMilliseconds(1100);
 
     private readonly HttpClient _mbHttp;

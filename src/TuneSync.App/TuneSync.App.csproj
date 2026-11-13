@@ -17,7 +17,11 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
     <ApplicationIcon>Assets\TuneSync.ico</ApplicationIcon>
-    <Product>TuneSync</Product>
+    <!-- What Windows shows for the app (taskbar, Task Manager, file properties). The exe keeps its
+         file name so pinned shortcuts and the autostart entry keep working. -->
+    <Product>GoTune Player</Product>
+    <AssemblyTitle>GoTune Player</AssemblyTitle>
+    <Company>GoTune</Company>
     <Version>1.0.0</Version>
   </PropertyGroup>
 

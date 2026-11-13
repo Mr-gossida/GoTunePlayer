@@ -85,7 +85,7 @@ public sealed partial class SleepTimerViewModel : ObservableObject
         try
         {
             Process.Start(new ProcessStartInfo("shutdown.exe",
-                $"/s /t {(int)WindowsWarning.TotalSeconds} /c \"TuneSync 예약 종료: 1분 뒤 PC가 종료됩니다.\"")
+                $"/s /t {(int)WindowsWarning.TotalSeconds} /c \"GoTune 예약 종료: 1분 뒤 PC가 종료됩니다.\"")
             {
                 CreateNoWindow = true,
                 UseShellExecute = false,

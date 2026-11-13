@@ -62,8 +62,8 @@ public static class TaskbarControls
     {
         public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture) =>
             value is LibraryFileViewModel file
-                ? string.IsNullOrWhiteSpace(file.Artist) ? $"{file.DisplayTitle} · TuneSync" : $"{file.DisplayTitle} - {file.Artist} · TuneSync"
-                : "TuneSync";
+                ? string.IsNullOrWhiteSpace(file.Artist) ? $"{file.DisplayTitle} · GoTune" : $"{file.DisplayTitle} - {file.Artist} · GoTune"
+                : "GoTune Player";
 
         public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) =>
             throw new NotSupportedException();

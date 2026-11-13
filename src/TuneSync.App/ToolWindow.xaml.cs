@@ -11,7 +11,7 @@ public partial class ToolWindow : FluentWindow
     public ToolWindow(Page page, string title, double width, double height)
     {
         InitializeComponent();
-        Title = $"{title} - TuneSync";
+        Title = $"{title} - GoTune";
         ToolTitleBar.Title = title;
         Width = width;
         Height = height;

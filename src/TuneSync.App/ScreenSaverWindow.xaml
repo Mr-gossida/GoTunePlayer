@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:effects="clr-namespace:TuneSync.App.Effects"
         xmlns:views="clr-namespace:TuneSync.App.Views"
-        Title="TuneSync 화면 보호기"
+        Title="GoTune 화면 보호기"
         WindowStyle="None" ResizeMode="NoResize" Topmost="True" ShowInTaskbar="False"
         Background="Black" Cursor="None" WindowStartupLocation="Manual">
     <Window.Resources>
