@@ -345,6 +345,17 @@ public sealed partial class PlaybackViewModel : ObservableObject, IDisposable
         player.MediaFailed += (sender, e) =>
         {
             if (!ReferenceEquals(sender, _player)) return;
+            // A network song whose stream broke off (its download was stopped as another song
+            // was picked): open it again in a fresh player before giving up on it.
+            if (_streamWatch is { Retries: < 3 } watch && CurrentFile is { } failed
+                && TuneSync.Core.Models.RemotePath.IsRemote(failed.Path))
+            {
+                var retries = watch.Retries + 1;
+                _pendingRestore = (_player.Position, true);
+                OpenSource(UriFor(failed.Path));
+                if (_streamWatch is not null) _streamWatch.Retries = retries;
+                return;
+            }
             Stop();
             ResetTimeline();
             Toast.Error("재생할 수 없습니다",
@@ -391,7 +402,10 @@ public sealed partial class PlaybackViewModel : ObservableObject, IDisposable
     /// again in a fresh player at the same spot - up to three times.</summary>
     private void WatchStream(TimeSpan position)
     {
-        if (_streamWatch is not { } watch || CurrentFile is not { } file || !IsPlaying || _isSeeking || _seekTarget is not null) return;
+        if (_streamWatch is not { } watch || CurrentFile is not { } file || _isSeeking || _seekTarget is not null) return;
+        // Still opening (never got as far as playing) - watched too, but only for a dead download.
+        var opening = !IsPlaying && !_player.NaturalDuration.HasTimeSpan;
+        if (!IsPlaying && !opening) return;
         var now = DateTime.UtcNow;
         if (position != watch.LastPosition)
         {
@@ -401,11 +415,15 @@ public sealed partial class PlaybackViewModel : ObservableObject, IDisposable
         }
         if (now - watch.LastProgress < TimeSpan.FromSeconds(2) || watch.Retries >= 3) return;
 
-        // Only when the music is there to play (a slow network is a different matter).
-        if (_network.Cache.Peek(file.Path) is not { } item || item.Length <= 0) return;
+        if (_network.Cache.Peek(file.Path) is not { } item) return;
+        // Its download died (stopped by a song picked meanwhile): the player waits for bytes
+        // that will never come. Opening it again starts the download anew.
+        var dead = !item.IsComplete && !item.IsDownloading;
+        // Otherwise only when the music is there to play (a slow network is a different matter).
+        if (!dead && (opening || item.Length <= 0)) return;
         var duration = DurationSeconds > 1 ? DurationSeconds : file.Duration.TotalSeconds;
         var neededByte = duration > 0 ? (long)(item.Length * Math.Min(1, (position.TotalSeconds + 5) / duration)) : 0;
-        if (!item.IsComplete && item.Downloaded < Math.Max(neededByte, 1_500_000)) return;
+        if (!dead && !item.IsComplete && item.Downloaded < Math.Max(neededByte, 1_500_000)) return;
 
         var retries = watch.Retries + 1;
         _pendingRestore = (position, true);

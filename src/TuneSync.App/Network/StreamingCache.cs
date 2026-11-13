@@ -34,7 +34,10 @@ public sealed class StreamingCache
     {
         var item = _items.GetOrAdd(remotePath, path => new CacheItem(path, FileFor(path)));
         item.Touch();
-        if (item.IsComplete || item.IsDownloading) return item;
+        // A download that is being stopped (another song was picked a moment ago) is told to
+        // carry on instead: handing the player a song whose download is about to die cut the
+        // stream short ("재생할 수 없습니다" / stuck at 0:00 when skipping back quickly).
+        if (item.IsComplete || item.KeepGoing()) return item;
         item.StartDownload(() => Trim());
         return item;
     }
@@ -171,7 +174,20 @@ public sealed class CacheItem
     public int Waiters;
 
     private volatile bool _cancel;
+    private bool _resume;
     private Stream? _source;
+
+    /// <summary>Called when the song is wanted again. True when its download is running - and if
+    /// it was being stopped, it now continues from where it got to rather than ending.</summary>
+    public bool KeepGoing()
+    {
+        lock (_gate)
+        {
+            if (!IsDownloading) return false;
+            if (_cancel) _resume = true;
+            return true;
+        }
+    }
 
     /// <summary>Stops the download (the partial file is dropped; it starts over if needed again).</summary>
     public void Cancel()
@@ -223,6 +239,7 @@ public sealed class CacheItem
             if (IsDownloading || IsComplete) return;
             IsDownloading = true;
             _cancel = false;
+            _resume = false;
             _failure = null;
             if (_completion.Task.IsCompleted) _completion = new(TaskCreationOptions.RunContinuationsAsynchronously);
             Interlocked.Exchange(ref _downloaded, 0);
@@ -234,21 +251,43 @@ public sealed class CacheItem
             {
                 var client = RemoteFiles.Client(RemotePath, out var path);
                 Length = client.GetSize(path);
-                using (var source = client.OpenRead(path, 0))
                 using (var target = new FileStream(PartPath, FileMode.Create, FileAccess.Write, FileShare.ReadWrite | FileShare.Delete))
                 {
-                    _source = source;
                     var buffer = new byte[256 * 1024];
-                    int read;
-                    while (!_cancel && (read = source.Read(buffer, 0, buffer.Length)) > 0)
+                    while (true)
                     {
-                        target.Write(buffer, 0, read);
-                        target.Flush();
-                        Interlocked.Add(ref _downloaded, read);
-                        lock (_gate) Monitor.PulseAll(_gate);
+                        try
+                        {
+                            // From where it got to: after a stop that was called off, the bytes
+                            // already here (and a player reading them) stay as they are.
+                            using var source = client.OpenRead(path, Downloaded);
+                            _source = source;
+                            int read;
+                            while (!_cancel && (read = source.Read(buffer, 0, buffer.Length)) > 0)
+                            {
+                                target.Write(buffer, 0, read);
+                                target.Flush();
+                                Interlocked.Add(ref _downloaded, read);
+                                lock (_gate) Monitor.PulseAll(_gate);
+                            }
+                        }
+                        catch when (_cancel)
+                        {
+                            // the connection was closed to stop the download
+                        }
+                        finally
+                        {
+                            _source = null;
+                        }
+                        lock (_gate)
+                        {
+                            if (!_cancel) break; // all of it is here
+                            if (!_resume) throw new OperationCanceledException("다른 곡을 재생해 내려받기를 멈췄습니다.");
+                            _cancel = false;
+                            _resume = false;
+                        }
                     }
                 }
-                if (_cancel) throw new OperationCanceledException("다른 곡을 재생해 내려받기를 멈췄습니다.");
                 File.Move(PartPath, FilePath, overwrite: true);
                 Length = new FileInfo(FilePath).Length;
                 Interlocked.Exchange(ref _downloaded, Length);

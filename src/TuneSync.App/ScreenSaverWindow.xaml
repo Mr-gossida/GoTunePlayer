@@ -3,6 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:effects="clr-namespace:TuneSync.App.Effects"
         xmlns:views="clr-namespace:TuneSync.App.Views"
+        xmlns:local="clr-namespace:TuneSync.App"
         Title="GoTune 화면 보호기"
         WindowStyle="None" ResizeMode="NoResize" Topmost="True" ShowInTaskbar="False"
         Background="Black" Cursor="None" WindowStartupLocation="Manual">
@@ -66,10 +67,30 @@
                            TextAlignment="Center" TextWrapping="Wrap"/>
                 <TextBlock Text="{Binding NowPlayingSubtitle}" FontSize="20" Foreground="#CCFFFFFF" Margin="0,8,0,0"
                            TextAlignment="Center" TextWrapping="Wrap"/>
+                <!-- How far the song has got: the player's seek bar in the same look, shown only
+                     (any mouse movement ends the screen saver anyway). White, like the spectrum. -->
+                <Grid Width="560" Margin="0,26,0,0" IsHitTestVisible="False">
+                    <Grid.Effect>
+                        <DropShadowEffect BlurRadius="10" ShadowDepth="0" Opacity="0.5" Color="Black"/>
+                    </Grid.Effect>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    <local:WaveSeekBar Height="24"
+                                       Maximum="{Binding DurationSeconds}" Value="{Binding PositionSeconds, Mode=OneWay}"
+                                       IsPlaying="{Binding IsPlaying}" Waveform="{Binding Waveform}" Look="{Binding SeekLook}"
+                                       WaveBrush="#F2FFFFFF" TrackBrush="#40FFFFFF"/>
+                    <Grid Grid.Row="1" Margin="0,4,0,0">
+                        <TextBlock Text="{Binding PositionText}" FontSize="13" Foreground="#CCFFFFFF"/>
+                        <TextBlock Text="{Binding DurationText}" FontSize="13" Foreground="#CCFFFFFF" HorizontalAlignment="Right"/>
+                    </Grid>
+                </Grid>
+
                 <!-- The spectrum of what's playing, as in the player - but white: the cover's accent
                      color is the same hue as the light behind it here and got lost. -->
                 <views:SpectrumView Playback="{Binding}" Look="{Binding SpectrumLook}" BarBrush="#F2FFFFFF" BarWidth="4"
-                                    Width="560" Height="48" Margin="0,22,0,0">
+                                    Width="560" Height="48" Margin="0,18,0,0">
                     <views:SpectrumView.Effect>
                         <DropShadowEffect BlurRadius="10" ShadowDepth="0" Opacity="0.5" Color="Black"/>
                     </views:SpectrumView.Effect>
