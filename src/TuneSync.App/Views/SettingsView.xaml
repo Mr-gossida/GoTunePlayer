@@ -117,7 +117,7 @@
                 <ComboBox Width="100" ItemsSource="{Binding CacheSizeOptions}" DisplayMemberPath="Label"
                           SelectedValuePath="Value" SelectedValue="{Binding CacheMegabytes}" ToolTip="최대 용량"/>
                 <ui:Button Content="비우기" Margin="8,0,0,0" Command="{Binding ClearCacheCommand}"/>
-                <ui:Button Icon="{ui:SymbolIcon FolderOpen24}" Margin="8,0,0,0" Width="34" Padding="0" ToolTip="캐시 폴더 열기"
+                <ui:Button Content="폴더 열기" Icon="{ui:SymbolIcon Open24}" Margin="8,0,0,0" ToolTip="캐시 폴더 열기"
                            Command="{Binding OpenCacheFolderCommand}"/>
             </StackPanel>
         </ui:CardControl>
@@ -222,7 +222,7 @@
                                   FontSize="12" TextWrapping="Wrap" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
                 </StackPanel>
             </ui:CardControl.Header>
-            <ComboBox Width="190" ItemsSource="{Binding ScreenSaverExitOptions}" DisplayMemberPath="Label"
+            <ComboBox Width="220" ItemsSource="{Binding ScreenSaverExitOptions}" DisplayMemberPath="Label"
                       SelectedValuePath="Value" SelectedValue="{Binding ScreenSaverExit}" IsEnabled="{Binding ScreenSaverEnabled}"/>
         </ui:CardControl>
 
@@ -243,7 +243,7 @@
             <ui:CardControl.Header>
                 <StackPanel>
                     <ui:TextBlock Text="데이터 폴더" FontTypography="Body"/>
-                    <ui:TextBlock Text="설정 파일과 자동 채움 적용 기록(되돌리기용 이전 태그)이 저장되는 폴더입니다." FontSize="12" TextWrapping="Wrap"
+                    <ui:TextBlock Text="설정, 라이브러리 목록, 네트워크 음악 캐시, 가사 싱크용 음성 인식 모델이 저장되는 폴더입니다." FontSize="12" TextWrapping="Wrap"
                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
                 </StackPanel>
             </ui:CardControl.Header>
