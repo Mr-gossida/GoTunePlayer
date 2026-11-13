@@ -622,13 +622,16 @@
                             <RowDefinition Height="*"/>
                             <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
-                        <Grid Margin="0,0,0,8">
-                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <!-- The lyrics' state on its own line, the actions under it: side by side they ran
+                             into each other in a narrow panel. -->
+                        <StackPanel Margin="0,0,0,8">
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
                                 <ui:ProgressRing IsIndeterminate="True" Width="14" Height="14" Margin="0,0,8,0"
                                                  Visibility="{Binding IsLyricsLoading, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}"/>
-                                <TextBlock Text="{Binding LyricsInfo}" FontSize="12" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                <TextBlock Text="{Binding LyricsInfo}" FontSize="12" TextTrimming="CharacterEllipsis" ToolTip="{Binding LyricsInfo}"
+                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
                             </StackPanel>
-                            <StackPanel HorizontalAlignment="Right" Orientation="Horizontal">
+                            <WrapPanel Orientation="Horizontal">
                                 <ui:Button Content="가사 찾기" Icon="{ui:SymbolIcon Search24}" Padding="10,4" FontSize="12" Margin="0,0,4,0"
                                            Command="{Binding SearchLyricsCommand}"
                                            ToolTip="LRCLIB에서 이 곡(길이·앨범까지 맞는 버전)의 가사를 찾아 넣습니다. 싱크 가사를 우선합니다"/>
@@ -639,8 +642,8 @@
                                 <ui:Button Content="되돌리기" Icon="{ui:SymbolIcon ArrowUndo16}" Appearance="Transparent"
                                            Padding="8,3" FontSize="12" Command="{Binding RevertLyricsCommand}"
                                            Visibility="{Binding IsLyricsPending, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}"/>
-                            </StackPanel>
-                        </Grid>
+                            </WrapPanel>
+                        </StackPanel>
                         <ContentControl Grid.Row="1" Content="{Binding}" ContentTemplate="{StaticResource SearchStatusTemplate}" Focusable="False" Margin="0,0,0,8" VerticalAlignment="Top"/>
                         <ui:TextBox Grid.Row="2" Text="{Binding LyricsText, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" AcceptsTab="False"
                                     TextWrapping="Wrap" VerticalContentAlignment="Top" VerticalScrollBarVisibility="Auto" FontSize="13"
