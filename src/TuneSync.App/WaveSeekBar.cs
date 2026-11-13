@@ -103,6 +103,8 @@ public sealed class WaveSeekBar : FrameworkElement
         FocusVisualStyle = null;
         Loaded += (_, _) => UpdateAnimationState();
         Unloaded += (_, _) => StopAnimating();
+        // Hidden (mini player in use) or minimized: no waves to draw.
+        OnScreen.Watch(this, () => { if (OnScreen.Check(this)) UpdateAnimationState(); else StopAnimating(); });
     }
 
     private double Left => ThumbRadius + 1;
@@ -452,7 +454,7 @@ public sealed class WaveSeekBar : FrameworkElement
 
     private void UpdateAnimationState()
     {
-        if (IsLoaded && (IsPlaying || _activity > 0.002 || _ripples.Count > 0 || _sparks.Count > 0 || _licks.Count > 0)) StartAnimating();
+        if (IsLoaded && OnScreen.Check(this) && (IsPlaying || _activity > 0.002 || _ripples.Count > 0 || _sparks.Count > 0 || _licks.Count > 0)) StartAnimating();
     }
 
     private void StartAnimating()
@@ -460,20 +462,20 @@ public sealed class WaveSeekBar : FrameworkElement
         if (_animating) return;
         _animating = true;
         _lastFrame = TimeSpan.Zero;
-        CompositionTarget.Rendering += OnRendering;
+        FrameTicker.Add(OnRendering);
     }
 
     private void StopAnimating()
     {
         if (!_animating) return;
         _animating = false;
-        CompositionTarget.Rendering -= OnRendering;
+        FrameTicker.Remove(OnRendering);
     }
 
     private void OnRendering(object? sender, EventArgs e)
     {
-        var now = ((RenderingEventArgs)e).RenderingTime;
-        if (now == _lastFrame) return; // Rendering can fire more than once per frame
+        var now = FrameTicker.Now;
+        if (now == _lastFrame) return;
         var dt = _lastFrame == TimeSpan.Zero ? 0 : Math.Min(0.1, (now - _lastFrame).TotalSeconds);
         _lastFrame = now;
 

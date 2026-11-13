@@ -47,7 +47,7 @@ public sealed class EqualizerBars : StackPanel
             _bars.Add(bar);
             Children.Add(bar);
         }
-        IsVisibleChanged += (_, _) => Update();
+        OnScreen.Watch(this, Update);
     }
 
     public bool IsActive
@@ -64,18 +64,22 @@ public sealed class EqualizerBars : StackPanel
 
     private void Update()
     {
-        var run = IsActive && IsVisible;
+        var run = IsActive && OnScreen.Check(this);
         for (var i = 0; i < _bars.Count; i++)
         {
             var scale = (ScaleTransform)_bars[i].RenderTransform;
             if (run)
             {
-                scale.BeginAnimation(ScaleTransform.ScaleYProperty, new DoubleAnimation(0.25, 1, TimeSpan.FromSeconds(Periods[i]))
+                var bounce = new DoubleAnimation(0.25, 1, TimeSpan.FromSeconds(Periods[i]))
                 {
                     AutoReverse = true,
                     RepeatBehavior = RepeatBehavior.Forever,
                     EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut },
-                });
+                };
+                // A tiny icon that runs as long as music plays: 24 frames a second is plenty
+                // (WPF would otherwise redraw for it at the monitor's full refresh rate).
+                Timeline.SetDesiredFrameRate(bounce, 24);
+                scale.BeginAnimation(ScaleTransform.ScaleYProperty, bounce);
             }
             else
             {

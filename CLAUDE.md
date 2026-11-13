@@ -83,6 +83,9 @@ Before building the debug app, kill only leftover debug processes (`*\bin\Debug\
   (no WPF grouping — group headers are data on `LibraryFileViewModel`; add files with `BulkObservableCollection.AddRange`).
 - WPF-UI 4.3 gotchas: `MessageBox.Content` is a string; close it with `Close(MessageBoxResult)`; check icon names with IconCheck.
 - Confirmations go through `Dialogs.ConfirmAsync` (themed, centered over the active window via `Dialogs.PlaceOverApp`); notices through `Toast`.
+- Continuous decorative motion (spectrum, seek-bar waves/fire, aurora) runs on `FrameTicker` (~30 fps), not
+  `CompositionTarget.Rendering` (that runs at the monitor's refresh rate and keeps WPF redrawing the whole app), and
+  pauses when `OnScreen.Check` says its window is hidden or minimized. Endless WPF animations set `Timeline.DesiredFrameRate`.
 - Settings live in `AppSettings` (Core) and are saved with `AppSettingsStore.Save`; expose them through a view model property.
 - When editing files from scripts, keep each file's BOM and line endings (CRLF/LF) as they were.
 - Comments explain why, in plain English, like the existing code.

@@ -86,7 +86,7 @@ public sealed class SpectrumView : FrameworkElement
         MouseLeave += (_, _) => InvalidateVisual();
         Loaded += (_, _) => Subscribe();
         Unloaded += (_, _) => Unsubscribe();
-        IsVisibleChanged += (_, _) => { if (IsVisible) Subscribe(); else Unsubscribe(); };
+        OnScreen.Watch(this, () => { if (OnScreen.Check(this)) Subscribe(); else Unsubscribe(); });
     }
 
     private void OnCycleOnClickChanged(bool on)
@@ -122,24 +122,24 @@ public sealed class SpectrumView : FrameworkElement
 
     private void Subscribe()
     {
-        if (_subscribed || !IsVisible) return;
+        if (_subscribed || !OnScreen.Check(this)) return;
         _subscribed = true;
         _lastFrame = TimeSpan.Zero;
-        CompositionTarget.Rendering += OnRendering;
+        FrameTicker.Add(OnRendering);
     }
 
     private void Unsubscribe()
     {
         if (!_subscribed) return;
         _subscribed = false;
-        CompositionTarget.Rendering -= OnRendering;
+        FrameTicker.Remove(OnRendering);
     }
 
     private int BarCount => Math.Max(8, (int)((ActualWidth + 1) / (BarWidth + 1)));
 
     private void OnRendering(object? sender, EventArgs e)
     {
-        var now = ((RenderingEventArgs)e).RenderingTime;
+        var now = FrameTicker.Now;
         if (now == _lastFrame) return;
         var dt = _lastFrame == TimeSpan.Zero ? 1 / 60f : (float)Math.Min((now - _lastFrame).TotalSeconds, 0.1);
         _lastFrame = now;

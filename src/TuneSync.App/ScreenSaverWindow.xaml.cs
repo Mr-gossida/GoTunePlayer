@@ -89,7 +89,7 @@ public partial class ScreenSaverWindow : Window
         {
             playback.PropertyChanged -= Playback_PropertyChanged;
             PlayerPalette.Changed -= RecolorAurora;
-            CompositionTarget.Rendering -= AdvanceAurora;
+            FrameTicker.Remove(AdvanceAurora);
             Views.LyricsScroller.Stop(LyricsViewer);
             _lyricsGate.Stop();
             _clock.Stop();
@@ -260,7 +260,7 @@ public partial class ScreenSaverWindow : Window
         AuroraLight.Color2 = second;
         if (!AuroraClock.IsRunning) NewAuroraSession();
         AdvanceAurora(null, EventArgs.Empty);
-        CompositionTarget.Rendering += AdvanceAurora;
+        FrameTicker.Add(AdvanceAurora);
         AuroraLayer.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromSeconds(2.5)));
     }
 
