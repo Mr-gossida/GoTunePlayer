@@ -35,9 +35,8 @@ Before building the debug app, kill only leftover debug processes (`*\bin\Debug\
 
 ## Deploying (the user's installed copy)
 
-- Install folder: `%LocalAppData%\Programs\GoTune` (exe `GoTune.exe`). Until the user confirms the old
-  `%LocalAppData%\Programs\TuneSync` (exe `TuneSync.App.exe`) can go, it may still exist; delete it only on their OK.
-- **Deploy only when the installed app is not running.** Check for processes whose path is under `*Programs\GoTune*` (or the old `*Programs\TuneSync*`). If it's running, don't publish — tell the user and ask them to close it.
+- Install folder: `%LocalAppData%\Programs\GoTune` (exe `GoTune.exe`). The old `Programs\TuneSync` install was removed on 2026-11-13.
+- **Deploy only when the installed app is not running.** Check for processes whose path is under `*Programs\GoTune*`. If it's running, don't publish — tell the user and ask them to close it.
 - **Never close, kill or relaunch the user's app yourself** (exception: the user explicitly asks, e.g. "배포하고 시스템 종료해주세요" — then close it gracefully with CloseMainWindow, never Kill).
 - Publish:
   ```bash
