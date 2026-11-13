@@ -39,6 +39,18 @@
                 <TranslateTransform x:Name="Drift"/>
             </Grid.RenderTransform>
 
+            <!-- A soft shade behind the song, so white text and the spectrum read even when the
+                 cover is pale and the aurora lights up behind them. No visible edge. -->
+            <Rectangle Width="1500" Height="1150" HorizontalAlignment="Center" VerticalAlignment="Center" IsHitTestVisible="False">
+                <Rectangle.Fill>
+                    <RadialGradientBrush>
+                        <GradientStop Color="#80000000" Offset="0"/>
+                        <GradientStop Color="#59000000" Offset="0.45"/>
+                        <GradientStop Color="#00000000" Offset="1"/>
+                    </RadialGradientBrush>
+                </Rectangle.Fill>
+            </Rectangle>
+
             <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="900">
                 <Border Width="340" Height="340" CornerRadius="14" HorizontalAlignment="Center" Background="#22FFFFFF">
                     <Border.Effect>
@@ -54,9 +66,14 @@
                            TextAlignment="Center" TextWrapping="Wrap"/>
                 <TextBlock Text="{Binding NowPlayingSubtitle}" FontSize="20" Foreground="#CCFFFFFF" Margin="0,8,0,0"
                            TextAlignment="Center" TextWrapping="Wrap"/>
-                <!-- The spectrum of what's playing, as in the player. -->
-                <views:SpectrumView Playback="{Binding}" Look="{Binding SpectrumLook}" BarBrush="{DynamicResource PlayerAccentBrush}" BarWidth="4"
-                                    Width="560" Height="48" Margin="0,22,0,0"/>
+                <!-- The spectrum of what's playing, as in the player - but white: the cover's accent
+                     color is the same hue as the light behind it here and got lost. -->
+                <views:SpectrumView Playback="{Binding}" Look="{Binding SpectrumLook}" BarBrush="#F2FFFFFF" BarWidth="4"
+                                    Width="560" Height="48" Margin="0,22,0,0">
+                    <views:SpectrumView.Effect>
+                        <DropShadowEffect BlurRadius="10" ShadowDepth="0" Opacity="0.5" Color="Black"/>
+                    </views:SpectrumView.Effect>
+                </views:SpectrumView>
 
                 <!-- Three lines - the one just sung, the current one, the next - gliding up like the
                      player's lyrics (LyricsScroller). Lines are laid out at the current-line size and
@@ -65,6 +82,9 @@
                               VerticalScrollBarVisibility="Hidden" HorizontalScrollBarVisibility="Disabled" CanContentScroll="False"
                               SizeChanged="LyricsViewer_SizeChanged"
                               Visibility="{Binding HasSyncedLyrics, Converter={StaticResource BoolToVisibility}}">
+                    <ScrollViewer.Effect>
+                        <DropShadowEffect BlurRadius="14" ShadowDepth="0" Opacity="0.65" Color="Black"/>
+                    </ScrollViewer.Effect>
                     <!-- Absolute, matching the view's Height: a relative mask is sized to the drawn
                          lines and would fade the first/last line itself (see PlayView). -->
                     <ScrollViewer.OpacityMask>
@@ -78,15 +98,12 @@
                     <ItemsControl x:Name="LyricsItems" ItemsSource="{Binding LyricsLines}">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
-                                <Grid x:Name="Line" Margin="0,5" RenderTransformOrigin="0.5,0.5" Opacity="0.45">
+                                <Grid x:Name="Line" Margin="0,5" RenderTransformOrigin="0.5,0.5" Opacity="0.55">
                                     <Grid.RenderTransform>
                                         <ScaleTransform ScaleX="0.62" ScaleY="0.62"/>
                                     </Grid.RenderTransform>
                                     <TextBlock Text="{Binding Text}" FontSize="30" FontWeight="SemiBold" Foreground="White"
                                                TextAlignment="Center" TextWrapping="Wrap"/>
-                                    <!-- the current line takes the cover's accent color (cross-faded in) -->
-                                    <TextBlock x:Name="Accent" Text="{Binding Text}" FontSize="30" FontWeight="SemiBold" Opacity="0"
-                                               Foreground="{DynamicResource PlayerAccentBrush}" TextAlignment="Center" TextWrapping="Wrap"/>
                                 </Grid>
                                 <DataTemplate.Triggers>
                                     <DataTrigger Binding="{Binding IsCurrent}" Value="True">
@@ -94,7 +111,6 @@
                                             <BeginStoryboard>
                                                 <Storyboard>
                                                     <DoubleAnimation Storyboard.TargetName="Line" Storyboard.TargetProperty="Opacity" To="1" Duration="0:0:0.45"/>
-                                                    <DoubleAnimation Storyboard.TargetName="Accent" Storyboard.TargetProperty="Opacity" To="1" Duration="0:0:0.45"/>
                                                     <DoubleAnimation Storyboard.TargetName="Line" Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleX)" To="1" Duration="0:0:0.45">
                                                         <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut"/></DoubleAnimation.EasingFunction>
                                                     </DoubleAnimation>
@@ -107,8 +123,7 @@
                                         <DataTrigger.ExitActions>
                                             <BeginStoryboard>
                                                 <Storyboard>
-                                                    <DoubleAnimation Storyboard.TargetName="Line" Storyboard.TargetProperty="Opacity" To="0.45" Duration="0:0:0.5"/>
-                                                    <DoubleAnimation Storyboard.TargetName="Accent" Storyboard.TargetProperty="Opacity" To="0" Duration="0:0:0.5"/>
+                                                    <DoubleAnimation Storyboard.TargetName="Line" Storyboard.TargetProperty="Opacity" To="0.55" Duration="0:0:0.5"/>
                                                     <DoubleAnimation Storyboard.TargetName="Line" Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleX)" To="0.62" Duration="0:0:0.5">
                                                         <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseInOut"/></DoubleAnimation.EasingFunction>
                                                     </DoubleAnimation>
