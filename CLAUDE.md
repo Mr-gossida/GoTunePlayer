@@ -68,7 +68,7 @@ Before building the debug app, kill only leftover debug processes (`*\bin\Debug\
   ```
   It reads `TUNESYNC_LYRTEST` (output folder), drives view models / plays songs (volume 0), logs to `result.txt`,
   snapshots with `RenderTargetBitmap` (draw the element through a `VisualBrush` over a background rectangle),
-  then writes `done.txt`. A PowerShell script backs up `%LocalAppData%\TuneSync\settings.json`, writes test
+  then writes `done.txt`. A PowerShell script backs up `%LocalAppData%\GoTune\settings.json`, writes test
   settings, starts `bin\Debug\...\GoTune.exe`, waits for `done.txt`, kills that process and restores the settings.
 - **Always remove the hook afterwards**: delete `DebugLyricsTest.cs` and `git checkout -- src/TuneSync.App/App.xaml.cs`.
   Also remove any `TEMP-TRACE` lines.
@@ -97,11 +97,11 @@ Before building the debug app, kill only leftover debug processes (`*\bin\Debug\
 
 ## Names that stay TuneSync (on purpose)
 
-Repo/project/namespace names, the data folder `%LocalAppData%\TuneSync`
-(settings, library index, cache, Whisper models), Credential Manager targets `TuneSync:{id}`, and the default merge
-quarantine folder `_TuneSync_Quarantine`. Renaming them would lose settings/passwords or break shortcuts; only do it
+Repo/project/namespace names and the default merge quarantine folder `_TuneSync_Quarantine`. Renaming them would lose settings/passwords or break shortcuts; only do it
 as a deliberate migration the user asks for. (The exe/dll names and install folder were
-migrated to GoTune on 2026-11-13; a debug build runs as single instance "GoTunePlayer.Debug", so it can run beside the installed app.)
+migrated to GoTune on 2026-11-13, and so were the data folder (`%LocalAppData%\GoTune`: settings, library index, cache,
+Whisper models - `AppDataFolder` moves the old `%LocalAppData%\TuneSync` over on first use) and the Credential Manager targets
+(`GoTune:{id}`; `CredentialStore.Load` moves an old `TuneSync:{id}` entry); a debug build runs as single instance "GoTunePlayer.Debug", so it can run beside the installed app.)
 
 ## Choosing model and effort
 

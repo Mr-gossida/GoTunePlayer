@@ -259,8 +259,7 @@ public sealed partial class SettingsViewModel : ObservableObject
     public string VersionText =>
         $"버전 {Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "1.0.0"}";
 
-    public static string DataFolder => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "TuneSync");
+    public static string DataFolder => AppDataFolder.Path;
 
     partial void OnThemeChanged(AppTheme value)
     {

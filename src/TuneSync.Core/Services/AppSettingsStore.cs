@@ -7,8 +7,9 @@ namespace TuneSync.Core.Services;
 /// folder. A corrupt or missing file just yields defaults rather than failing startup.</summary>
 public static class AppSettingsStore
 {
-    public static string DefaultPath { get; } = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "TuneSync", "settings.json");
+    // Computed on use (not at type load), so loading from an explicit path - tests - never
+    // touches the real data folder.
+    public static string DefaultPath => AppDataFolder.Combine("settings.json");
 
     public static AppSettings Load(string? path = null)
     {

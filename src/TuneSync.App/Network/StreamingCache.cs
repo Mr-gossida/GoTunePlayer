@@ -25,8 +25,7 @@ public sealed class StreamingCache
             try { File.Delete(partial); } catch { /* still in use - fine */ }
     }
 
-    public static string Folder { get; } = System.IO.Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "TuneSync", "cache");
+    public static string Folder { get; } = TuneSync.Core.Services.AppDataFolder.Combine("cache");
 
     /// <summary>The cache entry for a network song, starting its download if it isn't cached or
     /// already coming in.</summary>

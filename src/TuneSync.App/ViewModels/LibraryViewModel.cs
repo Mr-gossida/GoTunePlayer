@@ -670,8 +670,7 @@ public sealed partial class LibraryViewModel : ObservableObject
     }
 
     /// <summary>Songs read last time, reused while unchanged (local and network-share folders).</summary>
-    private readonly LibraryIndex _index = new(Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "TuneSync", "library-index.json"));
+    private readonly LibraryIndex _index = new(AppDataFolder.Combine("library-index.json"));
 
     [RelayCommand]
     private async Task RescanAsync()

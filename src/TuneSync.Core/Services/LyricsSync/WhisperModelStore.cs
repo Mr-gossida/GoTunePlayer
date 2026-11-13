@@ -1,6 +1,6 @@
 namespace TuneSync.Core.Services.LyricsSync;
 
-/// <summary>The speech recognition model, kept in %LocalAppData%\TuneSync\models. It isn't
+/// <summary>The speech recognition model, kept in %LocalAppData%\GoTune\models. It isn't
 /// shipped with the app (190 MB): it's downloaded once, when the user first asks for it.</summary>
 public static class WhisperModelStore
 {
@@ -9,8 +9,14 @@ public static class WhisperModelStore
     public const string DisplaySize = "190MB";
     private const string Url = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/" + FileName;
 
-    public static string Folder { get; set; } =
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "TuneSync", "models");
+    private static string? _folder;
+
+    /// <summary>The data folder's models folder unless set (tests).</summary>
+    public static string Folder
+    {
+        get => _folder ?? AppDataFolder.Combine("models");
+        set => _folder = value;
+    }
 
     public static string ModelPath => Path.Combine(Folder, FileName);
 

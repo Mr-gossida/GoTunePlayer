@@ -10,7 +10,10 @@ public static class CredentialStore
     private const int CRED_TYPE_GENERIC = 1;
     private const int CRED_PERSIST_LOCAL_MACHINE = 2;
 
-    private static string Target(string sourceId) => $"TuneSync:{sourceId}";
+    private static string Target(string sourceId) => $"GoTune:{sourceId}";
+
+    /// <summary>Where versions before the GoTune rename kept the password.</summary>
+    private static string LegacyTarget(string sourceId) => $"TuneSync:{sourceId}";
 
     public static void Save(string sourceId, string userName, string password)
     {
@@ -39,14 +42,35 @@ public static class CredentialStore
 
     public static string Load(string sourceId)
     {
-        if (!CredRead(Target(sourceId), CRED_TYPE_GENERIC, 0, out var pointer)) return "";
+        if (Read(Target(sourceId)) is { } current) return current.Password;
+        // Saved by a version from before the rename: move it to the new name (once).
+        if (Read(LegacyTarget(sourceId)) is not { } legacy) return "";
+        try
+        {
+            Save(sourceId, legacy.UserName, legacy.Password);
+            CredDelete(LegacyTarget(sourceId), CRED_TYPE_GENERIC, 0);
+        }
+        catch
+        {
+            // couldn't write the new one - keep the old one and use it
+        }
+        return legacy.Password;
+    }
+
+    private static (string UserName, string Password)? Read(string target)
+    {
+        if (!CredRead(target, CRED_TYPE_GENERIC, 0, out var pointer)) return null;
         try
         {
             var credential = Marshal.PtrToStructure<CREDENTIAL>(pointer);
-            if (credential.CredentialBlobSize == 0) return "";
-            var bytes = new byte[credential.CredentialBlobSize];
-            Marshal.Copy(credential.CredentialBlob, bytes, 0, bytes.Length);
-            return Encoding.Unicode.GetString(bytes);
+            var password = "";
+            if (credential.CredentialBlobSize > 0)
+            {
+                var bytes = new byte[credential.CredentialBlobSize];
+                Marshal.Copy(credential.CredentialBlob, bytes, 0, bytes.Length);
+                password = Encoding.Unicode.GetString(bytes);
+            }
+            return (credential.UserName ?? "", password);
         }
         finally
         {
@@ -54,7 +78,11 @@ public static class CredentialStore
         }
     }
 
-    public static void Delete(string sourceId) => CredDelete(Target(sourceId), CRED_TYPE_GENERIC, 0);
+    public static void Delete(string sourceId)
+    {
+        CredDelete(Target(sourceId), CRED_TYPE_GENERIC, 0);
+        CredDelete(LegacyTarget(sourceId), CRED_TYPE_GENERIC, 0);
+    }
 
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
     private struct CREDENTIAL

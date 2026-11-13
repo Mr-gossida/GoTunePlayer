@@ -22,8 +22,7 @@ public sealed class NetworkLibrary : IDisposable
         _settings = settings;
         Cache = new StreamingCache(() => Math.Max(256, _settings.StreamCacheMegabytes) * 1024L * 1024L);
         Server = new LocalStreamServer();
-        Index = new LibraryIndex(Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "TuneSync", "remote-index.json"));
+        Index = new LibraryIndex(TuneSync.Core.Services.AppDataFolder.Combine("remote-index.json"));
 
         RemoteFiles.ClientFor = ClientFor;
         ViewModels.LibraryFileViewModel.RemoteSourceName = id => Find(id)?.Name;

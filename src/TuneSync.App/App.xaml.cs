@@ -125,14 +125,13 @@ public partial class App : Application
         Toast.Error("예기치 않은 오류", e.Exception.Message);
     }
 
-    /// <summary>Appends the full exception to %LocalAppData%\TuneSync\error.log, so a problem a
+    /// <summary>Appends the full exception to %LocalAppData%\GoTune\error.log, so a problem a
     /// user reports can actually be diagnosed afterwards.</summary>
     internal static void LogError(Exception ex)
     {
         try
         {
-            var dir = System.IO.Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "TuneSync");
+            var dir = AppDataFolder.Path;
             System.IO.Directory.CreateDirectory(dir);
             System.IO.File.AppendAllText(System.IO.Path.Combine(dir, "error.log"),
                 $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {ex}{Environment.NewLine}{Environment.NewLine}");
