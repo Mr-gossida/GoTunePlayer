@@ -66,6 +66,9 @@ public sealed class AppSettings
     /// <summary>How the play list is drawn: rows with covers, dense rows, or a cover grid.</summary>
     public QueueViewMode QueueViewMode { get; set; } = QueueViewMode.Standard;
 
+    /// <summary>Play list rows lead with the artist instead of the title.</summary>
+    public bool QueueArtistFirst { get; set; }
+
     /// <summary>Grid view: the wished-for tile width.</summary>
     public double QueueTileSize { get; set; } = 132;
 

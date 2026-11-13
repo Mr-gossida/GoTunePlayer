@@ -224,6 +224,7 @@ public sealed partial class PlaybackViewModel : ObservableObject, IDisposable
         _settings = settings;
         _network = network;
         library.FilesRemoving += OnFilesRemoving;
+        LibraryFileViewModel.ArtistFirst = settings.QueueArtistFirst;
         PickSeekLook();
         // 임의: a new look for every song.
         PropertyChanged += (_, e) =>
@@ -1138,6 +1139,21 @@ public sealed partial class PlaybackViewModel : ObservableObject, IDisposable
             if (_settings.QueueViewMode == value) return;
             _settings.QueueViewMode = value;
             AppSettingsStore.Save(_settings);
+            OnPropertyChanged();
+        }
+    }
+
+    /// <summary>Rows lead with the artist instead of the title.</summary>
+    public bool QueueArtistFirst
+    {
+        get => _settings.QueueArtistFirst;
+        set
+        {
+            if (_settings.QueueArtistFirst == value) return;
+            _settings.QueueArtistFirst = value;
+            AppSettingsStore.Save(_settings);
+            LibraryFileViewModel.ArtistFirst = value;
+            foreach (var file in _library.Files) file.NotifyNameOrder();
             OnPropertyChanged();
         }
     }

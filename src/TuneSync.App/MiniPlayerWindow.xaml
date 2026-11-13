@@ -326,9 +326,9 @@
                                 </Border>
                             </Grid>
                             <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                <TextBlock x:Name="TitleText" Text="{Binding DisplayTitle}" FontSize="12" TextTrimming="CharacterEllipsis"
+                                <TextBlock x:Name="TitleText" Text="{Binding PrimaryText}" FontSize="12" TextTrimming="CharacterEllipsis"
                                            Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
-                                <TextBlock Text="{Binding Artist}" FontSize="11" TextTrimming="CharacterEllipsis"
+                                <TextBlock Text="{Binding SecondaryText}" FontSize="11" TextTrimming="CharacterEllipsis"
                                            Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
                             </StackPanel>
                             <TextBlock Grid.Column="2" Text="{Binding DurationText}" FontSize="11" Margin="8,0,2,0" VerticalAlignment="Center"

@@ -707,6 +707,15 @@ public partial class PlayView : Page
         Option("기본", QueueViewMode.Standard, Wpf.Ui.Controls.SymbolRegular.AppsList24);
         Option("촘촘한 목록", QueueViewMode.Compact, Wpf.Ui.Controls.SymbolRegular.TextBulletListLtr24);
         Option("그리드", QueueViewMode.Grid, Wpf.Ui.Controls.SymbolRegular.Grid24);
+        menu.Items.Add(new Separator());
+        void Order(string label, bool artistFirst)
+        {
+            var item = new MenuItem { Header = label, IsCheckable = true, IsChecked = playback.QueueArtistFirst == artistFirst };
+            item.Click += (_, _) => playback.QueueArtistFirst = artistFirst;
+            menu.Items.Add(item);
+        }
+        Order("제목 먼저", false);
+        Order("아티스트 먼저", true);
         if (playback.QueueViewMode == QueueViewMode.Grid)
         {
             menu.Items.Add(new Separator());

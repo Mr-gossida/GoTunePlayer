@@ -80,6 +80,22 @@ public sealed partial class LibraryFileViewModel : ObservableObject
     /// <summary>Source id → its display name (set by the app's network library).</summary>
     public static Func<string, string?>? RemoteSourceName { get; set; }
 
+    /// <summary>재생 목록 보기 › 아티스트 먼저: rows lead with the artist (set for all rows).</summary>
+    public static bool ArtistFirst { get; set; }
+
+    /// <summary>A play list row's main line: the title, or with 아티스트 먼저 the artist
+    /// (the title when there is no artist).</summary>
+    public string PrimaryText => ArtistFirst && !string.IsNullOrWhiteSpace(Artist) ? Artist : DisplayTitle;
+
+    /// <summary>The row's second line: the other of the two.</summary>
+    public string SecondaryText => ArtistFirst ? (string.IsNullOrWhiteSpace(Artist) ? "" : DisplayTitle) : Artist;
+
+    public void NotifyNameOrder()
+    {
+        OnPropertyChanged(nameof(PrimaryText));
+        OnPropertyChanged(nameof(SecondaryText));
+    }
+
     public bool IsRemote => TuneSync.Core.Models.RemotePath.IsRemote(Path);
     public string ArtistGroup => string.IsNullOrWhiteSpace(Artist) ? "(알 수 없는 아티스트)" : Artist;
     public string AlbumGroup => string.IsNullOrWhiteSpace(Album) ? "(알 수 없는 앨범)" : Album;

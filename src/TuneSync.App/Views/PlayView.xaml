@@ -101,7 +101,7 @@
                 </Border>
                 <TextBlock x:Name="Line" Grid.Column="1" FontSize="13" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
                            Foreground="{DynamicResource TextFillColorPrimaryBrush}">
-                    <Run Text="{Binding DisplayTitle, Mode=OneWay}"/><Run Text="  "/><Run Text="{Binding Artist, Mode=OneWay}" FontSize="12"
+                    <Run Text="{Binding PrimaryText, Mode=OneWay}"/><Run Text="  "/><Run Text="{Binding SecondaryText, Mode=OneWay}" FontSize="12"
                          Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
                 </TextBlock>
                 <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Margin="8,0,2,0">
@@ -210,9 +210,9 @@
                         </LinearGradientBrush>
                     </Border.Background>
                     <StackPanel>
-                        <TextBlock Text="{Binding DisplayTitle}" FontSize="13" FontWeight="SemiBold" Foreground="White"
+                        <TextBlock Text="{Binding PrimaryText}" FontSize="13" FontWeight="SemiBold" Foreground="White"
                                    TextTrimming="CharacterEllipsis"/>
-                        <TextBlock Text="{Binding Artist}" FontSize="11" Margin="0,2,0,0" Foreground="#B3FFFFFF" TextTrimming="CharacterEllipsis"/>
+                        <TextBlock Text="{Binding SecondaryText}" FontSize="11" Margin="0,2,0,0" Foreground="#B3FFFFFF" TextTrimming="CharacterEllipsis"/>
                     </StackPanel>
                 </Border>
                 <!-- the playing song: an equalizer on a frosted chip -->
@@ -850,9 +850,9 @@
                                     </Border>
                                 </Grid>
                                 <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                    <TextBlock x:Name="TitleText" Text="{Binding DisplayTitle}" FontSize="13" TextTrimming="CharacterEllipsis"
+                                    <TextBlock x:Name="TitleText" Text="{Binding PrimaryText}" FontSize="13" TextTrimming="CharacterEllipsis"
                                                Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
-                                    <TextBlock Text="{Binding Artist}" FontSize="12" Margin="0,2,0,0" TextTrimming="CharacterEllipsis"
+                                    <TextBlock Text="{Binding SecondaryText}" FontSize="12" Margin="0,2,0,0" TextTrimming="CharacterEllipsis"
                                                Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
                                 </StackPanel>
                                 <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Margin="10,0,4,0">
