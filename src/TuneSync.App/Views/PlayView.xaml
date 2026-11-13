@@ -917,6 +917,27 @@
                     </ListBox.ItemTemplate>
                 </ListBox>
 
+                <!-- The group being scrolled through stays pinned at the top (PlayView.UpdateStickyGroup);
+                     the list fades out under it, so no background is needed over the see-through panel. -->
+                <Grid x:Name="StickyGroup" Grid.Row="2" VerticalAlignment="Top" Margin="6,6,30,0" IsHitTestVisible="False"
+                      Visibility="Collapsed">
+                    <Grid.RenderTransform>
+                        <TranslateTransform x:Name="StickyShift"/>
+                    </Grid.RenderTransform>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <ui:SymbolIcon Grid.Column="0" Margin="0,0,6,0" FontSize="14"
+                                   Symbol="{Binding PlaylistGroup, Converter={StaticResource GroupIconConverter}}"
+                                   Foreground="{DynamicResource PlayerAccentBrush}"/>
+                    <TextBlock x:Name="StickyGroupName" Grid.Column="1" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"
+                               Foreground="{DynamicResource PlayerAccentBrush}"/>
+                    <TextBlock x:Name="StickyGroupCount" Grid.Column="2" Margin="8,0,0,0" FontSize="12"
+                               Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
+                </Grid>
+
                 <!-- Where dragged songs will land. -->
                 <Canvas Grid.Row="2" IsHitTestVisible="False" ClipToBounds="True">
                     <Border x:Name="DropLine" CornerRadius="1.5" Background="{DynamicResource PlayerAccentBrush}" Visibility="Collapsed"/>

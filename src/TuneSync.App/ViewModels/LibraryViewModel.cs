@@ -416,7 +416,11 @@ public sealed partial class LibraryViewModel : ObservableObject
         var rows = PlaylistView.Cast<LibraryFileViewModel>().ToList();
         if (_groupKey is not { } key)
         {
-            foreach (var row in rows) row.GroupHeader = null;
+            foreach (var row in rows)
+            {
+                row.GroupHeader = null;
+                row.GroupName = null;
+            }
             return;
         }
         var names = StringComparer.CurrentCultureIgnoreCase;
@@ -432,6 +436,7 @@ public sealed partial class LibraryViewModel : ObservableObject
             var name = key(row);
             var starts = previous is null || !names.Equals(name, previous);
             row.GroupHeader = starts ? name : null;
+            row.GroupName = name;
             row.GroupCount = counts[name];
             previous = name;
         }

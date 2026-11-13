@@ -43,6 +43,10 @@ public sealed partial class LibraryFileViewModel : ObservableObject
     [ObservableProperty]
     private string? _groupHeader;
 
+    /// <summary>The group this row belongs to (every row, not just the first); null without
+    /// grouping. For the queue's pinned heading.</summary>
+    public string? GroupName { get; set; }
+
     /// <summary>How many songs the group starting here has.</summary>
     [ObservableProperty]
     private int _groupCount;

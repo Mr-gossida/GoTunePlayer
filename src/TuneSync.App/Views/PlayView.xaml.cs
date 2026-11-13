@@ -25,7 +25,16 @@ public partial class PlayView : Page
         // The queue emptied or changed (folders removed, a rescan, a search): the "지금 재생 중"
         // button only makes sense while the playing song is in it.
         ((System.Collections.Specialized.INotifyCollectionChanged)PlaylistBox.Items).CollectionChanged += (_, _) =>
+        {
             Dispatcher.BeginInvoke(UpdateBackToCurrent, System.Windows.Threading.DispatcherPriority.Loaded);
+            // after the group headings are worked out again (LibraryViewModel.ScheduleGroupHeaders)
+            Dispatcher.BeginInvoke(UpdateStickyGroup, System.Windows.Threading.DispatcherPriority.Background);
+        };
+        _viewModel.Library.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(LibraryViewModel.PlaylistGroup))
+                Dispatcher.BeginInvoke(UpdateStickyGroup, System.Windows.Threading.DispatcherPriority.Background);
+        };
         // A new song's lyrics replace the old ones: start again from the top once the new lines
         // are laid out (resetting earlier is undone by the old lines' layout still being there).
         _viewModel.Playback.LyricsLines.CollectionChanged += (_, e) =>
@@ -1523,7 +1532,90 @@ public partial class PlayView : Page
 
     // --- "지금 재생 중": the playing song is scrolled out of view in the queue ---
 
-    private void PlaylistBox_ScrollChanged(object sender, ScrollChangedEventArgs e) => UpdateBackToCurrent();
+    private void PlaylistBox_ScrollChanged(object sender, ScrollChangedEventArgs e)
+    {
+        UpdateBackToCurrent();
+        UpdateStickyGroup();
+    }
+
+    // --- the group being scrolled through, pinned at the top of the queue ---
+
+    private const double StickyHeight = 30; // the pinned heading's band, where the list fades out
+
+    /// <summary>Shows which group the top of the queue is in. Hidden at a group's start, where
+    /// the list's own heading is in view; the next group's heading pushes it up and takes over,
+    /// like a phone's contact list.</summary>
+    private void UpdateStickyGroup()
+    {
+        void Hide()
+        {
+            if (StickyGroup.Visibility == System.Windows.Visibility.Collapsed) return;
+            StickyGroup.Visibility = System.Windows.Visibility.Collapsed;
+            PlaylistBox.OpacityMask = null;
+        }
+
+        if (_viewModel.Library.PlaylistGroup == PlaylistGroupKey.None || ItemsHost(PlaylistBox) is not { } panel)
+        {
+            Hide();
+            return;
+        }
+
+        // The realized rows/tiles, top to bottom.
+        var rows = new List<(ListBoxItem Item, LibraryFileViewModel Row, double Top, double Bottom)>();
+        foreach (var child in panel.Children)
+        {
+            if (child is not ListBoxItem item || !item.IsVisible || item.DataContext is not LibraryFileViewModel row) continue;
+            var top = item.TranslatePoint(new System.Windows.Point(0, 0), PlaylistBox).Y;
+            rows.Add((item, row, top, top + item.ActualHeight));
+        }
+        rows.Sort((a, b) => a.Top.CompareTo(b.Top));
+        var first = rows.FirstOrDefault(r => r.Bottom > 1);
+        if (first.Row?.GroupName is not { } group)
+        {
+            Hide();
+            return;
+        }
+
+        // At a group's first row with its heading fully in view: that heading says it already.
+        static bool HasHeading(ListBoxItem item) =>
+            item.Template?.FindName("GroupHeading", item) is System.Windows.FrameworkElement { IsVisible: true };
+        if (first.Row.GroupHeader is not null && HasHeading(first.Item) && first.Top >= -1)
+        {
+            Hide();
+            return;
+        }
+
+        // The next group's heading coming up pushes this one out.
+        var shift = 0.0;
+        var next = rows.FirstOrDefault(r => r.Top > first.Top + 0.5 && r.Row.GroupHeader is not null && HasHeading(r.Item));
+        if (next.Item is not null && next.Top < StickyHeight) shift = Math.Max(-StickyHeight, next.Top - StickyHeight);
+
+        StickyGroupName.Text = new Converters.PathLeafConverter().Convert(group, typeof(string), null!, System.Globalization.CultureInfo.CurrentCulture) as string ?? group;
+        StickyGroupCount.Text = $"{first.Row.GroupCount}곡";
+        StickyShift.Y = shift;
+        StickyGroup.Visibility = System.Windows.Visibility.Visible;
+
+        // The list fades out under the pinned heading.
+        var band = Math.Max(0, StickyHeight + shift);
+        var mask = new System.Windows.Media.LinearGradientBrush { MappingMode = System.Windows.Media.BrushMappingMode.Absolute, StartPoint = new System.Windows.Point(0, 0), EndPoint = new System.Windows.Point(0, band + 10) };
+        mask.GradientStops.Add(new System.Windows.Media.GradientStop(System.Windows.Media.Colors.Transparent, 0));
+        mask.GradientStops.Add(new System.Windows.Media.GradientStop(System.Windows.Media.Colors.Transparent, band / (band + 10)));
+        mask.GradientStops.Add(new System.Windows.Media.GradientStop(System.Windows.Media.Colors.Black, 1));
+        mask.Freeze();
+        PlaylistBox.OpacityMask = mask;
+    }
+
+    /// <summary>The panel an ItemsControl lays its items out on (stack or tiles).</summary>
+    private static System.Windows.Controls.Panel? ItemsHost(System.Windows.DependencyObject root)
+    {
+        for (var i = 0; i < System.Windows.Media.VisualTreeHelper.GetChildrenCount(root); i++)
+        {
+            var child = System.Windows.Media.VisualTreeHelper.GetChild(root, i);
+            if (child is System.Windows.Controls.Panel { IsItemsHost: true } panel) return panel;
+            if (ItemsHost(child) is { } found) return found;
+        }
+        return null;
+    }
 
     /// <summary>The queue row of the playing song: the same object, or - after a rescan rebuilt
     /// the rows - the row for the same file. Null when the queue doesn't have it (cleared,
