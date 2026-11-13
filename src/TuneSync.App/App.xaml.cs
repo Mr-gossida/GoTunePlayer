@@ -19,9 +19,55 @@ public partial class App : Application
     /// <summary>The app's services, for windows opened outside dependency injection.</summary>
     public IServiceProvider Services => _host!.Services;
 
+#if DEBUG
+    private const string InstanceName = "GoTunePlayer.Debug"; // a debug build may run beside the installed app
+#else
+    private const string InstanceName = "GoTunePlayer";
+#endif
+    private Mutex? _instance;
+
+    /// <summary>Only one copy runs. Starting it again just brings the running one to the front
+    /// (the main window, or the mini player when that's open).</summary>
+    private bool ClaimSingleInstance()
+    {
+        _instance = new Mutex(true, InstanceName + ".Instance", out var first);
+        var wake = new EventWaitHandle(false, EventResetMode.AutoReset, InstanceName + ".Show");
+        if (!first)
+        {
+            wake.Set();
+            return false;
+        }
+        var thread = new Thread(() =>
+        {
+            while (wake.WaitOne())
+                Dispatcher.BeginInvoke(BringToFront);
+        }) { IsBackground = true, Name = "single-instance" };
+        thread.Start();
+        return true;
+    }
+
+    private void BringToFront()
+    {
+        var window = Windows.OfType<Window>().FirstOrDefault(w => w is MiniPlayerWindow && w.IsVisible)
+                     ?? MainWindow;
+        if (window is null) return;
+        if (!window.IsVisible) window.Show();
+        if (window.WindowState == WindowState.Minimized) window.WindowState = WindowState.Normal;
+        window.Activate();
+        // Activate alone may only flash the taskbar button when another app has the focus.
+        window.Topmost = true;
+        window.Topmost = false;
+        window.Focus();
+    }
+
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+        if (!ClaimSingleInstance())
+        {
+            Shutdown(0);
+            return;
+        }
 
         DispatcherUnhandledException += OnDispatcherUnhandledException;
         TaskScheduler.UnobservedTaskException += (_, args) => args.SetObserved();
@@ -58,7 +104,7 @@ public partial class App : Application
         {
             // Without a main window the app would otherwise linger invisibly in the background.
             LogError(ex);
-            MessageBox.Show($"TuneSync를 시작하지 못했습니다.\n\n{ex.Message}", "TuneSync",
+            MessageBox.Show($"GoTune Player를 시작하지 못했습니다.\n\n{ex.Message}", "GoTune Player",
                 MessageBoxButton.OK, MessageBoxImage.Error);
             Shutdown(1);
         }

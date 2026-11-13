@@ -19,6 +19,8 @@
     <ApplicationIcon>Assets\TuneSync.ico</ApplicationIcon>
     <!-- What Windows shows for the app (taskbar, Task Manager, file properties). The exe keeps its
          file name so pinned shortcuts and the autostart entry keep working. -->
+    <AssemblyName>GoTune</AssemblyName>
+    <RootNamespace>TuneSync.App</RootNamespace>
     <Product>GoTune Player</Product>
     <AssemblyTitle>GoTune Player</AssemblyTitle>
     <Company>GoTune</Company>

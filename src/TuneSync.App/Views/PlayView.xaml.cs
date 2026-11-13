@@ -100,10 +100,12 @@ public partial class PlayView : Page
         // its cover's size needn't match (a short window gets a smaller cover), and the glide
         // has to scale the card by how the cover changes.
         System.Windows.Rect? before = animate && _hero && !intro && NowPlayingPanel.IsVisible ? BoundsInLayer(BigCover) : null;
+        var spectrumBefore = PanelSpectrum.ActualWidth;
         ShowHeroGauge(intro && playback.ShowIntroGauge, animate);
 
         if (hero != _hero)
         {
+            StopCardGlide();
             var from = before;
             _hero = hero;
             if (hero)
@@ -124,7 +126,7 @@ public partial class PlayView : Page
                     UpdateLayout();
                     // Cover, song info and spectrum travel together, as one card. Unhurried: the
                     // intro ends a few seconds before the singing, so there's time.
-                    GlideElement(NowPlayingPanel, start, BoundsInLayer(BigCover), TimeSpan.FromMilliseconds(1400));
+                    GlideCard(start, spectrumBefore, TimeSpan.FromMilliseconds(1400));
                 }
             }
         }
@@ -415,19 +417,42 @@ public partial class PlayView : Page
         }
     }
 
+    /// <summary>Every song the search finds, best first: titles that are the query or start with
+    /// it, then titles containing it, then artists, then albums and file names, then songs where
+    /// all the words appear somewhere (e.g. "akmu love"). Within a rank, list order.</summary>
     private void FindMatches()
     {
         var query = SearchBox.Text.Trim();
-        _matches = query.Length == 0
-            ? []
-            : [.. _viewModel.Library.PlaylistView.Cast<LibraryFileViewModel>().Where(f => Matches(f, query))];
+        if (query.Length == 0)
+        {
+            _matches = [];
+            return;
+        }
+        var words = query.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        _matches = [.. _viewModel.Library.PlaylistView.Cast<LibraryFileViewModel>()
+            .Select((file, index) => (File: file, Index: index, Rank: Rank(file, query, words)))
+            .Where(m => m.Rank >= 0)
+            .OrderBy(m => m.Rank).ThenBy(m => m.Index)
+            .Select(m => m.File)];
     }
 
-    private static bool Matches(LibraryFileViewModel file, string query) =>
-        file.DisplayTitle.Contains(query, StringComparison.CurrentCultureIgnoreCase)
-        || file.Artist.Contains(query, StringComparison.CurrentCultureIgnoreCase)
-        || file.Album.Contains(query, StringComparison.CurrentCultureIgnoreCase)
-        || file.FileName.Contains(query, StringComparison.CurrentCultureIgnoreCase);
+    private static int Rank(LibraryFileViewModel file, string query, string[] words)
+    {
+        const StringComparison ignore = StringComparison.CurrentCultureIgnoreCase;
+        var title = file.DisplayTitle;
+        if (title.Equals(query, ignore)) return 0;
+        if (title.StartsWith(query, ignore)) return 1;
+        if (title.Contains(query, ignore)) return 2;
+        if (file.Artist.Contains(query, ignore)) return 3;
+        if (file.Album.Contains(query, ignore)) return 4;
+        if (file.FileName.Contains(query, ignore)) return 5;
+        if (words.Length > 1)
+        {
+            var all = $"{title} {file.Artist} {file.Album} {file.FileName}";
+            if (words.All(w => all.Contains(w, ignore))) return 6;
+        }
+        return -1;
+    }
 
     private LibraryFileViewModel? _searchHit;
 
@@ -1299,34 +1324,86 @@ public partial class PlayView : Page
         });
     }
 
-    /// <summary>Moves an element that has just been laid out somewhere else from where it was to
-    /// where it is now, scaling it from its old size - the whole thing as one piece.</summary>
-    private void GlideElement(System.Windows.FrameworkElement element, System.Windows.Rect from, System.Windows.Rect to, TimeSpan length)
+    private EventHandler? _cardGlide;
+    private System.Windows.Media.TranslateTransform? _cardShift;
+    private System.Windows.Thickness _spectrumMargin;
+
+    /// <summary>Takes the card from the intro's centre to its place beside the lyrics. Only the
+    /// cover changes size; the title, details and spectrum keep their real size and stay right
+    /// under the cover all the way. (Scaling the whole card made them grow at the start, so the
+    /// spectrum jumped down and back.) Each frame lays the card out with the cover's current
+    /// size, then shifts it so the cover is where the motion has got to.</summary>
+    private void GlideCard(System.Windows.Rect from, double spectrumFrom, TimeSpan length)
     {
-        if (to.Width <= 0 || from.Width <= 0) return;
         foreach (var old in TransitionLayer.Children.OfType<System.Windows.FrameworkElement>().ToList())
             TransitionLayer.Children.Remove(old);
         BigCover.Opacity = 1;
-        element.BeginAnimation(OpacityProperty, null);
-        element.Opacity = 1;
+        NowPlayingPanel.BeginAnimation(OpacityProperty, null);
+        NowPlayingPanel.Opacity = 1;
+        var to = BoundsInLayer(BigCover);
+        if (to.Width <= 0 || from.Width <= 0) return;
 
-        var start = from.Width / to.Width;
-        var scale = new System.Windows.Media.ScaleTransform(start, start);
-        var shift = new System.Windows.Media.TranslateTransform(from.Left - to.Left, from.Top - to.Top);
-        var group = new System.Windows.Media.TransformGroup();
-        group.Children.Add(scale);
-        group.Children.Add(shift);
-        element.RenderTransformOrigin = new System.Windows.Point(0, 0);
-        element.RenderTransform = group;
-
+        var spectrumTo = PanelSpectrum.ActualWidth;
+        _spectrumMargin = PanelSpectrum.Margin;
+        PanelSpectrum.HorizontalAlignment = System.Windows.HorizontalAlignment.Left;
+        var shift = new System.Windows.Media.TranslateTransform();
+        _cardShift = shift;
+        NowPlayingPanel.RenderTransformOrigin = new System.Windows.Point(0, 0);
+        NowPlayingPanel.RenderTransform = shift;
         var ease = new System.Windows.Media.Animation.CubicEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseInOut };
-        OnNextFrame(() =>
+
+        void Place(double e)
         {
-            scale.BeginAnimation(System.Windows.Media.ScaleTransform.ScaleXProperty, new System.Windows.Media.Animation.DoubleAnimation(start, 1, length) { EasingFunction = ease });
-            scale.BeginAnimation(System.Windows.Media.ScaleTransform.ScaleYProperty, new System.Windows.Media.Animation.DoubleAnimation(start, 1, length) { EasingFunction = ease });
-            shift.BeginAnimation(System.Windows.Media.TranslateTransform.XProperty, new System.Windows.Media.Animation.DoubleAnimation(shift.X, 0, length) { EasingFunction = ease });
-            shift.BeginAnimation(System.Windows.Media.TranslateTransform.YProperty, new System.Windows.Media.Animation.DoubleAnimation(shift.Y, 0, length) { EasingFunction = ease });
-        });
+            var size = from.Width + (to.Width - from.Width) * e;
+            BigCover.Width = size;
+            BigCover.Height = size;
+            // Wider than the card for a moment: let it stick out on the right instead of being clipped.
+            BigCover.Margin = new System.Windows.Thickness(0, 0, Math.Min(0, NowPlayingPanel.ActualWidth - size), 0);
+            // The spectrum narrows with the card too, rather than snapping to the new width.
+            if (PanelSpectrum.IsVisible && spectrumFrom > 0 && spectrumTo > 0)
+            {
+                var width = spectrumFrom + (spectrumTo - spectrumFrom) * e;
+                PanelSpectrum.Width = width;
+                PanelSpectrum.Margin = new System.Windows.Thickness(_spectrumMargin.Left, _spectrumMargin.Top,
+                    Math.Min(0, NowPlayingPanel.ActualWidth - width), _spectrumMargin.Bottom);
+            }
+            NowPlayingPanel.UpdateLayout();
+            var at = BigCover.TranslatePoint(new System.Windows.Point(0, 0), TransitionLayer);
+            shift.X += from.Left + (to.Left - from.Left) * e - at.X;
+            shift.Y += from.Top + (to.Top - from.Top) * e - at.Y;
+        }
+
+        Place(0);
+        System.Diagnostics.Stopwatch? clock = null; // starts on the first frame, after the slow layout one
+        _cardGlide = (_, _) =>
+        {
+            if (NowPlayingPanel.RenderTransform != shift || _hero)
+            {
+                StopCardGlide();
+                return;
+            }
+            clock ??= System.Diagnostics.Stopwatch.StartNew();
+            var p = clock.Elapsed / length;
+            if (p >= 1) StopCardGlide();
+            else Place(ease.Ease(p));
+        };
+        System.Windows.Media.CompositionTarget.Rendering += _cardGlide;
+    }
+
+    /// <summary>Ends a card glide (finished or interrupted) and leaves the card at its real layout.</summary>
+    private void StopCardGlide()
+    {
+        if (_cardGlide is null) return;
+        System.Windows.Media.CompositionTarget.Rendering -= _cardGlide;
+        _cardGlide = null;
+        BigCover.ClearValue(MarginProperty);
+        PanelSpectrum.ClearValue(WidthProperty);
+        PanelSpectrum.ClearValue(HorizontalAlignmentProperty);
+        PanelSpectrum.Margin = _spectrumMargin;
+        if (NowPlayingPanel.RenderTransform == _cardShift)
+            NowPlayingPanel.RenderTransform = System.Windows.Media.Transform.Identity;
+        _cardShift = null;
+        FitNowPlayingPanel();
     }
 
     private static void FadeSlideIn(System.Windows.UIElement element, double fromX, double fromY, bool fade = true,

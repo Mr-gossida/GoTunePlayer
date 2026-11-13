@@ -2,8 +2,8 @@
 
 A Windows desktop music player with a tag/cover/lyrics manager, built with C# / .NET 10 / WPF.
 The product is branded **GoTune Player** (short form **GoTune** where space is tight; in the
-wordmark "Go" is drawn in the accent color). Internal names still say TuneSync — see
-"Names that stay TuneSync".
+wordmark "Go" is drawn in the accent color). The exe is `GoTune.exe` (+ `GoTune.Core.dll`); source
+folders, projects and namespaces still say TuneSync — see "Names that stay TuneSync".
 
 ## Working with the user
 
@@ -35,12 +35,13 @@ Before building the debug app, kill only leftover debug processes (`*\bin\Debug\
 
 ## Deploying (the user's installed copy)
 
-- Install folder: `%LocalAppData%\Programs\TuneSync` (exe `TuneSync.App.exe`).
-- **Deploy only when the installed app is not running.** Check for processes whose path is under `*Programs\TuneSync*`. If it's running, don't publish — tell the user and ask them to close it.
+- Install folder: `%LocalAppData%\Programs\GoTune` (exe `GoTune.exe`). Until the user confirms the old
+  `%LocalAppData%\Programs\TuneSync` (exe `TuneSync.App.exe`) can go, it may still exist; delete it only on their OK.
+- **Deploy only when the installed app is not running.** Check for processes whose path is under `*Programs\GoTune*` (or the old `*Programs\TuneSync*`). If it's running, don't publish — tell the user and ask them to close it.
 - **Never close, kill or relaunch the user's app yourself** (exception: the user explicitly asks, e.g. "배포하고 시스템 종료해주세요" — then close it gracefully with CloseMainWindow, never Kill).
 - Publish:
   ```bash
-  dotnet publish src/TuneSync.App/TuneSync.App.csproj -c Release -r win-x64 --self-contained false -o "$LOCALAPPDATA/Programs/TuneSync"
+  dotnet publish src/TuneSync.App/TuneSync.App.csproj -c Release -r win-x64 --self-contained false -o "$LOCALAPPDATA/Programs/GoTune"
   ```
 - Verify the deploy by the exe/dll modified time **read with Store Python** (`python -c ...`): bash/PowerShell/debug-app processes see a sandboxed copy of `%LocalAppData%`, Python sees the real one.
 
@@ -69,7 +70,7 @@ Before building the debug app, kill only leftover debug processes (`*\bin\Debug\
   It reads `TUNESYNC_LYRTEST` (output folder), drives view models / plays songs (volume 0), logs to `result.txt`,
   snapshots with `RenderTargetBitmap` (draw the element through a `VisualBrush` over a background rectangle),
   then writes `done.txt`. A PowerShell script backs up `%LocalAppData%\TuneSync\settings.json`, writes test
-  settings, starts `bin\Debug\...\TuneSync.App.exe`, waits for `done.txt`, kills that process and restores the settings.
+  settings, starts `bin\Debug\...\GoTune.exe`, waits for `done.txt`, kills that process and restores the settings.
 - **Always remove the hook afterwards**: delete `DebugLyricsTest.cs` and `git checkout -- src/TuneSync.App/App.xaml.cs`.
   Also remove any `TEMP-TRACE` lines.
 - Off-screen windows capture black with PrintWindow; `RenderTargetBitmap` can't render ps_3_0 effects (the aurora).
@@ -97,10 +98,11 @@ Before building the debug app, kill only leftover debug processes (`*\bin\Debug\
 
 ## Names that stay TuneSync (on purpose)
 
-Repo/project/namespace names, `TuneSync.App.exe`, the install folder, the data folder `%LocalAppData%\TuneSync`
+Repo/project/namespace names, the data folder `%LocalAppData%\TuneSync`
 (settings, library index, cache, Whisper models), Credential Manager targets `TuneSync:{id}`, and the default merge
 quarantine folder `_TuneSync_Quarantine`. Renaming them would lose settings/passwords or break shortcuts; only do it
-as a deliberate migration the user asks for.
+as a deliberate migration the user asks for. (The exe/dll names and install folder were
+migrated to GoTune on 2026-11-13; a debug build runs as single instance "GoTunePlayer.Debug", so it can run beside the installed app.)
 
 ## Choosing model and effort
 
