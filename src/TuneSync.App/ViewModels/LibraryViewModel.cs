@@ -33,6 +33,7 @@ public sealed partial class LibraryViewModel : ObservableObject
         new(PlaylistSortKey.Title, "제목"),
         new(PlaylistSortKey.Album, "앨범"),
         new(PlaylistSortKey.Duration, "길이"),
+        new(PlaylistSortKey.Custom, "직접 정렬 (끌어서 옮긴 순서)"),
     ];
 
     public IReadOnlyList<Choice<PlaylistGroupKey>> PlaylistGroupOptions { get; } =
@@ -305,11 +306,45 @@ public sealed partial class LibraryViewModel : ObservableObject
     partial void OnPlaylistSortDescendingChanged(bool value) => SavePlaylistOrder();
     partial void OnPlaylistGroupChanged(PlaylistGroupKey value) => SavePlaylistOrder();
 
+    private bool _holdOrder;
+    private Dictionary<string, int> _customRank = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Drag and drop in the play list: the songs go right before <paramref name="before"/>
+    /// (or to the end). The list switches to 직접 정렬 - no groups, the dragged order saved - and
+    /// says so the first time.</summary>
+    public void MoveInQueue(IReadOnlyList<LibraryFileViewModel> moving, LibraryFileViewModel? before)
+    {
+        if (moving.Count == 0) return;
+        var order = PlaylistView.Cast<LibraryFileViewModel>().ToList();
+        var leaving = moving.ToHashSet();
+        var rest = order.Where(f => !leaving.Contains(f)).ToList();
+        var at = before is null ? rest.Count : rest.IndexOf(before);
+        rest.InsertRange(at < 0 ? rest.Count : at, moving);
+        _settings.CustomOrder = [.. rest.Select(f => f.Path)];
+
+        var switched = PlaylistSort != PlaylistSortKey.Custom || PlaylistGroup != PlaylistGroupKey.None || PlaylistSortDescending;
+        _holdOrder = true;
+        try
+        {
+            PlaylistSort = PlaylistSortKey.Custom;
+            PlaylistGroup = PlaylistGroupKey.None;
+            PlaylistSortDescending = false;
+        }
+        finally
+        {
+            _holdOrder = false;
+        }
+        SavePlaylistOrder();
+        if (switched)
+            Toast.Info("직접 정렬로 바꿨습니다", "끌어서 옮긴 순서대로 재생하고, 이 순서는 저장됩니다. 정렬 메뉴에서 언제든 다른 정렬로 돌아갈 수 있습니다.");
+    }
+
     [RelayCommand]
     private void TogglePlaylistSortDirection() => PlaylistSortDescending = !PlaylistSortDescending;
 
     private void SavePlaylistOrder()
     {
+        if (_holdOrder) return;
         _settings.PlaylistSort = PlaylistSort;
         _settings.PlaylistSortDescending = PlaylistSortDescending;
         _settings.PlaylistGroup = PlaylistGroup;
@@ -336,8 +371,15 @@ public sealed partial class LibraryViewModel : ObservableObject
             PlaylistSortKey.Title => (a, b) => text.Compare(a.DisplayTitle, b.DisplayTitle),
             PlaylistSortKey.Album => (a, b) => text.Compare(a.Album, b.Album),
             PlaylistSortKey.Duration => (a, b) => a.Duration.CompareTo(b.Duration),
+            PlaylistSortKey.Custom => (a, b) => Rank(a).CompareTo(Rank(b)),
             _ => (a, b) => text.Compare(a.FileName, b.FileName),
         };
+        if (PlaylistSort == PlaylistSortKey.Custom)
+        {
+            // Songs not arranged yet (added later) come after the arranged ones, by file name.
+            _customRank = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            for (var i = 0; i < _settings.CustomOrder.Count; i++) _customRank.TryAdd(_settings.CustomOrder[i], i);
+        }
 
         // Groups aren't WPF groups: grouping switched off the list's virtualization (a row was
         // built for every song on every refresh - seconds for a big library). The sort keeps each
@@ -353,6 +395,8 @@ public sealed partial class LibraryViewModel : ObservableObject
         }
         ScheduleGroupHeaders();
     }
+
+    private int Rank(LibraryFileViewModel file) => _customRank.TryGetValue(file.Path, out var rank) ? rank : int.MaxValue;
 
     private Func<LibraryFileViewModel, string>? _groupKey;
     private bool _groupHeadersPending;

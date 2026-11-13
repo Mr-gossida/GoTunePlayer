@@ -35,6 +35,7 @@
         <!-- Queue rows: flat, rounded hover/selection instead of the default accent block. -->
         <Style x:Key="QueueItemStyle" TargetType="ListBoxItem">
             <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Setter Property="Padding" Value="6,5"/>
             <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
             <Setter Property="Template">
                 <Setter.Value>
@@ -59,7 +60,7 @@
                                 </TextBlock>
                             </Grid>
                             <!-- Right margin: room for the overlay scrollbar, so it never covers the durations. -->
-                            <Border x:Name="Bd" Background="Transparent" CornerRadius="6" Padding="6,5" Margin="0,1,12,1">
+                            <Border x:Name="Bd" Background="Transparent" CornerRadius="6" Padding="{TemplateBinding Padding}" Margin="0,1,12,1">
                                 <ContentPresenter/>
                             </Border>
                         </StackPanel>
@@ -78,6 +79,119 @@
                 </Setter.Value>
             </Setter>
         </Style>
+
+        <!-- Dense rows (촘촘한 목록): one line per song, no cover. -->
+        <Style x:Key="QueueCompactItemStyle" TargetType="ListBoxItem" BasedOn="{StaticResource QueueItemStyle}">
+            <Setter Property="Padding" Value="8,3"/>
+        </Style>
+        <DataTemplate x:Key="QueueCompactTemplate">
+            <Grid ToolTip="{Binding FileName}">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="18"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <Viewbox x:Name="Eq" Width="12" Height="11" HorizontalAlignment="Left" Visibility="Collapsed">
+                    <views:EqualizerBars BarBrush="{DynamicResource PlayerAccentBrush}"
+                                         IsActive="{Binding DataContext.Playback.IsPlaying, RelativeSource={RelativeSource AncestorType=Page}}"/>
+                </Viewbox>
+                <TextBlock x:Name="Line" Grid.Column="1" FontSize="13" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
+                           Foreground="{DynamicResource TextFillColorPrimaryBrush}">
+                    <Run Text="{Binding DisplayTitle, Mode=OneWay}"/><Run Text="  "/><Run Text="{Binding Artist, Mode=OneWay}" FontSize="12"
+                         Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
+                </TextBlock>
+                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Margin="8,0,2,0">
+                    <Border CornerRadius="7" Padding="5,0" Margin="0,0,6,0" Background="{DynamicResource PlayerAccentBrush}" ToolTip="다음에 재생할 곡"
+                            Visibility="{Binding IsUpNext, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}">
+                        <TextBlock FontSize="10" FontWeight="SemiBold" Text="{Binding UpNextOrder}" Foreground="{DynamicResource PlayerOnAccentBrush}"/>
+                    </Border>
+                    <TextBlock Text="{Binding DurationText}" FontSize="11" Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
+                </StackPanel>
+            </Grid>
+            <DataTemplate.Triggers>
+                <DataTrigger Binding="{Binding IsNowPlaying}" Value="True">
+                    <Setter TargetName="Eq" Property="Visibility" Value="Visible"/>
+                    <Setter TargetName="Line" Property="Foreground" Value="{DynamicResource PlayerAccentBrush}"/>
+                    <Setter TargetName="Line" Property="FontWeight" Value="SemiBold"/>
+                </DataTrigger>
+            </DataTemplate.Triggers>
+        </DataTemplate>
+
+        <!-- Cover grid (그리드): square covers with the song over a dark fade, like a music app's
+             album wall. Sized by VirtualizingTilePanel. -->
+        <Style x:Key="QueueTileStyle" TargetType="ListBoxItem">
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ListBoxItem">
+                        <Border x:Name="Frame" Margin="3,3,3,3" CornerRadius="9" BorderThickness="2" BorderBrush="Transparent" Padding="1">
+                            <ContentPresenter/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Frame" Property="BorderBrush" Value="{DynamicResource PlayerHoverBrush}"/>
+                            </Trigger>
+                            <DataTrigger Binding="{Binding IsNowPlaying}" Value="True">
+                                <Setter TargetName="Frame" Property="BorderBrush" Value="{DynamicResource PlayerAccentBrush}"/>
+                            </DataTrigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="Frame" Property="BorderBrush" Value="{DynamicResource TextFillColorSecondaryBrush}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <DataTemplate x:Key="QueueTileTemplate">
+            <Grid ToolTip="{Binding FileName}" ClipToBounds="True">
+                <Border CornerRadius="7" Background="{DynamicResource PlayerHoverBrush}">
+                    <ui:SymbolIcon Symbol="MusicNote224" FontSize="30" Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
+                </Border>
+                <Border CornerRadius="7">
+                    <Border.Background>
+                        <ImageBrush ImageSource="{Binding CoverThumbnail}" Stretch="UniformToFill"/>
+                    </Border.Background>
+                </Border>
+                <Border CornerRadius="0,0,7,7" VerticalAlignment="Bottom" Padding="8,22,8,7">
+                    <Border.Background>
+                        <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                            <GradientStop Color="#00000000" Offset="0"/>
+                            <GradientStop Color="#99000000" Offset="0.45"/>
+                            <GradientStop Color="#E6000000" Offset="1"/>
+                        </LinearGradientBrush>
+                    </Border.Background>
+                    <StackPanel>
+                        <TextBlock x:Name="TileTitle" Text="{Binding DisplayTitle}" FontSize="12" FontWeight="SemiBold" Foreground="White"
+                                   TextTrimming="CharacterEllipsis"/>
+                        <TextBlock Text="{Binding Artist}" FontSize="11" Margin="0,1,0,0" Foreground="#CCFFFFFF" TextTrimming="CharacterEllipsis"/>
+                    </StackPanel>
+                </Border>
+                <Border x:Name="PlayingBadge" Width="28" Height="24" CornerRadius="5" Padding="5,4" Margin="6"
+                        HorizontalAlignment="Right" VerticalAlignment="Top" Background="#B3000000" Visibility="Collapsed">
+                    <views:EqualizerBars BarBrush="{DynamicResource PlayerAccentBrush}"
+                                         IsActive="{Binding DataContext.Playback.IsPlaying, RelativeSource={RelativeSource AncestorType=Page}}"/>
+                </Border>
+                <Border CornerRadius="8" Padding="6,1" Margin="6" HorizontalAlignment="Left" VerticalAlignment="Top"
+                        Background="{DynamicResource PlayerAccentBrush}" ToolTip="다음에 재생할 곡"
+                        Visibility="{Binding IsUpNext, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}">
+                    <TextBlock FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource PlayerOnAccentBrush}">
+                        <Run Text="다음"/><Run Text=" "/><Run Text="{Binding UpNextOrder, Mode=OneWay}"/>
+                    </TextBlock>
+                </Border>
+                <Border x:Name="HoverPlay" Width="42" Height="42" CornerRadius="21" Background="#B3000000" Visibility="Collapsed"
+                        Cursor="Hand" ToolTip="재생" MouseLeftButtonUp="PlayItem_Click">
+                    <ui:SymbolIcon Symbol="Play24" Filled="True" FontSize="20" Foreground="White"/>
+                </Border>
+            </Grid>
+            <DataTemplate.Triggers>
+                <DataTrigger Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType=ListBoxItem}}" Value="True">
+                    <Setter TargetName="HoverPlay" Property="Visibility" Value="Visible"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding IsNowPlaying}" Value="True">
+                    <Setter TargetName="PlayingBadge" Property="Visibility" Value="Visible"/>
+                </DataTrigger>
+            </DataTemplate.Triggers>
+        </DataTemplate>
     </Page.Resources>
 
     <Grid>
@@ -549,6 +663,32 @@
             </StackPanel>
         </StackPanel>
 
+        <!-- ========== Queue panel's left edge: drag to resize (snaps to the standard width) ========== -->
+        <Thumb x:Name="QueueResizer" Grid.Column="1" Width="10" Margin="-5,0,0,0" HorizontalAlignment="Left" Panel.ZIndex="10"
+               Cursor="SizeWE" ToolTip="끌어서 너비 조절 · 두 번 클릭하면 기본 너비"
+               DragStarted="QueueResizer_DragStarted" DragDelta="QueueResizer_DragDelta" DragCompleted="QueueResizer_DragCompleted"
+               MouseDoubleClick="QueueResizer_MouseDoubleClick"
+               Visibility="{Binding Playback.IsQueueVisible, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}">
+            <Thumb.Template>
+                <ControlTemplate TargetType="Thumb">
+                    <Grid Background="Transparent">
+                        <Border x:Name="Grip" Width="3" CornerRadius="1.5" HorizontalAlignment="Center" Background="Transparent"/>
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Grip" Property="Background" Value="{DynamicResource PlayerHoverBrush}"/>
+                        </Trigger>
+                        <Trigger Property="IsDragging" Value="True">
+                            <Setter TargetName="Grip" Property="Background" Value="{DynamicResource TextFillColorTertiaryBrush}"/>
+                        </Trigger>
+                        <Trigger Property="Tag" Value="snapped">
+                            <Setter TargetName="Grip" Property="Background" Value="{DynamicResource PlayerAccentBrush}"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Thumb.Template>
+        </Thumb>
+
         <!-- ========== Queue panel (its sort/grouping also decides playback order) ========== -->
         <Border x:Name="QueuePanel" Grid.Column="1" Width="320" Background="{DynamicResource PlayerPanelBrush}" Padding="12,14,12,10"
                 Visibility="{Binding Playback.IsQueueVisible, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}">
@@ -574,6 +714,9 @@
                         <ui:Button x:Name="GroupButton" Style="{StaticResource PlayerIconButtonStyle}" Width="32" Height="32" FontSize="16"
                                    Icon="{ui:SymbolIcon GroupList24}" Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                    ToolTip="그룹" Click="GroupButton_Click"/>
+                        <ui:Button x:Name="ViewButton" Style="{StaticResource PlayerIconButtonStyle}" Width="32" Height="32" FontSize="16"
+                                   Icon="{ui:SymbolIcon AppsList24}" Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                   ToolTip="보기 방식 (기본 / 촘촘한 목록 / 그리드)" Click="ViewButton_Click"/>
                     </StackPanel>
                 </Grid>
 
@@ -590,7 +733,11 @@
                 <ListBox Grid.Row="2" x:Name="PlaylistBox" ItemsSource="{Binding PlaylistView}"
                          ItemContainerStyle="{StaticResource QueueItemStyle}" SelectionMode="Extended"
                          SelectionChanged="PlaylistBox_SelectionChanged"
-                         AllowDrop="True" DragOver="PlaylistBox_DragOver" Drop="PlaylistBox_Drop"
+                         AllowDrop="True" DragOver="PlaylistBox_DragOver" Drop="PlaylistBox_Drop" DragLeave="PlaylistBox_DragLeave"
+                         PreviewMouseLeftButtonDown="PlaylistBox_PreviewMouseLeftButtonDown"
+                         PreviewMouseLeftButtonUp="PlaylistBox_PreviewMouseLeftButtonUp"
+                         PreviewMouseMove="PlaylistBox_PreviewMouseMove"
+                         PreviewMouseWheel="PlaylistBox_PreviewMouseWheel"
                          BorderThickness="0" Background="Transparent" FocusVisualStyle="{x:Null}"
                          ScrollViewer.VerticalScrollBarVisibility="Auto"
                          ScrollViewer.HorizontalScrollBarVisibility="Disabled"
@@ -661,6 +808,11 @@
                         </DataTemplate>
                     </ListBox.ItemTemplate>
                 </ListBox>
+
+                <!-- Where dragged songs will land. -->
+                <Canvas Grid.Row="2" IsHitTestVisible="False" ClipToBounds="True">
+                    <Border x:Name="DropLine" CornerRadius="1.5" Background="{DynamicResource PlayerAccentBrush}" Visibility="Collapsed"/>
+                </Canvas>
 
                 <TextBlock Grid.Row="2" TextWrapping="Wrap" TextAlignment="Center" Margin="12,32,12,0" FontSize="13"
                            Foreground="{DynamicResource TextFillColorTertiaryBrush}" VerticalAlignment="Top"

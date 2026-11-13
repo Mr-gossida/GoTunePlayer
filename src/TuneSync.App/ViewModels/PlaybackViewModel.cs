@@ -1069,6 +1069,45 @@ public sealed partial class PlaybackViewModel : ObservableObject, IDisposable
     /// updates (they come only every 200 ms) instead of stepping.</summary>
     public TimeSpan IntroLength { get; private set; }
 
+    // ---- how the play list looks (saved) ----
+
+    public QueueViewMode QueueViewMode
+    {
+        get => _settings.QueueViewMode;
+        set
+        {
+            if (_settings.QueueViewMode == value) return;
+            _settings.QueueViewMode = value;
+            AppSettingsStore.Save(_settings);
+            OnPropertyChanged();
+        }
+    }
+
+    public double QueueTileSize
+    {
+        get => _settings.QueueTileSize;
+        set
+        {
+            value = Math.Clamp(value, 96, 200);
+            if (Math.Abs(_settings.QueueTileSize - value) < 0.5) return;
+            _settings.QueueTileSize = value;
+            AppSettingsStore.Save(_settings);
+            OnPropertyChanged();
+        }
+    }
+
+    /// <summary>The play list panel's width; saved when a resize ends (not on every pixel).</summary>
+    public double QueueWidth
+    {
+        get => _settings.QueueWidth;
+        set
+        {
+            if (Math.Abs(_settings.QueueWidth - value) < 0.5) return;
+            _settings.QueueWidth = value;
+            AppSettingsStore.Save(_settings);
+        }
+    }
+
     /// <summary>설정 › 인트로 진행 게이지: whether the intro shows its progress bar.</summary>
     public bool ShowIntroGauge
     {

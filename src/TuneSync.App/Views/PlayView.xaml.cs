@@ -1,7 +1,9 @@
 ﻿using System.ComponentModel;
+using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using TuneSync.App.ViewModels;
+using TuneSync.Core.Models;
 
 namespace TuneSync.App.Views;
 
@@ -38,9 +40,17 @@ public partial class PlayView : Page
         };
         SizeChanged += (_, _) =>
         {
+            ClampQueueWidth();
             ApplyResponsiveLayout(resizing: true);
             FitNowPlayingPanel();
         };
+
+        // The play list's look: the row template/style/panel in the XAML are the standard view.
+        _rowTemplate = PlaylistBox.ItemTemplate;
+        _rowStyle = PlaylistBox.ItemContainerStyle;
+        _rowPanel = PlaylistBox.ItemsPanel;
+        QueuePanel.Width = _viewModel.Playback.QueueWidth;
+        ApplyQueueView();
         Loaded += (_, _) =>
         {
             SyncPlaylistToCurrentTrack();
@@ -626,6 +636,278 @@ public partial class PlayView : Page
         e.Handled = true;
     }
 
+    // ---- view modes: standard rows, dense rows, cover grid ----
+
+    private readonly DataTemplate _rowTemplate;
+    private readonly Style _rowStyle;
+    private readonly ItemsPanelTemplate _rowPanel;
+    private ItemsPanelTemplate? _tilePanelTemplate;
+    private VirtualizingTilePanel? _tilePanel;
+
+    private void ApplyQueueView()
+    {
+        var mode = _viewModel.Playback.QueueViewMode;
+        var keep = PlaylistBox.SelectedItem;
+        _tilePanel = null;
+        // Rows leave room for the overlay scrollbar themselves; tiles need it here.
+        PlaylistBox.Padding = mode == QueueViewMode.Grid ? new Thickness(0, 0, 12, 0) : new Thickness(0);
+        switch (mode)
+        {
+            case QueueViewMode.Grid:
+                _tilePanelTemplate ??= new ItemsPanelTemplate(new FrameworkElementFactory(typeof(VirtualizingTilePanel)));
+                PlaylistBox.ItemsPanel = _tilePanelTemplate;
+                PlaylistBox.ItemContainerStyle = (Style)FindResource("QueueTileStyle");
+                PlaylistBox.ItemTemplate = (DataTemplate)FindResource("QueueTileTemplate");
+                Dispatcher.BeginInvoke(() =>
+                {
+                    _tilePanel = FindDescendant<VirtualizingTilePanel>(PlaylistBox);
+                    if (_tilePanel is not null) _tilePanel.TileSize = _viewModel.Playback.QueueTileSize;
+                }, System.Windows.Threading.DispatcherPriority.Loaded);
+                break;
+            case QueueViewMode.Compact:
+                PlaylistBox.ItemsPanel = _rowPanel;
+                PlaylistBox.ItemContainerStyle = (Style)FindResource("QueueCompactItemStyle");
+                PlaylistBox.ItemTemplate = (DataTemplate)FindResource("QueueCompactTemplate");
+                break;
+            default:
+                PlaylistBox.ItemsPanel = _rowPanel;
+                PlaylistBox.ItemContainerStyle = _rowStyle;
+                PlaylistBox.ItemTemplate = _rowTemplate;
+                break;
+        }
+        ViewButton.Icon = new Wpf.Ui.Controls.SymbolIcon
+        {
+            Symbol = mode switch
+            {
+                QueueViewMode.Grid => Wpf.Ui.Controls.SymbolRegular.Grid24,
+                QueueViewMode.Compact => Wpf.Ui.Controls.SymbolRegular.TextBulletListLtr24,
+                _ => Wpf.Ui.Controls.SymbolRegular.AppsList24,
+            },
+        };
+        if (keep is not null)
+            Dispatcher.BeginInvoke(() => PlaylistBox.ScrollIntoView(keep), System.Windows.Threading.DispatcherPriority.Loaded);
+    }
+
+    private void ViewButton_Click(object sender, System.Windows.RoutedEventArgs e)
+    {
+        var playback = _viewModel.Playback;
+        var menu = new ContextMenu();
+        void Option(string label, QueueViewMode mode, Wpf.Ui.Controls.SymbolRegular icon)
+        {
+            var item = new MenuItem
+            {
+                Header = label,
+                IsCheckable = true,
+                IsChecked = playback.QueueViewMode == mode,
+                Icon = new Wpf.Ui.Controls.SymbolIcon { Symbol = icon },
+            };
+            item.Click += (_, _) => playback.QueueViewMode = mode;
+            menu.Items.Add(item);
+        }
+        Option("기본", QueueViewMode.Standard, Wpf.Ui.Controls.SymbolRegular.AppsList24);
+        Option("촘촘한 목록", QueueViewMode.Compact, Wpf.Ui.Controls.SymbolRegular.TextBulletListLtr24);
+        Option("그리드", QueueViewMode.Grid, Wpf.Ui.Controls.SymbolRegular.Grid24);
+        if (playback.QueueViewMode == QueueViewMode.Grid)
+        {
+            menu.Items.Add(new Separator());
+            var slider = new Slider
+            {
+                Minimum = 96,
+                Maximum = 200,
+                Value = playback.QueueTileSize,
+                Width = 150,
+                SmallChange = 4,
+                LargeChange = 16,
+                ToolTip = "Ctrl + 마우스 휠로도 바꿀 수 있습니다",
+            };
+            slider.ValueChanged += (_, args) => playback.QueueTileSize = args.NewValue;
+            var size = new StackPanel();
+            size.Children.Add(new TextBlock { Text = "타일 크기", FontSize = 12, Margin = new Thickness(0, 0, 0, 4) });
+            size.Children.Add(slider);
+            menu.Items.Add(new MenuItem { Header = size, StaysOpenOnClick = true });
+        }
+        OpenMenu(menu, (System.Windows.UIElement)sender);
+    }
+
+    /// <summary>Ctrl + wheel over the grid: bigger or smaller tiles.</summary>
+    private void PlaylistBox_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
+    {
+        if (Keyboard.Modifiers != ModifierKeys.Control || _viewModel.Playback.QueueViewMode != QueueViewMode.Grid) return;
+        _viewModel.Playback.QueueTileSize += e.Delta > 0 ? 8 : -8;
+        e.Handled = true;
+    }
+
+    private static T? FindDescendant<T>(System.Windows.DependencyObject root) where T : System.Windows.DependencyObject
+    {
+        for (var i = 0; i < System.Windows.Media.VisualTreeHelper.GetChildrenCount(root); i++)
+        {
+            var child = System.Windows.Media.VisualTreeHelper.GetChild(root, i);
+            if (child is T match) return match;
+            if (FindDescendant<T>(child) is { } deeper) return deeper;
+        }
+        return null;
+    }
+
+    // ---- dragging songs to a new place ----
+
+    private const string QueueSongsFormat = "TuneSync.QueueSongs";
+    private Point _dragStart;
+    private LibraryFileViewModel? _dragSong;
+    private LibraryFileViewModel? _clickToSelect;
+
+    private LibraryFileViewModel? SongAt(object? source) =>
+        FindAncestor<ListBoxItem>(source as System.Windows.DependencyObject)?.DataContext as LibraryFileViewModel;
+
+    private void PlaylistBox_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        _dragStart = e.GetPosition(PlaylistBox);
+        _dragSong = SongAt(e.OriginalSource);
+        _clickToSelect = null;
+        // Pressing on one of several selected songs: keep the selection (it's probably about to be
+        // dragged); a plain click still selects just that song when the button comes up.
+        if (_dragSong is not null && e.ClickCount == 1 && Keyboard.Modifiers == ModifierKeys.None
+            && PlaylistBox.SelectedItems.Count > 1 && PlaylistBox.SelectedItems.Contains(_dragSong))
+        {
+            _clickToSelect = _dragSong;
+            e.Handled = true;
+            PlaylistBox.Focus();
+        }
+    }
+
+    private void PlaylistBox_PreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        if (_clickToSelect is { } song) PlaylistBox.SelectedItem = song;
+        _clickToSelect = null;
+        _dragSong = null;
+    }
+
+    private void PlaylistBox_PreviewMouseMove(object sender, MouseEventArgs e)
+    {
+        if (_dragSong is not { } grabbed || e.LeftButton != MouseButtonState.Pressed) return;
+        var moved = e.GetPosition(PlaylistBox) - _dragStart;
+        if (Math.Abs(moved.X) < SystemParameters.MinimumHorizontalDragDistance * 2
+            && Math.Abs(moved.Y) < SystemParameters.MinimumVerticalDragDistance * 2) return;
+
+        var order = PlaylistBox.Items;
+        var songs = PlaylistBox.SelectedItems.Contains(grabbed)
+            ? SelectedSongs().OrderBy(s => order.IndexOf(s)).ToList()
+            : [grabbed];
+        _dragSong = null;
+        _clickToSelect = null;
+        try
+        {
+            System.Windows.DragDrop.DoDragDrop(PlaylistBox, new System.Windows.DataObject(QueueSongsFormat, songs), System.Windows.DragDropEffects.Move);
+        }
+        finally
+        {
+            HideDropTarget();
+        }
+    }
+
+    private void PlaylistBox_DragLeave(object sender, System.Windows.DragEventArgs e) => HideDropTarget();
+
+    /// <summary>Where a drop at <paramref name="point"/> puts the songs: before which song (null:
+    /// at the end), and where to draw the line showing it.</summary>
+    private (LibraryFileViewModel? Before, Rect Line) DropTarget(Point point)
+    {
+        var grid = _viewModel.Playback.QueueViewMode == QueueViewMode.Grid;
+        var items = PlaylistBox.Items;
+        var hit = PlaylistBox.InputHitTest(point) as System.Windows.DependencyObject;
+        var row = FindAncestor<ListBoxItem>(hit);
+        if (row?.DataContext is not LibraryFileViewModel song)
+        {
+            // Below the last song (or in a gap): the end of the list.
+            var last = items.Count > 0 ? PlaylistBox.ItemContainerGenerator.ContainerFromIndex(items.Count - 1) as ListBoxItem : null;
+            if (last is null) return (null, Rect.Empty);
+            var b = last.TransformToAncestor(PlaylistBox).TransformBounds(new Rect(last.RenderSize));
+            return (null, grid ? new Rect(b.Right - 2, b.Top + 6, 3, b.Height - 12) : new Rect(b.Left + 4, b.Bottom - 1.5, b.Width - 20, 3));
+        }
+        var bounds = row.TransformToAncestor(PlaylistBox).TransformBounds(new Rect(row.RenderSize));
+        var index = items.IndexOf(song);
+        var after = grid ? point.X > bounds.Left + bounds.Width / 2 : point.Y > bounds.Top + bounds.Height / 2;
+        var before = after ? (index + 1 < items.Count ? items[index + 1] as LibraryFileViewModel : null) : song;
+        var line = grid
+            ? new Rect((after ? bounds.Right : bounds.Left) - 1.5, bounds.Top + 6, 3, bounds.Height - 12)
+            : new Rect(bounds.Left + 4, (after ? bounds.Bottom : bounds.Top) - 1.5, bounds.Width - 20, 3);
+        return (before, line);
+    }
+
+    private void ShowDropTarget(Point point)
+    {
+        var (_, line) = DropTarget(point);
+        if (line.IsEmpty)
+        {
+            HideDropTarget();
+            return;
+        }
+        Canvas.SetLeft(DropLine, line.Left);
+        Canvas.SetTop(DropLine, line.Top);
+        DropLine.Width = Math.Max(3, line.Width);
+        DropLine.Height = Math.Max(3, line.Height);
+        DropLine.Visibility = System.Windows.Visibility.Visible;
+    }
+
+    private void HideDropTarget() => DropLine.Visibility = System.Windows.Visibility.Collapsed;
+
+    /// <summary>Near the top or bottom edge while dragging: the list scrolls that way.</summary>
+    private void AutoScrollWhileDragging(Point point)
+    {
+        if (FindDescendant<ScrollViewer>(PlaylistBox) is not { } scroller) return;
+        const double edge = 36;
+        if (point.Y < edge) scroller.ScrollToVerticalOffset(scroller.VerticalOffset - (edge - point.Y) / 2 - 4);
+        else if (point.Y > PlaylistBox.ActualHeight - edge)
+            scroller.ScrollToVerticalOffset(scroller.VerticalOffset + (point.Y - (PlaylistBox.ActualHeight - edge)) / 2 + 4);
+    }
+
+    // ---- the play list's width: drag its edge; it snaps to the standard width ----
+
+    private const double QueueStandardWidth = 320;
+    private const double QueueMinWidth = 260;
+    private const double QueueSnap = 16;
+
+    /// <summary>As wide as the window allows while the player keeps enough room for its cover
+    /// and controls.</summary>
+    private double QueueMaxWidth => Math.Max(QueueMinWidth, Math.Min(760, ActualWidth - 460));
+
+    private void QueueResizer_DragStarted(object sender, System.Windows.Controls.Primitives.DragStartedEventArgs e) { }
+
+    private void QueueResizer_DragDelta(object sender, System.Windows.Controls.Primitives.DragDeltaEventArgs e)
+    {
+        // From the pointer, not the thumb's own deltas: the thumb moves with the edge it resizes.
+        var wanted = ActualWidth - Mouse.GetPosition(this).X;
+        var width = Math.Clamp(wanted, QueueMinWidth, QueueMaxWidth);
+        var snapped = Math.Abs(width - QueueStandardWidth) <= QueueSnap && QueueStandardWidth <= QueueMaxWidth;
+        if (snapped) width = QueueStandardWidth;
+        QueueResizer.Tag = snapped ? "snapped" : null;
+        if (Math.Abs(QueuePanel.Width - width) < 0.5) return;
+        QueuePanel.Width = width;
+        ApplyResponsiveLayout(resizing: true);
+    }
+
+    private void QueueResizer_DragCompleted(object sender, System.Windows.Controls.Primitives.DragCompletedEventArgs e)
+    {
+        QueueResizer.Tag = null;
+        _viewModel.Playback.QueueWidth = QueuePanel.Width;
+        ApplyResponsiveLayout();
+        FitNowPlayingPanel();
+    }
+
+    private void QueueResizer_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+    {
+        QueuePanel.Width = Math.Min(QueueStandardWidth, QueueMaxWidth);
+        _viewModel.Playback.QueueWidth = QueuePanel.Width;
+        ApplyResponsiveLayout();
+        FitNowPlayingPanel();
+    }
+
+    /// <summary>A smaller window: the play list gives up width before the player does.</summary>
+    private void ClampQueueWidth()
+    {
+        if (ActualWidth <= 0) return;
+        var wanted = Math.Max(QueueMinWidth, _viewModel.Playback.QueueWidth);
+        QueuePanel.Width = Math.Min(wanted, QueueMaxWidth);
+    }
+
     private List<LibraryFileViewModel> SelectedSongs() => [.. PlaylistBox.SelectedItems.OfType<LibraryFileViewModel>()];
 
     private void PlaylistBox_SelectionChanged(object sender, SelectionChangedEventArgs e) =>
@@ -659,6 +941,14 @@ public partial class PlayView : Page
 
     private void PlaylistBox_DragOver(object sender, System.Windows.DragEventArgs e)
     {
+        if (e.Data.GetDataPresent(QueueSongsFormat))
+        {
+            ShowDropTarget(e.GetPosition(PlaylistBox));
+            AutoScrollWhileDragging(e.GetPosition(PlaylistBox));
+            e.Effects = System.Windows.DragDropEffects.Move;
+            e.Handled = true;
+            return;
+        }
         var ok = DroppedPaths(e).Any(p => System.IO.Directory.Exists(p) || TuneSync.Core.Services.TagService.IsSupported(p));
         e.Effects = ok ? System.Windows.DragDropEffects.Copy : System.Windows.DragDropEffects.None;
         e.Handled = true;
@@ -666,6 +956,23 @@ public partial class PlayView : Page
 
     private async void PlaylistBox_Drop(object sender, System.Windows.DragEventArgs e)
     {
+        if (e.Data.GetData(QueueSongsFormat) is List<LibraryFileViewModel> moving)
+        {
+            var (before, _) = DropTarget(e.GetPosition(PlaylistBox));
+            HideDropTarget();
+            // Dropped onto one of the songs being moved: they go before the next one that stays.
+            if (before is not null && moving.Contains(before))
+            {
+                var items = PlaylistBox.Items.OfType<LibraryFileViewModel>().ToList();
+                before = items.Skip(items.IndexOf(before)).FirstOrDefault(f => !moving.Contains(f));
+            }
+            _viewModel.Library.MoveInQueue(moving, before);
+            PlaylistBox.SelectedItems.Clear();
+            foreach (var song in moving) PlaylistBox.SelectedItems.Add(song);
+            PlaylistBox.ScrollIntoView(moving[0]);
+            e.Handled = true;
+            return;
+        }
         var entries = DroppedPaths(e)
             .Select(p => System.IO.Directory.Exists(p)
                 ? new TuneSync.Core.Models.LibraryFolderEntry { Path = p, IncludeSubfolders = true }
@@ -720,6 +1027,12 @@ public partial class PlayView : Page
             case nameof(PlaybackViewModel.IntroProgress):
             case nameof(PlaybackViewModel.IsPlaying):
                 GlideIntroGauge();
+                break;
+            case nameof(PlaybackViewModel.QueueViewMode):
+                ApplyQueueView();
+                break;
+            case nameof(PlaybackViewModel.QueueTileSize):
+                if (_tilePanel is not null) _tilePanel.TileSize = _viewModel.Playback.QueueTileSize;
                 break;
             case nameof(PlaybackViewModel.ShowIntroGauge):
                 ShowHeroGauge(_viewModel.Playback.IsIntroVisible && _viewModel.Playback.ShowIntroGauge, animate: false);

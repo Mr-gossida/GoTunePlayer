@@ -62,6 +62,18 @@ public sealed class AppSettings
     public PlayerMode PlayerMode { get; set; } = PlayerMode.Full;
 
     public bool ShowQueue { get; set; } = true;
+
+    /// <summary>How the play list is drawn: rows with covers, dense rows, or a cover grid.</summary>
+    public QueueViewMode QueueViewMode { get; set; } = QueueViewMode.Standard;
+
+    /// <summary>Grid view: the wished-for tile width.</summary>
+    public double QueueTileSize { get; set; } = 132;
+
+    /// <summary>Width of the play list panel (dragging its edge).</summary>
+    public double QueueWidth { get; set; } = 320;
+
+    /// <summary>직접 정렬: the play list order arranged by dragging songs, by path.</summary>
+    public List<string> CustomOrder { get; set; } = [];
     public bool ShowLyrics { get; set; } = true;
 
     /// <summary>The small bar showing how far a song's intro has played before the lyrics start.</summary>
@@ -157,6 +169,15 @@ public enum PlaylistSortKey
     Title,
     Album,
     Duration,
+    /// <summary>The order the songs were dragged into.</summary>
+    Custom,
+}
+
+public enum QueueViewMode
+{
+    Standard,
+    Compact,
+    Grid,
 }
 
 public enum PlaylistGroupKey
