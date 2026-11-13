@@ -21,6 +21,7 @@ src/TuneSync.App         WPF app (WPF-UI 4.3, CommunityToolkit.Mvvm, Microsoft.E
 tests/TuneSync.Core.Tests xUnit tests for Core (TestAssets: sample.mp3/flac/m4a, cover_a/b.jpg)
 tools/ShaderCompiler     compiles Effects/Aurora.hlsl -> Aurora.ps (ps_3_0, d3dcompiler_47)
 tools/IconCheck          finds SymbolRegular icon names that don't exist in WPF-UI
+tools/SyncBench          accuracy of 싱크 가사 만들기: re-syncs songs that have LRC lyrics and compares line times
 ```
 
 ## Commands
@@ -29,6 +30,7 @@ tools/IconCheck          finds SymbolRegular icon names that don't exist in WPF-
 dotnet build src/TuneSync.App -v q
 dotnet test tests/TuneSync.Core.Tests
 dotnet run --project tools/IconCheck -- src/TuneSync.App      # after adding any SymbolIcon
+dotnet run --project tools/SyncBench -c Release -- <model.bin> <songs.txt|folder> [count]   # after changing lyrics sync (BENCH_DETAIL=1 for per-line)
 ```
 
 Before building the debug app, kill only leftover debug processes (`*\bin\Debug\*`), never the user's installed app.

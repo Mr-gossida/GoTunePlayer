@@ -188,12 +188,16 @@ public static class LyricsAligner
         // Weight of a line = its length plus a breath, so short lines still take some time.
         double Weight(int i) => Math.Max(lengths[i], 2) * charTime + 1.2;
 
+        // The singing usually stops a little before the song does.
+        var singingEnds = duration > 0 ? duration - Math.Min(12, duration * 0.06) : 0;
+
         if (anchors.Count == 0)
         {
-            // Nothing heard: spread everything over the song after a short intro.
+            // Nothing heard: spread everything over the song after a short intro - slow songs
+            // get more time per line, not just the usual pace (that bunched everything up early).
             var start = Math.Min(10, duration * 0.08);
             var total = Enumerable.Range(0, lines.Count).Sum(Weight);
-            var scale = total > 0 && duration > start ? Math.Min(1, (duration - start) * 0.92 / total) : 1;
+            var scale = total > 0 && singingEnds > start ? Math.Clamp((singingEnds - start) / total, 0.5, 2.5) : 1;
             var t = start;
             for (var i = 0; i < lines.Count; i++) { result[i] = t; t += Weight(i) * scale; }
         }
@@ -213,9 +217,20 @@ public static class LyricsAligner
                 var t = result[from];
                 for (var i = from + 1; i < to; i++) { t += span * weights[i - from - 1] / sum; result[i] = t; }
             }
-            // after the last anchor
-            for (var i = anchors[^1] + 1; i < lines.Count; i++)
-                result[i] = duration > 0 ? Math.Min(result[i - 1] + Weight(i - 1), Math.Max(result[i - 1] + 0.5, duration - 1)) : result[i - 1] + Weight(i - 1);
+            // after the last anchor: over what's left of the singing, at a pace between half
+            // and twice the usual (a slow song's last verse isn't sung at the usual pace)
+            var lastAnchor = anchors[^1];
+            if (lastAnchor + 1 < lines.Count)
+            {
+                var needed = Enumerable.Range(lastAnchor, lines.Count - 1 - lastAnchor).Sum(Weight);
+                var room = singingEnds - result[lastAnchor] - Weight(lines.Count - 1);
+                var scale = duration > 0 && needed > 0 && room > 0 ? Math.Clamp(room / needed, 0.5, 2.0) : 1;
+                for (var i = lastAnchor + 1; i < lines.Count; i++)
+                {
+                    result[i] = result[i - 1] + Weight(i - 1) * scale;
+                    if (duration > 0) result[i] = Math.Min(result[i], Math.Max(result[i - 1] + 0.5, duration - 1));
+                }
+            }
         }
 
         return [.. lines.Select((text, i) => new AlignedLine(text, TimeSpan.FromSeconds(Math.Max(0, result[i])), confident[i]))];

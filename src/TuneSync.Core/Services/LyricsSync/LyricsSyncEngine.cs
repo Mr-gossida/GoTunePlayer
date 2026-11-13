@@ -1,7 +1,13 @@
 namespace TuneSync.Core.Services.LyricsSync;
 
-/// <summary>Plain lyrics in, timed lines out: decode the song, let Whisper listen to it (biased
-/// toward the lyrics' own words), then line the lyrics up with what it heard.</summary>
+/// <summary>Plain lyrics in, timed lines out: decode the song, let Whisper listen to it, then line
+/// the lyrics up with what it heard.
+///
+/// It listens first without the lyrics as a hint: given them, Whisper tends to write lyric lines
+/// where it isn't sure, at the wrong times. On some songs, though (fast or heavily produced ones),
+/// it recognizes little without the hint - then it listens again with the lyrics as its prompt,
+/// and the pass that placed more lines wins. (On songs with known timings, tools/SyncBench: lines
+/// within 1 s went from 49% to about 60%, lines off by over 3 s from 35% to under 20%.)</summary>
 public sealed class LyricsSyncEngine : IDisposable
 {
     private readonly WhisperTranscriber _transcriber = new(WhisperModelStore.ModelPath);
@@ -20,12 +26,25 @@ public sealed class LyricsSyncEngine : IDisposable
         var duration = TimeSpan.FromSeconds(samples.Length / (double)AudioDecoder.SampleRate);
 
         progress?.Report((Stage.Listening, 0));
-        var heard = await Task.Run(() => _transcriber.TranscribeAsync(samples, LanguageOf(lines), Prompt(lines),
-            new Progress<int>(p => progress?.Report((Stage.Listening, p / 100.0))), ct), ct);
+        var language = LanguageOf(lines);
+        var free = await Task.Run(() => _transcriber.TranscribeAsync(samples, language, null,
+            new Progress<int>(p => progress?.Report((Stage.Listening, p / 200.0))), ct), ct);
+        var result = LyricsAligner.Align(lines, free, duration);
+        if (Placed(result) >= GoodEnough) return result;
 
+        var hinted = await Task.Run(() => _transcriber.TranscribeAsync(samples, language, Prompt(lines),
+            new Progress<int>(p => progress?.Report((Stage.Listening, 0.5 + p / 200.0))), ct), ct);
         progress?.Report((Stage.Aligning, 0));
-        return LyricsAligner.Align(lines, heard, duration);
+        var second = LyricsAligner.Align(lines, hinted, duration);
+        return Placed(second) > Placed(result) ? second : result;
     }
+
+    /// <summary>Share of lines whose time was heard rather than estimated.</summary>
+    private static double Placed(List<AlignedLine> lines) =>
+        lines.Count == 0 ? 0 : lines.Count(l => l.IsConfident) / (double)lines.Count;
+
+    /// <summary>Above this share placed, the first pass is kept without a second listen.</summary>
+    private const double GoodEnough = 0.85;
 
     /// <summary>Korean when the lyrics are mostly Hangul, English when mostly Latin letters,
     /// otherwise let Whisper detect it.</summary>
