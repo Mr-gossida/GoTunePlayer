@@ -80,6 +80,10 @@ public sealed partial class LibraryFileViewModel : ObservableObject
     /// <summary>Source id → its display name (set by the app's network library).</summary>
     public static Func<string, string?>? RemoteSourceName { get; set; }
 
+    /// <summary>The song the play list search is pointing at (drawn highlighted).</summary>
+    [ObservableProperty]
+    private bool _isSearchHit;
+
     /// <summary>재생 목록 보기 › 아티스트 먼저: rows lead with the artist (set for all rows).</summary>
     public static bool ArtistFirst { get; set; }
 

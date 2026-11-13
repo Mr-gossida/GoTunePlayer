@@ -16,7 +16,8 @@ public sealed partial class PlaybackViewModel : ObservableObject, IDisposable
 {
     private readonly LibraryViewModel _library;
     private readonly AppSettings _settings;
-    private readonly MediaPlayer _player = new();
+    /// <summary>Replaced by a fresh one for each network song (see <see cref="OpenSource"/>).</summary>
+    private MediaPlayer _player = new();
     private readonly DispatcherTimer _timer;
     private readonly DispatcherTimer _volumeSaveTimer;
     private bool _isSeeking;
@@ -241,42 +242,10 @@ public sealed partial class PlaybackViewModel : ObservableObject, IDisposable
         _keepScreenOn = settings.KeepScreenOnWhilePlaying;
         WatchForSessionToResume();
         _player.Volume = _volume;
-
-        _player.MediaOpened += (_, _) =>
-        {
-            // MediaPlayer falls back to its default volume (0.5) whenever a source is (re)opened,
-            // so the saved volume shown on the slider must be re-applied every time.
-            _player.Volume = Volume;
-            _player.IsMuted = IsMuted;
-            RefreshDuration();
-
-            if (_pendingRestore is { } restore)
-            {
-                // Reopened after the file was released for editing: continue where it was.
-                _pendingRestore = null;
-                _player.Position = restore.Position;
-                ShowPosition(restore.Position);
-                if (!restore.Play)
-                {
-                    _player.Pause();
-                    IsPlaying = false;
-                    return;
-                }
-            }
-
-            _player.Play();
-            IsPlaying = true;
-        };
-        _player.MediaEnded += (_, _) => AdvanceOrStop();
-        _player.MediaFailed += (_, e) =>
-        {
-            Stop();
-            ResetTimeline();
-            Toast.Error("재생할 수 없습니다",
-                $"{CurrentFile?.FileName ?? "파일"}\n{e.ErrorException?.Message ?? "알 수 없는 오류"}");
-        };
+        Wire(_player);
 
         _timer = new DispatcherTimer(DispatcherPriority.Normal) { Interval = TimeSpan.FromMilliseconds(200) };
+
         _timer.Tick += (_, _) => UpdatePosition();
         _timer.Start();
 
@@ -334,7 +303,111 @@ public sealed partial class PlaybackViewModel : ObservableObject, IDisposable
 
         _pendingRestore = (position, play);
         _isReleased = false;
-        _player.Open(UriFor(resolved));
+        OpenSource(UriFor(resolved));
+    }
+
+    /// <summary>The player's events; ones from a player already replaced are ignored.</summary>
+    private void Wire(MediaPlayer player)
+    {
+        player.MediaOpened += (sender, _) =>
+        {
+            if (!ReferenceEquals(sender, _player)) return;
+            // MediaPlayer falls back to its default volume (0.5) whenever a source is (re)opened,
+            // so the saved volume shown on the slider must be re-applied every time.
+            _player.Volume = Volume;
+            _player.IsMuted = IsMuted;
+            RefreshDuration();
+
+            if (_pendingRestore is { } restore)
+            {
+                // Reopened after the file was released for editing: continue where it was.
+                _pendingRestore = null;
+                _player.Position = restore.Position;
+                ShowPosition(restore.Position);
+                if (!restore.Play)
+                {
+                    _player.Pause();
+                    IsPlaying = false;
+                    return;
+                }
+            }
+
+            _player.Play();
+            IsPlaying = true;
+        };
+        player.MediaEnded += (sender, _) =>
+        {
+            if (ReferenceEquals(sender, _player)) AdvanceOrStop();
+        };
+        player.MediaFailed += (sender, e) =>
+        {
+            if (!ReferenceEquals(sender, _player)) return;
+            Stop();
+            ResetTimeline();
+            Toast.Error("재생할 수 없습니다",
+                $"{CurrentFile?.FileName ?? "파일"}\n{e.ErrorException?.Message ?? "알 수 없는 오류"}");
+        };
+    }
+
+    private bool _lastWasStream;
+
+    /// <summary>Opens a song in the player. A network song gets a brand-new player: Windows'
+    /// media player, once it has played one song over the local stream server, read only the
+    /// first half-megabyte of the next one and then sat at 0:00 (a fresh one plays it at once).</summary>
+    private void OpenSource(Uri uri)
+    {
+        var stream = uri.Scheme == Uri.UriSchemeHttp;
+        if (stream || _lastWasStream)
+        {
+            var old = _player;
+            _player = new MediaPlayer { Volume = Volume, IsMuted = IsMuted };
+            Wire(_player);
+            try { old.Pause(); old.Close(); } catch { /* already closed */ }
+        }
+        _lastWasStream = stream;
+        _streamWatch = stream ? new StreamWatch(DateTime.UtcNow) : null;
+        _player.Open(uri);
+    }
+
+    // ---- getting a stuck network song going again ----
+
+    /// <summary>A network song being watched: when its position last moved, and how many times
+    /// it has been reopened.</summary>
+    private sealed class StreamWatch(DateTime since)
+    {
+        public DateTime LastProgress = since;
+        public TimeSpan LastPosition = TimeSpan.MinValue;
+        public int Retries;
+    }
+
+    private StreamWatch? _streamWatch;
+
+    /// <summary>Windows' media player now and then stops reading a network song a moment after
+    /// it starts and sits at 0:00 (or stops mid-song) although the data is there. If the position
+    /// hasn't moved for 2 s while playing and enough of the song has arrived, the song is opened
+    /// again in a fresh player at the same spot - up to three times.</summary>
+    private void WatchStream(TimeSpan position)
+    {
+        if (_streamWatch is not { } watch || CurrentFile is not { } file || !IsPlaying || _isSeeking || _seekTarget is not null) return;
+        var now = DateTime.UtcNow;
+        if (position != watch.LastPosition)
+        {
+            watch.LastPosition = position;
+            watch.LastProgress = now;
+            return;
+        }
+        if (now - watch.LastProgress < TimeSpan.FromSeconds(2) || watch.Retries >= 3) return;
+
+        // Only when the music is there to play (a slow network is a different matter).
+        if (_network.Cache.Peek(file.Path) is not { } item || item.Length <= 0) return;
+        var duration = DurationSeconds > 1 ? DurationSeconds : file.Duration.TotalSeconds;
+        var neededByte = duration > 0 ? (long)(item.Length * Math.Min(1, (position.TotalSeconds + 5) / duration)) : 0;
+        if (!item.IsComplete && item.Downloaded < Math.Max(neededByte, 1_500_000)) return;
+
+        var retries = watch.Retries + 1;
+        _pendingRestore = (position, true);
+        OpenSource(UriFor(file.Path));
+        if (_streamWatch is not null) _streamWatch.Retries = retries;
     }
 
     /// <summary>What the player opens: a network song is streamed from the local cache server
@@ -342,6 +415,7 @@ public sealed partial class PlaybackViewModel : ObservableObject, IDisposable
     private Uri UriFor(string path)
     {
         if (!TuneSync.Core.Models.RemotePath.IsRemote(path)) return new Uri(path);
+        _network.Cache.Focus(path); // this song gets the connection(s) and the bandwidth
         return _network.Server.UrlFor(_network.Cache.Open(path));
     }
 
@@ -357,8 +431,26 @@ public sealed partial class PlaybackViewModel : ObservableObject, IDisposable
                 var index = CurrentFile is null ? -1 : files.IndexOf(CurrentFile);
                 if (index >= 0 && files.Count > 1) next = files[(index + 1) % files.Count];
             }
-            if (next is not null && TuneSync.Core.Models.RemotePath.IsRemote(next.Path))
+            if (next is null || !TuneSync.Core.Models.RemotePath.IsRemote(next.Path)) return;
+            // Only once this song is fully here: fetching both at once halves the speed of the
+            // one being listened to (and takes a second connection).
+            var current = CurrentFile;
+            if (current is not null && TuneSync.Core.Models.RemotePath.IsRemote(current.Path))
+            {
+                var nextPath = next.Path;
+                _network.Cache.Open(current.Path).Completion.ContinueWith(t =>
+                {
+                    if (t.IsCompletedSuccessfully)
+                        System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>
+                        {
+                            if (CurrentFile == current) _network.Cache.Prefetch(nextPath);
+                        });
+                }, TaskScheduler.Default);
+            }
+            else
+            {
                 _network.Cache.Prefetch(next.Path);
+            }
         }
         catch
         {
@@ -508,7 +600,7 @@ public sealed partial class PlaybackViewModel : ObservableObject, IDisposable
 
         try
         {
-            _player.Open(UriFor(path));
+            OpenSource(UriFor(path));
         }
         catch (Exception ex)
         {
@@ -561,7 +653,7 @@ public sealed partial class PlaybackViewModel : ObservableObject, IDisposable
         try
         {
             var readable = TuneSync.Core.Models.RemotePath.IsRemote(path)
-                ? await _network.Cache.CompletedPathAsync(path)
+                ? await _network.Cache.CompletedPathAsync(path, keep: false)
                 : PlayablePath.ResolveForReading(path);
             result = await Task.Run(() => TuneSync.Core.Services.SpectrumAnalyzer.Analyze(readable, ct: cts.Token), cts.Token);
         }
@@ -593,7 +685,7 @@ public sealed partial class PlaybackViewModel : ObservableObject, IDisposable
         {
             // A network song is analyzed from its cached copy once the download has finished.
             var readable = TuneSync.Core.Models.RemotePath.IsRemote(path)
-                ? await _network.Cache.CompletedPathAsync(path)
+                ? await _network.Cache.CompletedPathAsync(path, keep: false)
                 : PlayablePath.ResolveForReading(path);
             result = await Task.Run(() => WaveformAnalyzer.Analyze(readable, cts.Token), cts.Token);
         }
@@ -1023,6 +1115,7 @@ public sealed partial class PlaybackViewModel : ObservableObject, IDisposable
 
         if (DurationSeconds <= 1) RefreshDuration();
         var pos = _player.Position;
+        WatchStream(pos);
 
         // MediaPlayer keeps reporting the old position for a moment after a seek; showing that
         // would snap the slider back and then forward again, so hold the target until the seek

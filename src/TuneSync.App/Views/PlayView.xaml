@@ -60,9 +60,15 @@
                                 </TextBlock>
                             </Grid>
                             <!-- Right margin: room for the overlay scrollbar, so it never covers the durations. -->
-                            <Border x:Name="Bd" Background="Transparent" CornerRadius="6" Padding="{TemplateBinding Padding}" Margin="0,1,12,1">
-                                <ContentPresenter/>
-                            </Border>
+                            <Grid Margin="0,1,12,1">
+                                <!-- the search's current hit: tinted in the accent color with a bar at the left -->
+                                <Border x:Name="HitFill" CornerRadius="6" Background="{DynamicResource PlayerAccentBrush}" Opacity="0" IsHitTestVisible="False"/>
+                                <Border x:Name="Bd" Background="Transparent" CornerRadius="6" Padding="{TemplateBinding Padding}">
+                                    <ContentPresenter/>
+                                </Border>
+                                <Border x:Name="HitBar" Width="3" CornerRadius="1.5" Margin="0,5" HorizontalAlignment="Left"
+                                        Background="{DynamicResource PlayerAccentBrush}" Visibility="Collapsed" IsHitTestVisible="False"/>
+                            </Grid>
                         </StackPanel>
                         <ControlTemplate.Triggers>
                             <DataTrigger Binding="{Binding GroupHeader}" Value="{x:Null}">
@@ -74,6 +80,30 @@
                             <Trigger Property="IsSelected" Value="True">
                                 <Setter TargetName="Bd" Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}"/>
                             </Trigger>
+                            <DataTrigger Binding="{Binding IsSearchHit}" Value="True">
+                                <Setter TargetName="HitBar" Property="Visibility" Value="Visible"/>
+                                <Setter TargetName="Bd" Property="Background" Value="Transparent"/>
+                                <DataTrigger.EnterActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <!-- a flash that settles into a steady tint -->
+                                            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="HitFill" Storyboard.TargetProperty="Opacity">
+                                                <LinearDoubleKeyFrame KeyTime="0:0:0.12" Value="0.5"/>
+                                                <EasingDoubleKeyFrame KeyTime="0:0:0.9" Value="0.2">
+                                                    <EasingDoubleKeyFrame.EasingFunction><CubicEase EasingMode="EaseOut"/></EasingDoubleKeyFrame.EasingFunction>
+                                                </EasingDoubleKeyFrame>
+                                            </DoubleAnimationUsingKeyFrames>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </DataTrigger.EnterActions>
+                                <DataTrigger.ExitActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="HitFill" Storyboard.TargetProperty="Opacity" To="0" Duration="0:0:0.2"/>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </DataTrigger.ExitActions>
+                            </DataTrigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
@@ -147,6 +177,8 @@
                             </Border>
                             <ContentPresenter/>
                             <Border x:Name="Tint" CornerRadius="10" Background="{DynamicResource PlayerAccentBrush}" Opacity="0" IsHitTestVisible="False"/>
+                            <Border x:Name="Ring" CornerRadius="10" BorderThickness="3" BorderBrush="{DynamicResource PlayerAccentBrush}"
+                                    Visibility="Collapsed" IsHitTestVisible="False"/>
                             <Border x:Name="Check" Width="24" Height="24" CornerRadius="12" Margin="8" HorizontalAlignment="Left" VerticalAlignment="Top"
                                     Background="{DynamicResource PlayerAccentBrush}" BorderBrush="#E6FFFFFF" BorderThickness="1.5"
                                     IsHitTestVisible="False" Visibility="Collapsed">
@@ -184,6 +216,10 @@
                                 <Setter TargetName="Tint" Property="Opacity" Value="0.22"/>
                                 <Setter TargetName="Check" Property="Visibility" Value="Visible"/>
                             </Trigger>
+                            <DataTrigger Binding="{Binding IsSearchHit}" Value="True">
+                                <Setter TargetName="Tint" Property="Opacity" Value="0.35"/>
+                                <Setter TargetName="Ring" Property="Visibility" Value="Visible"/>
+                            </DataTrigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>

@@ -429,19 +429,39 @@ public partial class PlayView : Page
         || file.Album.Contains(query, StringComparison.CurrentCultureIgnoreCase)
         || file.FileName.Contains(query, StringComparison.CurrentCultureIgnoreCase);
 
+    private LibraryFileViewModel? _searchHit;
+
     private void GoToMatch(int index)
     {
         _matchIndex = index;
-        if (index < 0)
+        var match = index >= 0 ? _matches[index] : null;
+        if (!ReferenceEquals(_searchHit, match))
+        {
+            if (_searchHit is not null) _searchHit.IsSearchHit = false;
+            _searchHit = match;
+            if (match is not null) match.IsSearchHit = true;
+        }
+        UpdateBackToCurrent(); // the "지금 재생 중" button steps aside while searching
+        if (match is null)
         {
             SearchCounter.Text = SearchBox.Text.Trim().Length == 0 ? "" : "없음";
             return;
         }
 
-        var match = _matches[index];
         PlaylistBox.SelectedItem = match;
         PlaylistBox.ScrollIntoView(match);
+        Dispatcher.BeginInvoke(() => CenterInList(match), System.Windows.Threading.DispatcherPriority.Loaded);
         SearchCounter.Text = $"{index + 1}/{_matches.Count}";
+    }
+
+    /// <summary>Scrolls a song to the middle of the list (not just barely into view at an edge).</summary>
+    private void CenterInList(LibraryFileViewModel song)
+    {
+        if (PlaylistBox.ItemContainerGenerator.ContainerFromItem(song) is not FrameworkElement row
+            || FindDescendant<ScrollViewer>(PlaylistBox) is not { } scroller) return;
+        var top = row.TransformToAncestor(PlaylistBox).Transform(new Point(0, 0)).Y;
+        var delta = top + row.ActualHeight / 2 - PlaylistBox.ActualHeight / 2;
+        if (Math.Abs(delta) > 4) scroller.ScrollToVerticalOffset(scroller.VerticalOffset + delta);
     }
 
     /// <summary>↓ in the search box: continue with the keyboard in the list itself (Enter plays).</summary>
@@ -1443,7 +1463,7 @@ public partial class PlayView : Page
     private void UpdateBackToCurrent()
     {
         var show = false;
-        if (CurrentRow() is { } current && PlaylistBox.ActualHeight > 0)
+        if (_searchHit is null && CurrentRow() is { } current && PlaylistBox.ActualHeight > 0)
         {
             show = true;
             if (PlaylistBox.ItemContainerGenerator.ContainerFromItem(current) is System.Windows.FrameworkElement row && row.IsVisible)

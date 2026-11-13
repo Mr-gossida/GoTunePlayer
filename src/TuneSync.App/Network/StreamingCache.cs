@@ -49,6 +49,9 @@ public sealed class StreamingCache
         }
     }
 
+    /// <summary>The cache entry for a song if there is one, without starting a download.</summary>
+    public CacheItem? Peek(string remotePath) => _items.TryGetValue(remotePath, out var item) ? item : null;
+
     /// <summary>Fetch ahead (the next song in the queue) so it starts instantly.</summary>
     public void Prefetch(string remotePath)
     {
@@ -60,18 +63,43 @@ public sealed class StreamingCache
     public string CompletedPath(string remotePath)
     {
         var item = Open(remotePath);
-        item.Completion.GetAwaiter().GetResult();
-        return item.FilePath;
+        Interlocked.Increment(ref item.Waiters);
+        try
+        {
+            item.Completion.GetAwaiter().GetResult();
+            return item.FilePath;
+        }
+        finally
+        {
+            Interlocked.Decrement(ref item.Waiters);
+        }
     }
 
-    public Task<string> CompletedPathAsync(string remotePath)
+    /// <param name="keep">False for work that's only useful while the song plays (the seek bar
+    /// waves, the spectrum): playing another song may then stop the download.</param>
+    public Task<string> CompletedPathAsync(string remotePath, bool keep = true)
     {
         var item = Open(remotePath);
+        if (keep) Interlocked.Increment(ref item.Waiters);
         return item.Completion.ContinueWith(t =>
         {
+            if (keep) Interlocked.Decrement(ref item.Waiters);
             t.GetAwaiter().GetResult();
             return item.FilePath;
         }, TaskScheduler.Default);
+    }
+
+    /// <summary>A song starts playing: every other download stops, so its connection and
+    /// bandwidth go to this one. (Skipping through network songs used to leave each one's full
+    /// download running; FTP allows only a few connections, and the new song then waited for a
+    /// free one.) Downloads someone is waiting on - a tag edit - carry on.</summary>
+    public void Focus(string remotePath)
+    {
+        foreach (var (path, item) in _items)
+        {
+            if (string.Equals(path, remotePath, StringComparison.Ordinal)) continue;
+            if (item.IsDownloading && Volatile.Read(ref item.Waiters) == 0) item.Cancel();
+        }
     }
 
     public long UsedBytes => Directory.Exists(Folder)
@@ -138,6 +166,25 @@ public sealed class CacheItem
     private long _downloaded;
     private Exception? _failure;
 
+    /// <summary>Callers waiting for the finished file (tag edits, analysis): such a download
+    /// isn't stopped by <see cref="StreamingCache.Focus"/>.</summary>
+    public int Waiters;
+
+    private volatile bool _cancel;
+    private Stream? _source;
+
+    /// <summary>Stops the download (the partial file is dropped; it starts over if needed again).</summary>
+    public void Cancel()
+    {
+        lock (_gate)
+        {
+            if (!IsDownloading) return;
+            _cancel = true;
+        }
+        // Closing the connection's stream also ends a read blocked on the network.
+        try { _source?.Dispose(); } catch { /* already closed */ }
+    }
+
     public CacheItem(string remotePath, string filePath)
     {
         RemotePath = remotePath;
@@ -175,6 +222,7 @@ public sealed class CacheItem
         {
             if (IsDownloading || IsComplete) return;
             IsDownloading = true;
+            _cancel = false;
             _failure = null;
             if (_completion.Task.IsCompleted) _completion = new(TaskCreationOptions.RunContinuationsAsynchronously);
             Interlocked.Exchange(ref _downloaded, 0);
@@ -189,9 +237,10 @@ public sealed class CacheItem
                 using (var source = client.OpenRead(path, 0))
                 using (var target = new FileStream(PartPath, FileMode.Create, FileAccess.Write, FileShare.ReadWrite | FileShare.Delete))
                 {
+                    _source = source;
                     var buffer = new byte[256 * 1024];
                     int read;
-                    while ((read = source.Read(buffer, 0, buffer.Length)) > 0)
+                    while (!_cancel && (read = source.Read(buffer, 0, buffer.Length)) > 0)
                     {
                         target.Write(buffer, 0, read);
                         target.Flush();
@@ -199,6 +248,7 @@ public sealed class CacheItem
                         lock (_gate) Monitor.PulseAll(_gate);
                     }
                 }
+                if (_cancel) throw new OperationCanceledException("다른 곡을 재생해 내려받기를 멈췄습니다.");
                 File.Move(PartPath, FilePath, overwrite: true);
                 Length = new FileInfo(FilePath).Length;
                 Interlocked.Exchange(ref _downloaded, Length);
@@ -212,6 +262,7 @@ public sealed class CacheItem
             }
             finally
             {
+                _source = null;
                 IsDownloading = false;
                 lock (_gate) Monitor.PulseAll(_gate);
                 onFinished();
