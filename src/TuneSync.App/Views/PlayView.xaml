@@ -95,6 +95,10 @@
                     <views:EqualizerBars BarBrush="{DynamicResource PlayerAccentBrush}"
                                          IsActive="{Binding DataContext.Playback.IsPlaying, RelativeSource={RelativeSource AncestorType=Page}}"/>
                 </Viewbox>
+                <Border x:Name="HoverPlay" Width="18" Height="18" Margin="-3,0,0,0" CornerRadius="9" HorizontalAlignment="Left"
+                        Background="Transparent" Cursor="Hand" ToolTip="재생" Visibility="Collapsed" MouseLeftButtonUp="PlayItem_Click">
+                    <ui:SymbolIcon Symbol="Play24" Filled="True" FontSize="13" Foreground="{DynamicResource PlayerAccentBrush}"/>
+                </Border>
                 <TextBlock x:Name="Line" Grid.Column="1" FontSize="13" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
                            Foreground="{DynamicResource TextFillColorPrimaryBrush}">
                     <Run Text="{Binding DisplayTitle, Mode=OneWay}"/><Run Text="  "/><Run Text="{Binding Artist, Mode=OneWay}" FontSize="12"
@@ -114,28 +118,70 @@
                     <Setter TargetName="Line" Property="Foreground" Value="{DynamicResource PlayerAccentBrush}"/>
                     <Setter TargetName="Line" Property="FontWeight" Value="SemiBold"/>
                 </DataTrigger>
+                <DataTrigger Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType=ListBoxItem}}" Value="True">
+                    <Setter TargetName="HoverPlay" Property="Visibility" Value="Visible"/>
+                    <Setter TargetName="Eq" Property="Visibility" Value="Collapsed"/>
+                </DataTrigger>
             </DataTemplate.Triggers>
         </DataTemplate>
 
-        <!-- Cover grid (그리드): square covers with the song over a dark fade, like a music app's
-             album wall. Sized by VirtualizingTilePanel. -->
+        <!-- Cover grid (그리드): covers with soft shadows and the song over a dark fade, like a
+             music app's album wall; sized by VirtualizingTilePanel. Hover lifts a tile a little;
+             a selected one is tinted with a check mark instead of getting an outline. -->
         <Style x:Key="QueueTileStyle" TargetType="ListBoxItem">
             <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="ListBoxItem">
-                        <Border x:Name="Frame" Margin="3,3,3,3" CornerRadius="9" BorderThickness="2" BorderBrush="Transparent" Padding="1">
+                        <Grid x:Name="Root" Margin="6" RenderTransformOrigin="0.5,0.5">
+                            <Grid.RenderTransform>
+                                <ScaleTransform x:Name="Lift" ScaleX="1" ScaleY="1"/>
+                            </Grid.RenderTransform>
+                            <!-- the shadow, drawn by a shape behind the cover -->
+                            <Border CornerRadius="10" Background="#33000000">
+                                <Border.Effect>
+                                    <DropShadowEffect x:Name="Shadow" BlurRadius="14" ShadowDepth="4" Direction="270" Opacity="0.35" Color="Black"
+                                                      RenderingBias="Performance"/>
+                                </Border.Effect>
+                            </Border>
                             <ContentPresenter/>
-                        </Border>
+                            <Border x:Name="Tint" CornerRadius="10" Background="{DynamicResource PlayerAccentBrush}" Opacity="0" IsHitTestVisible="False"/>
+                            <Border x:Name="Check" Width="24" Height="24" CornerRadius="12" Margin="8" HorizontalAlignment="Left" VerticalAlignment="Top"
+                                    Background="{DynamicResource PlayerAccentBrush}" BorderBrush="#E6FFFFFF" BorderThickness="1.5"
+                                    IsHitTestVisible="False" Visibility="Collapsed">
+                                <ui:SymbolIcon Symbol="Checkmark24" FontSize="14" Foreground="{DynamicResource PlayerOnAccentBrush}"/>
+                            </Border>
+                        </Grid>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Frame" Property="BorderBrush" Value="{DynamicResource PlayerHoverBrush}"/>
+                                <Trigger.EnterActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="Lift" Storyboard.TargetProperty="ScaleX" To="1.035" Duration="0:0:0.16">
+                                                <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut"/></DoubleAnimation.EasingFunction>
+                                            </DoubleAnimation>
+                                            <DoubleAnimation Storyboard.TargetName="Lift" Storyboard.TargetProperty="ScaleY" To="1.035" Duration="0:0:0.16">
+                                                <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut"/></DoubleAnimation.EasingFunction>
+                                            </DoubleAnimation>
+                                            <DoubleAnimation Storyboard.TargetName="Shadow" Storyboard.TargetProperty="BlurRadius" To="24" Duration="0:0:0.16"/>
+                                            <DoubleAnimation Storyboard.TargetName="Shadow" Storyboard.TargetProperty="Opacity" To="0.55" Duration="0:0:0.16"/>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.EnterActions>
+                                <Trigger.ExitActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="Lift" Storyboard.TargetProperty="ScaleX" To="1" Duration="0:0:0.2"/>
+                                            <DoubleAnimation Storyboard.TargetName="Lift" Storyboard.TargetProperty="ScaleY" To="1" Duration="0:0:0.2"/>
+                                            <DoubleAnimation Storyboard.TargetName="Shadow" Storyboard.TargetProperty="BlurRadius" To="14" Duration="0:0:0.2"/>
+                                            <DoubleAnimation Storyboard.TargetName="Shadow" Storyboard.TargetProperty="Opacity" To="0.35" Duration="0:0:0.2"/>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.ExitActions>
                             </Trigger>
-                            <DataTrigger Binding="{Binding IsNowPlaying}" Value="True">
-                                <Setter TargetName="Frame" Property="BorderBrush" Value="{DynamicResource PlayerAccentBrush}"/>
-                            </DataTrigger>
                             <Trigger Property="IsSelected" Value="True">
-                                <Setter TargetName="Frame" Property="BorderBrush" Value="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                <Setter TargetName="Tint" Property="Opacity" Value="0.22"/>
+                                <Setter TargetName="Check" Property="Visibility" Value="Visible"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -143,49 +189,72 @@
             </Setter>
         </Style>
         <DataTemplate x:Key="QueueTileTemplate">
-            <Grid ToolTip="{Binding FileName}" ClipToBounds="True">
-                <Border CornerRadius="7" Background="{DynamicResource PlayerHoverBrush}">
+            <Grid ToolTip="{Binding FileName}">
+                <Border CornerRadius="10" Background="{DynamicResource PlayerHoverBrush}">
                     <ui:SymbolIcon Symbol="MusicNote224" FontSize="30" Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
                 </Border>
-                <Border CornerRadius="7">
+                <Border CornerRadius="10">
                     <Border.Background>
                         <ImageBrush ImageSource="{Binding CoverThumbnail}" Stretch="UniformToFill"/>
                     </Border.Background>
                 </Border>
-                <Border CornerRadius="0,0,7,7" VerticalAlignment="Bottom" Padding="8,22,8,7">
+                <!-- the song, over a fade that starts well above the text so it reads on any cover -->
+                <Border VerticalAlignment="Bottom" Padding="10,30,10,9" CornerRadius="0,0,10,10">
                     <Border.Background>
                         <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
                             <GradientStop Color="#00000000" Offset="0"/>
-                            <GradientStop Color="#99000000" Offset="0.45"/>
-                            <GradientStop Color="#E6000000" Offset="1"/>
+                            <GradientStop Color="#73000000" Offset="0.4"/>
+                            <GradientStop Color="#D9000000" Offset="1"/>
                         </LinearGradientBrush>
                     </Border.Background>
                     <StackPanel>
-                        <TextBlock x:Name="TileTitle" Text="{Binding DisplayTitle}" FontSize="12" FontWeight="SemiBold" Foreground="White"
+                        <TextBlock Text="{Binding DisplayTitle}" FontSize="13" FontWeight="SemiBold" Foreground="White"
                                    TextTrimming="CharacterEllipsis"/>
-                        <TextBlock Text="{Binding Artist}" FontSize="11" Margin="0,1,0,0" Foreground="#CCFFFFFF" TextTrimming="CharacterEllipsis"/>
+                        <TextBlock Text="{Binding Artist}" FontSize="11" Margin="0,2,0,0" Foreground="#B3FFFFFF" TextTrimming="CharacterEllipsis"/>
                     </StackPanel>
                 </Border>
-                <Border x:Name="PlayingBadge" Width="28" Height="24" CornerRadius="5" Padding="5,4" Margin="6"
+                <!-- the playing song: an equalizer on a frosted chip -->
+                <Border x:Name="PlayingBadge" Height="26" CornerRadius="13" Padding="9,5" Margin="8"
                         HorizontalAlignment="Right" VerticalAlignment="Top" Background="#B3000000" Visibility="Collapsed">
-                    <views:EqualizerBars BarBrush="{DynamicResource PlayerAccentBrush}"
-                                         IsActive="{Binding DataContext.Playback.IsPlaying, RelativeSource={RelativeSource AncestorType=Page}}"/>
+                    <StackPanel Orientation="Horizontal">
+                        <views:EqualizerBars Width="14" BarBrush="{DynamicResource PlayerAccentBrush}"
+                                             IsActive="{Binding DataContext.Playback.IsPlaying, RelativeSource={RelativeSource AncestorType=Page}}"/>
+                        <TextBlock Text="재생 중" FontSize="11" FontWeight="SemiBold" Margin="6,0,0,0" VerticalAlignment="Center" Foreground="White"/>
+                    </StackPanel>
                 </Border>
-                <Border CornerRadius="8" Padding="6,1" Margin="6" HorizontalAlignment="Left" VerticalAlignment="Top"
+                <Border CornerRadius="11" Padding="8,2" Margin="8" HorizontalAlignment="Right" VerticalAlignment="Top"
                         Background="{DynamicResource PlayerAccentBrush}" ToolTip="다음에 재생할 곡"
                         Visibility="{Binding IsUpNext, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}">
                     <TextBlock FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource PlayerOnAccentBrush}">
                         <Run Text="다음"/><Run Text=" "/><Run Text="{Binding UpNextOrder, Mode=OneWay}"/>
                     </TextBlock>
                 </Border>
-                <Border x:Name="HoverPlay" Width="42" Height="42" CornerRadius="21" Background="#B3000000" Visibility="Collapsed"
-                        Cursor="Hand" ToolTip="재생" MouseLeftButtonUp="PlayItem_Click">
-                    <ui:SymbolIcon Symbol="Play24" Filled="True" FontSize="20" Foreground="White"/>
+                <!-- hover: a round play button in the cover's color -->
+                <Border x:Name="HoverPlay" Width="46" Height="46" CornerRadius="23" Opacity="0" IsHitTestVisible="False" Cursor="Hand" ToolTip="재생"
+                        Background="{DynamicResource PlayerAccentBrush}" MouseLeftButtonUp="PlayItem_Click">
+                    <Border.Effect>
+                        <DropShadowEffect BlurRadius="12" ShadowDepth="2" Direction="270" Opacity="0.4" Color="Black" RenderingBias="Performance"/>
+                    </Border.Effect>
+                    <ui:SymbolIcon Symbol="Play24" Filled="True" FontSize="22" Margin="3,0,0,0" Foreground="{DynamicResource PlayerOnAccentBrush}"/>
                 </Border>
             </Grid>
             <DataTemplate.Triggers>
                 <DataTrigger Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType=ListBoxItem}}" Value="True">
-                    <Setter TargetName="HoverPlay" Property="Visibility" Value="Visible"/>
+                    <Setter TargetName="HoverPlay" Property="IsHitTestVisible" Value="True"/>
+                    <DataTrigger.EnterActions>
+                        <BeginStoryboard>
+                            <Storyboard>
+                                <DoubleAnimation Storyboard.TargetName="HoverPlay" Storyboard.TargetProperty="Opacity" To="1" Duration="0:0:0.15"/>
+                            </Storyboard>
+                        </BeginStoryboard>
+                    </DataTrigger.EnterActions>
+                    <DataTrigger.ExitActions>
+                        <BeginStoryboard>
+                            <Storyboard>
+                                <DoubleAnimation Storyboard.TargetName="HoverPlay" Storyboard.TargetProperty="Opacity" To="0" Duration="0:0:0.15"/>
+                            </Storyboard>
+                        </BeginStoryboard>
+                    </DataTrigger.ExitActions>
                 </DataTrigger>
                 <DataTrigger Binding="{Binding IsNowPlaying}" Value="True">
                     <Setter TargetName="PlayingBadge" Property="Visibility" Value="Visible"/>
