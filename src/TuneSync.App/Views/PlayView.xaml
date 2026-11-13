@@ -588,7 +588,9 @@
                 </Grid>
 
                 <ListBox Grid.Row="2" x:Name="PlaylistBox" ItemsSource="{Binding PlaylistView}"
-                         ItemContainerStyle="{StaticResource QueueItemStyle}"
+                         ItemContainerStyle="{StaticResource QueueItemStyle}" SelectionMode="Extended"
+                         SelectionChanged="PlaylistBox_SelectionChanged"
+                         AllowDrop="True" DragOver="PlaylistBox_DragOver" Drop="PlaylistBox_Drop"
                          BorderThickness="0" Background="Transparent" FocusVisualStyle="{x:Null}"
                          ScrollViewer.VerticalScrollBarVisibility="Auto"
                          ScrollViewer.HorizontalScrollBarVisibility="Disabled"

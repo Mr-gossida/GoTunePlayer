@@ -9,6 +9,10 @@ public sealed class AppSettings
     /// player), added/removed via the +/- buttons rather than a single "current folder".</summary>
     public List<LibraryFolderEntry> LibraryFolders { get; set; } = [];
 
+    /// <summary>Songs taken out of the play list (재생 목록에서 빼기) although their folder is
+    /// registered. The files themselves are untouched.</summary>
+    public List<string> ExcludedSongs { get; set; } = [];
+
     /// <summary>What adding folders/files does to the existing list: ask each time, add to it, or
     /// replace it.</summary>
     public LibraryAddMode LibraryAddMode { get; set; } = LibraryAddMode.Ask;

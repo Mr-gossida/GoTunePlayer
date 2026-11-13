@@ -93,11 +93,90 @@ public sealed partial class LibraryViewModel : ObservableObject
 
         foreach (var entry in settings.LibraryFolders)
             Folders.Add(new LibraryFolderViewModel(entry));
+        _excluded = new HashSet<string>(settings.ExcludedSongs, StringComparer.OrdinalIgnoreCase);
 
         if (Folders.Count > 0) _ = RescanAsync();
     }
 
     public bool HasNoFiles => Files.Count == 0;
+
+    // ---- taking songs out of the play list (their files stay where they are) ----
+
+    private readonly HashSet<string> _excluded;
+
+    /// <summary>How many songs were taken out (and can be put back).</summary>
+    public int ExcludedCount => _excluded.Count;
+
+    /// <summary>The rows selected in the play list (set by the view), for the − menu.</summary>
+    public IReadOnlyList<LibraryFileViewModel> QueueSelection { get; set; } = [];
+
+    /// <summary>Raised before songs leave the list, so playback can let go of them.</summary>
+    public event Action<IReadOnlyList<LibraryFileViewModel>>? FilesRemoving;
+
+    private static string SourcePath(LibraryFolderViewModel source) =>
+        source.Entry.IsRemote ? RemotePath.Build(source.Entry.RemoteSourceId!, source.Path) : source.Path;
+
+    /// <summary>재생 목록에서 빼기: the songs leave the list and stay out on later scans. A song
+    /// that was added on its own (a file, not a folder) is simply unregistered. Nothing on disk
+    /// changes; '뺀 곡 다시 넣기' brings them all back.</summary>
+    public async Task RemoveFromListAsync(IReadOnlyList<LibraryFileViewModel> files)
+    {
+        if (files.Count == 0) return;
+        var unsaved = files.Count(f => f.HasPendingChanges);
+        if (unsaved > 0 && !await Dialogs.ConfirmAsync("목록에서 빼기",
+                $"저장하지 않은 태그 변경이 있는 곡 {unsaved}곡이 포함되어 있습니다. 목록에서 빼면 그 변경은 사라집니다.\n\n계속할까요?", "빼기"))
+            return;
+
+        FilesRemoving?.Invoke(files);
+        var paths = files.Select(f => f.Path).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var ownSources = Folders.Where(f => f.IsFile && paths.Contains(SourcePath(f))).ToList();
+        foreach (var source in ownSources) Folders.Remove(source);
+        var unregistered = ownSources.Select(SourcePath).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        foreach (var path in paths.Where(p => !unregistered.Contains(p))) _excluded.Add(path);
+        if (ownSources.Count > 0) SaveFolders();
+        SaveExcluded();
+
+        Files.RemoveWhere(f => paths.Contains(f.Path));
+        StatusText = $"{Files.Count}개 파일";
+        Toast.Info(files.Count == 1 ? "목록에서 뺐습니다" : $"{files.Count}곡을 목록에서 뺐습니다",
+            "파일은 그대로 있습니다. 목록 아래 − 메뉴의 '뺀 곡 다시 넣기'로 되돌릴 수 있습니다.");
+    }
+
+    /// <summary>'뺀 곡 다시 넣기': every song taken out comes back.</summary>
+    [RelayCommand]
+    private async Task RestoreRemovedAsync()
+    {
+        if (_excluded.Count == 0) return;
+        var count = _excluded.Count;
+        _excluded.Clear();
+        SaveExcluded();
+        Toast.Info("뺀 곡을 다시 넣었습니다", $"{count}곡을 목록으로 되돌립니다.");
+        await RescanAsync();
+    }
+
+    /// <summary>Picking a folder or file again means wanting its songs: those taken out before come back.</summary>
+    private bool Unexclude(IEnumerable<LibraryFolderEntry> entries)
+    {
+        if (_excluded.Count == 0) return false;
+        var removed = 0;
+        foreach (var entry in entries)
+        {
+            var root = entry.IsRemote ? RemotePath.Build(entry.RemoteSourceId!, entry.Path) : entry.Path;
+            var prefix = root.TrimEnd('\\', '/');
+            removed += _excluded.RemoveWhere(p => string.Equals(p, root, StringComparison.OrdinalIgnoreCase)
+                                                || p.StartsWith(prefix + "\\", StringComparison.OrdinalIgnoreCase)
+                                                || p.StartsWith(prefix + "/", StringComparison.OrdinalIgnoreCase));
+        }
+        if (removed > 0) SaveExcluded();
+        return removed > 0;
+    }
+
+    private void SaveExcluded()
+    {
+        _settings.ExcludedSongs = [.. _excluded];
+        AppSettingsStore.Save(_settings);
+        OnPropertyChanged(nameof(ExcludedCount));
+    }
 
     /// <summary>Nothing registered yet: the welcome screen.</summary>
     public bool IsWelcome => Folders.Count == 0 && Files.Count == 0;
@@ -389,6 +468,7 @@ public sealed partial class LibraryViewModel : ObservableObject
         bool Registered(LibraryFolderEntry entry) => Folders.Any(f =>
             string.Equals(f.Path, entry.Path, StringComparison.OrdinalIgnoreCase) && f.Entry.RemoteSourceId == entry.RemoteSourceId);
         var fresh = entries.Where(e => !Registered(e)).ToList();
+        Unexclude(entries);
         if (fresh.Count == 0)
         {
             Toast.Info("이미 등록된 항목입니다", entries.Count == 1 ? "목록을 다시 불러옵니다." : $"{entries.Count}개 모두 등록되어 있어 목록을 다시 불러옵니다.");
@@ -490,6 +570,8 @@ public sealed partial class LibraryViewModel : ObservableObject
         if (Folders.Count == 0) return;
         Folders.Clear();
         SaveFolders();
+        _excluded.Clear();
+        SaveExcluded();
         await RescanAsync();
     }
 
@@ -569,6 +651,7 @@ public sealed partial class LibraryViewModel : ObservableObject
 
         async Task Add(LibraryFile file)
         {
+            if (_excluded.Count > 0 && _excluded.Contains(file.Path)) return; // taken out of the list
             pending.Add(file);
             count++;
             if (sinceFlush.ElapsedMilliseconds >= 300) await FlushAsync();

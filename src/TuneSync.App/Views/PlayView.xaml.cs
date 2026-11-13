@@ -464,10 +464,30 @@ public partial class PlayView : Page
             e.Handled = true;
             return;
         }
-        PlaylistBox.SelectedItem = file;
+        // Right-clicking inside a multiple selection keeps it; elsewhere it selects that row.
+        if (!PlaylistBox.SelectedItems.Contains(file)) PlaylistBox.SelectedItem = file;
+        var selected = SelectedSongs();
 
         var playback = _viewModel.Playback;
         menu.Items.Clear();
+        if (selected.Count > 1)
+        {
+            menu.Items.Add(MenuItem($"선택한 {selected.Count}곡 다음에 재생", Wpf.Ui.Controls.SymbolRegular.TextBulletListAdd24, () =>
+            {
+                // In list order, right after the current song.
+                foreach (var song in Enumerable.Reverse(selected.OrderBy(s => PlaylistBox.Items.IndexOf(s))).Where(s => !s.IsNowPlaying))
+                    playback.PlayAfterCurrent(song);
+            }));
+            menu.Items.Add(MenuItem($"선택한 {selected.Count}곡 나중에 재생", Wpf.Ui.Controls.SymbolRegular.AppsListDetail24, () =>
+            {
+                foreach (var song in selected.OrderBy(s => PlaylistBox.Items.IndexOf(s)).Where(s => !s.IsNowPlaying))
+                    playback.PlayLater(song);
+            }));
+            menu.Items.Add(new Separator());
+            menu.Items.Add(MenuItem($"목록에서 빼기 ({selected.Count}곡)", Wpf.Ui.Controls.SymbolRegular.Delete24,
+                () => _ = RemoveSelectedFromListAsync(), "Delete"));
+            return;
+        }
         menu.Items.Add(MenuItem("재생", Wpf.Ui.Controls.SymbolRegular.Play24, () => playback.PlayFile(file), "Enter"));
         if (file.IsUpNext)
         {
@@ -487,6 +507,8 @@ public partial class PlayView : Page
              ?? System.Windows.Application.Current.MainWindow as ShellWindow)?.ShowInTagManager(file)));
         menu.Items.Add(MenuItem("파일 위치 열기", Wpf.Ui.Controls.SymbolRegular.FolderOpen24, () => RevealInExplorer(file.Path)));
         menu.Items.Add(MenuItem("파일 경로 복사", Wpf.Ui.Controls.SymbolRegular.Copy24, () => CopyPath(file.Path)));
+        menu.Items.Add(new Separator());
+        menu.Items.Add(MenuItem("목록에서 빼기", Wpf.Ui.Controls.SymbolRegular.Delete24, () => _ = RemoveSelectedFromListAsync(), "Delete"));
     }
 
     private static MenuItem MenuItem(string header, Wpf.Ui.Controls.SymbolRegular icon, Action action, string? gesture = null)
@@ -593,9 +615,71 @@ public partial class PlayView : Page
 
     private void PlaylistBox_KeyDown(object sender, KeyEventArgs e)
     {
+        if (e.Key == Key.Delete)
+        {
+            _ = RemoveSelectedFromListAsync();
+            e.Handled = true;
+            return;
+        }
         if (e.Key != Key.Enter || PlaylistBox.SelectedItem is not LibraryFileViewModel file) return;
         _viewModel.Playback.PlayFile(file);
         e.Handled = true;
+    }
+
+    private List<LibraryFileViewModel> SelectedSongs() => [.. PlaylistBox.SelectedItems.OfType<LibraryFileViewModel>()];
+
+    private void PlaylistBox_SelectionChanged(object sender, SelectionChangedEventArgs e) =>
+        _viewModel.Library.QueueSelection = SelectedSongs();
+
+    /// <summary>Delete / 목록에서 빼기: the selected songs leave the list; the row after them gets
+    /// the selection, so pressing Delete again keeps going down the list.</summary>
+    private async Task RemoveSelectedFromListAsync()
+    {
+        var songs = SelectedSongs();
+        if (songs.Count == 0) return;
+        var view = PlaylistBox.Items;
+        var lastIndex = songs.Max(s => view.IndexOf(s));
+        var leaving = songs.ToHashSet();
+        var next = view.OfType<LibraryFileViewModel>().Skip(lastIndex + 1).FirstOrDefault(f => !leaving.Contains(f))
+                   ?? view.OfType<LibraryFileViewModel>().Take(lastIndex).LastOrDefault(f => !leaving.Contains(f));
+        await _viewModel.Library.RemoveFromListAsync(songs);
+        if (next is null || !PlaylistBox.Items.Contains(next)) return;
+        PlaylistBox.SelectedItem = next;
+        PlaylistBox.ScrollIntoView(next);
+        _ = Dispatcher.BeginInvoke(() =>
+        {
+            if (PlaylistBox.ItemContainerGenerator.ContainerFromItem(next) is ListBoxItem row) row.Focus();
+        }, System.Windows.Threading.DispatcherPriority.Loaded);
+    }
+
+    // --- dropping folders/files from Explorer onto the list adds them ---
+
+    private static string[] DroppedPaths(System.Windows.DragEventArgs e) =>
+        e.Data.GetData(System.Windows.DataFormats.FileDrop) is string[] paths ? paths : [];
+
+    private void PlaylistBox_DragOver(object sender, System.Windows.DragEventArgs e)
+    {
+        var ok = DroppedPaths(e).Any(p => System.IO.Directory.Exists(p) || TuneSync.Core.Services.TagService.IsSupported(p));
+        e.Effects = ok ? System.Windows.DragDropEffects.Copy : System.Windows.DragDropEffects.None;
+        e.Handled = true;
+    }
+
+    private async void PlaylistBox_Drop(object sender, System.Windows.DragEventArgs e)
+    {
+        var entries = DroppedPaths(e)
+            .Select(p => System.IO.Directory.Exists(p)
+                ? new TuneSync.Core.Models.LibraryFolderEntry { Path = p, IncludeSubfolders = true }
+                : System.IO.File.Exists(p) && TuneSync.Core.Services.TagService.IsSupported(p)
+                    ? new TuneSync.Core.Models.LibraryFolderEntry { Path = p, IsFile = true }
+                    : null)
+            .OfType<TuneSync.Core.Models.LibraryFolderEntry>()
+            .ToList();
+        if (entries.Count == 0)
+        {
+            Toast.Info("추가할 수 없습니다", "음악 폴더나 음악 파일(mp3, flac, m4a 등)을 끌어다 놓아 주세요.");
+            return;
+        }
+        await _viewModel.Library.AddSourcesAsync(entries);
     }
 
     private void Playback_PropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -1064,6 +1148,8 @@ public partial class PlayView : Page
     private void SyncPlaylistToCurrentTrack()
     {
         if (_viewModel.Playback.CurrentFile is not { } current) return;
+        // Several rows picked by hand (to remove or queue them): a song change mustn't undo that.
+        if (PlaylistBox.SelectedItems.Count > 1) return;
         PlaylistBox.SelectedItem = current;
         // After layout: right after a sort/rescan or at startup the list may not be measured yet.
         if (IsLoaded)

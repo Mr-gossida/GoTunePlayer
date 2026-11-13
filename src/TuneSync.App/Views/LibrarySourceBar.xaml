@@ -39,6 +39,13 @@
                        Click="RemoveButton_Click" ToolTip="목록 정리">
                 <ui:Button.ContextMenu>
                     <ContextMenu>
+                        <MenuItem x:Name="RemoveSelectedItem" Header="선택한 곡 목록에서 빼기" Click="RemoveSelected_Click" InputGestureText="Delete">
+                            <MenuItem.Icon><ui:SymbolIcon Symbol="Delete24"/></MenuItem.Icon>
+                        </MenuItem>
+                        <MenuItem x:Name="RestoreRemovedItem" Header="뺀 곡 다시 넣기" Click="RestoreRemoved_Click">
+                            <MenuItem.Icon><ui:SymbolIcon Symbol="ArrowUndo24"/></MenuItem.Icon>
+                        </MenuItem>
+                        <Separator/>
                         <MenuItem Header="모두 제거" Click="RemoveAll_Click"/>
                         <Separator/>
                         <MenuItem Header="존재하지 않는 폴더/파일 제거" Click="RemoveMissing_Click"/>

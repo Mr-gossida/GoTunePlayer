@@ -59,6 +59,12 @@ public partial class LibrarySourceBar : UserControl
     {
         var button = (Button)sender;
         if (button.ContextMenu is not { } menu) return;
+        var selected = Library?.QueueSelection.Count ?? 0;
+        RemoveSelectedItem.Header = selected > 0 ? $"선택한 {selected}곡 목록에서 빼기" : "선택한 곡 목록에서 빼기";
+        RemoveSelectedItem.IsEnabled = selected > 0;
+        var excluded = Library?.ExcludedCount ?? 0;
+        RestoreRemovedItem.Header = excluded > 0 ? $"뺀 곡 다시 넣기 ({excluded}곡)" : "뺀 곡 다시 넣기";
+        RestoreRemovedItem.IsEnabled = excluded > 0;
         menu.PlacementTarget = button;
         menu.IsOpen = true;
     }
@@ -72,6 +78,13 @@ public partial class LibrarySourceBar : UserControl
     }
 
     private void RemoveMissing_Click(object sender, RoutedEventArgs e) => Library?.RemoveMissingFolders();
+
+    private async void RemoveSelected_Click(object sender, RoutedEventArgs e)
+    {
+        if (Library is { QueueSelection.Count: > 0 } library) await library.RemoveFromListAsync(library.QueueSelection);
+    }
+
+    private void RestoreRemoved_Click(object sender, RoutedEventArgs e) => Library?.RestoreRemovedCommand.Execute(null);
 
     private void RemoveDuplicates_Click(object sender, RoutedEventArgs e) => Library?.RemoveDuplicateFolders();
 }

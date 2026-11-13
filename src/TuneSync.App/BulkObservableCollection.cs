@@ -19,4 +19,22 @@ public sealed class BulkObservableCollection<T> : ObservableCollection<T>
         OnPropertyChanged(new PropertyChangedEventArgs("Item[]"));
         OnCollectionChanged(new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Reset));
     }
+
+    /// <summary>Removes every item that matches, with one change notification.</summary>
+    public int RemoveWhere(Func<T, bool> match)
+    {
+        CheckReentrancy();
+        var removed = 0;
+        for (var i = Items.Count - 1; i >= 0; i--)
+        {
+            if (!match(Items[i])) continue;
+            Items.RemoveAt(i);
+            removed++;
+        }
+        if (removed == 0) return 0;
+        OnPropertyChanged(new PropertyChangedEventArgs(nameof(Count)));
+        OnPropertyChanged(new PropertyChangedEventArgs("Item[]"));
+        OnCollectionChanged(new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Reset));
+        return removed;
+    }
 }

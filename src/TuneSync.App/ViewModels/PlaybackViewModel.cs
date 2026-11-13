@@ -223,6 +223,7 @@ public sealed partial class PlaybackViewModel : ObservableObject, IDisposable
         _library = library;
         _settings = settings;
         _network = network;
+        library.FilesRemoving += OnFilesRemoving;
         _volume = Math.Clamp(settings.Volume, 0, 1);
         _isShuffle = settings.Shuffle;
         _repeat = settings.Repeat;
@@ -864,6 +865,22 @@ public sealed partial class PlaybackViewModel : ObservableObject, IDisposable
     /// <summary>The playlist exactly as shown in the 플레이 screen (its sort and grouping).</summary>
     private List<LibraryFileViewModel> CurrentList() => [.. _library.PlaylistView.Cast<LibraryFileViewModel>()];
 
+    /// <summary>Where the playing song stood when it was taken out of the list: next/previous
+    /// carry on from there instead of jumping back to the top.</summary>
+    private int _removedCurrentIndex = -1;
+
+    private void OnFilesRemoving(IReadOnlyList<LibraryFileViewModel> files)
+    {
+        var leaving = files.ToHashSet();
+        foreach (var file in files.Where(f => f.IsUpNext)) CancelUpNext(file);
+        _shuffleBag.RemoveAll(leaving.Contains);
+        if (CurrentFile is not { } current || !leaving.Contains(current)) return;
+        var list = CurrentList();
+        var index = list.IndexOf(current);
+        // The song that will take its place: the first one after it that stays.
+        _removedCurrentIndex = index < 0 ? -1 : list.Take(index).Count(f => !leaving.Contains(f));
+    }
+
     /// <summary>Previous/next in list order, wrapping around at either end.</summary>
     private void PlayRelative(int step)
     {
@@ -871,6 +888,15 @@ public sealed partial class PlaybackViewModel : ObservableObject, IDisposable
         if (files.Count == 0) return;
 
         var currentIndex = CurrentFile is null ? -1 : files.IndexOf(CurrentFile);
+        var anchor = _removedCurrentIndex;
+        _removedCurrentIndex = -1;
+        if (currentIndex < 0 && anchor >= 0)
+        {
+            // The playing song was taken out: "next" is the one now in its place.
+            var at = step > 0 ? anchor : anchor - 1;
+            PlayFile(files[(at % files.Count + files.Count) % files.Count]);
+            return;
+        }
         var nextIndex = ((currentIndex < 0 ? 0 : currentIndex + step) % files.Count + files.Count) % files.Count;
         PlayFile(files[nextIndex]);
     }
