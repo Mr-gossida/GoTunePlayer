@@ -39,7 +39,7 @@ else
 }
 
 var all = new List<double>();
-using var engine = new LyricsSyncEngine();
+using var engine = new LyricsSyncEngine(model);
 foreach (var song in songs)
 {
     string lyrics;

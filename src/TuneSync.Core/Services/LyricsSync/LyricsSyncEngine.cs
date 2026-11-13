@@ -10,7 +10,11 @@ namespace TuneSync.Core.Services.LyricsSync;
 /// within 1 s went from 49% to about 60%, lines off by over 3 s from 35% to under 20%.)</summary>
 public sealed class LyricsSyncEngine : IDisposable
 {
-    private readonly WhisperTranscriber _transcriber = new(WhisperModelStore.ModelPath);
+    private readonly WhisperTranscriber _transcriber;
+
+    public LyricsSyncEngine() : this(WhisperModelStore.ModelPath) { }
+
+    public LyricsSyncEngine(string modelPath) => _transcriber = new WhisperTranscriber(modelPath);
 
     public enum Stage { Decoding, Listening, Aligning }
 
