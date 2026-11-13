@@ -133,17 +133,6 @@
             </ui:CardControl.Header>
             <ui:ToggleSwitch IsChecked="{Binding StartWithWindows}" OnContent="켬" OffContent="끔"/>
         </ui:CardControl>
-        <ui:CardControl Margin="0,0,0,4" Icon="{ui:SymbolIcon History24}">
-            <ui:CardControl.Header>
-                <StackPanel>
-                    <ui:TextBlock Text="시작할 때 이어 듣기" FontTypography="Body"/>
-                    <ui:TextBlock Text="TuneSync를 열면 마지막으로 듣던 곡을 어디서부터 준비할지 정합니다."
-                                  FontSize="12" TextWrapping="Wrap" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-                </StackPanel>
-            </ui:CardControl.Header>
-            <ComboBox Width="200" ItemsSource="{Binding StartupResumeOptions}" DisplayMemberPath="Label"
-                      SelectedValuePath="Value" SelectedValue="{Binding StartupResume}"/>
-        </ui:CardControl>
         <ui:CardControl Margin="0,0,0,4" Icon="{ui:SymbolIcon Play24}">
             <ui:CardControl.Header>
                 <StackPanel>
@@ -153,6 +142,17 @@
                 </StackPanel>
             </ui:CardControl.Header>
             <ui:ToggleSwitch IsChecked="{Binding AutoPlayOnStartup}" OnContent="켬" OffContent="끔"/>
+        </ui:CardControl>
+        <ui:CardControl Margin="0,0,0,4" Icon="{ui:SymbolIcon History24}">
+            <ui:CardControl.Header>
+                <StackPanel>
+                    <ui:TextBlock Text="마지막 곡 이어 듣기" FontTypography="Body"/>
+                    <ui:TextBlock Text="TuneSync를 열면 마지막으로 듣던 곡을 어디서부터 준비할지 정합니다."
+                                  FontSize="12" TextWrapping="Wrap" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                </StackPanel>
+            </ui:CardControl.Header>
+            <ComboBox Width="200" ItemsSource="{Binding StartupResumeOptions}" DisplayMemberPath="Label"
+                      SelectedValuePath="Value" SelectedValue="{Binding StartupResume}"/>
         </ui:CardControl>
 
         <ui:TextBlock Text="재생" FontTypography="BodyStrong" Margin="0,20,0,8"/>

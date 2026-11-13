@@ -40,7 +40,7 @@ public sealed class WaveSeekBar : FrameworkElement
     /// <summary>Waves (in the cover's colors) or flames.</summary>
     public static readonly DependencyProperty LookProperty = DependencyProperty.Register(
         nameof(Look), typeof(SeekBarStyle), typeof(WaveSeekBar),
-        new FrameworkPropertyMetadata(SeekBarStyle.Wave, FrameworkPropertyMetadataOptions.AffectsRender, (d, _) => ((WaveSeekBar)d)._sparks.Clear()));
+        new FrameworkPropertyMetadata(SeekBarStyle.Wave, FrameworkPropertyMetadataOptions.AffectsRender, (d, _) => { ((WaveSeekBar)d)._sparks.Clear(); ((WaveSeekBar)d)._licks.Clear(); }));
 
     public SeekBarStyle Look { get => (SeekBarStyle)GetValue(LookProperty); set => SetValue(LookProperty, value); }
 
@@ -85,6 +85,8 @@ public sealed class WaveSeekBar : FrameworkElement
     private struct Spark { public double X, Y, Vx, Vy, Life, Size; }
 
     private bool Flames => Look == SeekBarStyle.Flame;
+    private double _fireTime;
+    private readonly List<Spark> _licks = [];
 
     // Value only updates a few times a second; interpolate between updates so the thumb (and
     // the loudness lookup) move smoothly.
@@ -162,12 +164,10 @@ public sealed class WaveSeekBar : FrameworkElement
             var fadeIn = Math.Min(1, (thumbX - Left) / 60);
             if (Flames)
             {
-                var amplitude = maxHeight * _activity * (0.32 + 0.68 * _level) * fadeIn * (1 + 0.25 * _flash);
-                if (amplitude > 0.3)
-                {
-                    DrawFlameLayer(dc, mid, thumbX, maxHeight, amplitude, seed: 0.0, scale: 1.0, core: false);
-                    DrawFlameLayer(dc, mid, thumbX, maxHeight, amplitude * 0.62, seed: 3.7, scale: 0.8, core: true);
-                }
+                // Flames may rise a little above the bar's own strip.
+                var flameRoom = maxHeight + FlameOverflow;
+                var amplitude = flameRoom * _activity * (0.38 + 0.62 * _level) * fadeIn * (1 + 0.4 * _flash);
+                if (amplitude > 0.3) DrawFire(dc, mid, thumbX, flameRoom, amplitude);
                 DrawSparks(dc);
                 DrawPlayedLine(dc, mid, thumbX, Color.FromRgb(0xC2, 0x2E, 0x12), Color.FromRgb(0xFF, 0x7A, 0x1A), Color.FromRgb(0xFF, 0xD2, 0x5A));
             }
@@ -285,57 +285,117 @@ public sealed class WaveSeekBar : FrameworkElement
         dc.DrawLine(pen, new Point(Left, mid), new Point(thumbX, mid));
     }
 
-    /// <summary>A row of flame tongues licking up from the played line: pointed tips that sway
-    /// sideways and flicker in height, deep red at the root through orange to a fading yellow
-    /// (or, for the inner layer, a hot pale core). Height follows the music like the waves.</summary>
-    private void DrawFlameLayer(DrawingContext dc, double mid, double endX, double maxHeight, double amplitude,
-                                double seed, double scale, bool core)
-    {
-        var t = _phase * 1.6 + seed;
-        var k = 2 * Math.PI / (15 * scale);
-        var geometry = new StreamGeometry();
-        using (var ctx = geometry.Open())
-        {
-            ctx.BeginFigure(new Point(Left, mid), isFilled: true, isClosed: true);
-            for (var x = Left; x <= endX; x += 1.5)
-            {
-                var envelope = SmoothStep(Math.Min(1, (x - Left) / 24)) * SmoothStep(Math.Min(1, (endX - x) / 10));
-                // Sway: the tongues lean and drift, never in step.
-                var sway = 6 * Math.Sin(x * 0.023 + t * 1.3) + 3.5 * Math.Sin(x * 0.061 - t * 2.2 + seed);
-                var tongue = Math.Pow(0.5 + 0.5 * Math.Cos((x + sway) * k - t * 0.9), 2.6);
-                var flicker = 0.55 + 0.45 * (0.5 + 0.5 * Math.Sin(x * 0.17 + t * 7.1 + seed))
-                                         * (0.5 + 0.5 * Math.Sin(x * 0.043 - t * 4.3 + seed * 1.9));
-                // Tallest just behind the thumb, where the music is now.
-                var nearThumb = 0.75 + 0.25 * SmoothStep(Math.Clamp(1 - (endX - x) / 140, 0, 1));
-                var y = amplitude * envelope * nearThumb * (0.28 + 0.72 * tongue * flicker);
-                ctx.LineTo(new Point(x, mid - Math.Min(maxHeight + 3, y)), true, true);
-            }
-            ctx.LineTo(new Point(endX, mid), true, true);
-        }
-        geometry.Freeze();
+    /// <summary>How far above the strip the flames may reach (they're drawn outside the bar).</summary>
+    private const double FlameOverflow = 9;
+    private const double TongueSpacing = 6.5;
 
-        var fill = new LinearGradientBrush
+    /// <summary>Fire along the played line, built tongue by tongue like a real flame front: each
+    /// tongue has its own rhythm - a slow swell, a quicker flicker and a fast shiver - its own
+    /// lean that sways in a shared draft, and a teardrop shape. Three nested layers give the
+    /// colour of real fire: a deep red-orange body, an orange-yellow middle and a pale hot core
+    /// near the root; the taller a tongue reaches, the yellower its tip. Louder music and beats
+    /// make the tongues leap; the tallest burn right behind the thumb.</summary>
+    private void DrawFire(DrawingContext dc, double mid, double endX, double room, double amplitude)
+    {
+        var t = _fireTime;
+        var wind = 2.2 * Math.Sin(t * 0.55) + 1.2 * Math.Sin(t * 1.3 + 1.1);
+        var outer = new StreamGeometry();
+        var middle = new StreamGeometry();
+        var core = new StreamGeometry();
+        using (var o = outer.Open())
+        using (var m = middle.Open())
+        using (var c = core.Open())
+        {
+            for (var i = 0; ; i++)
+            {
+                var seed = Hash(i);
+                var x = Left + i * TongueSpacing + (seed - 0.5) * 3;
+                if (x > endX - 1) break;
+
+                var envelope = SmoothStep(Math.Min(1, (x - Left) / 18)) * SmoothStep(Math.Min(1, (endX - x) / 8));
+                var nearThumb = 0.62 + 0.38 * SmoothStep(Math.Clamp(1 - (endX - x) / 160, 0, 1));
+                var s1 = 0.8 + seed * 0.7;
+                var s2 = 0.9 + Hash(i + 97) * 0.8;
+                var swell = 0.55 * Math.Sin(t * 2.1 * s1 + seed * 40)
+                          + 0.30 * Math.Sin(t * 5.3 * s2 + seed * 17)
+                          + 0.15 * Math.Sin(t * 11.7 + seed * 83);
+                var life = Math.Pow(Math.Clamp(0.5 + 0.5 * swell, 0, 1), 1.3);
+                var h = amplitude * envelope * nearThumb * (0.22 + 0.78 * life);
+                if (h < 1.2) continue;
+
+                var w = TongueSpacing * (1.6 + 0.8 * Hash(i + 31));
+                var lean = (Math.Sin(t * 1.7 + seed * 23) * 0.5 + Math.Sin(t * 4.3 + seed * 7) * 0.22) * w + wind * (h / room);
+                Tongue(o, x, mid + 1, w, h, lean);
+                Tongue(m, x + lean * 0.15, mid + 1, w * 0.62, h * 0.7, lean * 0.7);
+                Tongue(c, x + lean * 0.1, mid + 1, w * 0.34, h * 0.38, lean * 0.4);
+            }
+        }
+        outer.Freeze();
+        middle.Freeze();
+        core.Freeze();
+
+        // A warm glow on the line under the fire.
+        var glow = new LinearGradientBrush
         {
             MappingMode = BrushMappingMode.Absolute,
-            StartPoint = new Point(0, mid),
-            EndPoint = new Point(0, mid - maxHeight - 3),
-            GradientStops = core
-                ? new GradientStopCollection
-                {
-                    new(Color.FromArgb(0xF2, 0xFF, 0xF4, 0xC8), 0),
-                    new(Color.FromArgb(0xC8, 0xFF, 0xC8, 0x4A), 0.45),
-                    new(Color.FromArgb(0x00, 0xFF, 0xA8, 0x30), 1),
-                }
-                : new GradientStopCollection
-                {
-                    new(Color.FromArgb(0xE6, 0xD4, 0x2A, 0x10), 0),
-                    new(Color.FromArgb(0xD0, 0xFF, 0x6A, 0x14), 0.4),
-                    new(Color.FromArgb(0x90, 0xFF, 0xB0, 0x2E), 0.75),
-                    new(Color.FromArgb(0x00, 0xFF, 0xE0, 0x70), 1),
-                },
+            StartPoint = new Point(Left, 0),
+            EndPoint = new Point(Math.Max(Left + 1, endX), 0),
+            GradientStops =
+            {
+                new GradientStop(Color.FromArgb(0x00, 0xFF, 0x70, 0x20), 0),
+                new GradientStop(Color.FromArgb((byte)(0x50 + 0x40 * _flash), 0xFF, 0x80, 0x20), 0.85),
+                new GradientStop(Color.FromArgb((byte)(0x70 + 0x50 * _flash), 0xFF, 0xB0, 0x40), 1),
+            },
         };
-        fill.Freeze();
-        dc.DrawGeometry(fill, null, geometry);
+        glow.Freeze();
+        dc.DrawRectangle(glow, null, new Rect(Left, mid - 4, Math.Max(0, endX - Left), 6));
+
+        dc.DrawGeometry(FireBrush(mid, room, [(0, 0xF0, 0xC8, 0x22, 0x08), (0.3, 0xE0, 0xFF, 0x52, 0x10), (0.65, 0x99, 0xFF, 0x94, 0x22), (1, 0x00, 0xFF, 0xD0, 0x60)]), null, outer);
+        dc.DrawGeometry(FireBrush(mid, room * 0.75, [(0, 0xF5, 0xFF, 0xA8, 0x2E), (0.55, 0xB0, 0xFF, 0xC8, 0x48), (1, 0x00, 0xFF, 0xE8, 0x90)]), null, middle);
+        dc.DrawGeometry(FireBrush(mid, room * 0.42, [(0, 0xFA, 0xFF, 0xFB, 0xE6), (0.6, 0xC0, 0xFF, 0xF0, 0xB0), (1, 0x00, 0xFF, 0xF4, 0xC0)]), null, core);
+        DrawLicks(dc);
+    }
+
+    /// <summary>One teardrop flame: a wide root on the line narrowing to a leaning, pointed tip.</summary>
+    private static void Tongue(StreamGeometryContext ctx, double x, double baseY, double width, double height, double lean)
+    {
+        var half = width / 2;
+        var tip = new Point(x + lean, baseY - height);
+        ctx.BeginFigure(new Point(x - half, baseY), isFilled: true, isClosed: true);
+        ctx.BezierTo(new Point(x - half * 1.05, baseY - height * 0.38), new Point(x + lean * 0.55 - half * 0.45, baseY - height * 0.78), tip, true, true);
+        ctx.BezierTo(new Point(x + lean * 0.55 + half * 0.45, baseY - height * 0.78), new Point(x + half * 1.05, baseY - height * 0.38), new Point(x + half, baseY), true, true);
+    }
+
+    private static Brush FireBrush(double baseY, double reach, (double Offset, byte A, byte R, byte G, byte B)[] stops)
+    {
+        var brush = new LinearGradientBrush
+        {
+            MappingMode = BrushMappingMode.Absolute,
+            StartPoint = new Point(0, baseY),
+            EndPoint = new Point(0, baseY - Math.Max(1, reach)),
+        };
+        foreach (var (offset, a, r, g, b) in stops) brush.GradientStops.Add(new GradientStop(Color.FromArgb(a, r, g, b), offset));
+        brush.Freeze();
+        return brush;
+    }
+
+    /// <summary>A steady pseudo-random number in 0..1 for tongue <paramref name="i"/>.</summary>
+    private static double Hash(int i)
+    {
+        var v = Math.Sin(i * 12.9898 + 78.233) * 43758.5453;
+        return v - Math.Floor(v);
+    }
+
+    /// <summary>Bits of flame that break off the tips and rise, shrinking and fading.</summary>
+    private void DrawLicks(DrawingContext dc)
+    {
+        foreach (var lick in _licks)
+        {
+            var k = Math.Clamp(lick.Life / 0.4, 0, 1);
+            var brush = new SolidColorBrush(Color.FromArgb((byte)(200 * k), 0xFF, (byte)(0x90 + 0x50 * k), 0x30));
+            var r = lick.Size * (0.4 + 0.6 * k);
+            dc.DrawEllipse(brush, null, new Point(lick.X, lick.Y), r * 0.75, r * 1.25);
+        }
     }
 
     private void DrawSparks(DrawingContext dc)
@@ -392,7 +452,7 @@ public sealed class WaveSeekBar : FrameworkElement
 
     private void UpdateAnimationState()
     {
-        if (IsLoaded && (IsPlaying || _activity > 0.002 || _ripples.Count > 0 || _sparks.Count > 0)) StartAnimating();
+        if (IsLoaded && (IsPlaying || _activity > 0.002 || _ripples.Count > 0 || _sparks.Count > 0 || _licks.Count > 0)) StartAnimating();
     }
 
     private void StartAnimating()
@@ -424,6 +484,8 @@ public sealed class WaveSeekBar : FrameworkElement
 
         // Louder music flows faster.
         _phase += dt * (1.4 + 2.4 * _level) * Math.Max(_activity, 0.15);
+        // Fire burns faster when the music is loud.
+        _fireTime += dt * (0.8 + 0.9 * _level) * Math.Max(_activity, 0.2);
 
         // A beat: loudness jumping well above its recent average sends a ripple back from the thumb.
         _sinceBeat += dt;
@@ -446,7 +508,7 @@ public sealed class WaveSeekBar : FrameworkElement
             else _ripples[i] = (distance + dt * 150, strength);
         }
 
-        if (!IsPlaying && _activity < 0.002 && _ripples.Count == 0 && _sparks.Count == 0)
+        if (!IsPlaying && _activity < 0.002 && _ripples.Count == 0 && _sparks.Count == 0 && _licks.Count == 0)
         {
             _activity = 0;
             _level = 0;
@@ -459,6 +521,38 @@ public sealed class WaveSeekBar : FrameworkElement
     /// the thumb. They rise, drift and fade.</summary>
     private void UpdateSparks(double dt, bool beat)
     {
+        for (var i = _licks.Count - 1; i >= 0; i--)
+        {
+            var l = _licks[i];
+            l.X += l.Vx * dt;
+            l.Y += l.Vy * dt;
+            l.Life -= dt;
+            if (l.Life <= 0) _licks.RemoveAt(i);
+            else _licks[i] = l;
+        }
+        if (Flames && IsPlaying && _activity > 0.3 && Maximum > 0)
+        {
+            var line = ActualHeight / 2;
+            var tx = Left + (Right - Left) * Math.Clamp(CurrentPosition() / Maximum, 0, 1);
+            var room = line - 2 + FlameOverflow;
+            var chance = dt * (6 + 22 * _level) * (beat ? 4 : 1);
+            while (chance > 0 && tx - Left > 30 && _licks.Count < 24)
+            {
+                if (Random.Shared.NextDouble() > chance) break;
+                chance -= 1;
+                var back = Math.Pow(Random.Shared.NextDouble(), 1.6) * Math.Min(150, tx - Left);
+                _licks.Add(new Spark
+                {
+                    X = tx - 4 - back,
+                    Y = line - room * (0.45 + 0.4 * _level) * (0.6 + 0.4 * Random.Shared.NextDouble()),
+                    Vx = (Random.Shared.NextDouble() - 0.5) * 10,
+                    Vy = -(35 + Random.Shared.NextDouble() * 40),
+                    Life = 0.22 + Random.Shared.NextDouble() * 0.2,
+                    Size = 1.4 + Random.Shared.NextDouble() * 1.6,
+                });
+            }
+        }
+
         for (var i = _sparks.Count - 1; i >= 0; i--)
         {
             var s = _sparks[i];

@@ -211,7 +211,8 @@ public sealed class SpectrumView : FrameworkElement
         if (Look == SpectrumStyle.Off)
         {
             // Off: only a faint hint while the pointer is over it, so it can be switched back on.
-            if (CycleOnClick && IsMouseOver) DrawHint(dc, "스펙트럼 꺼짐 · 클릭해서 켜기");
+            // (Not while the new look's name is showing: the two would sit on top of each other.)
+            if (CycleOnClick && IsMouseOver && _label is null) DrawHint(dc, "스펙트럼 꺼짐 · 클릭해서 켜기");
             return;
         }
         if (height <= 0 || _level.Length == 0) return;
@@ -340,17 +341,22 @@ public sealed class SpectrumView : FrameworkElement
         dc.Pop();
     }
 
+    /// <summary>The new look's name (<paramref name="strong"/>: white on a dark pill, readable on
+    /// any background) or the quiet "click to turn on" hint (the theme's secondary text color).</summary>
     private void DrawHint(DrawingContext dc, string text, bool strong = false)
     {
-        var color = BarBrush is SolidColorBrush b ? b.Color : Colors.White;
+        var brush = strong
+            ? Brushes.White
+            : TryFindResource("TextFillColorSecondaryBrush") as Brush ?? Brushes.Gray;
         var formatted = new FormattedText(text, System.Globalization.CultureInfo.CurrentUICulture, FlowDirection.LeftToRight,
             new Typeface(new FontFamily("Segoe UI Variable Text, Malgun Gothic"), FontStyles.Normal, strong ? FontWeights.SemiBold : FontWeights.Normal, FontStretches.Normal),
-            11, new SolidColorBrush(Color.FromArgb(strong ? (byte)255 : (byte)170, color.R, color.G, color.B)), VisualTreeHelper.GetDpi(this).PixelsPerDip);
-        var w = formatted.Width + 14;
-        var h = formatted.Height + 4;
+            12, brush, VisualTreeHelper.GetDpi(this).PixelsPerDip);
+        var padX = strong ? 14 : 0;
+        var w = formatted.Width + padX * 2;
+        var h = formatted.Height + (strong ? 8 : 0);
         var rect = new Rect(Math.Max(0, (ActualWidth - w) / 2), Math.Max(0, (ActualHeight - h) / 2), w, h);
-        if (strong) dc.DrawRoundedRectangle(new SolidColorBrush(Color.FromArgb(0xB3, 0x10, 0x10, 0x10)), null, rect, h / 2, h / 2);
-        dc.DrawText(formatted, new Point(rect.X + 7, rect.Y + 2));
+        if (strong) dc.DrawRoundedRectangle(new SolidColorBrush(Color.FromArgb(0xE6, 0x1E, 0x1E, 0x22)), null, rect, h / 2, h / 2);
+        dc.DrawText(formatted, new Point(rect.X + padX, rect.Y + (h - formatted.Height) / 2));
     }
 
     /// <summary>Heights land on whole segments, like an LED meter.</summary>
