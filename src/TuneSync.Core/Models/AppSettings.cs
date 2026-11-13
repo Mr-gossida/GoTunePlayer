@@ -120,6 +120,17 @@ public sealed class AppSettings
     /// plays, a full-screen "now playing" view takes over.</summary>
     public bool ScreenSaverEnabled { get; set; } = true;
     public int ScreenSaverMinutes { get; set; } = 5;
+
+    /// <summary>How the screen saver is left: any input (default), or only the Esc key.</summary>
+    public ScreenSaverExit ScreenSaverExit { get; set; } = ScreenSaverExit.AnyInput;
+}
+
+public enum ScreenSaverExit
+{
+    /// <summary>Moving the mouse, clicking or any key brings the player back.</summary>
+    AnyInput,
+    /// <summary>Only Esc (or the on-screen Esc button) does; other input just shows how.</summary>
+    EscapeKey,
 }
 
 public enum LibraryAddMode

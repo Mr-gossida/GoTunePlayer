@@ -27,6 +27,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         _quarantineFolderName = settings.MergeQuarantineFolderName;
         _screenSaverEnabled = settings.ScreenSaverEnabled;
         _screenSaverMinutes = settings.ScreenSaverMinutes;
+        _screenSaverExit = settings.ScreenSaverExit;
         _cacheMegabytes = settings.StreamCacheMegabytes;
         _startWithWindows = AutoStart.IsEnabled();
         RefreshNetwork();
@@ -225,6 +226,21 @@ public sealed partial class SettingsViewModel : ObservableObject
     partial void OnScreenSaverEnabledChanged(bool value)
     {
         _settings.ScreenSaverEnabled = value;
+        AppSettingsStore.Save(_settings);
+    }
+
+    [ObservableProperty]
+    private ScreenSaverExit _screenSaverExit;
+
+    public IReadOnlyList<Choice<ScreenSaverExit>> ScreenSaverExitOptions { get; } =
+    [
+        new(ScreenSaverExit.AnyInput, "마우스·키보드 조작 시"),
+        new(ScreenSaverExit.EscapeKey, "ESC 키를 누를 때만"),
+    ];
+
+    partial void OnScreenSaverExitChanged(ScreenSaverExit value)
+    {
+        _settings.ScreenSaverExit = value;
         AppSettingsStore.Save(_settings);
     }
 

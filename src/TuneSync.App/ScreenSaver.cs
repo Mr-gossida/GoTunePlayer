@@ -36,6 +36,7 @@ public static class ScreenSaver
     {
         if (_windows is not null || _playback is null) return;
         ScreenSaverWindow.NewAuroraSession();
+        ScreenSaverWindow.EscapeOnly = _settings?.ScreenSaverExit == ScreenSaverExit.EscapeKey;
         var player = ActiveWindow();
         var monitors = Monitors();
         var windows = new List<ScreenSaverWindow>();

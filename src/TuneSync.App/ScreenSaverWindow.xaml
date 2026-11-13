@@ -187,6 +187,40 @@
             </TextBlock>
         </Grid>
 
+        <!-- ESC-only mode (설정 › 화면 보호기 종료 방법): shown on any other input, with a button to
+             leave by mouse. Fades away again when the input stops. -->
+        <Border x:Name="ExitPrompt" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,28"
+                Padding="22,12,12,12" CornerRadius="28" Background="#CC101010" BorderBrush="#33FFFFFF" BorderThickness="1"
+                Visibility="Collapsed" Opacity="0">
+            <StackPanel Orientation="Horizontal">
+                <TextBlock VerticalAlignment="Center" FontSize="17" Foreground="White" Margin="0,0,18,0">
+                    <Run Text="ESC" FontWeight="SemiBold"/><Run Text=" 키를 누르면 화면 보호기가 종료됩니다"/>
+                </TextBlock>
+                <Button x:Name="ExitButton" Click="ExitButton_Click" Cursor="Hand" Focusable="False" ToolTip="화면 보호기 종료">
+                    <Button.Template>
+                        <ControlTemplate TargetType="Button">
+                            <Border x:Name="Face" CornerRadius="18" Background="#E6FFFFFF" Padding="16,7">
+                                <StackPanel Orientation="Horizontal">
+                                    <Border CornerRadius="5" BorderBrush="#99101010" BorderThickness="1.5" Padding="6,1" Margin="0,0,8,0">
+                                        <TextBlock Text="ESC" FontSize="12" FontWeight="Bold" Foreground="#FF101010"/>
+                                    </Border>
+                                    <TextBlock Text="종료" FontSize="15" FontWeight="SemiBold" Foreground="#FF101010" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="Face" Property="Background" Value="White"/>
+                                </Trigger>
+                                <Trigger Property="IsPressed" Value="True">
+                                    <Setter TargetName="Face" Property="Background" Value="#CCFFFFFF"/>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Button.Template>
+                </Button>
+            </StackPanel>
+        </Border>
+
         <TextBlock x:Name="Hint" Text="마우스를 움직이거나 아무 키나 누르면 돌아갑니다" FontSize="13" Foreground="#99FFFFFF"
                    HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,40"/>
     </Grid>
