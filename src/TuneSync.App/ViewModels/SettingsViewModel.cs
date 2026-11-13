@@ -28,6 +28,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         _screenSaverEnabled = settings.ScreenSaverEnabled;
         _screenSaverMinutes = settings.ScreenSaverMinutes;
         _screenSaverExit = settings.ScreenSaverExit;
+        _minimizeToMini = settings.MinimizeToMini;
         _cacheMegabytes = settings.StreamCacheMegabytes;
         _startWithWindows = AutoStart.IsEnabled();
         RefreshNetwork();
@@ -226,6 +227,15 @@ public sealed partial class SettingsViewModel : ObservableObject
     partial void OnScreenSaverEnabledChanged(bool value)
     {
         _settings.ScreenSaverEnabled = value;
+        AppSettingsStore.Save(_settings);
+    }
+
+    [ObservableProperty]
+    private bool _minimizeToMini;
+
+    partial void OnMinimizeToMiniChanged(bool value)
+    {
+        _settings.MinimizeToMini = value;
         AppSettingsStore.Save(_settings);
     }
 

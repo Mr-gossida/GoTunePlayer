@@ -70,7 +70,8 @@ Before building the debug app, kill only leftover debug processes (`*\bin\Debug\
   snapshots with `RenderTargetBitmap` (draw the element through a `VisualBrush` over a background rectangle),
   then writes `done.txt`. A PowerShell script backs up `%LocalAppData%\GoTune\settings.json`, writes test
   settings, starts `bin\Debug\...\GoTune.exe`, waits for `done.txt`, kills that process and restores the settings.
-- **Always remove the hook afterwards**: delete `DebugLyricsTest.cs` and `git checkout -- src/TuneSync.App/App.xaml.cs`.
+- **Always remove the hook afterwards**: delete `DebugLyricsTest.cs` and remove just the three hook lines from `App.xaml.cs`
+  (`git checkout` of the file only when it has no other uncommitted change - it would undo those too).
   Also remove any `TEMP-TRACE` lines.
 - Off-screen windows capture black with PrintWindow; `RenderTargetBitmap` can't render ps_3_0 effects (the aurora).
 - Don't pipe test scripts into `Select-Object -First` (it stops the script before its cleanup runs).

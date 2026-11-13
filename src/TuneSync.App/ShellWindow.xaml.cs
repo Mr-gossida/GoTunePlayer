@@ -36,7 +36,20 @@ public partial class ShellWindow : FluentWindow
         Toast.Register(this, snackbar);
 
         PlayerFrame.Navigate(services.GetRequiredService<PlayView>());
-        TaskbarControls.Attach(this, playback);
+        TaskbarControls.Attach(this, playback, new("미니 플레이어로", "\uE73F", () => EnterMiniMode(_mini?.Mode ?? PlayerMode.MiniHorizontal)));
+        StateChanged += (_, _) =>
+        {
+            if (WindowState != WindowState.Minimized)
+            {
+                StartingQuietly = false;
+                return;
+            }
+            // 설정 › 최소화하면 미니 플레이어로 (not when Windows started us minimized at sign-in)
+            if (!_settings.MinimizeToMini || StartingQuietly || IsClosing || !IsVisible) return;
+            Hide(); // first, so the window doesn't flash back up while being restored
+            WindowState = WindowState.Normal;
+            EnterMiniMode(_mini?.Mode ?? PlayerMode.MiniHorizontal);
+        };
         SleepTimerButton.DataContext = services.GetRequiredService<SleepTimerViewModel>();
         ScreenSaver.Start(services);
 
@@ -107,6 +120,9 @@ public partial class ShellWindow : FluentWindow
     // --- mini player ---
 
     private MiniPlayerWindow? _mini;
+
+    /// <summary>Set while the app opens minimized at Windows sign-in: that minimize must stay one.</summary>
+    public bool StartingQuietly { get; set; }
 
     /// <summary>True once the app is shutting down (the mini player then closes for real).</summary>
     public bool IsClosing { get; private set; }

@@ -28,7 +28,7 @@ public partial class MiniPlayerWindow : FluentWindow
         _settings = settings;
         _shell = shell;
         DataContext = playback;
-        TaskbarControls.Attach(this, playback);
+        TaskbarControls.Attach(this, playback, new("전체 플레이어로", "\uE740", () => _shell.ExitMiniMode()));
         WindowSnapper.Attach(this); // magnetic screen edges while dragging
 
         playback.PropertyChanged += Playback_PropertyChanged;
@@ -175,6 +175,14 @@ public partial class MiniPlayerWindow : FluentWindow
     /// <summary>No title bar here: the whole window is the drag handle.</summary>
     private void Window_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
+        // Double-click anywhere that isn't a control: back to the full player, like
+        // double-clicking a title bar.
+        if (e.ClickCount == 2)
+        {
+            e.Handled = true;
+            _shell.ExitMiniMode();
+            return;
+        }
         if (e.ButtonState == MouseButtonState.Pressed) DragMove();
     }
 

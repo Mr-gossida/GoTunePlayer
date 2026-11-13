@@ -9,16 +9,25 @@ using TuneSync.App.ViewModels;
 namespace TuneSync.App;
 
 /// <summary>Previous / play-pause / next buttons under the window's taskbar thumbnail (like
-/// Windows Media Player and Spotify), and the playing song as the window title, which is what
+/// Windows Media Player and Spotify), plus full/mini player switching, and the playing song as the window title, which is what
 /// the taskbar and Alt+Tab show.</summary>
 public static class TaskbarControls
 {
-    public static void Attach(Window window, PlaybackViewModel playback)
+    /// <summary>A fourth button that switches between the full and the mini player.</summary>
+    public sealed record SwitchButton(string Description, string Glyph, Action Click);
+
+    public static void Attach(Window window, PlaybackViewModel playback, SwitchButton? switchButton = null)
     {
         var previous = new ThumbButtonInfo { Description = "이전 곡", Command = playback.PlayPreviousCommand, ImageSource = Glyph("\uE892") };
         var playPause = new ThumbButtonInfo { Command = playback.TogglePlayPauseCommand };
         var next = new ThumbButtonInfo { Description = "다음 곡", Command = playback.PlayNextCommand, ImageSource = Glyph("\uE893") };
         window.TaskbarItemInfo = new TaskbarItemInfo { ThumbButtonInfos = [previous, playPause, next] };
+        if (switchButton is not null)
+        {
+            var toggle = new ThumbButtonInfo { Description = switchButton.Description, ImageSource = Glyph(switchButton.Glyph) };
+            toggle.Click += (_, _) => switchButton.Click();
+            window.TaskbarItemInfo.ThumbButtonInfos.Add(toggle);
+        }
 
         void Refresh()
         {

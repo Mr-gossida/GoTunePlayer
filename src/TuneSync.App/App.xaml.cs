@@ -91,7 +91,11 @@ public partial class App : Application
             var autoStarted = e.Args.Contains(AutoStart.Argument, StringComparer.OrdinalIgnoreCase);
             if (settings.PlayerMode == PlayerMode.Full)
             {
-                if (autoStarted) shell.WindowState = WindowState.Minimized;
+                if (autoStarted)
+                {
+                    shell.StartingQuietly = true;
+                    shell.WindowState = WindowState.Minimized;
+                }
                 shell.Show();
             }
             else

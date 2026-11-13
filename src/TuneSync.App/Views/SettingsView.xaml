@@ -188,6 +188,16 @@
             </ui:CardControl.Header>
             <ui:ToggleSwitch IsChecked="{Binding ShowIntroGauge}" OnContent="표시" OffContent="숨김"/>
         </ui:CardControl>
+        <ui:CardControl Margin="0,0,0,4" Icon="{ui:SymbolIcon PictureInPictureEnter24}">
+            <ui:CardControl.Header>
+                <StackPanel>
+                    <ui:TextBlock Text="최소화하면 미니 플레이어로" FontTypography="Body"/>
+                    <ui:TextBlock Text="플레이어 창의 최소화(─) 버튼을 누르면 작업 표시줄로 숨는 대신 미니 플레이어로 바뀝니다. 미니 플레이어를 더블클릭하면 다시 돌아옵니다."
+                                  FontSize="12" TextWrapping="Wrap" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                </StackPanel>
+            </ui:CardControl.Header>
+            <ui:ToggleSwitch IsChecked="{Binding MinimizeToMini}" OnContent="켬" OffContent="끔"/>
+        </ui:CardControl>
         <ui:CardControl Margin="0,0,0,4" Icon="{ui:SymbolIcon Desktop24}">
             <ui:CardControl.Header>
                 <StackPanel>

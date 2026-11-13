@@ -121,6 +121,10 @@ public sealed class AppSettings
     public bool ScreenSaverEnabled { get; set; } = true;
     public int ScreenSaverMinutes { get; set; } = 5;
 
+    /// <summary>The full player's minimize button turns it into the mini player instead of
+    /// sending it to the taskbar.</summary>
+    public bool MinimizeToMini { get; set; }
+
     /// <summary>How the screen saver is left: any input (default), or only the Esc key.</summary>
     public ScreenSaverExit ScreenSaverExit { get; set; } = ScreenSaverExit.AnyInput;
 }
