@@ -227,10 +227,13 @@ public sealed partial class PlaybackViewModel : ObservableObject, IDisposable
         library.FilesRemoving += OnFilesRemoving;
         LibraryFileViewModel.ArtistFirst = settings.QueueArtistFirst;
         PickSeekLook();
-        // 임의: a new look for every song.
+        PickSpectrumLook();
+        // 임의 / 랜덤: a new look for every song.
         PropertyChanged += (_, e) =>
         {
-            if (e.PropertyName == nameof(CurrentFile) && SeekBarStyle == SeekBarStyle.Random) PickSeekLook();
+            if (e.PropertyName != nameof(CurrentFile)) return;
+            if (SeekBarStyle == SeekBarStyle.Random) PickSeekLook();
+            if (SpectrumStyle == SpectrumStyle.Random) PickSpectrumLook();
         };
         _volume = Math.Clamp(settings.Volume, 0, 1);
         _isShuffle = settings.Shuffle;
@@ -1201,7 +1204,27 @@ public sealed partial class PlaybackViewModel : ObservableObject, IDisposable
             _settings.SpectrumStyle = value;
             AppSettingsStore.Save(_settings);
             OnPropertyChanged();
+            PickSpectrumLook();
         }
+    }
+
+    /// <summary>The spectrum's look right now: the chosen one, or with 랜덤 one picked per song.</summary>
+    [ObservableProperty]
+    private SpectrumStyle _spectrumLook;
+
+    private static readonly SpectrumStyle[] RandomLooks =
+        [SpectrumStyle.Led, SpectrumStyle.Bars, SpectrumStyle.Wave, SpectrumStyle.Mirror, SpectrumStyle.Dots];
+
+    private void PickSpectrumLook()
+    {
+        if (SpectrumStyle != SpectrumStyle.Random)
+        {
+            SpectrumLook = SpectrumStyle;
+            return;
+        }
+        // A different one from what's showing, so a new song (or the click) visibly changes it.
+        var choices = RandomLooks.Where(l => l != SpectrumLook).ToArray();
+        SpectrumLook = choices[Random.Shared.Next(choices.Length)];
     }
 
     /// <summary>Clicking the spectrum: 없음 → LED → 둥근 막대 → 물결 → 대칭 → 점 → 없음 …</summary>
@@ -1219,6 +1242,7 @@ public sealed partial class PlaybackViewModel : ObservableObject, IDisposable
         SpectrumStyle.Wave => "물결",
         SpectrumStyle.Mirror => "대칭 막대",
         SpectrumStyle.Dots => "도트",
+        SpectrumStyle.Random => "랜덤 (곡마다)",
         _ => style.ToString(),
     };
 

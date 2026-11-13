@@ -205,6 +205,8 @@ public enum SpectrumStyle
     Mirror,
     /// <summary>Columns of dots.</summary>
     Dots,
+    /// <summary>One of the looks above, picked anew for each song.</summary>
+    Random,
 }
 
 public enum QueueViewMode

@@ -100,6 +100,13 @@ public sealed class SpectrumView : FrameworkElement
     {
         if (!CycleOnClick || Playback is not { } playback) return;
         playback.CycleSpectrumStyle();
+        // The new look's name, briefly (with 랜덤, which look it picked).
+        _label = playback.SpectrumStyle == SpectrumStyle.Random
+            ? "랜덤 · " + PlaybackViewModel.SpectrumStyleName(playback.SpectrumLook)
+            : PlaybackViewModel.SpectrumStyleName(playback.SpectrumStyle);
+        _labelUntil = DateTime.UtcNow.AddSeconds(1.4);
+        _settled = false;
+        InvalidateVisual();
         e.Handled = true;
     }
 
@@ -110,11 +117,6 @@ public sealed class SpectrumView : FrameworkElement
     private void OnLookChanged(DependencyPropertyChangedEventArgs e)
     {
         _settled = false;
-        if (CycleOnClick && IsLoaded)
-        {
-            _label = PlaybackViewModel.SpectrumStyleName((SpectrumStyle)e.NewValue);
-            _labelUntil = DateTime.UtcNow.AddSeconds(1.4);
-        }
         InvalidateVisual();
     }
 

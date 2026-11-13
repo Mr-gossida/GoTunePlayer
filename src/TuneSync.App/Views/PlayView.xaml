@@ -345,7 +345,7 @@
                     <TextBlock Text="{Binding NowPlayingDetails}" FontSize="12" Margin="0,2,0,0" TextTrimming="CharacterEllipsis"
                                Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
                     <ContentControl Content="{Binding}" ContentTemplate="{StaticResource QualityLineTemplate}" Margin="0,4,0,0" Focusable="False"/>
-                    <views:SpectrumView Playback="{Binding}" Look="{Binding SpectrumStyle}" CycleOnClick="True" BarBrush="{DynamicResource PlayerAccentBrush}" Height="21" Margin="0,8,0,0"/>
+                    <views:SpectrumView Playback="{Binding}" Look="{Binding SpectrumLook}" CycleOnClick="True" BarBrush="{DynamicResource PlayerAccentBrush}" Height="21" Margin="0,8,0,0"/>
                 </StackPanel>
             </Grid>
 
@@ -388,7 +388,7 @@
                            Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
                 <ContentControl x:Name="PanelQuality" Content="{Binding}" ContentTemplate="{StaticResource QualityLineTemplate}" Margin="0,8,0,0" Focusable="False"/>
                 <!-- Spectrum analyzer of what's playing (SpectrumView): transparent, in the cover's color. -->
-                <views:SpectrumView x:Name="PanelSpectrum" Playback="{Binding}" Look="{Binding SpectrumStyle}" CycleOnClick="True" BarBrush="{DynamicResource PlayerAccentBrush}" Height="42" Margin="0,18,0,0"/>
+                <views:SpectrumView x:Name="PanelSpectrum" Playback="{Binding}" Look="{Binding SpectrumLook}" CycleOnClick="True" BarBrush="{DynamicResource PlayerAccentBrush}" Height="42" Margin="0,18,0,0"/>
                 <!-- Intro (hero card, PlayView.ApplyIntroStage): how far the opening has played. -->
                 <!-- Shown/hidden from code (ApplyIntroStage), before the card is measured for its glide. -->
                 <Grid x:Name="HeroGauge" Height="3" Margin="0,24,0,-27" Visibility="Collapsed">
