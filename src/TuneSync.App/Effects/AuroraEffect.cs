@@ -31,6 +31,28 @@ public sealed class AuroraEffect : ShaderEffect
     public static readonly DependencyProperty IntensityProperty = DependencyProperty.Register(
         nameof(Intensity), typeof(double), typeof(AuroraEffect), new UIPropertyMetadata(0.7, PixelShaderConstantCallback(4)));
 
+    public static readonly DependencyProperty OffsetProperty = DependencyProperty.Register(
+        nameof(Offset), typeof(Point), typeof(AuroraEffect), new UIPropertyMetadata(new Point(), PixelShaderConstantCallback(5)));
+
+    public static readonly DependencyProperty SpanProperty = DependencyProperty.Register(
+        nameof(Span), typeof(Size), typeof(AuroraEffect), new UIPropertyMetadata(new Size(), PixelShaderConstantCallback(6)));
+
+    /// <summary>With several monitors: where this screen's top-left sits in the shared picture,
+    /// in units of the tallest screen's height.</summary>
+    public Point Offset
+    {
+        get => (Point)GetValue(OffsetProperty);
+        set => SetValue(OffsetProperty, value);
+    }
+
+    /// <summary>With several monitors: this screen's size in the shared picture (same units).
+    /// Empty (the default) for a single screen, which then uses <see cref="Aspect"/>.</summary>
+    public Size Span
+    {
+        get => (Size)GetValue(SpanProperty);
+        set => SetValue(SpanProperty, value);
+    }
+
     public AuroraEffect()
     {
         PixelShader = Shader;
@@ -40,6 +62,8 @@ public sealed class AuroraEffect : ShaderEffect
         UpdateShaderValue(Color2Property);
         UpdateShaderValue(AspectProperty);
         UpdateShaderValue(IntensityProperty);
+        UpdateShaderValue(OffsetProperty);
+        UpdateShaderValue(SpanProperty);
     }
 
     public Brush Input

@@ -28,7 +28,7 @@
 
         <!-- The clock stays put in its corner (drifting, it could slide off the screen); its
              digits change every minute anyway. -->
-        <StackPanel HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,56,72,0">
+        <StackPanel x:Name="ClockPanel" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,56,72,0">
             <TextBlock x:Name="ClockText" FontSize="72" FontWeight="Light" Foreground="White" HorizontalAlignment="Right"/>
             <TextBlock x:Name="DateText" FontSize="18" Foreground="#B3FFFFFF" HorizontalAlignment="Right" Margin="0,0,4,0"/>
         </StackPanel>
@@ -52,8 +52,8 @@
                 </Rectangle.Fill>
             </Rectangle>
 
-            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="900">
-                <Border Width="340" Height="340" CornerRadius="14" HorizontalAlignment="Center" Background="#22FFFFFF">
+            <StackPanel x:Name="MainStack" HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="900">
+                <Border x:Name="CoverCard" Width="340" Height="340" CornerRadius="14" HorizontalAlignment="Center" Background="#22FFFFFF">
                     <Border.Effect>
                         <DropShadowEffect BlurRadius="60" ShadowDepth="12" Direction="270" Opacity="0.55" Color="Black"/>
                     </Border.Effect>
@@ -63,13 +63,13 @@
                         </Border.Background>
                     </Border>
                 </Border>
-                <TextBlock Text="{Binding NowPlayingTitle}" FontSize="38" FontWeight="Bold" Foreground="White" Margin="0,36,0,0"
+                <TextBlock x:Name="TitleText" Text="{Binding NowPlayingTitle}" FontSize="38" FontWeight="Bold" Foreground="White" Margin="0,36,0,0"
                            TextAlignment="Center" TextWrapping="Wrap"/>
-                <TextBlock Text="{Binding NowPlayingSubtitle}" FontSize="20" Foreground="#CCFFFFFF" Margin="0,8,0,0"
+                <TextBlock x:Name="SubtitleText" Text="{Binding NowPlayingSubtitle}" FontSize="20" Foreground="#CCFFFFFF" Margin="0,8,0,0"
                            TextAlignment="Center" TextWrapping="Wrap"/>
                 <!-- How far the song has got: the player's seek bar in the same look, shown only
                      (any mouse movement ends the screen saver anyway). White, like the spectrum. -->
-                <Grid Width="560" Margin="0,26,0,0" IsHitTestVisible="False">
+                <Grid x:Name="SeekPanel" Width="560" Margin="0,26,0,0" IsHitTestVisible="False">
                     <Grid.Effect>
                         <DropShadowEffect BlurRadius="10" ShadowDepth="0" Opacity="0.5" Color="Black"/>
                     </Grid.Effect>
@@ -89,7 +89,7 @@
 
                 <!-- The spectrum of what's playing, as in the player - but white: the cover's accent
                      color is the same hue as the light behind it here and got lost. -->
-                <views:SpectrumView Playback="{Binding}" Look="{Binding SpectrumLook}" BarBrush="#F2FFFFFF" BarWidth="4"
+                <views:SpectrumView x:Name="MainSpectrum" Playback="{Binding}" Look="{Binding SpectrumLook}" BarBrush="#F2FFFFFF" BarWidth="4"
                                     Width="560" Height="48" Margin="0,18,0,0">
                     <views:SpectrumView.Effect>
                         <DropShadowEffect BlurRadius="10" ShadowDepth="0" Opacity="0.5" Color="Black"/>
@@ -161,6 +161,30 @@
                     </ItemsControl>
                 </ScrollViewer>
             </StackPanel>
+
+            <!-- Other monitors (ScreenSaverRole.Ambient), and the lyrics screen while there are no
+                 lines to show: a big clock over a wide spectrum. -->
+            <StackPanel x:Name="AmbientPanel" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed">
+                <StackPanel.Effect>
+                    <DropShadowEffect BlurRadius="16" ShadowDepth="0" Opacity="0.5" Color="Black"/>
+                </StackPanel.Effect>
+                <TextBlock x:Name="AmbientClock" FontSize="150" FontWeight="Light" Foreground="White" HorizontalAlignment="Center"/>
+                <TextBlock x:Name="AmbientDate" FontSize="24" Foreground="#B3FFFFFF" HorizontalAlignment="Center" Margin="0,-6,0,0"/>
+                <views:SpectrumView x:Name="AmbientSpectrum" Playback="{Binding}" Look="{Binding SpectrumLook}" BarBrush="#E6FFFFFF" BarWidth="8"
+                                    Width="1000" Height="130" Margin="0,56,0,0"/>
+                <TextBlock Margin="0,30,0,0" HorizontalAlignment="Center" FontSize="18" Foreground="#B3FFFFFF">
+                    <Run Text="{Binding NowPlayingTitle, Mode=OneWay}"/><Run Text="  ·  "/><Run Text="{Binding NowPlayingSubtitle, Mode=OneWay}"/>
+                </TextBlock>
+            </StackPanel>
+
+            <!-- The lyrics screen (ScreenSaverRole.Lyrics): which song, quietly, under the lines. -->
+            <TextBlock x:Name="WallFooter" Visibility="Collapsed" HorizontalAlignment="Center" VerticalAlignment="Bottom"
+                       Margin="0,0,0,90" FontSize="20" Foreground="#B3FFFFFF">
+                <TextBlock.Effect>
+                    <DropShadowEffect BlurRadius="10" ShadowDepth="0" Opacity="0.5" Color="Black"/>
+                </TextBlock.Effect>
+                <Run Text="{Binding NowPlayingTitle, Mode=OneWay}" FontWeight="SemiBold" Foreground="White"/><Run Text="  ·  "/><Run Text="{Binding NowPlayingSubtitle, Mode=OneWay}"/>
+            </TextBlock>
         </Grid>
 
         <TextBlock x:Name="Hint" Text="마우스를 움직이거나 아무 키나 누르면 돌아갑니다" FontSize="13" Foreground="#99FFFFFF"

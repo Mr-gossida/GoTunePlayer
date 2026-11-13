@@ -12,6 +12,8 @@ float4 color1 : register(c1);   // main light color (from the cover)
 float4 color2 : register(c2);   // second light color (hue-shifted)
 float aspect : register(c3);    // width / height of the element
 float intensity : register(c4); // 0..1 overall strength
+float2 offset : register(c5);   // where this screen sits in the whole picture (several monitors)
+float2 span : register(c6);     // this screen's size in the whole picture; 0 = alone (use aspect)
 
 // 1 at the crest of each sine wave, falling off fast: thin bright streaks.
 float ridge(float v, float sharpness)
@@ -21,7 +23,9 @@ float ridge(float v, float sharpness)
 
 float4 main(float2 uv : TEXCOORD) : COLOR
 {
-    float2 p = float2(uv.x * aspect, uv.y) * 3.0;
+    // One light across all monitors: each screen draws its own part of the shared picture, so
+    // the bands carry on over the bezels instead of every screen showing the same thing.
+    float2 p = (span.y > 0.0 ? offset + uv * span : float2(uv.x * aspect, uv.y)) * 3.0;
     float t = time;
 
     // Let the waves push each other around: this is what makes the light "flow".
