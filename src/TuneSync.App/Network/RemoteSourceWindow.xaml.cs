@@ -7,18 +7,27 @@ namespace TuneSync.App.Network;
 /// <summary>The "네트워크 위치 추가" wizard window (see <see cref="RemoteSourceSetupViewModel"/>).</summary>
 public partial class RemoteSourceWindow : FluentWindow
 {
-    private readonly RemoteSourceSetupViewModel _viewModel = new();
+    private readonly RemoteSourceSetupViewModel _viewModel;
 
-    public RemoteSourceWindow()
+    public RemoteSourceWindow(IReadOnlyList<TuneSync.Core.Models.RemoteSource>? saved = null,
+        TuneSync.Core.Models.RemoteSource? start = null)
     {
         InitializeComponent();
+        _viewModel = new RemoteSourceSetupViewModel(saved);
         DataContext = _viewModel;
+        _viewModel.PasswordLoaded += (_, _) => PasswordBox.Password = _viewModel.Password;
         _viewModel.Finished += (_, _) =>
         {
             DialogResult = true;
             Close();
         };
-        Loaded += (_, _) => AddressBox.Focus();
+        Loaded += (_, _) =>
+        {
+            // Opened for one saved location (the + menu): straight to its folders.
+            var option = start is null ? null : _viewModel.SavedSources.FirstOrDefault(o => o.Source.Id == start.Id);
+            if (option is not null) _viewModel.UseSavedCommand.Execute(option);
+            else AddressBox.Focus();
+        };
         Closed += (_, _) => _viewModel.Dispose();
     }
 
@@ -41,9 +50,10 @@ public partial class RemoteSourceWindow : FluentWindow
 
     /// <summary>Runs the wizard; on success saves the location (password to Credential Manager)
     /// and returns the folder to add to the library.</summary>
-    public static TuneSync.Core.Models.LibraryFolderEntry? Run(Window? owner, NetworkLibrary network)
+    public static TuneSync.Core.Models.LibraryFolderEntry? Run(Window? owner, NetworkLibrary network,
+        TuneSync.Core.Models.RemoteSource? start = null)
     {
-        var window = new RemoteSourceWindow { Owner = owner };
+        var window = new RemoteSourceWindow(network.Sources, start) { Owner = owner };
         if (window.ShowDialog() != true || window.Result is not { } result) return null;
         network.Save(result.Source, result.Password);
         return result.Folder;

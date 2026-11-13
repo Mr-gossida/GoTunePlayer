@@ -18,9 +18,37 @@ public partial class LibrarySourceBar : UserControl
     {
         var button = (Button)sender;
         if (button.ContextMenu is not { } menu) return;
+        ListSavedSources(menu);
         menu.PlacementTarget = button;
         menu.Placement = System.Windows.Controls.Primitives.PlacementMode.Top;
         menu.IsOpen = true;
+    }
+
+    /// <summary>Network locations set up before, one click away (straight to picking a folder).</summary>
+    private void ListSavedSources(ContextMenu menu)
+    {
+        foreach (var old in menu.Items.OfType<FrameworkElement>().Where(i => Equals(i.Tag, "saved")).ToList())
+            menu.Items.Remove(old);
+        if (Library is not { SavedSources.Count: > 0 } library) return;
+
+        menu.Items.Add(new Separator { Tag = "saved" });
+        menu.Items.Add(new MenuItem { Header = "저장된 네트워크 위치", IsEnabled = false, Tag = "saved" });
+        foreach (var source in library.SavedSources)
+        {
+            var item = new MenuItem
+            {
+                Header = source.Name.Length > 0 ? source.Name : source.Address,
+                InputGestureText = source.KindLabel,
+                ToolTip = source.Address,
+                Tag = "saved",
+                Icon = new Wpf.Ui.Controls.SymbolIcon
+                {
+                    Symbol = Enum.Parse<Wpf.Ui.Controls.SymbolRegular>(Network.RemoteSourceSetupViewModel.IconFor(source.Kind)),
+                },
+            };
+            item.Click += (_, _) => library.AddFromSavedSourceCommand.Execute(source);
+            menu.Items.Add(item);
+        }
     }
 
     private void AddLocal_Click(object sender, RoutedEventArgs e) => Library?.AddFoldersCommand.Execute(null);

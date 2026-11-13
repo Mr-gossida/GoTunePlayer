@@ -15,8 +15,10 @@ public sealed partial class RemoteSourceSetupViewModel : ObservableObject, IDisp
     private IRemoteClient? _browser;
     private CancellationTokenSource? _busy;
 
-    public RemoteSourceSetupViewModel()
+    public RemoteSourceSetupViewModel(IReadOnlyList<RemoteSource>? saved = null)
     {
+        SavedSources = (saved ?? []).Select(s => new SavedSourceOption(s, s.Name.Length > 0 ? s.Name : s.Address,
+            $"{s.KindLabel} · {s.Address}" + (s.UserName.Length > 0 ? $" · {s.UserName}" : ""), IconFor(s.Kind))).ToList();
         Kinds =
         [
             new(RemoteKind.WebDav, "WebDAV", "NAS · Nextcloud · 클라우드", "Globe24"),
@@ -29,6 +31,45 @@ public sealed partial class RemoteSourceSetupViewModel : ObservableObject, IDisp
     }
 
     public IReadOnlyList<KindOption> Kinds { get; }
+
+    // --- locations set up before: pick one to browse it again, no typing ---
+
+    public IReadOnlyList<SavedSourceOption> SavedSources { get; }
+    public bool HasSavedSources => SavedSources.Count > 0;
+
+    /// <summary>Set when a saved location is reused, so it is updated rather than added twice.</summary>
+    private string? _existingId;
+
+    /// <summary>Raised when a saved password was filled in (the window shows it in its PasswordBox).</summary>
+    public event EventHandler? PasswordLoaded;
+
+    public static string IconFor(RemoteKind kind) => kind switch
+    {
+        RemoteKind.WebDav => "Globe24",
+        RemoteKind.Smb => "Server24",
+        RemoteKind.Sftp => "LockClosed24",
+        RemoteKind.Ftps => "ShieldLock24",
+        _ => "ArrowSwap24",
+    };
+
+    /// <summary>A saved location: its details and password are filled in and it connects right
+    /// away, straight to its folders.</summary>
+    [RelayCommand]
+    private async Task UseSavedAsync(SavedSourceOption? option)
+    {
+        if (option is null || IsBusy) return;
+        var s = option.Source;
+        SelectedKind = Kinds.FirstOrDefault(k => k.Kind == s.Kind) ?? Kinds[0];
+        Address = s.Address;
+        Port = s.Port > 0 ? s.Port : null;
+        UserName = s.UserName;
+        Name = s.Name;
+        AcceptAnyCertificate = s.AcceptAnyCertificate;
+        try { Password = CredentialStore.Load(s.Id); } catch { Password = ""; }
+        _existingId = s.Id;
+        PasswordLoaded?.Invoke(this, EventArgs.Empty);
+        await ConnectAsync();
+    }
 
     // --- step 1: connection ---
 
@@ -143,6 +184,7 @@ public sealed partial class RemoteSourceSetupViewModel : ObservableObject, IDisp
 
     public RemoteSource BuildSource() => new()
     {
+        Id = _existingId ?? Guid.NewGuid().ToString("N"),
         Name = DisplayName,
         Kind = Kind,
         Address = Address.Trim(),
@@ -290,3 +332,5 @@ public sealed partial class RemoteSourceSetupViewModel : ObservableObject, IDisp
 public sealed record KindOption(RemoteKind Kind, string Title, string Subtitle, string Icon);
 
 public sealed record BrowseItem(string Name, string Path);
+
+public sealed record SavedSourceOption(RemoteSource Source, string Title, string Detail, string Icon);

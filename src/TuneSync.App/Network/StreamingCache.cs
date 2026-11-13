@@ -39,6 +39,16 @@ public sealed class StreamingCache
         return item;
     }
 
+    /// <summary>Drops a song's cached copy (it no longer matches the server); the next play
+    /// downloads it again.</summary>
+    public void Forget(string remotePath)
+    {
+        if (_items.TryRemove(remotePath, out var item))
+        {
+            try { File.Delete(item.FilePath); } catch { /* in use - replaced by the next download */ }
+        }
+    }
+
     /// <summary>Fetch ahead (the next song in the queue) so it starts instantly.</summary>
     public void Prefetch(string remotePath)
     {
@@ -225,9 +235,18 @@ public sealed class CacheItem
         }
     }
 
-    /// <summary>The song was edited in the cache and uploaded: the file on disk is the new truth.</summary>
+    /// <summary>The song was edited in the cache and uploaded: the file on disk is the new truth -
+    /// its size and, with it, how much of it is here. (Leaving the "arrived" count at the old size
+    /// made the stream server stop short of a file that grew - added lyrics - and the song then
+    /// never started playing.)</summary>
     public void Refresh()
     {
-        if (File.Exists(FilePath)) Length = new FileInfo(FilePath).Length;
+        if (!File.Exists(FilePath)) return;
+        lock (_gate)
+        {
+            Length = new FileInfo(FilePath).Length;
+            if (IsComplete) Interlocked.Exchange(ref _downloaded, Length);
+            Monitor.PulseAll(_gate);
+        }
     }
 }

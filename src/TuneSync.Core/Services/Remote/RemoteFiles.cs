@@ -20,6 +20,10 @@ public static class RemoteFiles
     /// <summary>Told after a local copy was edited and uploaded (so the cache keeps it).</summary>
     public static Action<string, string>? Uploaded { get; set; }
 
+    /// <summary>Told when an edit of the local copy couldn't be uploaded: that copy no longer
+    /// matches the server and must be fetched again.</summary>
+    public static Action<string>? Discarded { get; set; }
+
     private static readonly ConcurrentDictionary<string, long> Sizes = new(StringComparer.Ordinal);
 
     /// <summary>Sizes are known from folder listings; remembering them saves a round trip per file.</summary>
@@ -54,15 +58,24 @@ public static class RemoteFiles
         }
 
         var copy = LocalCopyOf?.Invoke(path) ?? throw new IOException("원격 파일을 받아오지 못했습니다.");
-        using (var file = TagLib.File.Create(copy))
+        try
         {
-            edit(file);
-            file.Save();
-        }
+            using (var file = TagLib.File.Create(copy))
+            {
+                edit(file);
+                file.Save();
+            }
 
-        var client = Client(path, out var remotePath);
-        using (var content = File.OpenRead(copy))
-            client.Upload(remotePath, content);
+            var client = Client(path, out var remotePath);
+            using (var content = File.OpenRead(copy))
+                client.Upload(remotePath, content);
+        }
+        catch
+        {
+            Sizes.TryRemove(path, out _);
+            Discarded?.Invoke(path);
+            throw;
+        }
         Sizes[path] = new FileInfo(copy).Length;
         Uploaded?.Invoke(path, copy);
     }

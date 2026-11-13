@@ -98,6 +98,8 @@ public sealed class LocalStreamServer : IDisposable
                 .Append(partial ? "HTTP/1.1 206 Partial Content\r\n" : "HTTP/1.1 200 OK\r\n")
                 .Append("Content-Type: ").Append(ContentType(item.RemotePath)).Append("\r\n")
                 .Append("Accept-Ranges: bytes\r\n")
+                // Never kept by the system's HTTP cache: an edited song must be read anew.
+                .Append("Cache-Control: no-store\r\n")
                 .Append("Content-Length: ").Append(end - start + 1).Append("\r\n");
             if (partial) header.Append("Content-Range: bytes ").Append(start).Append('-').Append(end).Append('/').Append(length).Append("\r\n");
             header.Append("Connection: close\r\n\r\n");

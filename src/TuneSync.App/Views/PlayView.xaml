@@ -144,7 +144,8 @@
                         </Style.Triggers>
                     </Style>
                 </StackPanel.Style>
-                <Grid x:Name="BigCover" Height="{Binding ActualWidth, RelativeSource={RelativeSource Self}}">
+                <!-- Square; its size is set from code (PlayView.FitNowPlayingPanel) to fit the window. -->
+                <Grid x:Name="BigCover" Width="300" Height="300" HorizontalAlignment="Left">
                     <Border CornerRadius="10" Background="{DynamicResource PlayerHoverBrush}">
                         <ui:SymbolIcon Symbol="MusicNote224" FontSize="80" Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
                     </Border>
@@ -161,11 +162,11 @@
                            Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
                 <TextBlock Text="{Binding NowPlayingSubtitle}" FontSize="16" TextWrapping="Wrap" Margin="0,6,0,0"
                            Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-                <TextBlock Text="{Binding NowPlayingDetails}" FontSize="12" TextWrapping="Wrap" Margin="0,4,0,0"
+                <TextBlock x:Name="PanelDetails" Text="{Binding NowPlayingDetails}" FontSize="12" TextWrapping="Wrap" Margin="0,4,0,0"
                            Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
-                <ContentControl Content="{Binding}" ContentTemplate="{StaticResource QualityLineTemplate}" Margin="0,8,0,0" Focusable="False"/>
+                <ContentControl x:Name="PanelQuality" Content="{Binding}" ContentTemplate="{StaticResource QualityLineTemplate}" Margin="0,8,0,0" Focusable="False"/>
                 <!-- Spectrum analyzer of what's playing (SpectrumView): transparent, in the cover's color. -->
-                <views:SpectrumView Playback="{Binding}" BarBrush="{DynamicResource PlayerAccentBrush}" Height="42" Margin="0,18,0,0"/>
+                <views:SpectrumView x:Name="PanelSpectrum" Playback="{Binding}" BarBrush="{DynamicResource PlayerAccentBrush}" Height="42" Margin="0,18,0,0"/>
                 <!-- Intro (hero card, PlayView.ApplyIntroStage): how far the opening has played. -->
                 <!-- Shown/hidden from code (ApplyIntroStage), before the card is measured for its glide. -->
                 <Grid x:Name="HeroGauge" Height="3" Margin="0,24,0,-27" Visibility="Collapsed">

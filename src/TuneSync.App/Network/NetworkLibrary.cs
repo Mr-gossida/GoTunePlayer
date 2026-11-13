@@ -33,6 +33,11 @@ public sealed class NetworkLibrary : IDisposable
             Index.Forget(path);
             Cache.Open(path).Refresh();
         };
+        RemoteFiles.Discarded = path =>
+        {
+            Index.Forget(path);
+            Cache.Forget(path);
+        };
     }
 
     public StreamingCache Cache { get; }
@@ -69,7 +74,19 @@ public sealed class NetworkLibrary : IDisposable
     public void Save(RemoteSource source, string password)
     {
         CredentialStore.Save(source.Id, source.UserName, password);
-        if (Find(source.Id) is null) _settings.RemoteSources.Add(source);
+        if (Find(source.Id) is { } existing)
+        {
+            existing.Name = source.Name;
+            existing.Kind = source.Kind;
+            existing.Address = source.Address;
+            existing.Port = source.Port;
+            existing.UserName = source.UserName;
+            existing.AcceptAnyCertificate = source.AcceptAnyCertificate;
+        }
+        else
+        {
+            _settings.RemoteSources.Add(source);
+        }
         if (_clients.TryRemove(source.Id, out var old)) old.Dispose();
         AppSettingsStore.Save(_settings);
     }

@@ -440,6 +440,21 @@ public sealed partial class LibraryViewModel : ObservableObject
             await AddSourcesAsync([folder]);
     }
 
+    /// <summary>Network locations set up before (the + menu lists them).</summary>
+    public IReadOnlyList<RemoteSource> SavedSources => _network.Sources;
+
+    /// <summary>A saved location from the + menu: connects with its saved details and goes
+    /// straight to picking a folder there.</summary>
+    [RelayCommand]
+    private async Task AddFromSavedSourceAsync(RemoteSource? source)
+    {
+        if (source is null) return;
+        var owner = System.Windows.Application.Current.Windows.OfType<System.Windows.Window>().FirstOrDefault(w => w.IsActive)
+                    ?? System.Windows.Application.Current.MainWindow;
+        if (Network.RemoteSourceWindow.Run(owner, _network, source) is { } folder)
+            await AddSourcesAsync([folder]);
+    }
+
     /// <summary>A network location was removed: drop its folders/songs from the library.</summary>
     public async Task RemoveSourceAsync(string sourceId)
     {

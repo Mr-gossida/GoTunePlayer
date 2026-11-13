@@ -56,6 +56,33 @@
                 <TextBlock Text="NAS, 서버, 클라우드에 있는 음악을 바로 재생합니다. 처음 재생할 때 내려받아 두므로 다시 들을 때는 바로 나옵니다."
                            FontSize="13" TextWrapping="Wrap" Margin="0,6,0,18" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
 
+                <!-- Locations set up before: one click connects and shows their folders. -->
+                <StackPanel Visibility="{Binding HasSavedSources, Converter={StaticResource BoolToVisibility}}" Margin="0,0,0,18">
+                    <TextBlock Text="저장된 위치" FontSize="13" FontWeight="SemiBold" Margin="0,0,0,8"
+                               Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                    <ItemsControl ItemsSource="{Binding SavedSources}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="{x:Type net:SavedSourceOption}">
+                                <ui:CardAction Margin="0,0,0,6" Padding="14,10" IsChevronVisible="True"
+                                               Command="{Binding DataContext.UseSavedCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                               CommandParameter="{Binding}" ToolTip="저장된 정보로 연결해 폴더를 고릅니다">
+                                    <StackPanel Orientation="Horizontal">
+                                        <ui:SymbolIcon Symbol="{Binding Icon}" FontSize="20" VerticalAlignment="Center"
+                                                       Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}"/>
+                                        <StackPanel Margin="12,0,0,0">
+                                            <TextBlock Text="{Binding Title}" FontWeight="SemiBold" Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                                            <TextBlock Text="{Binding Detail}" FontSize="12" TextTrimming="CharacterEllipsis"
+                                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                        </StackPanel>
+                                    </StackPanel>
+                                </ui:CardAction>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <TextBlock Text="새 위치" FontSize="13" FontWeight="SemiBold" Margin="0,14,0,0"
+                               Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                </StackPanel>
+
                 <ListBox ItemsSource="{Binding Kinds}" SelectedItem="{Binding SelectedKind}" ItemContainerStyle="{StaticResource KindCardStyle}"
                          Background="Transparent" BorderThickness="0" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                     <ListBox.ItemsPanel>

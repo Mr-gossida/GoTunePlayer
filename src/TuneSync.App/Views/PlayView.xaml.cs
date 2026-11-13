@@ -36,7 +36,11 @@ public partial class PlayView : Page
                 FollowCurrentLyric();
             }, System.Windows.Threading.DispatcherPriority.Loaded);
         };
-        SizeChanged += (_, _) => ApplyResponsiveLayout(resizing: true);
+        SizeChanged += (_, _) =>
+        {
+            ApplyResponsiveLayout(resizing: true);
+            FitNowPlayingPanel();
+        };
         Loaded += (_, _) =>
         {
             SyncPlaylistToCurrentTrack();
@@ -52,7 +56,11 @@ public partial class PlayView : Page
             _trackChanging = true;
             Dispatcher.BeginInvoke(() => _trackChanging = false, System.Windows.Threading.DispatcherPriority.Background);
         };
-        Loaded += (_, _) => ApplyIntroStage(animate: false);
+        Loaded += (_, _) =>
+        {
+            ApplyIntroStage(animate: false);
+            FitNowPlayingPanel();
+        };
     }
 
     // --- intro stage: hero card during the opening, then a dramatic hand-off to the lyrics ---
@@ -78,7 +86,10 @@ public partial class PlayView : Page
         else if (animate && IntroPulse.IsVisible) CollapseAfter(IntroPulse, TimeSpan.FromMilliseconds(550), () => _viewModel.Playback.IsIntroVisible);
         else IntroPulse.Visibility = System.Windows.Visibility.Collapsed;
 
-        System.Windows.Rect? before = animate && _hero && !intro && NowPlayingPanel.IsVisible ? BoundsInLayer(NowPlayingPanel) : null;
+        // Measured on the cover, which sits at the card's top-left corner: the card's width and
+        // its cover's size needn't match (a short window gets a smaller cover), and the glide
+        // has to scale the card by how the cover changes.
+        System.Windows.Rect? before = animate && _hero && !intro && NowPlayingPanel.IsVisible ? BoundsInLayer(BigCover) : null;
         ShowHeroGauge(intro && playback.ShowIntroGauge, animate);
 
         if (hero != _hero)
@@ -89,21 +100,21 @@ public partial class PlayView : Page
             {
                 Grid.SetColumnSpan(NowPlayingPanel, 2);
                 NowPlayingPanel.HorizontalAlignment = System.Windows.HorizontalAlignment.Center;
-                NowPlayingPanel.Width = 340;
                 NowPlayingPanel.Margin = new System.Windows.Thickness(0);
+                FitNowPlayingPanel();
             }
             else
             {
                 NowPlayingPanel.ClearValue(Grid.ColumnSpanProperty);
                 NowPlayingPanel.ClearValue(HorizontalAlignmentProperty);
-                NowPlayingPanel.ClearValue(WidthProperty);
                 NowPlayingPanel.ClearValue(MarginProperty);
+                FitNowPlayingPanel();
                 if (from is { } start)
                 {
                     UpdateLayout();
                     // Cover, song info and spectrum travel together, as one card. Unhurried: the
                     // intro ends a few seconds before the singing, so there's time.
-                    GlideElement(NowPlayingPanel, start, BoundsInLayer(NowPlayingPanel), TimeSpan.FromMilliseconds(1400));
+                    GlideElement(NowPlayingPanel, start, BoundsInLayer(BigCover), TimeSpan.FromMilliseconds(1400));
                 }
             }
         }
@@ -124,6 +135,55 @@ public partial class PlayView : Page
             {
                 LyricsScrollViewer.BeginAnimation(OpacityProperty, null);
                 LyricsScrollViewer.Opacity = 1;
+            }
+        }
+    }
+
+    /// <summary>The cover card at its usual width (340 as the intro's centerpiece, 300 beside the
+    /// lyrics, 400 alone). When the window is too short for all of it, the cover gets smaller
+    /// (the text keeps its width, so it doesn't wrap onto more lines), and if that's still not
+    /// enough the spectrum and then the quality/album lines step aside - nothing is cut off.</summary>
+    private void FitNowPlayingPanel()
+    {
+        var full = _hero ? 340.0 : _viewModel.Playback.IsLyricsVisible ? 300.0 : 400.0;
+        if (_hero) NowPlayingPanel.Width = full;
+        else NowPlayingPanel.ClearValue(WidthProperty); // the style's width
+
+        var visible = System.Windows.Visibility.Visible;
+        void Cover(double size)
+        {
+            BigCover.Width = size;
+            BigCover.Height = size;
+        }
+        Cover(full);
+        PanelSpectrum.Visibility = visible;
+        PanelQuality.Visibility = visible;
+        PanelDetails.Visibility = visible;
+
+        var room = NowPlayingGrid.ActualHeight;
+        if (room <= 0 || NowPlayingPanel.Visibility != visible) return;
+        double Over()
+        {
+            NowPlayingPanel.Measure(new System.Windows.Size(double.PositiveInfinity, double.PositiveInfinity));
+            return NowPlayingPanel.DesiredSize.Height - room;
+        }
+
+        var over = Over();
+        if (over <= 0.5) return;
+        const double smallestCover = 120;
+        Cover(Math.Max(smallestCover, full - over - 2));
+        if ((over = Over()) <= 0.5) return;
+
+        // Still too tall with the smallest cover: drop the extras, least important first.
+        foreach (var extra in new System.Windows.UIElement[] { PanelSpectrum, PanelQuality, PanelDetails })
+        {
+            extra.Visibility = System.Windows.Visibility.Collapsed;
+            Cover(smallestCover);
+            if ((over = Over()) <= 0.5)
+            {
+                // Give the cover back what the extra freed beyond what was needed.
+                Cover(Math.Min(full, smallestCover - over - 2));
+                return;
             }
         }
     }
@@ -543,6 +603,8 @@ public partial class PlayView : Page
                 FollowCurrentLyric();
                 break;
             case nameof(PlaybackViewModel.CurrentFile):
+                // A new title may take more or fewer lines.
+                Dispatcher.BeginInvoke(FitNowPlayingPanel, System.Windows.Threading.DispatcherPriority.Loaded);
                 HideBackToLyric();
                 ResetLyricsScroll();
                 _followPausedUntil = DateTime.MinValue;
@@ -552,6 +614,7 @@ public partial class PlayView : Page
             case nameof(PlaybackViewModel.IsLyricsVisible):
                 ApplyResponsiveLayout();
                 ApplyIntroStage(animate: false);
+                Dispatcher.BeginInvoke(FitNowPlayingPanel, System.Windows.Threading.DispatcherPriority.Loaded);
                 break;
             case nameof(PlaybackViewModel.IsIntroVisible):
                 ApplyIntroStage(animate: true);
