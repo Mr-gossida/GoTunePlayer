@@ -19,7 +19,28 @@ public static class Dialogs
             IsSecondaryButtonEnabled = false,
         };
         FitButtons(box, confirmText, "취소");
+        PlaceOverApp(box);
         return await box.ShowDialogAsync() == MessageBoxResult.Primary;
+    }
+
+    /// <summary>Opens a dialog in the middle of the TuneSync window in use (a tool window, the
+    /// mini player or the main window) instead of wherever Windows puts a new window.</summary>
+    public static void PlaceOverApp(System.Windows.Window box)
+    {
+        var app = System.Windows.Application.Current;
+        bool Usable(System.Windows.Window w) => !ReferenceEquals(w, box) && w.IsVisible && w is not ScreenSaverWindow
+                                                && w.WindowState != System.Windows.WindowState.Minimized;
+        var windows = app?.Windows.OfType<System.Windows.Window>().ToList() ?? [];
+        var owner = windows.FirstOrDefault(w => w.IsActive && Usable(w))
+                    ?? (app?.MainWindow is { } main && Usable(main) ? main : null)
+                    ?? windows.FirstOrDefault(Usable);
+        if (owner is null || ReferenceEquals(owner, box) || !owner.IsVisible || owner.WindowState == System.Windows.WindowState.Minimized)
+        {
+            box.WindowStartupLocation = System.Windows.WindowStartupLocation.CenterScreen;
+            return;
+        }
+        box.Owner = owner;
+        box.WindowStartupLocation = System.Windows.WindowStartupLocation.CenterOwner;
     }
 
     /// <summary>The dialog splits its width evenly between its buttons, so a long label
@@ -68,6 +89,7 @@ public static class Dialogs
             MaxWidth = 560,
         };
         FitButtons(box, "기존 목록에 추가", "새로 등록", "취소");
+        PlaceOverApp(box);
         var mode = await box.ShowDialogAsync() switch
         {
             MessageBoxResult.Primary => TuneSync.Core.Models.LibraryAddMode.Append,

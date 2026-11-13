@@ -76,6 +76,12 @@ public sealed class AppSettings
     public List<string> CustomOrder { get; set; } = [];
     public bool ShowLyrics { get; set; } = true;
 
+    /// <summary>What plays along on the seek bar.</summary>
+    public SeekBarStyle SeekBarStyle { get; set; } = SeekBarStyle.Wave;
+
+    /// <summary>The spectrum analyzer's look (under the song info and on the screen saver).</summary>
+    public SpectrumStyle SpectrumStyle { get; set; } = SpectrumStyle.Led;
+
     /// <summary>The small bar showing how far a song's intro has played before the lyrics start.</summary>
     public bool ShowIntroGauge { get; set; } = true;
 
@@ -171,6 +177,31 @@ public enum PlaylistSortKey
     Duration,
     /// <summary>The order the songs were dragged into.</summary>
     Custom,
+}
+
+public enum SeekBarStyle
+{
+    /// <summary>Drifting waves in the cover's colors.</summary>
+    Wave,
+    /// <summary>Flickering flames with sparks.</summary>
+    Flame,
+    /// <summary>One of the above, picked anew for each song.</summary>
+    Random,
+}
+
+public enum SpectrumStyle
+{
+    Off,
+    /// <summary>LED-segment bars with falling peak caps.</summary>
+    Led,
+    /// <summary>Smooth rounded bars.</summary>
+    Bars,
+    /// <summary>A flowing filled curve.</summary>
+    Wave,
+    /// <summary>Bars mirrored around the middle.</summary>
+    Mirror,
+    /// <summary>Columns of dots.</summary>
+    Dots,
 }
 
 public enum QueueViewMode

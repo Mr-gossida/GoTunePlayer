@@ -238,6 +238,7 @@ public partial class ShellWindow : FluentWindow
             CloseButtonText = "취소",
             IsSecondaryButtonEnabled = false,
         };
+        Dialogs.PlaceOverApp(box);
         if (await box.ShowDialogAsync() != Wpf.Ui.Controls.MessageBoxResult.Primary) return null;
 
         var value = amount.Value ?? 0;

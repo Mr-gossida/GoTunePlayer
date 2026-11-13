@@ -104,7 +104,7 @@
                 </TextBlock>
                 <local:WaveSeekBar Height="20" Margin="0,4,0,0"
                                    Maximum="{Binding DurationSeconds}" Value="{Binding PositionSeconds, Mode=OneWay}"
-                                   IsPlaying="{Binding IsPlaying}" Waveform="{Binding Waveform}"
+                                   IsPlaying="{Binding IsPlaying}" Waveform="{Binding Waveform}" Look="{Binding SeekLook}"
                                    WaveBrush="{DynamicResource PlayerAccentBrush}" TrackBrush="{DynamicResource PlayerTrackBrush}"
                                    SeekStarted="SeekBar_SeekStarted" SeekCompleted="SeekBar_SeekCompleted"/>
             </StackPanel>
@@ -199,7 +199,7 @@
                 </Grid.RowDefinitions>
                 <local:WaveSeekBar Height="24"
                                    Maximum="{Binding DurationSeconds}" Value="{Binding PositionSeconds, Mode=OneWay}"
-                                   IsPlaying="{Binding IsPlaying}" Waveform="{Binding Waveform}"
+                                   IsPlaying="{Binding IsPlaying}" Waveform="{Binding Waveform}" Look="{Binding SeekLook}"
                                    WaveBrush="{DynamicResource PlayerAccentBrush}" TrackBrush="{DynamicResource PlayerTrackBrush}"
                                    SeekStarted="SeekBar_SeekStarted" SeekCompleted="SeekBar_SeekCompleted"/>
                 <Grid Grid.Row="1">

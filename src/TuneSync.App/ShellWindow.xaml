@@ -165,7 +165,7 @@
                                    TextAlignment="Right" Margin="0,0,8,0" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
                         <local:WaveSeekBar x:Name="SeekBar" Grid.Column="1" Height="28" VerticalAlignment="Center"
                                            Maximum="{Binding DurationSeconds}" Value="{Binding PositionSeconds, Mode=OneWay}"
-                                           IsPlaying="{Binding IsPlaying}" Waveform="{Binding Waveform}"
+                                           IsPlaying="{Binding IsPlaying}" Waveform="{Binding Waveform}" Look="{Binding SeekLook}"
                                            WaveBrush="{DynamicResource PlayerAccentBrush}"
                                            TrackBrush="{DynamicResource PlayerTrackBrush}"
                                            SeekStarted="SeekBar_SeekStarted" SeekCompleted="SeekBar_SeekCompleted"/>

@@ -156,6 +156,28 @@
         </ui:CardControl>
 
         <ui:TextBlock Text="재생" FontTypography="BodyStrong" Margin="0,20,0,8"/>
+        <ui:CardControl Margin="0,0,0,4" Icon="{ui:SymbolIcon Flash24}">
+            <ui:CardControl.Header>
+                <StackPanel>
+                    <ui:TextBlock Text="재생바 효과" FontTypography="Body"/>
+                    <ui:TextBlock Text="재생한 부분 위에서 음악에 맞춰 움직이는 효과입니다. 임의는 곡마다 물결과 불꽃 중 하나를 고릅니다."
+                                  FontSize="12" TextWrapping="Wrap" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                </StackPanel>
+            </ui:CardControl.Header>
+            <ComboBox Width="160" ItemsSource="{Binding SeekBarStyleOptions}" DisplayMemberPath="Label"
+                      SelectedValuePath="Value" SelectedValue="{Binding SeekBarStyle}"/>
+        </ui:CardControl>
+        <ui:CardControl Margin="0,0,0,4" Icon="{ui:SymbolIcon DataBarVertical24}">
+            <ui:CardControl.Header>
+                <StackPanel>
+                    <ui:TextBlock Text="스펙트럼 모양" FontTypography="Body"/>
+                    <ui:TextBlock Text="곡 정보 아래와 화면 보호기의 스펙트럼입니다. 곡 정보 아래 스펙트럼을 클릭해도 차례로 바뀝니다."
+                                  FontSize="12" TextWrapping="Wrap" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                </StackPanel>
+            </ui:CardControl.Header>
+            <ComboBox Width="160" ItemsSource="{Binding SpectrumStyleOptions}" DisplayMemberPath="Label"
+                      SelectedValuePath="Value" SelectedValue="{Binding SpectrumStyle}"/>
+        </ui:CardControl>
         <ui:CardControl Margin="0,0,0,4" Icon="{ui:SymbolIcon Timer24}">
             <ui:CardControl.Header>
                 <StackPanel>

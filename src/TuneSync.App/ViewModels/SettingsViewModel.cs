@@ -163,6 +163,36 @@ public sealed partial class SettingsViewModel : ObservableObject
         }
     }
 
+    public IReadOnlyList<Choice<SeekBarStyle>> SeekBarStyleOptions { get; } =
+    [
+        new(SeekBarStyle.Wave, "물결"),
+        new(SeekBarStyle.Flame, "불꽃"),
+        new(SeekBarStyle.Random, "임의 (곡마다)"),
+    ];
+
+    public SeekBarStyle SeekBarStyle
+    {
+        get => Playback.SeekBarStyle;
+        set
+        {
+            Playback.SeekBarStyle = value;
+            OnPropertyChanged();
+        }
+    }
+
+    public IReadOnlyList<Choice<SpectrumStyle>> SpectrumStyleOptions { get; } =
+        [.. Enum.GetValues<SpectrumStyle>().Select(s => new Choice<SpectrumStyle>(s, PlaybackViewModel.SpectrumStyleName(s)))];
+
+    public SpectrumStyle SpectrumStyle
+    {
+        get => Playback.SpectrumStyle;
+        set
+        {
+            Playback.SpectrumStyle = value;
+            OnPropertyChanged();
+        }
+    }
+
     public bool ShowIntroGauge
     {
         get => Playback.ShowIntroGauge;

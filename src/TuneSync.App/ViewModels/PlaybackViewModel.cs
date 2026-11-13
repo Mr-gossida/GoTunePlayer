@@ -224,6 +224,12 @@ public sealed partial class PlaybackViewModel : ObservableObject, IDisposable
         _settings = settings;
         _network = network;
         library.FilesRemoving += OnFilesRemoving;
+        PickSeekLook();
+        // 임의: a new look for every song.
+        PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(CurrentFile) && SeekBarStyle == SeekBarStyle.Random) PickSeekLook();
+        };
         _volume = Math.Clamp(settings.Volume, 0, 1);
         _isShuffle = settings.Shuffle;
         _repeat = settings.Repeat;
@@ -1068,6 +1074,59 @@ public sealed partial class PlaybackViewModel : ObservableObject, IDisposable
     /// <summary>How long the whole intro lasts, so the view can glide the bar between position
     /// updates (they come only every 200 ms) instead of stepping.</summary>
     public TimeSpan IntroLength { get; private set; }
+
+    // ---- seek bar and spectrum looks (saved) ----
+
+    public SeekBarStyle SeekBarStyle
+    {
+        get => _settings.SeekBarStyle;
+        set
+        {
+            if (_settings.SeekBarStyle == value) return;
+            _settings.SeekBarStyle = value;
+            AppSettingsStore.Save(_settings);
+            OnPropertyChanged();
+            PickSeekLook();
+        }
+    }
+
+    /// <summary>The seek bar's look right now: the chosen one, or with 임의 one picked per song.</summary>
+    [ObservableProperty]
+    private SeekBarStyle _seekLook;
+
+    private void PickSeekLook() => SeekLook = SeekBarStyle == SeekBarStyle.Random
+        ? (Random.Shared.Next(2) == 0 ? SeekBarStyle.Wave : SeekBarStyle.Flame)
+        : SeekBarStyle;
+
+    public SpectrumStyle SpectrumStyle
+    {
+        get => _settings.SpectrumStyle;
+        set
+        {
+            if (_settings.SpectrumStyle == value) return;
+            _settings.SpectrumStyle = value;
+            AppSettingsStore.Save(_settings);
+            OnPropertyChanged();
+        }
+    }
+
+    /// <summary>Clicking the spectrum: 없음 → LED → 둥근 막대 → 물결 → 대칭 → 점 → 없음 …</summary>
+    public void CycleSpectrumStyle()
+    {
+        var all = Enum.GetValues<SpectrumStyle>();
+        SpectrumStyle = all[(Array.IndexOf(all, SpectrumStyle) + 1) % all.Length];
+    }
+
+    public static string SpectrumStyleName(SpectrumStyle style) => style switch
+    {
+        SpectrumStyle.Off => "없음",
+        SpectrumStyle.Led => "LED 막대",
+        SpectrumStyle.Bars => "둥근 막대",
+        SpectrumStyle.Wave => "물결",
+        SpectrumStyle.Mirror => "대칭 막대",
+        SpectrumStyle.Dots => "도트",
+        _ => style.ToString(),
+    };
 
     // ---- how the play list looks (saved) ----
 

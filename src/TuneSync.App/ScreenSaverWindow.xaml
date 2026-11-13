@@ -55,7 +55,7 @@
                 <TextBlock Text="{Binding NowPlayingSubtitle}" FontSize="20" Foreground="#CCFFFFFF" Margin="0,8,0,0"
                            TextAlignment="Center" TextWrapping="Wrap"/>
                 <!-- The spectrum of what's playing, as in the player. -->
-                <views:SpectrumView Playback="{Binding}" BarBrush="{DynamicResource PlayerAccentBrush}" BarWidth="4"
+                <views:SpectrumView Playback="{Binding}" Look="{Binding SpectrumStyle}" BarBrush="{DynamicResource PlayerAccentBrush}" BarWidth="4"
                                     Width="560" Height="48" Margin="0,22,0,0"/>
 
                 <!-- Three lines - the one just sung, the current one, the next - gliding up like the
