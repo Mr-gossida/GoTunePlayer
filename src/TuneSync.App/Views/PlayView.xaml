@@ -224,7 +224,7 @@
                             <ScaleTransform ScaleX="3.5" ScaleY="3.5"/>
                         </views:EqualizerBars.LayoutTransform>
                     </views:EqualizerBars>
-                    <Grid Width="160" Height="3" Margin="0,32,0,0"
+                    <Grid x:Name="PulseGauge" Width="160" Height="3" Margin="0,32,0,0"
                           Visibility="{Binding ShowIntroGauge, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}">
                         <Border CornerRadius="1.5" Background="{DynamicResource PlayerTrackBrush}"/>
                         <Border CornerRadius="1.5" Background="{DynamicResource PlayerAccentBrush}" RenderTransformOrigin="0,0.5">

@@ -195,8 +195,11 @@ public partial class PlayView : Page
     {
         if (show)
         {
-            HeroGauge.BeginAnimation(OpacityProperty, null);
-            HeroGauge.Opacity = 1;
+            if (!_gaugeRetiring)
+            {
+                HeroGauge.BeginAnimation(OpacityProperty, null);
+                HeroGauge.Opacity = 1;
+            }
             HeroGauge.Visibility = System.Windows.Visibility.Visible;
             return;
         }
@@ -617,6 +620,16 @@ public partial class PlayView : Page
                 Dispatcher.BeginInvoke(FitNowPlayingPanel, System.Windows.Threading.DispatcherPriority.Loaded);
                 break;
             case nameof(PlaybackViewModel.IsIntroVisible):
+                if (_viewModel.Playback.IsIntroVisible && _gaugeRetiring)
+                {
+                    // A new intro (next song): its bars start out visible.
+                    _gaugeRetiring = false;
+                    foreach (var gauge in new System.Windows.UIElement[] { HeroGauge, PulseGauge })
+                    {
+                        gauge.BeginAnimation(OpacityProperty, null);
+                        gauge.Opacity = 1;
+                    }
+                }
                 ApplyIntroStage(animate: true);
                 GlideIntroGauge();
                 break;
@@ -639,6 +652,36 @@ public partial class PlayView : Page
         // Two bars show the intro: under the lyrics-area equalizer, and on the hero card.
         GlideGauge(IntroGaugeScale);
         GlideGauge(HeroGaugeScale);
+        RetireGaugesNearTheEnd();
+    }
+
+    private bool _gaugeRetiring;
+    private static readonly TimeSpan GaugeRetireTime = TimeSpan.FromMilliseconds(800);
+
+    /// <summary>The bars dissolve where they are over the intro's last moments, finishing just as
+    /// they fill - so they are gone before the card and lyrics start moving, instead of being
+    /// carried off mid-fade. Seeking back brings them back.</summary>
+    private void RetireGaugesNearTheEnd()
+    {
+        var playback = _viewModel.Playback;
+        if (!playback.IsIntroVisible || playback.IntroLength <= TimeSpan.Zero) return;
+        var remaining = TimeSpan.FromSeconds((1 - playback.IntroProgress) * playback.IntroLength.TotalSeconds);
+        var near = playback.IsPlaying && remaining <= GaugeRetireTime;
+        if (near == _gaugeRetiring) return;
+        _gaugeRetiring = near;
+        foreach (var gauge in new System.Windows.UIElement[] { HeroGauge, PulseGauge })
+        {
+            if (near)
+                gauge.BeginAnimation(OpacityProperty, new System.Windows.Media.Animation.DoubleAnimation(0, remaining)
+                {
+                    EasingFunction = new System.Windows.Media.Animation.SineEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseInOut },
+                });
+            else
+            {
+                gauge.BeginAnimation(OpacityProperty, null); // sought back, or paused: show it again
+                gauge.Opacity = 1;
+            }
+        }
     }
 
     private void GlideGauge(System.Windows.Media.ScaleTransform gauge)
