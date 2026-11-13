@@ -49,9 +49,14 @@ public static class CoverArtService
             using var src = Image.FromStream(ms);
             using var thumb = new Bitmap(size, size, PixelFormat.Format24bppRgb);
             using (var g = Graphics.FromImage(thumb))
+            using (var edges = new ImageAttributes())
             {
                 g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
-                g.DrawImage(src, 0, 0, size, size);
+                g.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.HighQuality;
+                // Without this, resampling blends the edge pixels with black beyond the image -
+                // a thin dark line around every thumbnail.
+                edges.SetWrapMode(System.Drawing.Drawing2D.WrapMode.TileFlipXY);
+                g.DrawImage(src, new Rectangle(0, 0, size, size), 0, 0, src.Width, src.Height, GraphicsUnit.Pixel, edges);
             }
             using var outMs = new MemoryStream();
             thumb.Save(outMs, ImageFormat.Jpeg);

@@ -137,8 +137,9 @@
                             <Grid.RenderTransform>
                                 <ScaleTransform x:Name="Lift" ScaleX="1" ScaleY="1"/>
                             </Grid.RenderTransform>
-                            <!-- the shadow, drawn by a shape behind the cover -->
-                            <Border CornerRadius="10" Background="#33000000">
+                            <!-- the shadow, cast by a shape tucked inside the cover's edge (a shape the
+                                 cover's size showed as a thin dark line around its rounded corners) -->
+                            <Border CornerRadius="10" Margin="4" Background="#FF000000">
                                 <Border.Effect>
                                     <DropShadowEffect x:Name="Shadow" BlurRadius="14" ShadowDepth="4" Direction="270" Opacity="0.35" Color="Black"
                                                       RenderingBias="Performance"/>
@@ -190,12 +191,13 @@
         </Style>
         <DataTemplate x:Key="QueueTileTemplate">
             <Grid ToolTip="{Binding FileName}">
-                <Border CornerRadius="10" Background="{DynamicResource PlayerHoverBrush}">
+                <Border x:Name="NoCover" CornerRadius="10" Background="{DynamicResource PlayerHoverBrush}" Visibility="Collapsed">
                     <ui:SymbolIcon Symbol="MusicNote224" FontSize="30" Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
                 </Border>
                 <Border CornerRadius="10">
                     <Border.Background>
-                        <ImageBrush ImageSource="{Binding CoverThumbnail}" Stretch="UniformToFill"/>
+                        <!-- a hair trimmed off each edge: older thumbnails have a thin dark border -->
+                        <ImageBrush ImageSource="{Binding CoverThumbnail}" Stretch="UniformToFill" Viewbox="0.015,0.015,0.97,0.97"/>
                     </Border.Background>
                 </Border>
                 <!-- the song, over a fade that starts well above the text so it reads on any cover -->
@@ -214,13 +216,11 @@
                     </StackPanel>
                 </Border>
                 <!-- the playing song: an equalizer on a frosted chip -->
-                <Border x:Name="PlayingBadge" Height="26" CornerRadius="13" Padding="9,5" Margin="8"
-                        HorizontalAlignment="Right" VerticalAlignment="Top" Background="#B3000000" Visibility="Collapsed">
-                    <StackPanel Orientation="Horizontal">
-                        <views:EqualizerBars Width="14" BarBrush="{DynamicResource PlayerAccentBrush}"
-                                             IsActive="{Binding DataContext.Playback.IsPlaying, RelativeSource={RelativeSource AncestorType=Page}}"/>
-                        <TextBlock Text="재생 중" FontSize="11" FontWeight="SemiBold" Margin="6,0,0,0" VerticalAlignment="Center" Foreground="White"/>
-                    </StackPanel>
+                <!-- the playing song: its moving equalizer on a small dark disc -->
+                <Border x:Name="PlayingBadge" Width="28" Height="28" CornerRadius="14" Padding="7" Margin="8"
+                        HorizontalAlignment="Right" VerticalAlignment="Top" Background="#B3000000" Visibility="Collapsed" ToolTip="재생 중">
+                    <views:EqualizerBars BarBrush="{DynamicResource PlayerAccentBrush}"
+                                         IsActive="{Binding DataContext.Playback.IsPlaying, RelativeSource={RelativeSource AncestorType=Page}}"/>
                 </Border>
                 <Border CornerRadius="11" Padding="8,2" Margin="8" HorizontalAlignment="Right" VerticalAlignment="Top"
                         Background="{DynamicResource PlayerAccentBrush}" ToolTip="다음에 재생할 곡"
@@ -258,6 +258,9 @@
                 </DataTrigger>
                 <DataTrigger Binding="{Binding IsNowPlaying}" Value="True">
                     <Setter TargetName="PlayingBadge" Property="Visibility" Value="Visible"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding CoverThumbnail}" Value="{x:Null}">
+                    <Setter TargetName="NoCover" Property="Visibility" Value="Visible"/>
                 </DataTrigger>
             </DataTemplate.Triggers>
         </DataTemplate>
