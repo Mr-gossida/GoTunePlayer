@@ -185,7 +185,7 @@ public partial class ShellWindow : FluentWindow
     {
         if (_focusStage is not null || !IsVisible || WindowState == WindowState.Minimized) return;
         var player = _services.GetRequiredService<PlayView>();
-        var from = CoverBounds(player.BigCover);
+        var from = CoverBounds(player.FocusCover);
 
         var stage = new NowPlayingStage(_playback, width: ActualWidth, interactive: true);
         _focusStage = stage;
@@ -228,11 +228,12 @@ public partial class ShellWindow : FluentWindow
 
         // The cover flies back to its place in the player while the picture fades.
         var player = _services.GetRequiredService<PlayView>();
-        if (CoverBounds(stage.Cover) is { } from && CoverBounds(player.BigCover) is { } to)
+        var home = player.FocusCover;
+        if (CoverBounds(stage.Cover) is { } from && CoverBounds(home) is { } to)
         {
             stage.Cover.Opacity = 0;
-            player.BigCover.Opacity = 0;
-            FlyCover(from, to, 14, 10, () => player.BigCover.Opacity = 1);
+            home.Opacity = 0;
+            FlyCover(from, to, 14, home == player.BigCover ? 10 : 8, () => home.Opacity = 1);
         }
         var fade = new System.Windows.Media.Animation.DoubleAnimation(0, TimeSpan.FromMilliseconds(320));
         fade.Completed += (_, _) => Done();

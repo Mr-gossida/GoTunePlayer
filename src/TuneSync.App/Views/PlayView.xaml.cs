@@ -1482,17 +1482,26 @@ public partial class PlayView : Page
 
     // --- the big cover opens 음악 집중 모드 ---
 
+    // The big cover, or in a narrow window the small one in the header: both open it.
+
+    /// <summary>The cover on show now (the big one, or the header's in a narrow window): where
+    /// focus mode's cover flies from and back to.</summary>
+    public System.Windows.FrameworkElement FocusCover => BigCover.IsVisible ? BigCover : SmallCover;
+
+    private System.Windows.UIElement HintOf(object cover) => cover == SmallCover ? SmallFocusHint : FocusHint;
+
     private void BigCover_MouseEnter(object sender, MouseEventArgs e) =>
-        FocusHint.BeginAnimation(OpacityProperty, new System.Windows.Media.Animation.DoubleAnimation(1, TimeSpan.FromMilliseconds(180)));
+        HintOf(sender).BeginAnimation(OpacityProperty, new System.Windows.Media.Animation.DoubleAnimation(1, TimeSpan.FromMilliseconds(180)));
 
     private void BigCover_MouseLeave(object sender, MouseEventArgs e) =>
-        FocusHint.BeginAnimation(OpacityProperty, new System.Windows.Media.Animation.DoubleAnimation(0, TimeSpan.FromMilliseconds(250)));
+        HintOf(sender).BeginAnimation(OpacityProperty, new System.Windows.Media.Animation.DoubleAnimation(0, TimeSpan.FromMilliseconds(250)));
 
     private void BigCover_Click(object sender, MouseButtonEventArgs e)
     {
         if (System.Windows.Window.GetWindow(this) is not ShellWindow shell) return;
-        FocusHint.BeginAnimation(OpacityProperty, null);
-        FocusHint.Opacity = 0;
+        var hint = HintOf(sender);
+        hint.BeginAnimation(OpacityProperty, null);
+        hint.Opacity = 0;
         shell.EnterFocusMode();
         e.Handled = true;
     }

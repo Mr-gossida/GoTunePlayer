@@ -327,7 +327,8 @@
                     <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
-                <Grid x:Name="SmallCover" Width="88" Height="88" Margin="0,0,16,0">
+                <Grid x:Name="SmallCover" Width="88" Height="88" Margin="0,0,16,0" Cursor="Hand" ToolTip="음악 집중 모드 (F11)"
+                      MouseEnter="BigCover_MouseEnter" MouseLeave="BigCover_MouseLeave" MouseLeftButtonUp="BigCover_Click">
                     <Border CornerRadius="8" Background="{DynamicResource PlayerHoverBrush}">
                         <ui:SymbolIcon Symbol="MusicNote224" FontSize="32" Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
                     </Border>
@@ -335,6 +336,10 @@
                         <Border.Background>
                             <ImageBrush ImageSource="{Binding CurrentCoverSmall}" Stretch="UniformToFill" RenderOptions.BitmapScalingMode="HighQuality"/>
                         </Border.Background>
+                    </Border>
+                    <!-- On hover, like the big cover: a shade and the focus-mode sign. -->
+                    <Border x:Name="SmallFocusHint" CornerRadius="8" Background="#66000000" Opacity="0" IsHitTestVisible="False">
+                        <ui:SymbolIcon Symbol="ArrowExpand24" FontSize="22" Foreground="White"/>
                     </Border>
                 </Grid>
                 <StackPanel Grid.Column="1" VerticalAlignment="Center">
