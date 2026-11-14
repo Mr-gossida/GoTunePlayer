@@ -66,6 +66,10 @@ public partial class NowPlayingStage : UserControl
         // backdrop is shown as before.
         if (!RenderCapability.IsPixelShaderVersionSupported(3, 0)) AuroraLayer.Visibility = Visibility.Collapsed;
 
+        // The column changes height too, not just the window: the lyrics appear or go with the
+        // song (no synced lyrics -> none), and a long title wraps. Fit again after each change.
+        MainStack.SizeChanged += (_, _) => Dispatcher.BeginInvoke(FitToSize, DispatcherPriority.Loaded);
+
         _clock.Tick += (_, _) => UpdateClock();
         _drift.Tick += (_, _) => DriftSomewhere();
         _lyricsGate.Tick += LyricsGate_Tick;
