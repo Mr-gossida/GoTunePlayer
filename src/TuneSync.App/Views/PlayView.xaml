@@ -367,7 +367,8 @@
                     </Style>
                 </StackPanel.Style>
                 <!-- Square; its size is set from code (PlayView.FitNowPlayingPanel) to fit the window. -->
-                <Grid x:Name="BigCover" Width="300" Height="300" HorizontalAlignment="Left">
+                <Grid x:Name="BigCover" Width="300" Height="300" HorizontalAlignment="Left" Cursor="Hand" ToolTip="음악 집중 모드 (F11)"
+                      MouseEnter="BigCover_MouseEnter" MouseLeave="BigCover_MouseLeave" MouseLeftButtonUp="BigCover_Click">
                     <Border CornerRadius="10" Background="{DynamicResource PlayerHoverBrush}">
                         <ui:SymbolIcon Symbol="MusicNote224" FontSize="80" Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
                     </Border>
@@ -378,6 +379,15 @@
                         <Border.Background>
                             <ImageBrush ImageSource="{Binding CurrentCover}" Stretch="UniformToFill" RenderOptions.BitmapScalingMode="HighQuality"/>
                         </Border.Background>
+                    </Border>
+                    <!-- On hover: a soft shade and what a click does (음악 집중 모드). -->
+                    <Border x:Name="FocusHint" CornerRadius="10" Background="#59000000" Opacity="0" IsHitTestVisible="False">
+                        <Border HorizontalAlignment="Center" VerticalAlignment="Center" CornerRadius="20" Padding="14,8" Background="#B3101010">
+                            <StackPanel Orientation="Horizontal">
+                                <ui:SymbolIcon Symbol="ArrowExpand24" FontSize="16" Foreground="White" Margin="0,0,8,0"/>
+                                <TextBlock Text="집중 모드" FontSize="13" FontWeight="SemiBold" Foreground="White" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Border>
                     </Border>
                 </Grid>
                 <TextBlock Text="{Binding NowPlayingTitle}" FontSize="24" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,24,0,0"

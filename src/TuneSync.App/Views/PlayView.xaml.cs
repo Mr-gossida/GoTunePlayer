@@ -1480,6 +1480,23 @@ public partial class PlayView : Page
         ShowBackToLyric();
     }
 
+    // --- the big cover opens 음악 집중 모드 ---
+
+    private void BigCover_MouseEnter(object sender, MouseEventArgs e) =>
+        FocusHint.BeginAnimation(OpacityProperty, new System.Windows.Media.Animation.DoubleAnimation(1, TimeSpan.FromMilliseconds(180)));
+
+    private void BigCover_MouseLeave(object sender, MouseEventArgs e) =>
+        FocusHint.BeginAnimation(OpacityProperty, new System.Windows.Media.Animation.DoubleAnimation(0, TimeSpan.FromMilliseconds(250)));
+
+    private void BigCover_Click(object sender, MouseButtonEventArgs e)
+    {
+        if (System.Windows.Window.GetWindow(this) is not ShellWindow shell) return;
+        FocusHint.BeginAnimation(OpacityProperty, null);
+        FocusHint.Opacity = 0;
+        shell.EnterFocusMode();
+        e.Handled = true;
+    }
+
     private void LyricLine_Click(object sender, MouseButtonEventArgs e)
     {
         if (sender is not System.Windows.FrameworkElement { DataContext: LyricsLineViewModel line }) return;

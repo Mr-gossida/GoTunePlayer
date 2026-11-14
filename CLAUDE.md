@@ -100,6 +100,9 @@ Before building the debug app, kill only leftover debug processes (`*\bin\Debug\
   and a watchdog reopens a stream that stops moving. FTP allows only 4 connections per source.
 - Tag edits to network files are made on the cache copy and uploaded; `CacheItem.Refresh` must update both size and downloaded count.
 - `PlaybackViewModel.CurrentPosition` is what visuals (spectrum, lyrics) sample.
+- `NowPlayingStage` is the full-screen "now playing" picture (aurora, cover, seek bar, spectrum, lyrics, clock). The screen saver
+  hosts one per monitor (`ScreenSaverWindow`, display only); 음악 집중 모드 hosts one inside the player window (`ShellWindow.EnterFocusMode`,
+  interactive). Change the picture there, not in either host.
 
 ## Names that stay TuneSync (on purpose)
 

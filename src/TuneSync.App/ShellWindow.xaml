@@ -220,6 +220,47 @@
             </Grid>
         </Border>
 
+        <!-- 음악 집중 모드 (ShellWindow.EnterFocusMode): the now-playing picture (NowPlayingStage) over
+             the whole player below the title bar. Its controls show while the mouse moves. -->
+        <Grid x:Name="FocusHost" Grid.Row="1" Grid.RowSpan="2" Visibility="Collapsed" Background="Black"
+              ClipToBounds="True" MouseMove="FocusHost_MouseMove">
+            <ContentControl x:Name="FocusStageHost" Focusable="False" IsTabStop="False"/>
+            <Grid x:Name="FocusChrome" Opacity="0">
+                <ui:Button HorizontalAlignment="Left" VerticalAlignment="Top" Margin="20,16,0,0" Padding="12,6"
+                           Content="집중 모드 나가기" Icon="{ui:SymbolIcon ArrowMinimize24}" Click="ExitFocus_Click"
+                           Foreground="White" Background="#66000000" BorderBrush="#33FFFFFF" ToolTip="Esc · F11"/>
+                <Border VerticalAlignment="Bottom" HorizontalAlignment="Center" Margin="0,0,0,22" Padding="14,8"
+                        CornerRadius="30" Background="#B3101010" BorderBrush="#33FFFFFF" BorderThickness="1">
+                    <StackPanel Orientation="Horizontal">
+                        <ui:Button Style="{StaticResource PlayerIconButtonStyle}" Foreground="White" Margin="0,0,8,0"
+                                   Icon="{ui:SymbolIcon Previous24, Filled=True}" Command="{Binding PlayPreviousCommand}" ToolTip="이전 곡 (Ctrl+←)"/>
+                        <ui:Button Style="{StaticResource PlayerPlayButtonStyle}"
+                                   Icon="{Binding IsPlaying, Converter={StaticResource PlayPauseIconConverter}}"
+                                   Command="{Binding TogglePlayPauseCommand}" ToolTip="재생 / 일시정지 (Space)"/>
+                        <ui:Button Style="{StaticResource PlayerIconButtonStyle}" Foreground="White" Margin="8,0,14,0"
+                                   Icon="{ui:SymbolIcon Next24, Filled=True}" Command="{Binding PlayNextCommand}" ToolTip="다음 곡 (Ctrl+→)"/>
+                        <ui:Button Command="{Binding ToggleMuteCommand}" ToolTip="음소거" Foreground="White">
+                            <ui:Button.Style>
+                                <Style TargetType="ui:Button" BasedOn="{StaticResource PlayerIconButtonStyle}">
+                                    <Setter Property="Icon" Value="{ui:SymbolIcon Speaker224}"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsMuted}" Value="True">
+                                            <Setter Property="Icon" Value="{ui:SymbolIcon SpeakerMute24}"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </ui:Button.Style>
+                        </ui:Button>
+                        <Slider Width="100" Margin="4,0,6,0" VerticalAlignment="Center" IsMoveToPointEnabled="True"
+                                Minimum="0" Maximum="1" SmallChange="0.05" LargeChange="0.1" PreviewMouseWheel="Volume_PreviewMouseWheel"
+                                Value="{Binding Volume}" ToolTip="볼륨 (Ctrl+↑/↓, 마우스 휠)"/>
+                    </StackPanel>
+                </Border>
+            </Grid>
+        </Grid>
+        <!-- The cover flying between the player and focus mode. -->
+        <Canvas x:Name="FocusFlyLayer" Grid.Row="1" Grid.RowSpan="2" IsHitTestVisible="False"/>
+
         <!-- Toast notifications (Toast.cs), floating just above the transport bar. -->
         <ui:SnackbarPresenter x:Name="SnackbarPresenter" Grid.Row="1" VerticalAlignment="Bottom" Margin="20,0,20,12"/>
     </Grid>
