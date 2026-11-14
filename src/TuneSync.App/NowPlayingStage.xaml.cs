@@ -305,8 +305,15 @@ public partial class NowPlayingStage : UserControl
         AuroraLayer.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromSeconds(2.5)));
     }
 
-    private void AdvanceAurora(object? sender, EventArgs e) =>
+    private int _auroraTick;
+
+    /// <summary>15 times a second (every other tick of the shared ~30 fps clock): the light
+    /// drifts too slowly for more to show, and each update redraws the whole screen.</summary>
+    private void AdvanceAurora(object? sender, EventArgs e)
+    {
+        if (sender is not null && (++_auroraTick & 1) == 1) return;
         AuroraLight.Time = _auroraStart + AuroraClock.Elapsed.TotalSeconds;
+    }
 
     /// <summary>A new song: the light slowly takes on its cover's colors.</summary>
     private void RecolorAurora()

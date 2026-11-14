@@ -25,6 +25,12 @@
             <Rectangle.Effect>
                 <effects:AuroraEffect x:Name="AuroraLight" Intensity="0.7"/>
             </Rectangle.Effect>
+            <!-- The light is soft: worked out at a third of the resolution (a ninth of the pixels)
+                 and stretched, it looks the same. Full-size, every frame of it kept the GPU of a
+                 4K screen busy (40-50% of an RTX 5080, at full clock). -->
+            <Rectangle.CacheMode>
+                <BitmapCache RenderAtScale="0.33"/>
+            </Rectangle.CacheMode>
         </Rectangle>
 
         <!-- The clock stays put in its corner (drifting, it could slide off the screen); its
@@ -62,6 +68,11 @@
                     <Border.Effect>
                         <DropShadowEffect BlurRadius="60" ShadowDepth="12" Direction="270" Opacity="0.55" Color="Black"/>
                     </Border.Effect>
+                    <!-- Kept as a picture: otherwise the wide blur is redone every time the light
+                         behind it changes. -->
+                    <Border.CacheMode>
+                        <BitmapCache/>
+                    </Border.CacheMode>
                     <Border CornerRadius="14">
                         <Border.Background>
                             <ImageBrush ImageSource="{Binding CurrentCover}" Stretch="UniformToFill" RenderOptions.BitmapScalingMode="HighQuality"/>
@@ -75,9 +86,6 @@
                 <!-- How far the song has got: the player's seek bar in the same look. Display only
                      in the screen saver; draggable in focus mode (Interactive). White, like the spectrum. -->
                 <Grid x:Name="SeekPanel" Width="560" Margin="0,26,0,0" IsHitTestVisible="False" Background="Transparent">
-                    <Grid.Effect>
-                        <DropShadowEffect BlurRadius="10" ShadowDepth="0" Opacity="0.5" Color="Black"/>
-                    </Grid.Effect>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
@@ -93,13 +101,11 @@
                 </Grid>
 
                 <!-- The spectrum of what's playing, as in the player - but white: the cover's accent
-                     color is the same hue as the light behind it here and got lost. -->
+                     color is the same hue as the light behind it here and got lost. No glow: it moves
+                     every frame, and a blur on it was redone every frame (the shade behind the song
+                     keeps it readable). -->
                 <views:SpectrumView x:Name="MainSpectrum" Playback="{Binding}" Look="{Binding SpectrumLook}" BarBrush="#F2FFFFFF" BarWidth="4"
-                                    Width="560" Height="48" Margin="0,18,0,0">
-                    <views:SpectrumView.Effect>
-                        <DropShadowEffect BlurRadius="10" ShadowDepth="0" Opacity="0.5" Color="Black"/>
-                    </views:SpectrumView.Effect>
-                </views:SpectrumView>
+                                    Width="560" Height="48" Margin="0,18,0,0"/>
 
                 <!-- Three lines - the one just sung, the current one, the next - gliding up like the
                      player's lyrics (LyricsScroller). Lines are laid out at the current-line size and
@@ -171,11 +177,16 @@
             <!-- Other monitors (ScreenSaverRole.Ambient), and the lyrics screen while there are no
                  lines to show: a big clock over a wide spectrum. -->
             <StackPanel x:Name="AmbientPanel" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed">
-                <StackPanel.Effect>
-                    <DropShadowEffect BlurRadius="16" ShadowDepth="0" Opacity="0.5" Color="Black"/>
-                </StackPanel.Effect>
-                <TextBlock x:Name="AmbientClock" FontSize="150" FontWeight="Light" Foreground="White" HorizontalAlignment="Center"/>
-                <TextBlock x:Name="AmbientDate" FontSize="24" Foreground="#B3FFFFFF" HorizontalAlignment="Center" Margin="0,-6,0,0"/>
+                <StackPanel>
+                    <StackPanel.Effect>
+                        <DropShadowEffect BlurRadius="16" ShadowDepth="0" Opacity="0.5" Color="Black"/>
+                    </StackPanel.Effect>
+                    <StackPanel.CacheMode>
+                        <BitmapCache/>
+                    </StackPanel.CacheMode>
+                    <TextBlock x:Name="AmbientClock" FontSize="150" FontWeight="Light" Foreground="White" HorizontalAlignment="Center"/>
+                    <TextBlock x:Name="AmbientDate" FontSize="24" Foreground="#B3FFFFFF" HorizontalAlignment="Center" Margin="0,-6,0,0"/>
+                </StackPanel>
                 <views:SpectrumView x:Name="AmbientSpectrum" Playback="{Binding}" Look="{Binding SpectrumLook}" BarBrush="#E6FFFFFF" BarWidth="8"
                                     Width="1000" Height="130" Margin="0,56,0,0"/>
                 <TextBlock Margin="0,30,0,0" HorizontalAlignment="Center" FontSize="18" Foreground="#B3FFFFFF">
