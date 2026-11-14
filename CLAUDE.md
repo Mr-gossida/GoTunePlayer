@@ -78,6 +78,11 @@ Before building the debug app, kill only leftover debug processes (`*\bin\Debug\
 - Off-screen windows capture black with PrintWindow; `RenderTargetBitmap` can't render ps_3_0 effects (the aurora).
 - Don't pipe test scripts into `Select-Object -First` (it stops the script before its cleanup runs).
 - For rendering/animation problems, trace numbers per frame (`CompositionTarget.Rendering`) instead of judging from one screenshot.
+- GPU cost: debug runs render on the GPU (tier 2), but a window placed off-screen isn't drawn by it (0%), so GPU use can
+  only be measured with the window on a real monitor (ask the user first; they must not touch input meanwhile). Sample
+  `\GPU Engine(pid_<id>_*engtype_3D)\Utilization Percentage` with `Get-Counter` each second (typeperf fixes its instance
+  list at start and misses engines created later), toggle elements per phase from the hook, compare phases. The % is
+  relative to the current clock, so small differences can mislead; look for large drops.
 
 ## Code conventions
 
@@ -86,6 +91,9 @@ Before building the debug app, kill only leftover debug processes (`*\bin\Debug\
   (no WPF grouping — group headers are data on `LibraryFileViewModel`; add files with `BulkObservableCollection.AddRange`).
 - WPF-UI 4.3 gotchas: `MessageBox.Content` is a string; close it with `Close(MessageBoxResult)`; check icon names with IconCheck.
 - Confirmations go through `Dialogs.ConfirmAsync` (themed, centered over the active window via `Dialogs.PlaceOverApp`); notices through `Toast`.
+- Per-frame drawing: no gradient brush mapped `RelativeToBoundingBox` on shapes whose size changes every frame (the GPU
+  rebuilds it per shape per frame - that was most of the screen saver's GPU use); use one `Absolute` brush, built once.
+  No opacity masks or blur effects on things that change every frame; cache still things with `BitmapCache`.
 - Continuous decorative motion (spectrum, seek-bar waves/fire, aurora) runs on `FrameTicker` (~30 fps), not
   `CompositionTarget.Rendering` (that runs at the monitor's refresh rate and keeps WPF redrawing the whole app), and
   pauses when `OnScreen.Check` says its window is hidden or minimized. Endless WPF animations set `Timeline.DesiredFrameRate`.
