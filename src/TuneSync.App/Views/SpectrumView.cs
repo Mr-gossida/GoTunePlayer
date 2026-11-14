@@ -77,7 +77,6 @@ public sealed class SpectrumView : FrameworkElement
     private bool _subscribed;
     private bool _settled = true;
     private Brush? _fill;
-    private Brush? _segments;
 
     public SpectrumView()
     {
@@ -221,7 +220,7 @@ public sealed class SpectrumView : FrameworkElement
         if (Look != SpectrumStyle.Led)
         {
             var c = BarBrush is SolidColorBrush b ? b.Color : Colors.White;
-            if (_fill is null || c != _fillColor) (_fill, _fillColor) = (BuildFill(c), c);
+            if (_fill is null || c != _fillColor || height != _fillHeight) (_fill, _fillColor, _fillHeight) = (BuildFill(c, height), c, height);
             switch (Look)
             {
                 case SpectrumStyle.Bars: DrawRoundBars(dc, height, mirrored: false); break;
@@ -233,18 +232,32 @@ public sealed class SpectrumView : FrameworkElement
         }
         // The accent color glides to the next cover's color on a song change: follow it.
         var color = BarBrush is SolidColorBrush solid ? solid.Color : Colors.White;
-        if (_fill is null || color != _fillColor) (_fill, _fillColor) = (BuildFill(color), color);
-        _segments ??= BuildSegments();
-
+        if (_fill is null || color != _fillColor || height != _fillHeight) (_fill, _fillColor, _fillHeight) = (BuildFill(color, height), color, height);
         var step = BarWidth + 1;
-        // Lit bars, cut into LED segments by an opacity mask (one mask for all bars: cheap).
-        dc.PushOpacityMask(_segments);
+        // Lit bars, as their LED segments drawn directly (not whole bars cut up by an opacity
+        // mask, which had the GPU draw the strip into a separate surface every frame).
+        const double pitch = Segment + SegmentGap;
         for (var i = 0; i < _level.Length; i++)
         {
             var h = Snap(_level[i] * height);
-            if (h > 0) dc.DrawRectangle(_fill, null, new Rect(i * step, height - h, BarWidth, h));
+            if (h <= 0) continue;
+            var top = height - h;
+            var x = i * step;
+            var bar = new StreamGeometry();
+            using (var g = bar.Open())
+            {
+                // The same rows the mask let through: lit from 1 px into each 3 px step, from the top.
+                for (var y = Math.Floor((top - SegmentGap) / pitch) * pitch + SegmentGap; y < height; y += pitch)
+                {
+                    double y0 = Math.Max(y, top), y1 = Math.Min(y + Segment, height);
+                    if (y1 <= y0) continue;
+                    g.BeginFigure(new Point(x, y0), true, true);
+                    g.PolyLineTo([new Point(x + BarWidth, y0), new Point(x + BarWidth, y1), new Point(x, y1)], false, false);
+                }
+            }
+            bar.Freeze();
+            dc.DrawGeometry(_fill, null, bar);
         }
-        dc.Pop();
 
         // Peak caps: one bright segment that hangs above the bar, then drops.
         for (var i = 0; i < _peak.Length; i++)
@@ -366,15 +379,20 @@ public sealed class SpectrumView : FrameworkElement
 
     /// <summary>The accent color, brightest at the top and fading toward the bottom.</summary>
     private Color _fillColor;
+    private double _fillHeight;
 
-    private static Brush BuildFill(Color color)
+    private static Brush BuildFill(Color color, double height)
     {
         var top = Color.FromArgb(255, (byte)Math.Min(255, color.R + 40), (byte)Math.Min(255, color.G + 40), (byte)Math.Min(255, color.B + 40));
         var brush = new LinearGradientBrush
         {
+            // Over the strip's full height, the same for every bar: one gradient the GPU makes once.
+            // (Relative to each bar, it had to be made again for every bar on every frame, as their
+            // heights change - with three spectrums, most of the screen saver's GPU use.) Tall bars
+            // get the bright top, low ones stay deeper, like an LED meter.
             StartPoint = new Point(0, 0),
-            EndPoint = new Point(0, 1),
-            MappingMode = BrushMappingMode.RelativeToBoundingBox,
+            EndPoint = new Point(0, Math.Max(1, height)),
+            MappingMode = BrushMappingMode.Absolute,
             GradientStops =
             {
                 new GradientStop(top, 0),
@@ -386,33 +404,10 @@ public sealed class SpectrumView : FrameworkElement
         return brush;
     }
 
-    /// <summary>Horizontal stripes, 2 px opaque / 1 px clear, tiled down the control.</summary>
-    private static Brush BuildSegments()
-    {
-        var group = new DrawingGroup();
-        using (var g = group.Open())
-        {
-            g.DrawRectangle(Brushes.Transparent, null, new Rect(0, 0, 1, Segment + SegmentGap));
-            g.DrawRectangle(Brushes.Black, null, new Rect(0, SegmentGap, 1, Segment));
-        }
-        var brush = new DrawingBrush(group)
-        {
-            TileMode = TileMode.Tile,
-            Viewport = new Rect(0, 0, 1, Segment + SegmentGap),
-            ViewportUnits = BrushMappingMode.Absolute,
-            Viewbox = new Rect(0, 0, 1, Segment + SegmentGap),
-            ViewboxUnits = BrushMappingMode.Absolute,
-            Stretch = Stretch.None,
-            AlignmentY = AlignmentY.Bottom,
-        };
-        brush.Freeze();
-        return brush;
-    }
 
     protected override void OnRenderSizeChanged(SizeChangedInfo sizeInfo)
     {
         base.OnRenderSizeChanged(sizeInfo);
-        _segments = null;
         _settled = false;
     }
 }
