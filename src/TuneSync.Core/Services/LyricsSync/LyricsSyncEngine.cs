@@ -3,20 +3,47 @@ namespace TuneSync.Core.Services.LyricsSync;
 /// <summary>Plain lyrics in, timed lines out: decode the song, let Whisper listen to it, then line
 /// the lyrics up with what it heard.
 ///
-/// It listens first without the lyrics as a hint: given them, Whisper tends to write lyric lines
-/// where it isn't sure, at the wrong times. On some songs, though (fast or heavily produced ones),
-/// it recognizes little without the hint - then it listens again with the lyrics as its prompt,
-/// and the pass that placed more lines wins. (On songs with known timings, tools/SyncBench: lines
-/// within 1 s went from 49% to about 60%, lines off by over 3 s from 35% to under 20%.)</summary>
+/// The singing is first taken out of the song (<see cref="VocalSeparator"/>), which shows where
+/// the singer pauses: the song is then listened to in pieces that start where singing starts
+/// (<see cref="VoiceActivity.Windows"/>), not in fixed 30 s pieces that cut through words and
+/// leave Whisper guessing where in a long pause the next phrase begins.
+///
+/// It listens up to three times, until one pass places enough lines, and the pass that placed
+/// the most wins: the song as it is; the vocals alone (better on some songs, worse on others);
+/// the song again with the lyrics as Whisper's prompt (given them it recognizes more on fast or
+/// heavily produced songs, but it also writes lyric lines where it isn't sure, at wrong times -
+/// so that comes last).
+///
+/// On ten songs with known timings (tools/SyncBench, 378 lines): lines within 1 s went from 61%
+/// to 71%, lines off by over 3 s from 19% to 9%. Without the separation model it falls back to
+/// fixed pieces and two passes.</summary>
 public sealed class LyricsSyncEngine : IDisposable
 {
     private readonly WhisperTranscriber _transcriber;
+    private readonly string? _vocalModelPath;
+    private VocalSeparator? _separator;
 
-    public LyricsSyncEngine() : this(WhisperModelStore.ModelPath) { }
+    public LyricsSyncEngine() : this(WhisperModelStore.ModelPath, VocalModelStore.IsDownloaded ? VocalModelStore.ModelPath : null) { }
 
-    public LyricsSyncEngine(string modelPath) => _transcriber = new WhisperTranscriber(modelPath);
+    /// <param name="vocalModelPath">The vocal separation model, or null to do without.</param>
+    public LyricsSyncEngine(string modelPath, string? vocalModelPath)
+    {
+        _transcriber = new WhisperTranscriber(modelPath);
+        _vocalModelPath = vocalModelPath;
+    }
 
-    public enum Stage { Decoding, Listening, Aligning }
+    public enum Stage { Decoding, Separating, Listening, Aligning }
+
+    /// <summary>What a pass listens to.</summary>
+    public enum Source { Song, Vocals }
+
+    /// <summary>One listen: to what, and whether with the lyrics as Whisper's prompt.</summary>
+    public readonly record struct Pass(Source Source, bool Hinted);
+
+    /// <summary>The passes in the order they're tried.</summary>
+    public static IReadOnlyList<Pass> Passes(bool separated) => separated
+        ? [new(Source.Song, false), new(Source.Vocals, false), new(Source.Song, true)]
+        : [new(Source.Song, false), new(Source.Song, true)];
 
     /// <param name="progress">Stage and 0..1 within it.</param>
     public async Task<List<AlignedLine>> SyncAsync(string audioPath, string plainLyrics,
@@ -26,28 +53,60 @@ public sealed class LyricsSyncEngine : IDisposable
         if (lines.Count == 0) return [];
 
         progress?.Report((Stage.Decoding, 0));
-        var samples = await Task.Run(() => AudioDecoder.ReadMono16k(audioPath, ct), ct);
-        var duration = TimeSpan.FromSeconds(samples.Length / (double)AudioDecoder.SampleRate);
+        var song = await Task.Run(() => AudioDecoder.ReadMono16k(audioPath, ct), ct);
+        var duration = TimeSpan.FromSeconds(song.Length / (double)AudioDecoder.SampleRate);
+
+        float[]? vocals = null;
+        if (_vocalModelPath is not null)
+        {
+            progress?.Report((Stage.Separating, 0));
+            vocals = await Task.Run(() => SeparateVocals(audioPath,
+                new Progress<double>(p => progress?.Report((Stage.Separating, p))), ct), ct);
+        }
+        var windows = vocals is null ? null : VoiceActivity.Detect(vocals).Windows();
 
         progress?.Report((Stage.Listening, 0));
         var language = LanguageOf(lines);
-        var free = await Task.Run(() => _transcriber.TranscribeAsync(samples, language, null,
-            new Progress<int>(p => progress?.Report((Stage.Listening, p / 200.0))), ct), ct);
-        var result = LyricsAligner.Align(lines, free, duration);
-        if (Placed(result) >= GoodEnough) return result;
+        var passes = Passes(vocals is not null);
+        var done = 0;
+        return await SyncAsync(lines, duration, passes, pass =>
+        {
+            var from = done++ / (double)passes.Count;
+            return Task.Run(() => _transcriber.TranscribeAsync(pass.Source == Source.Vocals ? vocals! : song, language,
+                pass.Hinted ? Prompt(lines) : null,
+                new Progress<int>(p => progress?.Report((Stage.Listening, from + p / 100.0 / passes.Count))), ct, windows), ct);
+        });
+    }
 
-        var hinted = await Task.Run(() => _transcriber.TranscribeAsync(samples, language, Prompt(lines),
-            new Progress<int>(p => progress?.Report((Stage.Listening, 0.5 + p / 200.0))), ct), ct);
-        progress?.Report((Stage.Aligning, 0));
-        var second = LyricsAligner.Align(lines, hinted, duration);
-        return Placed(second) > Placed(result) ? second : result;
+    /// <summary>The singing alone, at the 16 kHz speech recognition expects.</summary>
+    public float[] SeparateVocals(string audioPath, IProgress<double>? progress, CancellationToken ct)
+    {
+        _separator ??= new VocalSeparator(_vocalModelPath!);
+        var (left, right) = AudioDecoder.ReadStereo(audioPath, VocalSeparator.SampleRate, ct);
+        var vocals = _separator.Separate(left, right, progress, ct);
+        return AudioDecoder.Resample(vocals, VocalSeparator.SampleRate, AudioDecoder.SampleRate);
+    }
+
+    /// <summary>The decision between passes, apart from how the listening is done (tools/SyncBench
+    /// keeps what was heard between runs, so aligner changes can be measured in seconds).</summary>
+    public static async Task<List<AlignedLine>> SyncAsync(IReadOnlyList<string> lines, TimeSpan duration,
+        IReadOnlyList<Pass> passes, Func<Pass, Task<List<TimedText>>> listen)
+    {
+        List<AlignedLine> best = [];
+        foreach (var pass in passes)
+        {
+            var result = LyricsAligner.Align(lines, await listen(pass), duration);
+            if (best.Count == 0 || Placed(result) > Placed(best)) best = result;
+            if (Placed(best) >= GoodEnough) break;
+        }
+        return best;
     }
 
     /// <summary>Share of lines whose time was heard rather than estimated.</summary>
     private static double Placed(List<AlignedLine> lines) =>
         lines.Count == 0 ? 0 : lines.Count(l => l.IsConfident) / (double)lines.Count;
 
-    /// <summary>Above this share placed, the first pass is kept without a second listen.</summary>
+    /// <summary>Above this share placed, no further pass is listened to.</summary>
     private const double GoodEnough = 0.85;
 
     /// <summary>Korean when the lyrics are mostly Hangul, English when mostly Latin letters,
@@ -78,5 +137,9 @@ public sealed class LyricsSyncEngine : IDisposable
         return prompt.Length <= 300 ? prompt : prompt[..300];
     }
 
-    public void Dispose() => _transcriber.Dispose();
+    public void Dispose()
+    {
+        _transcriber.Dispose();
+        _separator?.Dispose();
+    }
 }

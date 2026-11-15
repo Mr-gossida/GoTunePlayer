@@ -3,7 +3,18 @@
 //   dotnet run --project tools/SyncBench -- <model.bin> <songs.txt | folder> [count]
 // songs.txt: one audio path per line (made from a folder on the first run, then reused, so
 // runs compare the same songs).
+// Environment:
+//   BENCH_OUT          write the results to this file (UTF-8) instead of the console
+//   BENCH_DETAIL=1     every line: real time, found time, ? if estimated, error, text
+//   BENCH_VOCAL_MODEL  the vocal separation model (default: next to <model.bin>, where the app
+//                      keeps it); BENCH_NOSEP=1 measures without separation
+//   BENCH_CACHE        a folder that keeps the separated vocals and what Whisper heard, per song
+//                      and pass: with it, a change to the aligner is measured in seconds instead
+//                      of minutes. Use a fresh folder after changing the listening itself.
 using System.Diagnostics;
+using System.Globalization;
+using System.Runtime.InteropServices;
+using System.Text.Json;
 using TuneSync.Core.Services;
 using TuneSync.Core.Services.LyricsSync;
 
@@ -13,6 +24,11 @@ var model = args[0];
 var list = args[1];
 var count = args.Length > 2 ? int.Parse(args[2]) : 8;
 WhisperModelStore.Folder = Path.GetDirectoryName(model)!;
+var vocalModel = Environment.GetEnvironmentVariable("BENCH_VOCAL_MODEL") is { Length: > 0 } given ? given : VocalModelStore.ModelPath;
+if (Environment.GetEnvironmentVariable("BENCH_NOSEP") == "1" || !File.Exists(vocalModel)) vocalModel = null;
+Console.WriteLine(vocalModel is null ? "without vocal separation" : $"vocal separation: {Path.GetFileName(vocalModel)}");
+var cache = Environment.GetEnvironmentVariable("BENCH_CACHE") is { Length: > 0 } c ? c : null;
+if (cache is not null) Directory.CreateDirectory(cache);
 
 List<string> songs;
 if (File.Exists(list)) songs = [.. File.ReadAllLines(list).Where(l => l.Trim().Length > 0)];
@@ -39,7 +55,8 @@ else
 }
 
 var all = new List<double>();
-using var engine = new LyricsSyncEngine(model);
+using var engine = new LyricsSyncEngine(model, vocalModel);
+using var transcriber = new WhisperTranscriber(model);
 foreach (var song in songs)
 {
     string lyrics;
@@ -47,7 +64,7 @@ foreach (var song in songs)
     var truth = LrcParser.Parse(lyrics).Where(l => l.Text.Length > 0).OrderBy(l => l.Time).ToList();
     var plain = string.Join("\n", truth.Select(l => l.Text));
     var clock = Stopwatch.StartNew();
-    var result = await engine.SyncAsync(song, plain, null, CancellationToken.None);
+    var result = cache is null ? await engine.SyncAsync(song, plain, null, CancellationToken.None) : await SyncCached(song, plain);
     if (result.Count != truth.Count) { Console.WriteLine($"{Path.GetFileName(song)}: line count {result.Count} vs {truth.Count}"); continue; }
     var errors = truth.Select((l, i) => Math.Abs((result[i].Time - l.Time).TotalSeconds)).ToList();
     all.AddRange(errors);
@@ -57,6 +74,45 @@ foreach (var song in songs)
             Console.WriteLine($"   {truth[i].Time.TotalSeconds,7:0.00} {result[i].Time.TotalSeconds,7:0.00} {(result[i].IsConfident ? ' ' : '?')} {errors[i],5:0.00}  {truth[i].Text}");
 }
 Console.WriteLine($"{"ALL",-50} {Summary(all)}");
+
+// The engine's own steps, with the vocals and what was heard kept in the cache folder.
+async Task<List<AlignedLine>> SyncCached(string song, string plain)
+{
+    var lines = LrcWriter.PlainLines(plain);
+    var name = Path.Combine(cache!, Path.GetFileName(song));
+
+    float[]? mix = null;
+    float[] Mix() => mix ??= AudioDecoder.ReadMono16k(song);
+    TimeSpan duration;
+    if (File.Exists(name + ".duration")) duration = TimeSpan.FromSeconds(double.Parse(File.ReadAllText(name + ".duration"), CultureInfo.InvariantCulture));
+    else
+    {
+        duration = TimeSpan.FromSeconds(Mix().Length / (double)AudioDecoder.SampleRate);
+        File.WriteAllText(name + ".duration", duration.TotalSeconds.ToString(CultureInfo.InvariantCulture));
+    }
+
+    float[]? vocals = null;
+    if (vocalModel is not null)
+    {
+        if (File.Exists(name + ".vocals.f32")) vocals = MemoryMarshal.Cast<byte, float>(File.ReadAllBytes(name + ".vocals.f32")).ToArray();
+        else
+        {
+            vocals = engine.SeparateVocals(song, null, CancellationToken.None);
+            File.WriteAllBytes(name + ".vocals.f32", MemoryMarshal.AsBytes(vocals.AsSpan()).ToArray());
+        }
+    }
+    var windows = vocals is null ? null : VoiceActivity.Detect(vocals).Windows();
+
+    return await LyricsSyncEngine.SyncAsync(lines, duration, LyricsSyncEngine.Passes(vocals is not null), async pass =>
+    {
+        var file = $"{name}.{pass.Source}.{(pass.Hinted ? "hinted" : "free")}.json";
+        if (File.Exists(file)) return JsonSerializer.Deserialize<List<TimedText>>(File.ReadAllText(file))!;
+        var heard = await transcriber.TranscribeAsync(pass.Source == LyricsSyncEngine.Source.Vocals ? vocals! : Mix(),
+            LyricsSyncEngine.LanguageOf(lines), pass.Hinted ? LyricsSyncEngine.Prompt(lines) : null, null, CancellationToken.None, windows);
+        File.WriteAllText(file, JsonSerializer.Serialize(heard));
+        return heard;
+    });
+}
 
 static string Summary(List<double> e)
 {

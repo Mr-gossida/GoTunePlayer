@@ -69,6 +69,7 @@ public static class LyricsAligner
         var starts = new List<double>[lines.Count];
         var first = new double[lines.Count];
         var last = new double[lines.Count];
+        var firstPos = new int[lines.Count];
         for (var i = 0; i < lines.Count; i++) { starts[i] = []; first[i] = double.MaxValue; last[i] = double.MinValue; }
         for (var k = 0; k < lyricChars.Count; k++)
         {
@@ -76,23 +77,36 @@ public static class LyricsAligner
             var (_, line, pos) = lyricChars[k];
             var t = heardChars[h].Time;
             starts[line].Add(t - pos * charTime);
+            if (starts[line].Count == 1) firstPos[line] = pos;
             first[line] = Math.Min(first[line], t);
             last[line] = Math.Max(last[line], t);
         }
+
+        // How long this song's lines take, per character: from the first to the last found
+        // character of the lines that were mostly found (the slower ones of them). A slow ballad
+        // holds its notes far longer than the gaps between neighboring characters suggest - by
+        // those, its well-heard lines looked stretched and were all thrown out.
+        var paces = new List<double>();
+        for (var i = 0; i < lines.Count; i++)
+            if (lineLength[i] >= 4 && starts[i].Count >= lineLength[i] * 0.5 && last[i] > first[i]) paces.Add((last[i] - first[i]) / lineLength[i]);
+        paces.Sort();
+        var pace = paces.Count >= 3 ? Math.Max(charTime, paces[paces.Count * 3 / 4]) : charTime;
 
         var times = new double?[lines.Count];
         var confident = new bool[lines.Count];
         for (var i = 0; i < lines.Count; i++)
         {
             if (starts[i].Count == 0 || lineLength[i] == 0) continue;
-            // The median of the first few estimates: one stray early or late match can't drag it.
+            // The line's first character, when it was found, says it directly. Otherwise the
+            // median of the first few estimates: one stray early or late match can't drag it.
             var early = starts[i].Take(3).OrderBy(x => x).ToList();
-            times[i] = Math.Max(0, early[early.Count / 2]);
+            times[i] = Math.Max(0, firstPos[i] == 0 ? first[i] : early[early.Count / 2]);
 
             var enough = starts[i].Count >= Math.Max(1, lineLength[i] * ConfidentShare);
-            // Found characters spread far wider than the line takes to sing: recognition lost its
-            // place here (skipped lines, stretched words), so its times can't be trusted.
-            var expected = lineLength[i] * charTime;
+            // Found characters spread far wider than a line of this song takes to sing:
+            // recognition lost its place here (skipped lines, stretched words), so its times
+            // can't be trusted.
+            var expected = lineLength[i] * pace;
             var span = last[i] - first[i];
             var plausible = span <= Math.Max(expected * 2.5, expected + 3);
             confident[i] = enough && plausible;
