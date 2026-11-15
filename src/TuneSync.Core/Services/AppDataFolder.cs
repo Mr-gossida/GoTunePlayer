@@ -7,10 +7,10 @@ namespace TuneSync.Core.Services;
 public static class AppDataFolder
 {
     private static readonly string Root = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-    private static readonly Lazy<string> Resolved = new(Resolve, LazyThreadSafetyMode.ExecutionAndPublication);
 
     public static string NewPath { get; } = System.IO.Path.Combine(Root, "GoTune");
     public static string LegacyPath { get; } = System.IO.Path.Combine(Root, "TuneSync");
+    private static readonly Lazy<string> Resolved = new(() => Resolve(NewPath, LegacyPath), LazyThreadSafetyMode.ExecutionAndPublication);
 
     /// <summary>The data folder (moved from the old location if needed).</summary>
     public static string Path => Resolved.Value;
@@ -18,19 +18,22 @@ public static class AppDataFolder
     /// <summary>A file or folder inside the data folder.</summary>
     public static string Combine(params string[] parts) => System.IO.Path.Combine([Path, .. parts]);
 
-    private static string Resolve()
+    /// <summary>The folder to use, given where it should be and where older versions kept it:
+    /// the old one is moved over when only it exists. Takes the two paths so tests can run it
+    /// on folders of their own.</summary>
+    public static string Resolve(string newPath, string legacyPath)
     {
-        if (Directory.Exists(NewPath) || !Directory.Exists(LegacyPath)) return NewPath;
+        if (Directory.Exists(newPath) || !Directory.Exists(legacyPath)) return newPath;
         try
         {
-            Directory.Move(LegacyPath, NewPath);
-            return NewPath;
+            Directory.Move(legacyPath, newPath);
+            return newPath;
         }
         catch
         {
             // Something holds a file in it (an older copy still running?): keep using the old
             // folder this time rather than starting with nothing; the move is tried next start.
-            return LegacyPath;
+            return legacyPath;
         }
     }
 }
