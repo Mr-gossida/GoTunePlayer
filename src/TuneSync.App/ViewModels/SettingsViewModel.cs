@@ -224,8 +224,14 @@ public sealed partial class SettingsViewModel : ObservableObject
         new(30, "30분 뒤"),
     ];
 
+    /// <summary>The screen saver card's line: "켜짐 · 5분 뒤 · ESC 키로만 종료".</summary>
+    public string ScreenSaverSummary => !ScreenSaverEnabled ? "꺼짐"
+        : $"켜짐 · {ScreenSaverDelayOptions.FirstOrDefault(o => o.Value == ScreenSaverMinutes)?.Label ?? $"{ScreenSaverMinutes}분 뒤"} · "
+          + (ScreenSaverExit == ScreenSaverExit.EscapeKey ? "ESC 키로만 종료" : "마우스·키보드로 종료");
+
     partial void OnScreenSaverEnabledChanged(bool value)
     {
+        OnPropertyChanged(nameof(ScreenSaverSummary));
         _settings.ScreenSaverEnabled = value;
         AppSettingsStore.Save(_settings);
     }
@@ -250,12 +256,14 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     partial void OnScreenSaverExitChanged(ScreenSaverExit value)
     {
+        OnPropertyChanged(nameof(ScreenSaverSummary));
         _settings.ScreenSaverExit = value;
         AppSettingsStore.Save(_settings);
     }
 
     partial void OnScreenSaverMinutesChanged(int value)
     {
+        OnPropertyChanged(nameof(ScreenSaverSummary));
         _settings.ScreenSaverMinutes = value;
         AppSettingsStore.Save(_settings);
     }

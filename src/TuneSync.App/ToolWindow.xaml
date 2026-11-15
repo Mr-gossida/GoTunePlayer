@@ -13,6 +13,10 @@
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
+        <!-- With playerColors: the cover's tint under a veil (ToolWindow constructor). -->
+        <Rectangle x:Name="PlayerTint" Grid.RowSpan="2" Visibility="Collapsed" Fill="{DynamicResource PlayerTintBrush}"/>
+        <Rectangle x:Name="PlayerVeil" Grid.RowSpan="2" Visibility="Collapsed" Fill="{DynamicResource PlayerVeilBrush}"/>
+
         <ui:TitleBar x:Name="ToolTitleBar" Grid.Row="0">
             <ui:TitleBar.Icon>
                 <ui:ImageIcon Source="pack://application:,,,/Assets/TuneSync.png"/>

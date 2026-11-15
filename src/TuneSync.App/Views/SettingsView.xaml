@@ -9,274 +9,396 @@
       d:DataContext="{d:DesignInstance Type=vm:SettingsViewModel}"
       Title="설정"
       Foreground="{DynamicResource TextFillColorPrimaryBrush}">
-    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-    <StackPanel Margin="20,16,20,24" MaxWidth="900" HorizontalAlignment="Left">
-        <ui:TextBlock Text="설정" FontTypography="Title" Margin="0,0,0,16"/>
-
-        <ui:TextBlock Text="모양" FontTypography="BodyStrong" Margin="0,0,0,8"/>
-        <ui:CardControl Margin="0,0,0,4" Icon="{ui:SymbolIcon DarkTheme24}">
-            <ui:CardControl.Header>
-                <StackPanel>
-                    <ui:TextBlock Text="테마" FontTypography="Body"/>
-                    <ui:TextBlock Text="앱의 밝은/어두운 테마를 선택합니다." FontSize="12"
-                                  Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-                </StackPanel>
-            </ui:CardControl.Header>
-            <ComboBox Width="200" ItemsSource="{Binding ThemeOptions}" DisplayMemberPath="Label"
-                      SelectedValuePath="Value" SelectedValue="{Binding Theme}"/>
-        </ui:CardControl>
-
-        <ui:TextBlock Text="라이브러리" FontTypography="BodyStrong" Margin="0,20,0,8"/>
-        <ui:CardControl Margin="0,0,0,4" Icon="{ui:SymbolIcon FolderAdd24}">
-            <ui:CardControl.Header>
-                <StackPanel>
-                    <ui:TextBlock Text="폴더·파일을 추가할 때" FontTypography="Body"/>
-                    <ui:TextBlock Text="이미 등록된 목록이 있을 때, 새로 고른 항목을 기존 목록에 더할지 목록을 새로 만들지 정합니다."
-                                  FontSize="12" TextWrapping="Wrap" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-                </StackPanel>
-            </ui:CardControl.Header>
-            <ComboBox Width="200" ItemsSource="{Binding Library.AddModeOptions}" DisplayMemberPath="Label"
-                      SelectedValuePath="Value" SelectedValue="{Binding Library.AddMode}"/>
-        </ui:CardControl>
-
-        <ui:TextBlock Text="네트워크" FontTypography="BodyStrong" Margin="0,20,0,8"/>
-        <ui:Card Margin="0,0,0,4" Padding="16,14">
-            <StackPanel>
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto"/>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="Auto"/>
-                    </Grid.ColumnDefinitions>
-                    <ui:SymbolIcon Symbol="Server24" FontSize="22" Margin="2,0,16,0" VerticalAlignment="Center"/>
-                    <StackPanel Grid.Column="1">
-                        <ui:TextBlock Text="네트워크 위치" FontTypography="Body"/>
-                        <ui:TextBlock Text="NAS·서버·클라우드(WebDAV, Samba, SFTP, FTP)의 음악을 재생합니다. 태그·가사·커버를 고치면 원격지 파일에도 저장됩니다."
-                                      FontSize="12" TextWrapping="Wrap" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-                    </StackPanel>
-                    <ui:Button Grid.Column="2" Content="위치 추가" Icon="{ui:SymbolIcon Add24}" Margin="12,0,0,0" VerticalAlignment="Center"
-                               Command="{Binding AddNetworkSourceCommand}"/>
-                </Grid>
-
-                <ItemsControl ItemsSource="{Binding NetworkSources}" Margin="38,12,0,0">
-                    <ItemsControl.ItemTemplate>
-                        <DataTemplate>
-                            <Border Margin="0,0,0,6" Padding="12,8" CornerRadius="6" Background="{DynamicResource SubtleFillColorSecondaryBrush}">
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="Auto"/>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="Auto"/>
-                                    </Grid.ColumnDefinitions>
-                                    <Border CornerRadius="4" Padding="6,2" Margin="0,0,12,0" VerticalAlignment="Center"
-                                            Background="{DynamicResource AccentFillColorDefaultBrush}">
-                                        <TextBlock Text="{Binding KindLabel}" FontSize="11" FontWeight="SemiBold"
-                                                   Foreground="{DynamicResource TextOnAccentFillColorPrimaryBrush}"/>
-                                    </Border>
-                                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                        <TextBlock Text="{Binding Name}" FontWeight="SemiBold" Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
-                                        <TextBlock FontSize="12" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextFillColorSecondaryBrush}">
-                                            <Run Text="{Binding Address, Mode=OneWay}"/><Run Text="  ·  "/><Run Text="{Binding UserName, Mode=OneWay}"/>
-                                        </TextBlock>
-                                    </StackPanel>
-                                    <ui:Button Grid.Column="2" Icon="{ui:SymbolIcon Delete24}" ToolTip="이 위치 제거" Width="34" Height="32" Padding="0"
-                                               Background="Transparent" BorderThickness="0"
-                                               Command="{Binding DataContext.RemoveNetworkSourceCommand, RelativeSource={RelativeSource AncestorType=Page}}"
-                                               CommandParameter="{Binding}"/>
-                                </Grid>
+    <!-- Settings in categories (list on the left, like Windows Settings) with a search over all of
+         them. Each card's Tag holds the words the search looks for (SettingsView.ApplySearch). -->
+    <Page.Resources>
+        <Style x:Key="Desc" TargetType="ui:TextBlock">
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="TextWrapping" Value="Wrap"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}"/>
+        </Style>
+        <Style x:Key="CategoryTitle" TargetType="ui:TextBlock">
+            <Setter Property="FontTypography" Value="Subtitle"/>
+            <Setter Property="Margin" Value="0,0,0,4"/>
+        </Style>
+        <Style x:Key="CategoryLead" TargetType="ui:TextBlock" BasedOn="{StaticResource Desc}">
+            <Setter Property="Margin" Value="0,0,0,8"/>
+        </Style>
+        <Style x:Key="Group" TargetType="ui:TextBlock">
+            <Setter Property="FontTypography" Value="BodyStrong"/>
+            <Setter Property="Margin" Value="0,14,0,6"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}"/>
+        </Style>
+        <Style x:Key="Card" TargetType="ui:CardControl" BasedOn="{StaticResource {x:Type ui:CardControl}}">
+            <Setter Property="Margin" Value="0,0,0,4"/>
+        </Style>
+        <!-- the category list: a bar in the player's accent marks the open one -->
+        <Style x:Key="NavItem" TargetType="ListBoxItem">
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ListBoxItem">
+                        <Grid Margin="0,1">
+                            <Border x:Name="Bd" CornerRadius="6" Background="Transparent" Padding="12,8">
+                                <ContentPresenter/>
                             </Border>
-                        </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
-                <TextBlock Text="아직 추가한 네트워크 위치가 없습니다." Margin="38,10,0,0" FontSize="12"
-                           Foreground="{DynamicResource TextFillColorTertiaryBrush}">
-                    <TextBlock.Style>
-                        <Style TargetType="TextBlock">
-                            <Style.Triggers>
-                                <DataTrigger Binding="{Binding HasNetworkSources}" Value="True">
-                                    <Setter Property="Visibility" Value="Collapsed"/>
-                                </DataTrigger>
-                            </Style.Triggers>
-                        </Style>
-                    </TextBlock.Style>
-                </TextBlock>
+                            <Border x:Name="Mark" Width="3" Height="16" CornerRadius="1.5" HorizontalAlignment="Left"
+                                    Background="{DynamicResource PlayerAccentBrush}" Visibility="Collapsed"/>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}"/>
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}"/>
+                                <Setter TargetName="Mark" Property="Visibility" Value="Visible"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Page.Resources>
+
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="196"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+
+        <!-- ===== categories and search ===== -->
+        <Border Background="{DynamicResource PlayerPanelBrush}" Padding="10,12,10,12">
+            <DockPanel>
+                <ui:TextBox x:Name="SearchBox" DockPanel.Dock="Top" PlaceholderText="설정 검색" Icon="{ui:SymbolIcon Search24}"
+                            ClearButtonEnabled="True" Margin="0,0,0,12" TextChanged="SearchBox_TextChanged"/>
+                <ListBox x:Name="NavList" ItemContainerStyle="{StaticResource NavItem}" BorderThickness="0" Background="Transparent"
+                         SelectionChanged="NavList_SelectionChanged" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                    <ListBoxItem Tag="General" IsSelected="True">
+                        <StackPanel Orientation="Horizontal"><ui:SymbolIcon Symbol="Options24" Margin="0,0,10,0"/><TextBlock Text="일반"/></StackPanel>
+                    </ListBoxItem>
+                    <ListBoxItem Tag="Playback">
+                        <StackPanel Orientation="Horizontal"><ui:SymbolIcon Symbol="Play24" Margin="0,0,10,0"/><TextBlock Text="재생"/></StackPanel>
+                    </ListBoxItem>
+                    <ListBoxItem Tag="ScreenSaver">
+                        <StackPanel Orientation="Horizontal"><ui:SymbolIcon Symbol="SlideMultiple24" Margin="0,0,10,0"/><TextBlock Text="화면 보호기"/></StackPanel>
+                    </ListBoxItem>
+                    <ListBoxItem Tag="Library">
+                        <StackPanel Orientation="Horizontal"><ui:SymbolIcon Symbol="Library24" Margin="0,0,10,0"/><TextBlock Text="라이브러리"/></StackPanel>
+                    </ListBoxItem>
+                    <ListBoxItem Tag="Network">
+                        <StackPanel Orientation="Horizontal"><ui:SymbolIcon Symbol="Server24" Margin="0,0,10,0"/><TextBlock Text="네트워크"/></StackPanel>
+                    </ListBoxItem>
+                    <ListBoxItem Tag="Tools">
+                        <StackPanel Orientation="Horizontal"><ui:SymbolIcon Symbol="Toolbox24" Margin="0,0,10,0"/><TextBlock Text="도구"/></StackPanel>
+                    </ListBoxItem>
+                    <ListBoxItem Tag="About">
+                        <StackPanel Orientation="Horizontal"><ui:SymbolIcon Symbol="Info24" Margin="0,0,10,0"/><TextBlock Text="정보"/></StackPanel>
+                    </ListBoxItem>
+                </ListBox>
+            </DockPanel>
+        </Border>
+
+        <!-- ===== the open category (or, while searching, every match) ===== -->
+        <ScrollViewer x:Name="ContentScroller" Grid.Column="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <StackPanel x:Name="Categories" Margin="22,14,22,24">
+
+                <!-- 일반 -->
+                <StackPanel Tag="General">
+                    <ui:TextBlock Text="일반" Style="{StaticResource CategoryTitle}"/>
+                    <ui:TextBlock Text="모양과 GoTune Player를 열 때의 동작" Style="{StaticResource CategoryLead}"/>
+                    <ui:TextBlock Text="모양" Style="{StaticResource Group}"/>
+                    <ui:CardControl Style="{StaticResource Card}" Icon="{ui:SymbolIcon DarkTheme24}" Tag="테마 밝게 어둡게 다크 라이트 모양">
+                        <ui:CardControl.Header>
+                            <StackPanel>
+                                <ui:TextBlock Text="테마" FontTypography="Body"/>
+                                <ui:TextBlock Text="밝게 · 어둡게 · Windows 설정 따르기" Style="{StaticResource Desc}"/>
+                            </StackPanel>
+                        </ui:CardControl.Header>
+                        <ComboBox Width="200" ItemsSource="{Binding ThemeOptions}" DisplayMemberPath="Label"
+                                  SelectedValuePath="Value" SelectedValue="{Binding Theme}"/>
+                    </ui:CardControl>
+                    <ui:TextBlock Text="시작" Style="{StaticResource Group}"/>
+                    <ui:CardControl Style="{StaticResource Card}" Icon="{ui:SymbolIcon Power24}" Tag="Windows 시작 자동 실행 로그인 부팅"
+                                    ToolTip="Windows에 로그인하면 작업 표시줄에 최소화된 상태로 시작합니다. 작업 관리자 › 시작 앱에서도 끌 수 있습니다.">
+                        <ui:CardControl.Header>
+                            <StackPanel>
+                                <ui:TextBlock Text="Windows 시작 시 자동 실행" FontTypography="Body"/>
+                                <ui:TextBlock Text="로그인하면 최소화된 상태로 시작합니다" Style="{StaticResource Desc}"/>
+                            </StackPanel>
+                        </ui:CardControl.Header>
+                        <ui:ToggleSwitch IsChecked="{Binding StartWithWindows}" OnContent="켬" OffContent="끔"/>
+                    </ui:CardControl>
+                    <ui:CardControl Style="{StaticResource Card}" Icon="{ui:SymbolIcon Play24}" Tag="시작하면 바로 재생 자동 재생"
+                                    ToolTip="이어 들을 곡이 없으면 재생 대기열의 첫 곡(셔플이 켜져 있으면 무작위 곡)부터 재생합니다.">
+                        <ui:CardControl.Header>
+                            <StackPanel>
+                                <ui:TextBlock Text="시작하면 바로 재생" FontTypography="Body"/>
+                                <ui:TextBlock Text="일시정지로 기다리지 않고 바로 재생합니다" Style="{StaticResource Desc}"/>
+                            </StackPanel>
+                        </ui:CardControl.Header>
+                        <ui:ToggleSwitch IsChecked="{Binding AutoPlayOnStartup}" OnContent="켬" OffContent="끔"/>
+                    </ui:CardControl>
+                    <ui:CardControl Style="{StaticResource Card}" Icon="{ui:SymbolIcon History24}" Tag="마지막 곡 이어 듣기 이어듣기 재개">
+                        <ui:CardControl.Header>
+                            <StackPanel>
+                                <ui:TextBlock Text="마지막 곡 이어 듣기" FontTypography="Body"/>
+                                <ui:TextBlock Text="열 때 마지막 곡을 어디서부터 준비할지" Style="{StaticResource Desc}"/>
+                            </StackPanel>
+                        </ui:CardControl.Header>
+                        <ComboBox Width="200" ItemsSource="{Binding StartupResumeOptions}" DisplayMemberPath="Label"
+                                  SelectedValuePath="Value" SelectedValue="{Binding StartupResume}"/>
+                    </ui:CardControl>
+                </StackPanel>
+
+                <!-- 재생 -->
+                <StackPanel Tag="Playback">
+                    <ui:TextBlock Text="재생" Style="{StaticResource CategoryTitle}"/>
+                    <ui:TextBlock Text="재생 화면의 모양과 동작" Style="{StaticResource CategoryLead}"/>
+                    <ui:TextBlock Text="화면 효과" Style="{StaticResource Group}"/>
+                    <ui:CardControl Style="{StaticResource Card}" Icon="{ui:SymbolIcon Flash24}" Tag="재생바 효과 물결 불꽃 임의 시크바"
+                                    ToolTip="재생한 부분 위에서 음악에 맞춰 움직이는 효과입니다. 임의는 곡마다 물결과 불꽃 중 하나를 고릅니다.">
+                        <ui:CardControl.Header>
+                            <StackPanel>
+                                <ui:TextBlock Text="재생바 효과" FontTypography="Body"/>
+                                <ui:TextBlock Text="물결 · 불꽃 · 임의(곡마다)" Style="{StaticResource Desc}"/>
+                            </StackPanel>
+                        </ui:CardControl.Header>
+                        <ComboBox Width="200" ItemsSource="{Binding SeekBarStyleOptions}" DisplayMemberPath="Label"
+                                  SelectedValuePath="Value" SelectedValue="{Binding SeekBarStyle}"/>
+                    </ui:CardControl>
+                    <ui:CardControl Style="{StaticResource Card}" Icon="{ui:SymbolIcon DataBarVertical24}" Tag="스펙트럼 모양 LED 막대 물결 랜덤"
+                                    ToolTip="곡 정보 아래와 화면 보호기의 스펙트럼입니다. 곡 정보 아래 스펙트럼을 클릭해도 차례로 바뀝니다.">
+                        <ui:CardControl.Header>
+                            <StackPanel>
+                                <ui:TextBlock Text="스펙트럼 모양" FontTypography="Body"/>
+                                <ui:TextBlock Text="스펙트럼을 클릭해도 바꿀 수 있습니다" Style="{StaticResource Desc}"/>
+                            </StackPanel>
+                        </ui:CardControl.Header>
+                        <ComboBox Width="200" ItemsSource="{Binding SpectrumStyleOptions}" DisplayMemberPath="Label"
+                                  SelectedValuePath="Value" SelectedValue="{Binding SpectrumStyle}"/>
+                    </ui:CardControl>
+                    <ui:CardControl Style="{StaticResource Card}" Icon="{ui:SymbolIcon Timer24}" Tag="인트로 진행 게이지 전주"
+                                    ToolTip="싱크 가사가 시작되기 전 인트로 동안, 가사가 나오기까지 얼마나 남았는지 가는 막대로 보여 줍니다.">
+                        <ui:CardControl.Header>
+                            <StackPanel>
+                                <ui:TextBlock Text="인트로 진행 게이지" FontTypography="Body"/>
+                                <ui:TextBlock Text="가사가 나오기까지 남은 시간을 막대로" Style="{StaticResource Desc}"/>
+                            </StackPanel>
+                        </ui:CardControl.Header>
+                        <ui:ToggleSwitch IsChecked="{Binding ShowIntroGauge}" OnContent="표시" OffContent="숨김"/>
+                    </ui:CardControl>
+                    <ui:TextBlock Text="창과 전원" Style="{StaticResource Group}"/>
+                    <ui:CardControl Style="{StaticResource Card}" Icon="{ui:SymbolIcon PictureInPictureEnter24}" Tag="최소화 미니 플레이어"
+                                    ToolTip="최소화(─) 버튼을 누르면 작업 표시줄로 숨는 대신 미니 플레이어로 바뀝니다. 미니 플레이어를 더블클릭하면 돌아옵니다.">
+                        <ui:CardControl.Header>
+                            <StackPanel>
+                                <ui:TextBlock Text="최소화하면 미니 플레이어로" FontTypography="Body"/>
+                                <ui:TextBlock Text="미니 플레이어를 더블클릭하면 돌아옵니다" Style="{StaticResource Desc}"/>
+                            </StackPanel>
+                        </ui:CardControl.Header>
+                        <ui:ToggleSwitch IsChecked="{Binding MinimizeToMini}" OnContent="켬" OffContent="끔"/>
+                    </ui:CardControl>
+                    <ui:CardControl Style="{StaticResource Card}" Icon="{ui:SymbolIcon Desktop24}" Tag="화면 켜짐 유지 절전 모드 화면 꺼짐"
+                                    ToolTip="음악이 재생되는 동안 화면이 꺼지거나 PC가 절전 모드로 들어가지 않게 합니다. 일시정지하거나 멈추면 원래대로 돌아갑니다.">
+                        <ui:CardControl.Header>
+                            <StackPanel>
+                                <ui:TextBlock Text="재생 중 화면 켜짐 유지" FontTypography="Body"/>
+                                <ui:TextBlock Text="재생하는 동안 화면이 꺼지지 않게" Style="{StaticResource Desc}"/>
+                            </StackPanel>
+                        </ui:CardControl.Header>
+                        <ui:ToggleSwitch IsChecked="{Binding Playback.KeepScreenOn}" OnContent="켬" OffContent="끔"/>
+                    </ui:CardControl>
+                </StackPanel>
+
+                <!-- 화면 보호기: everything about it in one card -->
+                <StackPanel Tag="ScreenSaver">
+                    <ui:TextBlock Text="화면 보호기" Style="{StaticResource CategoryTitle}"/>
+                    <ui:TextBlock Text="재생 중 입력이 없으면 커버와 가사, 시계를 전체 화면으로 보여 줍니다" Style="{StaticResource CategoryLead}"/>
+                    <ui:CardExpander Margin="0,8,0,4" Icon="{ui:SymbolIcon SlideMultiple24}" IsExpanded="True"
+                                     Tag="화면 보호기 스크린세이버 미리 보기 시작 시간 종료 방법 ESC">
+                        <ui:CardExpander.Header>
+                            <StackPanel>
+                                <ui:TextBlock Text="화면 보호기" FontTypography="Body"/>
+                                <ui:TextBlock Text="{Binding ScreenSaverSummary}" Style="{StaticResource Desc}"/>
+                            </StackPanel>
+                        </ui:CardExpander.Header>
+                        <StackPanel Margin="4,0,4,2">
+                            <Grid Margin="0,2,0,10">
+                                <TextBlock Text="사용" VerticalAlignment="Center"/>
+                                <ui:ToggleSwitch HorizontalAlignment="Right" IsChecked="{Binding ScreenSaverEnabled}" OnContent="켬" OffContent="끔"/>
+                            </Grid>
+                            <Grid Margin="0,0,0,10" ToolTip="마우스·키보드 입력이 없을 때 이 시간이 지나면 시작합니다">
+                                <TextBlock Text="시작까지" VerticalAlignment="Center"/>
+                                <ComboBox Width="200" HorizontalAlignment="Right" ItemsSource="{Binding ScreenSaverDelayOptions}" DisplayMemberPath="Label"
+                                          SelectedValuePath="Value" SelectedValue="{Binding ScreenSaverMinutes}" IsEnabled="{Binding ScreenSaverEnabled}"/>
+                            </Grid>
+                            <Grid Margin="0,0,0,10"
+                                  ToolTip="ESC 키를 누를 때만 종료하도록 하면, 마우스나 키보드가 실수로 움직여도 화면 보호기가 유지되고 종료 방법 안내와 ESC 버튼이 나타납니다">
+                                <TextBlock Text="종료 방법" VerticalAlignment="Center"/>
+                                <ComboBox Width="200" HorizontalAlignment="Right" ItemsSource="{Binding ScreenSaverExitOptions}" DisplayMemberPath="Label"
+                                          SelectedValuePath="Value" SelectedValue="{Binding ScreenSaverExit}" IsEnabled="{Binding ScreenSaverEnabled}"/>
+                            </Grid>
+                            <Grid>
+                                <TextBlock Text="지금 바로 띄워 보기" VerticalAlignment="Center" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                <ui:Button HorizontalAlignment="Right" Content="미리 보기" Icon="{ui:SymbolIcon Eye24}" Command="{Binding PreviewScreenSaverCommand}"/>
+                            </Grid>
+                        </StackPanel>
+                    </ui:CardExpander>
+                </StackPanel>
+
+                <!-- 라이브러리 -->
+                <StackPanel Tag="Library">
+                    <ui:TextBlock Text="라이브러리" Style="{StaticResource CategoryTitle}"/>
+                    <ui:TextBlock Text="음악 폴더와 파일 목록" Style="{StaticResource CategoryLead}"/>
+                    <ui:CardControl Style="{StaticResource Card}" Margin="0,8,0,4" Icon="{ui:SymbolIcon FolderAdd24}" Tag="폴더 파일 추가 목록 더하기 새로"
+                                    ToolTip="이미 등록된 목록이 있을 때, 새로 고른 항목을 기존 목록에 더할지 목록을 새로 만들지 정합니다.">
+                        <ui:CardControl.Header>
+                            <StackPanel>
+                                <ui:TextBlock Text="폴더·파일을 추가할 때" FontTypography="Body"/>
+                                <ui:TextBlock Text="기존 목록에 더할지, 새로 만들지" Style="{StaticResource Desc}"/>
+                            </StackPanel>
+                        </ui:CardControl.Header>
+                        <ComboBox Width="200" ItemsSource="{Binding Library.AddModeOptions}" DisplayMemberPath="Label"
+                                  SelectedValuePath="Value" SelectedValue="{Binding Library.AddMode}"/>
+                    </ui:CardControl>
+                </StackPanel>
+
+                <!-- 네트워크 -->
+                <StackPanel Tag="Network">
+                    <ui:TextBlock Text="네트워크" Style="{StaticResource CategoryTitle}"/>
+                    <ui:TextBlock Text="NAS·서버·클라우드의 음악" Style="{StaticResource CategoryLead}"/>
+                    <ui:Card Margin="0,8,0,4" Padding="16,14" Tag="네트워크 위치 NAS 서버 WebDAV Samba SMB SFTP FTP 추가">
+                        <StackPanel>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <ui:SymbolIcon Symbol="Server24" FontSize="22" Margin="2,0,16,0" VerticalAlignment="Center"/>
+                                <StackPanel Grid.Column="1">
+                                    <ui:TextBlock Text="네트워크 위치" FontTypography="Body"/>
+                                    <ui:TextBlock Text="WebDAV · Samba · SFTP · FTP. 태그·가사·커버를 고치면 원격지에도 저장됩니다." Style="{StaticResource Desc}"/>
+                                </StackPanel>
+                                <ui:Button Grid.Column="2" Content="위치 추가" Icon="{ui:SymbolIcon Add24}" Margin="12,0,0,0" VerticalAlignment="Center"
+                                           Command="{Binding AddNetworkSourceCommand}"/>
+                            </Grid>
+                            <ItemsControl ItemsSource="{Binding NetworkSources}" Margin="38,12,0,0">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Margin="0,0,0,6" Padding="12,8" CornerRadius="6" Background="{DynamicResource SubtleFillColorSecondaryBrush}">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <Border CornerRadius="4" Padding="6,2" Margin="0,0,12,0" VerticalAlignment="Center"
+                                                        Background="{DynamicResource PlayerAccentBrush}">
+                                                    <TextBlock Text="{Binding KindLabel}" FontSize="11" FontWeight="SemiBold"
+                                                               Foreground="{DynamicResource PlayerOnAccentBrush}"/>
+                                                </Border>
+                                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                                                    <TextBlock FontSize="12" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextFillColorSecondaryBrush}">
+                                                        <Run Text="{Binding Address, Mode=OneWay}"/><Run Text="  ·  "/><Run Text="{Binding UserName, Mode=OneWay}"/>
+                                                    </TextBlock>
+                                                </StackPanel>
+                                                <ui:Button Grid.Column="2" Icon="{ui:SymbolIcon Delete24}" ToolTip="이 위치 제거" Width="34" Height="32" Padding="0"
+                                                           Background="Transparent" BorderThickness="0"
+                                                           Command="{Binding DataContext.RemoveNetworkSourceCommand, RelativeSource={RelativeSource AncestorType=Page}}"
+                                                           CommandParameter="{Binding}"/>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <TextBlock Text="아직 추가한 네트워크 위치가 없습니다." Margin="38,10,0,0" FontSize="12"
+                                       Foreground="{DynamicResource TextFillColorTertiaryBrush}">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding HasNetworkSources}" Value="True">
+                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </StackPanel>
+                    </ui:Card>
+                    <ui:CardControl Style="{StaticResource Card}" Icon="{ui:SymbolIcon DatabaseArrowDown20}" Tag="스트리밍 캐시 용량 비우기 저장 공간"
+                                    ToolTip="네트워크 음악은 재생하면서 이 PC에 받아 두어, 다시 들을 때는 바로 재생됩니다. 다음 곡도 미리 받아 둡니다. 용량을 넘으면 오래 듣지 않은 곡부터 지웁니다.">
+                        <ui:CardControl.Header>
+                            <StackPanel>
+                                <ui:TextBlock Text="스트리밍 캐시" FontTypography="Body"/>
+                                <ui:TextBlock Style="{StaticResource Desc}">
+                                    <Run Text="받아 둔 곡은 다음엔 바로 재생 · "/><Run Text="{Binding CacheUsageText, Mode=OneWay}" FontWeight="SemiBold"/>
+                                </ui:TextBlock>
+                            </StackPanel>
+                        </ui:CardControl.Header>
+                        <StackPanel Orientation="Horizontal">
+                            <ComboBox Width="100" ItemsSource="{Binding CacheSizeOptions}" DisplayMemberPath="Label"
+                                      SelectedValuePath="Value" SelectedValue="{Binding CacheMegabytes}" ToolTip="최대 용량"/>
+                            <ui:Button Content="비우기" Margin="8,0,0,0" Command="{Binding ClearCacheCommand}"/>
+                            <ui:Button Content="폴더 열기" Icon="{ui:SymbolIcon Open24}" Margin="8,0,0,0" ToolTip="캐시 폴더 열기"
+                                       Command="{Binding OpenCacheFolderCommand}"/>
+                        </StackPanel>
+                    </ui:CardControl>
+                </StackPanel>
+
+                <!-- 도구 -->
+                <StackPanel Tag="Tools">
+                    <ui:TextBlock Text="도구" Style="{StaticResource CategoryTitle}"/>
+                    <ui:TextBlock Text="폴더 합치기와 데이터" Style="{StaticResource CategoryLead}"/>
+                    <ui:CardControl Style="{StaticResource Card}" Margin="0,8,0,4" Icon="{ui:SymbolIcon FolderProhibited24}" Tag="폴더 합치기 격리 폴더 충돌"
+                                    ToolTip="충돌한 파일을 삭제하지 않고 옮겨 두는, 타겟 폴더 안의 폴더 이름입니다.">
+                        <ui:CardControl.Header>
+                            <StackPanel>
+                                <ui:TextBlock Text="격리 폴더 이름" FontTypography="Body"/>
+                                <ui:TextBlock Text="폴더 합치기에서 충돌한 파일을 옮겨 두는 곳" Style="{StaticResource Desc}"/>
+                            </StackPanel>
+                        </ui:CardControl.Header>
+                        <ui:TextBox Width="200" Text="{Binding QuarantineFolderName, UpdateSourceTrigger=PropertyChanged}" ClearButtonEnabled="False"/>
+                    </ui:CardControl>
+                    <ui:CardControl Style="{StaticResource Card}" Icon="{ui:SymbolIcon FolderOpen24}" Tag="데이터 폴더 설정 파일 저장 위치"
+                                    ToolTip="설정, 라이브러리 목록, 네트워크 음악 캐시, 가사 싱크용 음성 인식 모델이 저장되는 폴더입니다.">
+                        <ui:CardControl.Header>
+                            <StackPanel>
+                                <ui:TextBlock Text="데이터 폴더" FontTypography="Body"/>
+                                <ui:TextBlock Text="설정·라이브러리 목록·캐시·음성 인식 모델" Style="{StaticResource Desc}"/>
+                            </StackPanel>
+                        </ui:CardControl.Header>
+                        <ui:Button Content="폴더 열기" Icon="{ui:SymbolIcon Open24}" Command="{Binding OpenDataFolderCommand}"/>
+                    </ui:CardControl>
+                </StackPanel>
+
+                <!-- 정보 -->
+                <StackPanel Tag="About">
+                    <ui:TextBlock Text="정보" Style="{StaticResource CategoryTitle}"/>
+                    <ui:Card Margin="0,12,0,4" Tag="정보 버전 GoTune">
+                        <StackPanel>
+                            <StackPanel Orientation="Horizontal">
+                                <Image Source="pack://application:,,,/Assets/TuneSync.png" Width="40" Height="40" Margin="0,0,12,0"/>
+                                <StackPanel VerticalAlignment="Center">
+                                    <!-- the wordmark: "Go" in the accent color -->
+                                    <TextBlock FontSize="14" FontWeight="SemiBold" Foreground="{DynamicResource TextFillColorPrimaryBrush}">
+                                        <Run Text="Go" Foreground="{DynamicResource PlayerAccentBrush}"/><Run Text="Tune Player"/>
+                                    </TextBlock>
+                                    <ui:TextBlock Text="{Binding VersionText}" FontSize="12" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                </StackPanel>
+                            </StackPanel>
+                            <ui:TextBlock Margin="0,12,0,0" Style="{StaticResource Desc}"
+                                          Text="태그·커버 정보는 MusicBrainz와 Cover Art Archive, 가사는 LRCLIB에서 가져옵니다."/>
+                        </StackPanel>
+                    </ui:Card>
+                </StackPanel>
+
+                <!-- nothing matched the search -->
+                <ui:TextBlock x:Name="NoMatch" Text="찾는 설정이 없습니다." Visibility="Collapsed" Margin="0,24,0,0"
+                              Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
             </StackPanel>
-        </ui:Card>
-        <ui:CardControl Margin="0,0,0,4" Icon="{ui:SymbolIcon DatabaseArrowDown20}">
-            <ui:CardControl.Header>
-                <StackPanel>
-                    <ui:TextBlock Text="스트리밍 캐시" FontTypography="Body"/>
-                    <ui:TextBlock FontSize="12" TextWrapping="Wrap" Foreground="{DynamicResource TextFillColorSecondaryBrush}">
-                        <Run Text="네트워크 음악은 재생하면서 이 PC에 받아 두어, 다시 들을 때는 바로 재생됩니다. 다음 곡도 미리 받아 둡니다. 용량을 넘으면 오래 듣지 않은 곡부터 지웁니다."/>
-                        <LineBreak/>
-                        <Run Text="{Binding CacheUsageText, Mode=OneWay}" FontWeight="SemiBold"/>
-                    </ui:TextBlock>
-                </StackPanel>
-            </ui:CardControl.Header>
-            <StackPanel Orientation="Horizontal">
-                <ComboBox Width="100" ItemsSource="{Binding CacheSizeOptions}" DisplayMemberPath="Label"
-                          SelectedValuePath="Value" SelectedValue="{Binding CacheMegabytes}" ToolTip="최대 용량"/>
-                <ui:Button Content="비우기" Margin="8,0,0,0" Command="{Binding ClearCacheCommand}"/>
-                <ui:Button Content="폴더 열기" Icon="{ui:SymbolIcon Open24}" Margin="8,0,0,0" ToolTip="캐시 폴더 열기"
-                           Command="{Binding OpenCacheFolderCommand}"/>
-            </StackPanel>
-        </ui:CardControl>
-
-        <ui:TextBlock Text="시작" FontTypography="BodyStrong" Margin="0,20,0,8"/>
-        <ui:CardControl Margin="0,0,0,4" Icon="{ui:SymbolIcon Power24}">
-            <ui:CardControl.Header>
-                <StackPanel>
-                    <ui:TextBlock Text="Windows 시작 시 자동 실행" FontTypography="Body"/>
-                    <ui:TextBlock Text="Windows에 로그인하면 GoTune Player가 작업 표시줄에 최소화된 상태로 시작합니다. 작업 관리자 › 시작 앱에서도 끌 수 있습니다."
-                                  FontSize="12" TextWrapping="Wrap" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-                </StackPanel>
-            </ui:CardControl.Header>
-            <ui:ToggleSwitch IsChecked="{Binding StartWithWindows}" OnContent="켬" OffContent="끔"/>
-        </ui:CardControl>
-        <ui:CardControl Margin="0,0,0,4" Icon="{ui:SymbolIcon Play24}">
-            <ui:CardControl.Header>
-                <StackPanel>
-                    <ui:TextBlock Text="시작하면 바로 재생" FontTypography="Body"/>
-                    <ui:TextBlock Text="켜면 일시정지 상태로 기다리지 않고 바로 재생합니다. 이어 들을 곡이 없으면 재생 대기열의 첫 곡(셔플이 켜져 있으면 무작위 곡)부터 재생합니다."
-                                  FontSize="12" TextWrapping="Wrap" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-                </StackPanel>
-            </ui:CardControl.Header>
-            <ui:ToggleSwitch IsChecked="{Binding AutoPlayOnStartup}" OnContent="켬" OffContent="끔"/>
-        </ui:CardControl>
-        <ui:CardControl Margin="0,0,0,4" Icon="{ui:SymbolIcon History24}">
-            <ui:CardControl.Header>
-                <StackPanel>
-                    <ui:TextBlock Text="마지막 곡 이어 듣기" FontTypography="Body"/>
-                    <ui:TextBlock Text="GoTune Player를 열면 마지막으로 듣던 곡을 어디서부터 준비할지 정합니다."
-                                  FontSize="12" TextWrapping="Wrap" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-                </StackPanel>
-            </ui:CardControl.Header>
-            <ComboBox Width="200" ItemsSource="{Binding StartupResumeOptions}" DisplayMemberPath="Label"
-                      SelectedValuePath="Value" SelectedValue="{Binding StartupResume}"/>
-        </ui:CardControl>
-
-        <ui:TextBlock Text="재생" FontTypography="BodyStrong" Margin="0,20,0,8"/>
-        <ui:CardControl Margin="0,0,0,4" Icon="{ui:SymbolIcon Flash24}">
-            <ui:CardControl.Header>
-                <StackPanel>
-                    <ui:TextBlock Text="재생바 효과" FontTypography="Body"/>
-                    <ui:TextBlock Text="재생한 부분 위에서 음악에 맞춰 움직이는 효과입니다. 임의는 곡마다 물결과 불꽃 중 하나를 고릅니다."
-                                  FontSize="12" TextWrapping="Wrap" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-                </StackPanel>
-            </ui:CardControl.Header>
-            <ComboBox Width="160" ItemsSource="{Binding SeekBarStyleOptions}" DisplayMemberPath="Label"
-                      SelectedValuePath="Value" SelectedValue="{Binding SeekBarStyle}"/>
-        </ui:CardControl>
-        <ui:CardControl Margin="0,0,0,4" Icon="{ui:SymbolIcon DataBarVertical24}">
-            <ui:CardControl.Header>
-                <StackPanel>
-                    <ui:TextBlock Text="스펙트럼 모양" FontTypography="Body"/>
-                    <ui:TextBlock Text="곡 정보 아래와 화면 보호기의 스펙트럼입니다. 곡 정보 아래 스펙트럼을 클릭해도 차례로 바뀝니다."
-                                  FontSize="12" TextWrapping="Wrap" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-                </StackPanel>
-            </ui:CardControl.Header>
-            <ComboBox Width="160" ItemsSource="{Binding SpectrumStyleOptions}" DisplayMemberPath="Label"
-                      SelectedValuePath="Value" SelectedValue="{Binding SpectrumStyle}"/>
-        </ui:CardControl>
-        <ui:CardControl Margin="0,0,0,4" Icon="{ui:SymbolIcon Timer24}">
-            <ui:CardControl.Header>
-                <StackPanel>
-                    <ui:TextBlock Text="인트로 진행 게이지" FontTypography="Body"/>
-                    <ui:TextBlock Text="싱크 가사가 시작되기 전 인트로 동안, 가사가 나오기까지 얼마나 남았는지 가는 막대로 보여 줍니다. 인트로가 끝나면 부드럽게 사라집니다."
-                                  FontSize="12" TextWrapping="Wrap" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-                </StackPanel>
-            </ui:CardControl.Header>
-            <ui:ToggleSwitch IsChecked="{Binding ShowIntroGauge}" OnContent="표시" OffContent="숨김"/>
-        </ui:CardControl>
-        <ui:CardControl Margin="0,0,0,4" Icon="{ui:SymbolIcon PictureInPictureEnter24}">
-            <ui:CardControl.Header>
-                <StackPanel>
-                    <ui:TextBlock Text="최소화하면 미니 플레이어로" FontTypography="Body"/>
-                    <ui:TextBlock Text="플레이어 창의 최소화(─) 버튼을 누르면 작업 표시줄로 숨는 대신 미니 플레이어로 바뀝니다. 미니 플레이어를 더블클릭하면 다시 돌아옵니다."
-                                  FontSize="12" TextWrapping="Wrap" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-                </StackPanel>
-            </ui:CardControl.Header>
-            <ui:ToggleSwitch IsChecked="{Binding MinimizeToMini}" OnContent="켬" OffContent="끔"/>
-        </ui:CardControl>
-        <ui:CardControl Margin="0,0,0,4" Icon="{ui:SymbolIcon Desktop24}">
-            <ui:CardControl.Header>
-                <StackPanel>
-                    <ui:TextBlock Text="재생 중 화면 켜짐 유지" FontTypography="Body"/>
-                    <ui:TextBlock Text="음악이 재생되는 동안 화면이 꺼지거나 PC가 절전 모드로 들어가지 않게 합니다. 일시정지하거나 멈추면 원래대로 돌아갑니다."
-                                  FontSize="12" TextWrapping="Wrap" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-                </StackPanel>
-            </ui:CardControl.Header>
-            <ui:ToggleSwitch IsChecked="{Binding Playback.KeepScreenOn}" OnContent="켬" OffContent="끔"/>
-        </ui:CardControl>
-        <ui:CardControl Margin="0,0,0,4" Icon="{ui:SymbolIcon SlideMultiple24}">
-            <ui:CardControl.Header>
-                <StackPanel>
-                    <ui:TextBlock Text="화면 보호기" FontTypography="Body"/>
-                    <ui:TextBlock Text="음악이 재생되는 동안 마우스·키보드 입력이 없으면 커버와 가사, 시계를 전체 화면으로 보여 줍니다."
-                                  FontSize="12" TextWrapping="Wrap" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-                </StackPanel>
-            </ui:CardControl.Header>
-            <StackPanel Orientation="Horizontal">
-                <ComboBox Width="110" Margin="0,0,12,0" ItemsSource="{Binding ScreenSaverDelayOptions}" DisplayMemberPath="Label"
-                          SelectedValuePath="Value" SelectedValue="{Binding ScreenSaverMinutes}" IsEnabled="{Binding ScreenSaverEnabled}"
-                          ToolTip="입력이 없을 때 이 시간이 지나면 시작합니다"/>
-                <ui:Button Content="미리 보기" Margin="0,0,12,0" Command="{Binding PreviewScreenSaverCommand}"/>
-                <ui:ToggleSwitch IsChecked="{Binding ScreenSaverEnabled}" OnContent="켬" OffContent="끔"/>
-            </StackPanel>
-        </ui:CardControl>
-        <ui:CardControl Margin="0,0,0,4" Icon="{ui:SymbolIcon Keyboard24}">
-            <ui:CardControl.Header>
-                <StackPanel>
-                    <ui:TextBlock Text="화면 보호기 종료 방법" FontTypography="Body"/>
-                    <ui:TextBlock Text="ESC 키를 누를 때만 종료하도록 하면, 마우스나 키보드가 실수로 움직여도 화면 보호기가 유지됩니다. 그때는 종료 방법 안내와 함께 마우스로 누를 수 있는 ESC 버튼이 나타납니다."
-                                  FontSize="12" TextWrapping="Wrap" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-                </StackPanel>
-            </ui:CardControl.Header>
-            <ComboBox Width="220" ItemsSource="{Binding ScreenSaverExitOptions}" DisplayMemberPath="Label"
-                      SelectedValuePath="Value" SelectedValue="{Binding ScreenSaverExit}" IsEnabled="{Binding ScreenSaverEnabled}"/>
-        </ui:CardControl>
-
-        <ui:TextBlock Text="폴더 합치기" FontTypography="BodyStrong" Margin="0,20,0,8"/>
-        <ui:CardControl Margin="0,0,0,4" Icon="{ui:SymbolIcon FolderProhibited24}">
-            <ui:CardControl.Header>
-                <StackPanel>
-                    <ui:TextBlock Text="격리 폴더 이름" FontTypography="Body"/>
-                    <ui:TextBlock Text="충돌한 파일을 삭제하지 않고 옮겨 두는, 타겟 폴더 안의 폴더 이름입니다." FontSize="12" TextWrapping="Wrap"
-                                  Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-                </StackPanel>
-            </ui:CardControl.Header>
-            <ui:TextBox Width="240" Text="{Binding QuarantineFolderName, UpdateSourceTrigger=PropertyChanged}" ClearButtonEnabled="False"/>
-        </ui:CardControl>
-
-        <ui:TextBlock Text="데이터" FontTypography="BodyStrong" Margin="0,20,0,8"/>
-        <ui:CardControl Margin="0,0,0,4" Icon="{ui:SymbolIcon FolderOpen24}">
-            <ui:CardControl.Header>
-                <StackPanel>
-                    <ui:TextBlock Text="데이터 폴더" FontTypography="Body"/>
-                    <ui:TextBlock Text="설정, 라이브러리 목록, 네트워크 음악 캐시, 가사 싱크용 음성 인식 모델이 저장되는 폴더입니다." FontSize="12" TextWrapping="Wrap"
-                                  Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-                </StackPanel>
-            </ui:CardControl.Header>
-            <ui:Button Content="폴더 열기" Icon="{ui:SymbolIcon Open24}" Command="{Binding OpenDataFolderCommand}"/>
-        </ui:CardControl>
-
-        <ui:TextBlock Text="정보" FontTypography="BodyStrong" Margin="0,20,0,8"/>
-        <ui:Card Margin="0,0,0,4">
-            <StackPanel>
-                <StackPanel Orientation="Horizontal">
-                    <Image Source="pack://application:,,,/Assets/TuneSync.png" Width="40" Height="40" Margin="0,0,12,0"/>
-                    <StackPanel VerticalAlignment="Center">
-                        <!-- the wordmark: "Go" in the accent color -->
-                        <TextBlock FontSize="14" FontWeight="SemiBold" Foreground="{DynamicResource TextFillColorPrimaryBrush}">
-                            <Run Text="Go" Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}"/><Run Text="Tune Player"/>
-                        </TextBlock>
-                        <ui:TextBlock Text="{Binding VersionText}" FontSize="12" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-                    </StackPanel>
-                </StackPanel>
-                <ui:TextBlock Margin="0,12,0,0" FontSize="12" TextWrapping="Wrap" Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                              Text="태그·커버 정보는 MusicBrainz와 Cover Art Archive, 가사는 LRCLIB에서 가져옵니다."/>
-            </StackPanel>
-        </ui:Card>
-    </StackPanel>
-    </ScrollViewer>
+        </ScrollViewer>
+    </Grid>
 </Page>

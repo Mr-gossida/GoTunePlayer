@@ -19,6 +19,11 @@ public static class PlayerPalette
     public const string TrackKey = "PlayerTrackBrush";
     public const string HoverKey = "PlayerHoverBrush";
 
+    /// <summary>Laid over <see cref="TintKey"/> in a window that takes the player's colors
+    /// (설정): the same hue, a step deeper (dark theme) or paler (light), so it belongs with the
+    /// player yet reads as a window of its own.</summary>
+    public const string VeilKey = "PlayerVeilBrush";
+
     private static Color? _source;
 
     public static void Register(Application app)
@@ -57,6 +62,7 @@ public static class PlayerPalette
         Set(PanelKey, dark ? Color.FromArgb(0x38, 0, 0, 0) : Color.FromArgb(0x55, 0xFF, 0xFF, 0xFF), animate: false);
         Set(TrackKey, dark ? Color.FromArgb(0x40, 0xFF, 0xFF, 0xFF) : Color.FromArgb(0x30, 0, 0, 0), animate: false);
         Set(HoverKey, dark ? Color.FromArgb(0x14, 0xFF, 0xFF, 0xFF) : Color.FromArgb(0x10, 0, 0, 0), animate: false);
+        Set(VeilKey, dark ? Color.FromArgb(0x47, 0, 0, 0) : Color.FromArgb(0x59, 0xFF, 0xFF, 0xFF), animate: false);
         SetScrim(tint, animate);
         Changed?.Invoke();
     }

@@ -8,9 +8,17 @@ namespace TuneSync.App;
 /// the state it was left in.</summary>
 public partial class ToolWindow : FluentWindow
 {
-    public ToolWindow(Page page, string title, double width, double height)
+    /// <param name="playerColors">Take the player's colors (the cover's tint, a step apart)
+    /// instead of the plain system backdrop.</param>
+    public ToolWindow(Page page, string title, double width, double height, bool playerColors = false)
     {
         InitializeComponent();
+        if (playerColors)
+        {
+            WindowBackdropType = Wpf.Ui.Controls.WindowBackdropType.None;
+            PlayerTint.Visibility = System.Windows.Visibility.Visible;
+            PlayerVeil.Visibility = System.Windows.Visibility.Visible;
+        }
         Title = $"{title} - GoTune";
         ToolTitleBar.Title = title;
         Width = width;

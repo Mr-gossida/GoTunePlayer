@@ -424,7 +424,7 @@ public partial class ShellWindow : FluentWindow
         return after;
     }
 
-    private void OpenSettings_Click(object sender, RoutedEventArgs e) => OpenTool<SettingsView>("설정", 820, 720);
+    private void OpenSettings_Click(object sender, RoutedEventArgs e) => OpenTool<SettingsView>("설정", 820, 720, playerColors: true);
 
     /// <summary>The queue's "태그 관리에서 보기": opens (or raises) the tag manager on that song.</summary>
     public void ShowInTagManager(LibraryFileViewModel file)
@@ -434,7 +434,7 @@ public partial class ShellWindow : FluentWindow
     }
 
     /// <summary>Opens a tool in its own window, or brings it to the front if it's already open.</summary>
-    private void OpenTool<TPage>(string title, double width, double height) where TPage : Page
+    private void OpenTool<TPage>(string title, double width, double height, bool playerColors = false) where TPage : Page
     {
         if (_openTools.TryGetValue(typeof(TPage), out var existing))
         {
@@ -443,7 +443,7 @@ public partial class ShellWindow : FluentWindow
             return;
         }
 
-        var window = new ToolWindow(_services.GetRequiredService<TPage>(), title, width, height) { Owner = this };
+        var window = new ToolWindow(_services.GetRequiredService<TPage>(), title, width, height, playerColors) { Owner = this };
         window.Closed += (_, _) => _openTools.Remove(typeof(TPage));
         _openTools[typeof(TPage)] = window;
         window.Show();
