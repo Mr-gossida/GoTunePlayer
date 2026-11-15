@@ -201,18 +201,25 @@ public partial class PlayView
         var near = playback.IsPlaying && remaining <= GaugeRetireTime;
         if (near == _gaugeRetiring) return;
         _gaugeRetiring = near;
+        if (!near)
+        {
+            ShowGaugesAgain(); // sought back, or paused
+            return;
+        }
+        foreach (var gauge in new System.Windows.UIElement[] { HeroGauge, PulseGauge })
+            gauge.BeginAnimation(OpacityProperty, new System.Windows.Media.Animation.DoubleAnimation(0, remaining)
+            {
+                EasingFunction = new System.Windows.Media.Animation.SineEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseInOut },
+            });
+    }
+
+    /// <summary>Both intro bars back at full strength, whatever fade was running on them.</summary>
+    private void ShowGaugesAgain()
+    {
         foreach (var gauge in new System.Windows.UIElement[] { HeroGauge, PulseGauge })
         {
-            if (near)
-                gauge.BeginAnimation(OpacityProperty, new System.Windows.Media.Animation.DoubleAnimation(0, remaining)
-                {
-                    EasingFunction = new System.Windows.Media.Animation.SineEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseInOut },
-                });
-            else
-            {
-                gauge.BeginAnimation(OpacityProperty, null); // sought back, or paused: show it again
-                gauge.Opacity = 1;
-            }
+            gauge.BeginAnimation(OpacityProperty, null);
+            gauge.Opacity = 1;
         }
     }
 
@@ -259,8 +266,7 @@ public partial class PlayView
     /// size, then shifts it so the cover is where the motion has got to.</summary>
     private void GlideCard(System.Windows.Rect from, double spectrumFrom, TimeSpan length)
     {
-        foreach (var old in TransitionLayer.Children.OfType<System.Windows.FrameworkElement>().ToList())
-            TransitionLayer.Children.Remove(old);
+        ClearTransitionLayer();
         BigCover.Opacity = 1;
         NowPlayingPanel.BeginAnimation(OpacityProperty, null);
         NowPlayingPanel.Opacity = 1;

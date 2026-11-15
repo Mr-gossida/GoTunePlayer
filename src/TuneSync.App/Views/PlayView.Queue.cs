@@ -129,17 +129,11 @@ public partial class PlayView
         var menu = new ContextMenu();
         foreach (var option in library.PlaylistSortOptions)
         {
-            var item = new MenuItem { Header = option.Label, IsCheckable = true, IsChecked = Equals(option.Value, library.PlaylistSort) };
-            item.Click += (_, _) => library.PlaylistSort = option.Value;
-            menu.Items.Add(item);
+            menu.Items.Add(CheckItem(option.Label, Equals(option.Value, library.PlaylistSort), () => library.PlaylistSort = option.Value));
         }
         menu.Items.Add(new Separator());
-        var ascending = new MenuItem { Header = "오름차순", IsCheckable = true, IsChecked = !library.PlaylistSortDescending };
-        ascending.Click += (_, _) => library.PlaylistSortDescending = false;
-        var descending = new MenuItem { Header = "내림차순", IsCheckable = true, IsChecked = library.PlaylistSortDescending };
-        descending.Click += (_, _) => library.PlaylistSortDescending = true;
-        menu.Items.Add(ascending);
-        menu.Items.Add(descending);
+        menu.Items.Add(CheckItem("오름차순", !library.PlaylistSortDescending, () => library.PlaylistSortDescending = false));
+        menu.Items.Add(CheckItem("내림차순", library.PlaylistSortDescending, () => library.PlaylistSortDescending = true));
         OpenMenu(menu, (System.Windows.UIElement)sender);
     }
 
@@ -149,11 +143,17 @@ public partial class PlayView
         var menu = new ContextMenu();
         foreach (var option in library.PlaylistGroupOptions)
         {
-            var item = new MenuItem { Header = option.Label, IsCheckable = true, IsChecked = Equals(option.Value, library.PlaylistGroup) };
-            item.Click += (_, _) => library.PlaylistGroup = option.Value;
-            menu.Items.Add(item);
+            menu.Items.Add(CheckItem(option.Label, Equals(option.Value, library.PlaylistGroup), () => library.PlaylistGroup = option.Value));
         }
         OpenMenu(menu, (System.Windows.UIElement)sender);
+    }
+
+    /// <summary>A menu entry with a check mark on the choice in effect.</summary>
+    private static MenuItem CheckItem(string header, bool isChecked, Action choose)
+    {
+        var item = new MenuItem { Header = header, IsCheckable = true, IsChecked = isChecked };
+        item.Click += (_, _) => choose();
+        return item;
     }
 
     private static void OpenMenu(ContextMenu menu, System.Windows.UIElement target)
@@ -254,14 +254,8 @@ public partial class PlayView
         Option("촘촘한 목록", QueueViewMode.Compact, Wpf.Ui.Controls.SymbolRegular.TextBulletListLtr24);
         Option("그리드", QueueViewMode.Grid, Wpf.Ui.Controls.SymbolRegular.Grid24);
         menu.Items.Add(new Separator());
-        void Order(string label, bool artistFirst)
-        {
-            var item = new MenuItem { Header = label, IsCheckable = true, IsChecked = playback.QueueArtistFirst == artistFirst };
-            item.Click += (_, _) => playback.QueueArtistFirst = artistFirst;
-            menu.Items.Add(item);
-        }
-        Order("제목 먼저", false);
-        Order("아티스트 먼저", true);
+        menu.Items.Add(CheckItem("제목 먼저", !playback.QueueArtistFirst, () => playback.QueueArtistFirst = false));
+        menu.Items.Add(CheckItem("아티스트 먼저", playback.QueueArtistFirst, () => playback.QueueArtistFirst = true));
         if (playback.QueueViewMode == QueueViewMode.Grid)
         {
             menu.Items.Add(new Separator());

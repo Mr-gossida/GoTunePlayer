@@ -7,9 +7,10 @@ using TuneSync.Core.Models;
 
 namespace TuneSync.App.Views;
 
-/// <summary>
-/// Interaction logic for PlayView.xaml
-/// </summary>
+/// <summary>The 플레이 page: the playing song's cover card and lyrics, with the play list beside
+/// them. This file wires the page to its view models; each concern has its own file
+/// (PlayView.Intro / NowPlaying / Lyrics / Layout / Queue / QueueSearch / QueueDragDrop /
+/// QueueStickyGroup).</summary>
 public partial class PlayView : Page
 {
     private readonly PlayPageViewModel _viewModel;
@@ -129,11 +130,7 @@ public partial class PlayView : Page
                 {
                     // A new intro (next song): its bars start out visible.
                     _gaugeRetiring = false;
-                    foreach (var gauge in new System.Windows.UIElement[] { HeroGauge, PulseGauge })
-                    {
-                        gauge.BeginAnimation(OpacityProperty, null);
-                        gauge.Opacity = 1;
-                    }
+                    ShowGaugesAgain();
                 }
                 ApplyIntroStage(animate: true);
                 GlideIntroGauge();

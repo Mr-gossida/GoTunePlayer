@@ -15,7 +15,7 @@ public partial class PlayView
 
     private bool? _compact;
 
-    /// <summary>Adapts to the window width: the queue switches between two widths, and when the
+    /// <summary>Adapts to the window width: when the
     /// lyrics no longer have room beside the big cover, the cover glides up into a strip above
     /// the lyrics. Switching back needs a little more room than switching in, so dragging around
     /// the threshold doesn't make it flip back and forth. While the window edge is being dragged,
@@ -27,8 +27,9 @@ public partial class PlayView
         if (width <= 0) return;
         var playback = _viewModel.Playback;
 
-        // The queue keeps one fixed width (QueuePanel, 320): re-laying out its grouped list at a
-        // new width cost ~100ms in one frame, which was the stutter felt while resizing.
+        // The queue's width doesn't follow the window (the user sets it by dragging its edge):
+        // re-laying out its grouped list at a new width cost ~100ms in one frame, which was the
+        // stutter felt while resizing.
         var content = width - (playback.IsQueueVisible ? QueuePanel.Width : 0);
         var compact = playback.IsLyricsVisible && (_compact == true ? content < 800 : content < 760);
 
@@ -119,14 +120,20 @@ public partial class PlayView
     private System.Windows.Rect BoundsInLayer(System.Windows.FrameworkElement element) =>
         element.TransformToVisual(TransitionLayer).TransformBounds(new System.Windows.Rect(element.RenderSize));
 
+    /// <summary>Takes away whatever an earlier transition left flying.</summary>
+    private void ClearTransitionLayer()
+    {
+        foreach (var old in TransitionLayer.Children.OfType<System.Windows.FrameworkElement>().ToList())
+            TransitionLayer.Children.Remove(old);
+    }
+
     /// <summary>A copy of the cover flies from its old rectangle to its new one (like Android's
     /// shared-element transition) while the real one stays hidden until it lands.</summary>
     private void GlideCover(System.Windows.Media.ImageSource cover, System.Windows.Rect from, System.Windows.Rect to,
                             System.Windows.FrameworkElement target, double cornerRadius, TimeSpan? duration = null)
     {
         var length = duration ?? LayoutTransition;
-        foreach (var old in TransitionLayer.Children.OfType<System.Windows.FrameworkElement>().ToList())
-            TransitionLayer.Children.Remove(old);
+        ClearTransitionLayer();
         BigCover.Opacity = 1;
         SmallCover.Opacity = 1;
 
@@ -194,8 +201,6 @@ public partial class PlayView
     /// <summary>As wide as the window allows while the player keeps enough room for its cover
     /// and controls.</summary>
     private double QueueMaxWidth => Math.Max(QueueMinWidth, Math.Min(760, ActualWidth - 460));
-
-    private void QueueResizer_DragStarted(object sender, System.Windows.Controls.Primitives.DragStartedEventArgs e) { }
 
     private void QueueResizer_DragDelta(object sender, System.Windows.Controls.Primitives.DragDeltaEventArgs e)
     {

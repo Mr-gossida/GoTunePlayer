@@ -789,7 +789,7 @@
         <!-- ========== Queue panel's left edge: drag to resize (snaps to the standard width) ========== -->
         <Thumb x:Name="QueueResizer" Grid.Column="1" Width="10" Margin="-5,0,0,0" HorizontalAlignment="Left" Panel.ZIndex="10"
                Cursor="SizeWE" ToolTip="끌어서 너비 조절 · 두 번 클릭하면 기본 너비"
-               DragStarted="QueueResizer_DragStarted" DragDelta="QueueResizer_DragDelta" DragCompleted="QueueResizer_DragCompleted"
+               DragDelta="QueueResizer_DragDelta" DragCompleted="QueueResizer_DragCompleted"
                MouseDoubleClick="QueueResizer_MouseDoubleClick"
                Visibility="{Binding Playback.IsQueueVisible, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}">
             <Thumb.Template>

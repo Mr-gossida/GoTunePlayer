@@ -13,7 +13,6 @@ public partial class PlayView
     // --- playlist search: moves the selection to matching songs, never filters the list ---
 
     private List<LibraryFileViewModel> _matches = [];
-    private int _matchIndex = -1;
 
     /// <summary>Ctrl+F from anywhere in the player window.</summary>
     public void FocusSearch()
@@ -61,7 +60,6 @@ public partial class PlayView
 
     private void GoToMatch(int index)
     {
-        _matchIndex = index;
         var match = index >= 0 ? _matches[index] : null;
         if (!ReferenceEquals(_searchHit, match))
         {
