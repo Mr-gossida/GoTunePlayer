@@ -44,6 +44,9 @@ public static class RemoteFiles
         return TagLib.File.Create(new Abstraction(path, new RemoteReadStream(client, remotePath, size)));
     }
 
+    /// <summary>"Used by another process" (ERROR_SHARING_VIOLATION / ERROR_LOCK_VIOLATION).</summary>
+    private static bool IsSharingViolation(IOException ex) => (ex.HResult & 0xFFFF) is 32 or 33;
+
     /// <summary>Changes a file's tags. Remote files are edited on a local copy that is then
     /// uploaded back over the original (via a temporary name, so a dropped connection never leaves
     /// a broken file on the server).</summary>
@@ -51,10 +54,22 @@ public static class RemoteFiles
     {
         if (!RemotePath.IsRemote(path))
         {
-            using var local = TagLib.File.Create(path);
-            edit(local);
-            local.Save();
-            return;
+            // Something may still be reading the file for a moment (the spectrum analysis of a
+            // song that just started, an indexer, a virus scan): wait for it instead of failing.
+            for (var attempt = 1; ; attempt++)
+            {
+                try
+                {
+                    using var local = TagLib.File.Create(path);
+                    edit(local);
+                    local.Save();
+                    return;
+                }
+                catch (IOException ex) when (attempt < 12 && IsSharingViolation(ex))
+                {
+                    Thread.Sleep(250);
+                }
+            }
         }
 
         var copy = LocalCopyOf?.Invoke(path) ?? throw new IOException("원격 파일을 받아오지 못했습니다.");

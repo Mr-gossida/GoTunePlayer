@@ -8,7 +8,7 @@ using TuneSync.App.ViewModels;
 
 namespace TuneSync.App;
 
-/// <summary>The "싱크 가사 만들기" editor (see <see cref="LyricsSyncViewModel"/>).</summary>
+/// <summary>The "싱크 가사 만들기 / 편집" editor (see <see cref="LyricsSyncViewModel"/>).</summary>
 public partial class LyricsSyncWindow : Wpf.Ui.Controls.FluentWindow
 {
     private readonly LyricsSyncViewModel _viewModel;
@@ -40,23 +40,23 @@ public partial class LyricsSyncWindow : Wpf.Ui.Controls.FluentWindow
         };
     }
 
-    /// <summary>Opens the editor for <paramref name="file"/>'s plain lyrics. True when synced
-    /// lyrics were saved.</summary>
-    public static bool Run(Window? owner, LibraryFileViewModel file, string plainLyrics)
+    /// <summary>Opens the editor for <paramref name="file"/>'s lyrics: plain ones to sync, or
+    /// synced ones to fix (their times loaded). True when synced lyrics were saved.</summary>
+    public static bool Run(Window? owner, LibraryFileViewModel file, string lyrics)
     {
-        var window = Create(file, plainLyrics);
+        var window = Create(file, lyrics);
         window.Owner = owner;
         return window.ShowDialog() == true;
     }
 
-    internal static LyricsSyncWindow Create(LibraryFileViewModel file, string plainLyrics)
+    internal static LyricsSyncWindow Create(LibraryFileViewModel file, string lyrics)
     {
         var services = ((App)Application.Current).Services;
         var viewModel = new LyricsSyncViewModel(
             services.GetRequiredService<PlaybackViewModel>(),
             services.GetRequiredService<LibraryViewModel>(),
             services.GetRequiredService<Network.NetworkLibrary>(),
-            file, plainLyrics);
+            file, lyrics);
         return new LyricsSyncWindow(viewModel);
     }
 
@@ -123,7 +123,7 @@ public partial class LyricsSyncWindow : Wpf.Ui.Controls.FluentWindow
             e.Cancel = true;
             Dispatcher.BeginInvoke(async () =>
             {
-                if (!await Dialogs.ConfirmAsync("싱크 가사 만들기", "맞춘 시간을 저장하지 않고 닫을까요?", "저장하지 않고 닫기")) return;
+                if (!await Dialogs.ConfirmAsync(_viewModel.WindowTitle, "맞춘 시간을 저장하지 않고 닫을까요?", "저장하지 않고 닫기")) return;
                 _closeConfirmed = true;
                 _viewModel.CancelWorkCommand.Execute(null);
                 Close();

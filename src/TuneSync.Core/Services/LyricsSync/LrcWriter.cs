@@ -22,6 +22,20 @@ public static class LrcWriter
         return sb.ToString().TrimEnd('\n');
     }
 
+    /// <summary>LRC tag lines that aren't lyrics ("[ar:…]", "[ti:…]", "[offset:…]", …), in order,
+    /// so editing the timing of synced lyrics keeps them.</summary>
+    public static List<string> HeaderLines(string lyrics) =>
+        [.. LrcParser.NormalizeNewlines(lyrics).Split('\n').Select(l => l.Trim())
+            .Where(l => System.Text.RegularExpressions.Regex.IsMatch(l, @"^\[[A-Za-z#][\w#-]*:[^\]]*\]$"))];
+
+    /// <summary><see cref="Write"/> with <paramref name="header"/> lines first.</summary>
+    public static string Write(IEnumerable<string> header, IEnumerable<(TimeSpan Time, string Text)> lines)
+    {
+        var head = string.Join("\n", header);
+        var body = Write(lines);
+        return head.Length == 0 ? body : body.Length == 0 ? head : head + "\n" + body;
+    }
+
     /// <summary>The lines of plain lyrics worth timing (blank lines and any timestamps dropped).</summary>
     public static List<string> PlainLines(string lyrics) =>
         [.. LrcParser.NormalizeNewlines(lyrics).Split('\n')

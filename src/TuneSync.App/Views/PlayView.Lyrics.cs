@@ -65,6 +65,13 @@ public partial class PlayView
         LyricsSyncWindow.Run(System.Windows.Window.GetWindow(this), file, playback.PlainLyrics);
     }
 
+    private void EditSyncedLyrics_Click(object sender, System.Windows.RoutedEventArgs e)
+    {
+        var playback = _viewModel.Playback;
+        if (playback.CurrentFile is not { } file || string.IsNullOrWhiteSpace(playback.SyncedLyricsText)) return;
+        LyricsSyncWindow.Run(System.Windows.Window.GetWindow(this), file, playback.SyncedLyricsText);
+    }
+
     private void FollowCurrentLyric()
     {
         if (!IsLoaded || DateTime.UtcNow < _followPausedUntil) return;

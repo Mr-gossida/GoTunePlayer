@@ -1,4 +1,4 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using System.Linq;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -11,6 +11,10 @@ namespace TuneSync.App.ViewModels;
 public sealed partial class SyncLineViewModel(string text) : ObservableObject
 {
     public string Text { get; } = text;
+
+    /// <summary>A timed empty line from existing synced lyrics: where a line stops showing (an
+    /// instrumental break). Optional - never required for saving, dropped when left without a time.</summary>
+    public bool IsGap => Text.Length == 0;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(TimeText), nameof(HasTime), nameof(NeedsCheck))]
@@ -46,16 +50,35 @@ public sealed partial class LyricsSyncViewModel : ObservableObject, IDisposable
     private CancellationTokenSource? _work;
 
     public LyricsSyncViewModel(PlaybackViewModel playback, LibraryViewModel library, Network.NetworkLibrary network,
-        LibraryFileViewModel file, string plainLyrics)
+        LibraryFileViewModel file, string lyrics)
     {
         _playback = playback;
         _library = library;
         _network = network;
         File = file;
-        foreach (var line in LrcWriter.PlainLines(plainLyrics)) Lines.Add(new SyncLineViewModel(line));
-        SelectedLine = Lines.FirstOrDefault();
+        var synced = LrcParser.Parse(lyrics);
+        IsEditing = synced.Count > 0;
+        if (IsEditing)
+        {
+            // Already synced: start from its times (and keep its [ar:]/[ti:]… tags for saving).
+            _header = LrcWriter.HeaderLines(lyrics);
+            foreach (var line in synced) Lines.Add(new SyncLineViewModel(line.Text) { Time = line.Time });
+        }
+        else
+        {
+            foreach (var line in LrcWriter.PlainLines(lyrics)) Lines.Add(new SyncLineViewModel(line));
+        }
+        SelectedLine = Lines.FirstOrDefault(l => !l.IsGap) ?? Lines.FirstOrDefault();
         UpdateSummary();
     }
+
+    private readonly List<string> _header = [];
+
+    /// <summary>The song already had synced lyrics: this edits their timing ("싱크 가사 편집")
+    /// rather than making them from plain text.</summary>
+    public bool IsEditing { get; }
+
+    public string WindowTitle => IsEditing ? "싱크 가사 편집" : "싱크 가사 만들기";
 
     public LibraryFileViewModel File { get; }
     public PlaybackViewModel Playback => _playback;
@@ -101,11 +124,12 @@ public sealed partial class LyricsSyncViewModel : ObservableObject, IDisposable
 
     private void UpdateSummary()
     {
-        var timed = Lines.Count(l => l.HasTime);
-        var check = Lines.Count(l => l.NeedsCheck);
-        Summary = timed == 0 ? $"{Lines.Count}줄 · 아직 시간이 없습니다"
-            : timed < Lines.Count ? $"{Lines.Count}줄 중 {timed}줄 시간 지정" + (check > 0 ? $" · 확인 필요 {check}줄" : "")
-            : check > 0 ? $"{Lines.Count}줄 모두 지정 · 확인 필요 {check}줄" : $"{Lines.Count}줄 모두 지정";
+        var sung = Lines.Where(l => !l.IsGap).ToList();
+        var timed = sung.Count(l => l.HasTime);
+        var check = sung.Count(l => l.NeedsCheck);
+        Summary = timed == 0 ? $"{sung.Count}줄 · 아직 시간이 없습니다"
+            : timed < sung.Count ? $"{sung.Count}줄 중 {timed}줄 시간 지정" + (check > 0 ? $" · 확인 필요 {check}줄" : "")
+            : check > 0 ? $"{sung.Count}줄 모두 지정 · 확인 필요 {check}줄" : $"{sung.Count}줄 모두 지정";
     }
 
     // ---- automatic sync ----
@@ -130,6 +154,10 @@ public sealed partial class LyricsSyncViewModel : ObservableObject, IDisposable
             if (!ok) return;
             if (!await DownloadModelAsync()) return;
         }
+        if (Lines.Any(l => l.HasTime) && !await Dialogs.ConfirmAsync("자동으로 맞추기",
+                "지금 있는 시간을 모두 새로 맞춥니다. 저장하기 전까지는 파일이 바뀌지 않으니, 마음에 들지 않으면 저장하지 않고 닫으면 됩니다.",
+                "새로 맞추기"))
+            return;
 
         _work = new CancellationTokenSource();
         var ct = _work.Token;
@@ -139,7 +167,8 @@ public sealed partial class LyricsSyncViewModel : ObservableObject, IDisposable
         {
             Status = "노래를 준비하는 중…";
             var audio = File.IsRemote ? await _network.Cache.CompletedPathAsync(File.Path) : File.Path;
-            var plain = string.Join("\n", Lines.Select(l => l.Text));
+            var sung = Lines.Where(l => !l.IsGap).ToList();
+            var plain = string.Join("\n", sung.Select(l => l.Text));
             _engine ??= new LyricsSyncEngine();
             var progress = new Progress<(LyricsSyncEngine.Stage Stage, double Value)>(p =>
             {
@@ -152,11 +181,14 @@ public sealed partial class LyricsSyncViewModel : ObservableObject, IDisposable
                 };
             });
             var result = await _engine.SyncAsync(audio, plain, progress, ct);
-            for (var i = 0; i < Lines.Count && i < result.Count; i++)
+            for (var i = 0; i < sung.Count && i < result.Count; i++)
             {
-                Lines[i].Time = result[i].Time;
-                Lines[i].IsConfident = result[i].IsConfident;
+                sung[i].Time = result[i].Time;
+                sung[i].IsConfident = result[i].IsConfident;
             }
+            // The old breaks' times no longer fit the new line times (and recognition doesn't
+            // place breaks): clear them, so they're left out unless stamped again.
+            foreach (var gap in Lines.Where(l => l.IsGap)) gap.Time = null;
             HasChanges = true;
             var check = result.Count(r => !r.IsConfident);
             Status = check == 0
@@ -338,17 +370,17 @@ public sealed partial class LyricsSyncViewModel : ObservableObject, IDisposable
     private async Task SaveAsync()
     {
         if (IsBusy || IsSaving) return;
-        var missing = Lines.Count(l => !l.HasTime);
+        var missing = Lines.Count(l => !l.HasTime && !l.IsGap);
         if (missing > 0)
         {
-            SelectedLine = Lines.First(l => !l.HasTime);
+            SelectedLine = Lines.First(l => !l.HasTime && !l.IsGap);
             ScrollRequested?.Invoke(SelectedLine);
             Toast.Warning("시간이 없는 줄이 있습니다", $"{missing}줄에 시간을 지정한 뒤 저장하세요. (자동으로 맞추기 또는 Space)");
             return;
         }
 
         // Keep the file's order; LRC readers sort by time anyway.
-        var lrc = LrcWriter.Write(Lines.Select(l => (l.Time!.Value, l.Text)));
+        var lrc = LrcWriter.Write(_header, Lines.Where(l => l.HasTime).Select(l => (l.Time!.Value, l.Text)));
         IsSaving = true;
         var resume = await _playback.ReleaseIfPlayingAsync([File.Path]);
         try

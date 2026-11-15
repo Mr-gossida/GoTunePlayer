@@ -81,6 +81,9 @@ public sealed partial class PlaybackViewModel
     private int _lyricsVersion;
     private bool _isLoadingLyrics;
 
+    /// <summary>The playing song's synced lyrics as stored (LRC, tags included), for "싱크 편집".</summary>
+    public string? SyncedLyricsText { get; private set; }
+
     /// <summary>Reads the song's lyrics off the UI thread: the library lives on a network share,
     /// and a slow read there used to freeze the whole window right as a song started.</summary>
     private async void LoadLyrics(LibraryFileViewModel file)
@@ -88,6 +91,7 @@ public sealed partial class PlaybackViewModel
         var version = ++_lyricsVersion;
         LyricsLines.Clear();
         PlainLyrics = null;
+        SyncedLyricsText = null;
         PlainLyricsLines = [];
         HasSyncedLyrics = false;
         CurrentLyricsIndex = -1;
@@ -114,6 +118,7 @@ public sealed partial class PlaybackViewModel
             {
                 foreach (var line in parsed)
                     LyricsLines.Add(new LyricsLineViewModel(line.Time, line.Text));
+                SyncedLyricsText = lyrics;
                 HasSyncedLyrics = true;
                 // Worth an intro only when there's real time before the first line.
                 var sung = parsed.Where(l => !string.IsNullOrWhiteSpace(l.Text)).ToList();

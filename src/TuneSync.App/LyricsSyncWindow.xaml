@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
         xmlns:conv="clr-namespace:TuneSync.App.Converters"
-        Title="싱크 가사 만들기" Width="760" Height="820" MinWidth="620" MinHeight="560"
+        Title="{Binding WindowTitle}" Width="760" Height="820" MinWidth="620" MinHeight="560"
         WindowStartupLocation="CenterOwner" ExtendsContentIntoTitleBar="True"
         WindowBackdropType="Mica" WindowCornerPreference="Round" ShowInTaskbar="False"
         PreviewKeyDown="Window_PreviewKeyDown">
@@ -50,7 +50,7 @@
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <ui:TitleBar Title="싱크 가사 만들기" ShowMinimize="False" ShowMaximize="False"/>
+        <ui:TitleBar Title="{Binding WindowTitle}" ShowMinimize="False" ShowMaximize="False"/>
 
         <!-- Song -->
         <Grid Grid.Row="1" Margin="24,8,24,12">
@@ -137,6 +137,13 @@
                         </DataTrigger>
                         <DataTrigger Binding="{Binding IsCurrent}" Value="True">
                             <Setter TargetName="LineText" Property="FontWeight" Value="SemiBold"/>
+                        </DataTrigger>
+                        <!-- an instrumental break from the existing lyrics -->
+                        <DataTrigger Binding="{Binding IsGap}" Value="True">
+                            <Setter TargetName="LineText" Property="Text" Value="♪ 간주 (가사 없음 · 선택)"/>
+                            <Setter TargetName="LineText" Property="FontSize" Value="12"/>
+                            <Setter TargetName="LineText" Property="Foreground" Value="{DynamicResource TextFillColorTertiaryBrush}"/>
+                            <Setter TargetName="LineText" Property="ToolTip" Value="앞 줄이 사라지는 시점입니다. 시간을 지우면 저장할 때 빠집니다."/>
                         </DataTrigger>
                     </DataTemplate.Triggers>
                 </DataTemplate>

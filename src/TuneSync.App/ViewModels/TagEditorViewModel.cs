@@ -654,9 +654,14 @@ public sealed partial class TagEditorViewModel : ObservableObject
         LyricsText = text;
         _lyricsLoading = false;
         OnPropertyChanged(nameof(CanMakeSynced));
+        OnPropertyChanged(nameof(CanEditSynced));
     }
 
-    partial void OnIsLyricsLoadingChanged(bool value) => OnPropertyChanged(nameof(CanMakeSynced));
+    partial void OnIsLyricsLoadingChanged(bool value)
+    {
+        OnPropertyChanged(nameof(CanMakeSynced));
+        OnPropertyChanged(nameof(CanEditSynced));
+    }
 
     partial void OnLyricsTextChanged(string value)
     {
@@ -678,18 +683,22 @@ public sealed partial class TagEditorViewModel : ObservableObject
             : "일반 가사";
         if (IsLyricsPending) LyricsInfo += " · 저장 전";
         OnPropertyChanged(nameof(CanMakeSynced));
+        OnPropertyChanged(nameof(CanEditSynced));
     }
 
     /// <summary>One song whose lyrics (as shown, edits included) are plain text.</summary>
     public bool CanMakeSynced => _selection.Count == 1 && !IsLyricsLoading
         && Normalize(LyricsText).Length > 0 && LrcParser.Parse(Normalize(LyricsText)).Count == 0;
 
-    /// <summary>Opens the sync editor on the shown lyrics; once synced lyrics are saved, any
-    /// unsaved lyrics edit here is replaced by them.</summary>
+    /// <summary>One song whose lyrics (as shown, edits included) are already synced: "싱크 편집".</summary>
+    public bool CanEditSynced => _selection.Count == 1 && !IsLyricsLoading && LrcParser.Parse(Normalize(LyricsText)).Count > 0;
+
+    /// <summary>Opens the sync editor on the shown lyrics (plain ones to sync, synced ones to fix);
+    /// once synced lyrics are saved, any unsaved lyrics edit here is replaced by them.</summary>
     [RelayCommand]
     private void MakeSynced()
     {
-        if (!CanMakeSynced) return;
+        if (!CanMakeSynced && !CanEditSynced) return;
         var file = _selection[0];
         var owner = Application.Current.Windows.OfType<Window>().FirstOrDefault(w => w.IsActive);
         if (!LyricsSyncWindow.Run(owner, file, LyricsText)) return;

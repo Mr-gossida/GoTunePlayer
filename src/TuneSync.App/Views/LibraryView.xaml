@@ -639,6 +639,10 @@
                                            Command="{Binding MakeSyncedCommand}"
                                            ToolTip="음성 인식으로 각 줄의 시간을 자동으로 맞추고, 들어보며 고칠 수 있습니다"
                                            Visibility="{Binding CanMakeSynced, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}"/>
+                                <ui:Button Content="싱크 편집" Icon="{ui:SymbolIcon Edit24}" Padding="10,4" FontSize="12" Margin="0,0,4,0"
+                                           Command="{Binding MakeSyncedCommand}"
+                                           ToolTip="싱크 가사의 시간을 들어보며 고칩니다 (자동으로 다시 맞출 수도 있습니다)"
+                                           Visibility="{Binding CanEditSynced, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}"/>
                                 <ui:Button Content="되돌리기" Icon="{ui:SymbolIcon ArrowUndo16}" Appearance="Transparent"
                                            Padding="8,3" FontSize="12" Command="{Binding RevertLyricsCommand}"
                                            Visibility="{Binding IsLyricsPending, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}"/>
