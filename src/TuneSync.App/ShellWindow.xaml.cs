@@ -36,7 +36,7 @@ public partial class ShellWindow : FluentWindow
         Toast.Register(this, snackbar);
 
         PlayerFrame.Navigate(services.GetRequiredService<PlayView>());
-        TaskbarControls.Attach(this, playback, new("미니 플레이어로", "\uE73F", () => EnterMiniMode(_mini?.Mode ?? PlayerMode.MiniHorizontal)));
+        TaskbarControls.Attach(this, playback, new("미니 플레이어로", "\uE73F", EnterLastMiniMode));
         StateChanged += (_, _) =>
         {
             if (WindowState != WindowState.Minimized)
@@ -48,7 +48,7 @@ public partial class ShellWindow : FluentWindow
             if (!_settings.MinimizeToMini || StartingQuietly || IsClosing || !IsVisible) return;
             Hide(); // first, so the window doesn't flash back up while being restored
             WindowState = WindowState.Normal;
-            EnterMiniMode(_mini?.Mode ?? PlayerMode.MiniHorizontal);
+            EnterLastMiniMode();
         };
         SleepTimerButton.DataContext = services.GetRequiredService<SleepTimerViewModel>();
         ScreenSaver.Start(services);
@@ -100,7 +100,7 @@ public partial class ShellWindow : FluentWindow
                     e.Handled = true;
                     return;
                 case System.Windows.Input.Key.M:
-                    EnterMiniMode(_mini?.Mode ?? PlayerMode.MiniHorizontal);
+                    EnterLastMiniMode();
                     e.Handled = true;
                     return;
             }
@@ -204,7 +204,7 @@ public partial class ShellWindow : FluentWindow
     protected override void OnClosing(CancelEventArgs e)
     {
         // Unsaved tag edits: ask before they're lost.
-        var editor = (ViewModels.TagEditorViewModel?)_services.GetService(typeof(ViewModels.TagEditorViewModel));
+        var editor = _services.GetService<TagEditorViewModel>();
         if (!_discardConfirmed && editor is { HasPending: true })
         {
             e.Cancel = true;

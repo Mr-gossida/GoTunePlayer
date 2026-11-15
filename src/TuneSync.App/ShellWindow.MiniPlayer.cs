@@ -24,8 +24,10 @@ public partial class ShellWindow
     /// <summary>True once the app is shutting down (the mini player then closes for real).</summary>
     public bool IsClosing { get; private set; }
 
-    private void MiniMode_Click(object sender, RoutedEventArgs e) =>
-        EnterMiniMode(_mini?.Mode ?? PlayerMode.MiniHorizontal);
+    private void MiniMode_Click(object sender, RoutedEventArgs e) => EnterLastMiniMode();
+
+    /// <summary>The mini player in the shape it had last time (the horizontal one the first time).</summary>
+    private void EnterLastMiniMode() => EnterMiniMode(_mini?.Mode ?? PlayerMode.MiniHorizontal);
 
     /// <summary>Swaps this window for the mini player (playback continues untouched).</summary>
     public void EnterMiniMode(PlayerMode mode)
