@@ -18,7 +18,6 @@ public sealed record AlignedLine(string Text, TimeSpan Time, bool IsConfident);
 public static class LyricsAligner
 {
     private const double MatchCost = 0;
-    private const double SimilarCost = 0.35;  // same Korean initial consonant + vowel (모/못)
     private const double MismatchCost = 1;
     private const double SkipHeardCost = 0.5;  // recognition heard something not in the lyrics
     private const double SkipLyricCost = 1;    // a lyric character recognition missed
@@ -158,7 +157,7 @@ public static class LyricsAligner
             switch (move[i * W + j])
             {
                 case 1:
-                    if (Substitution(lyric[i - 1].C, heard[j - 1].C) <= SimilarCost) result[i - 1] = j - 1;
+                    if (Substitution(lyric[i - 1].C, heard[j - 1].C) <= KeepCost) result[i - 1] = j - 1;
                     i--; j--;
                     break;
                 case 2: i--; break;
@@ -168,11 +167,47 @@ public static class LyricsAligner
         return result;
     }
 
+    /// <summary>A lined-up pair of characters this alike counts as found (two Korean syllables
+    /// differing in one part only: the initial consonant, the vowel or the final consonant).</summary>
+    private const double KeepCost = 0.45;
+
     private static double Substitution(char a, char b)
     {
         if (a == b) return MatchCost;
-        if (IsHangul(a) && IsHangul(b) && (a - 0xAC00) / 28 == (b - 0xAC00) / 28) return SimilarCost; // same initial + vowel
-        return MismatchCost;
+        return IsHangul(a) && IsHangul(b) ? SoundCost(a, b) : MismatchCost;
+    }
+
+    /// <summary>How differently two Hangul syllables sound, 0..1: the initial consonant and the
+    /// vowel count most, the final consonant least (it often moves onto the next syllable when
+    /// sung - 했어 is heard as 해써). Letters that sound alike count as the same: ㅐ/ㅔ,
+    /// ㅙ/ㅞ/ㅚ, tense and plain consonants, and final consonants by how they're pronounced
+    /// (ㅅㅆㅈㅊㅌㅎ → ㄷ, ㄲㅋ → ㄱ, ㅍ → ㅂ).</summary>
+    internal static double SoundCost(char a, char b)
+    {
+        var (ia, va, fa) = Split(a);
+        var (ib, vb, fb) = Split(b);
+        var cost = 0.0;
+        if (Initial(ia) != Initial(ib)) cost += 0.45;
+        if (Vowel(va) != Vowel(vb)) cost += 0.45;
+        if (Final(fa) != Final(fb)) cost += 0.2;
+        return Math.Min(cost, MismatchCost);
+
+        static (int I, int V, int F) Split(char c) { var s = c - 0xAC00; return (s / 588, s % 588 / 28, s % 28); }
+        // ㄲ→ㄱ, ㄸ→ㄷ, ㅃ→ㅂ, ㅆ→ㅅ, ㅉ→ㅈ
+        static int Initial(int i) => i switch { 1 => 0, 4 => 3, 8 => 7, 10 => 9, 13 => 12, _ => i };
+        // ㅔ→ㅐ, ㅖ→ㅒ, ㅚ/ㅞ→ㅙ
+        static int Vowel(int v) => v switch { 5 => 1, 7 => 3, 11 or 15 => 10, _ => v };
+        // finals as pronounced: ㄱ ㄴ ㄷ ㄹ ㅁ ㅂ ㅇ
+        static int Final(int f) => f switch
+        {
+            2 or 3 or 9 or 24 => 1,
+            5 or 6 => 4,
+            19 or 20 or 22 or 23 or 25 or 27 => 7,
+            11 or 12 or 13 or 15 => 8,
+            10 => 16,
+            14 or 18 or 26 => 17,
+            _ => f,
+        };
     }
 
     private static bool IsHangul(char c) => c is >= '가' and <= '힣';

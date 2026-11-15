@@ -186,4 +186,25 @@ public class LyricsAlignerTests
         Assert.InRange(windows[0].End, 4.25, 4.35);
         Assert.InRange(windows[1].Start, 19.65, 19.75);
     }
+
+    [Fact]
+    public void Hears_korean_by_sound_not_spelling()
+    {
+        // Sung and heard: ㅔ/ㅐ alike, tense consonants, a final consonant moved to the next syllable.
+        string[] lines = ["네게 줄게 했어요", "이제는 안녕"];
+        var heard = new List<TimedText>
+        {
+            new(TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(6), "내개"),
+            new(TimeSpan.FromSeconds(6), TimeSpan.FromSeconds(7), "쭐께"),
+            new(TimeSpan.FromSeconds(7), TimeSpan.FromSeconds(8.5), "해써요"),
+            new(TimeSpan.FromSeconds(12), TimeSpan.FromSeconds(13), "이제는"),
+            new(TimeSpan.FromSeconds(13), TimeSpan.FromSeconds(14), "안녕"),
+        };
+
+        var result = LyricsAligner.Align(lines, heard, TimeSpan.FromSeconds(60));
+
+        Assert.True(result[0].IsConfident);
+        AssertNear(5, result[0].Time);
+        AssertNear(12, result[1].Time);
+    }
 }
