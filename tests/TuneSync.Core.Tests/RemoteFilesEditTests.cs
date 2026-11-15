@@ -5,7 +5,7 @@ namespace TuneSync.Core.Tests;
 public class RemoteFilesEditTests
 {
     [Fact]
-    public void Edit_WaitsForAReaderToLetGo()
+    public async Task Edit_WaitsForAReaderToLetGo()
     {
         var path = Path.Combine(Path.GetTempPath(), $"tunesync-edit-{Guid.NewGuid():N}.mp3");
         File.Copy(Path.Combine(AppContext.BaseDirectory, "TestAssets", "sample.mp3"), path);
@@ -16,7 +16,7 @@ public class RemoteFilesEditTests
             var release = Task.Run(async () => { await Task.Delay(600); reader.Dispose(); });
 
             RemoteFiles.Edit(path, f => f.Tag.Lyrics = "[00:01.00]hello");
-            release.Wait();
+            await release;
 
             using var check = TagLib.File.Create(path);
             Assert.Equal("[00:01.00]hello", check.Tag.Lyrics);

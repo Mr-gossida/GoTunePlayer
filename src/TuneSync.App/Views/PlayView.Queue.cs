@@ -90,7 +90,7 @@ public partial class PlayView
         return item;
     }
 
-    private static void RevealInExplorer(string path)
+    internal static void RevealInExplorer(string path)
     {
         if (TuneSync.Core.Models.RemotePath.IsRemote(path))
         {
@@ -110,7 +110,7 @@ public partial class PlayView
         }
     }
 
-    private static void CopyPath(string path)
+    internal static void CopyPath(string path)
     {
         try
         {
@@ -355,6 +355,50 @@ public partial class PlayView
         if (CurrentRow() is not { } current) return;
         PlaylistBox.SelectedItem = current;
         PlaylistBox.ScrollIntoView(current);
+    }
+
+    /// <summary>The playback bar's cover was clicked: bring the playing song into view in the
+    /// list and blink it, so the eye finds it. <paramref name="openQueue"/> also opens a hidden
+    /// list and clears a search (the card's "재생 목록에서 보기"); otherwise a hidden list stays hidden.</summary>
+    public void RevealCurrent(bool openQueue)
+    {
+        var playback = _viewModel.Playback;
+        if (openQueue)
+        {
+            playback.IsQueueVisible = true;
+            if (SearchBox.Text.Length > 0) SearchBox.Text = "";
+        }
+        if (!playback.IsQueueVisible) return;
+        Dispatcher.BeginInvoke(() =>
+        {
+            if (CurrentRow() is not { } current) return;
+            PlaylistBox.SelectedItem = current;
+            PlaylistBox.ScrollIntoView(current);
+            Dispatcher.BeginInvoke(() =>
+            {
+                UpdateBackToCurrent();
+                if (PlaylistBox.ItemContainerGenerator.ContainerFromItem(current) is not System.Windows.UIElement row) return;
+                row.BeginAnimation(OpacityProperty, new System.Windows.Media.Animation.DoubleAnimation(1, 0.3, TimeSpan.FromMilliseconds(170))
+                {
+                    AutoReverse = true,
+                    RepeatBehavior = new System.Windows.Media.Animation.RepeatBehavior(2),
+                    FillBehavior = System.Windows.Media.Animation.FillBehavior.Stop,
+                    EasingFunction = new System.Windows.Media.Animation.SineEase(),
+                });
+            }, System.Windows.Threading.DispatcherPriority.Background);
+        }, System.Windows.Threading.DispatcherPriority.Loaded);
+    }
+
+    /// <summary>Opens the list (if hidden) and searches it, e.g. for the playing song's album.</summary>
+    public void SearchQueue(string text)
+    {
+        _viewModel.Playback.IsQueueVisible = true;
+        Dispatcher.BeginInvoke(() =>
+        {
+            SearchBox.Text = text;
+            SearchBox.Focus();
+            SearchBox.CaretIndex = SearchBox.Text.Length;
+        }, System.Windows.Threading.DispatcherPriority.Loaded);
     }
 
     /// <summary>Keeps the playlist highlight on the playing track, including when it changes via

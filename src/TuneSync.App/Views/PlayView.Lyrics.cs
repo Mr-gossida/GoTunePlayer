@@ -58,18 +58,18 @@ public partial class PlayView
         LyricsScroller.SnapTo(LyricsScrollViewer, LyricsItems, _viewModel.Playback.CurrentLyricsIndex);
     }
 
-    private void MakeSyncedLyrics_Click(object sender, System.Windows.RoutedEventArgs e)
-    {
-        var playback = _viewModel.Playback;
-        if (playback.CurrentFile is not { } file || string.IsNullOrWhiteSpace(playback.PlainLyrics)) return;
-        LyricsSyncWindow.Run(System.Windows.Window.GetWindow(this), file, playback.PlainLyrics);
-    }
+    private void MakeSyncedLyrics_Click(object sender, System.Windows.RoutedEventArgs e) => OpenLyricsSync();
 
-    private void EditSyncedLyrics_Click(object sender, System.Windows.RoutedEventArgs e)
+    private void EditSyncedLyrics_Click(object sender, System.Windows.RoutedEventArgs e) => OpenLyricsSync();
+
+    /// <summary>The sync editor on the playing song's lyrics: synced ones to fix ("싱크 편집"),
+    /// plain ones to time ("싱크 가사 만들기"). Nothing when the song has no lyrics.</summary>
+    public void OpenLyricsSync()
     {
         var playback = _viewModel.Playback;
-        if (playback.CurrentFile is not { } file || string.IsNullOrWhiteSpace(playback.SyncedLyricsText)) return;
-        LyricsSyncWindow.Run(System.Windows.Window.GetWindow(this), file, playback.SyncedLyricsText);
+        var lyrics = playback.HasSyncedLyrics ? playback.SyncedLyricsText : playback.PlainLyrics;
+        if (playback.CurrentFile is not { } file || string.IsNullOrWhiteSpace(lyrics)) return;
+        LyricsSyncWindow.Run(System.Windows.Window.GetWindow(this), file, lyrics);
     }
 
     private void FollowCurrentLyric()

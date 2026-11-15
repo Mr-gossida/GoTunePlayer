@@ -109,7 +109,32 @@
                         <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="*"/>
                     </Grid.ColumnDefinitions>
-                    <Grid Width="56" Height="56" Margin="0,0,12,0">
+                    <!-- Click: the playing song blinks in the list and its card opens (right-click:
+                         just the card). ShellWindow.NowPlayingCard.cs -->
+                    <Grid x:Name="BarCover" Width="56" Height="56" Margin="0,0,12,0" Cursor="Hand" Background="Transparent"
+                          RenderTransformOrigin="0.5,0.5" ToolTip="지금 재생 중인 곡 · 목록에서 찾고 바로가기 열기"
+                          MouseLeftButtonUp="BarCover_Click" MouseRightButtonUp="BarCover_RightClick">
+                        <Grid.RenderTransform>
+                            <ScaleTransform x:Name="BarCoverScale"/>
+                        </Grid.RenderTransform>
+                        <Grid.Triggers>
+                            <EventTrigger RoutedEvent="MouseEnter">
+                                <BeginStoryboard>
+                                    <Storyboard>
+                                        <DoubleAnimation Storyboard.TargetName="BarCoverScale" Storyboard.TargetProperty="ScaleX" To="1.07" Duration="0:0:0.15"/>
+                                        <DoubleAnimation Storyboard.TargetName="BarCoverScale" Storyboard.TargetProperty="ScaleY" To="1.07" Duration="0:0:0.15"/>
+                                    </Storyboard>
+                                </BeginStoryboard>
+                            </EventTrigger>
+                            <EventTrigger RoutedEvent="MouseLeave">
+                                <BeginStoryboard>
+                                    <Storyboard>
+                                        <DoubleAnimation Storyboard.TargetName="BarCoverScale" Storyboard.TargetProperty="ScaleX" To="1" Duration="0:0:0.15"/>
+                                        <DoubleAnimation Storyboard.TargetName="BarCoverScale" Storyboard.TargetProperty="ScaleY" To="1" Duration="0:0:0.15"/>
+                                    </Storyboard>
+                                </BeginStoryboard>
+                            </EventTrigger>
+                        </Grid.Triggers>
                         <Border CornerRadius="6" Background="{DynamicResource PlayerHoverBrush}">
                             <ui:SymbolIcon Symbol="MusicNote224" FontSize="22" Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
                         </Border>
@@ -119,6 +144,73 @@
                             </Border.Background>
                         </Border>
                     </Grid>
+
+                    <!-- The now-playing card: big cover, details and shortcuts. -->
+                    <Popup x:Name="NowPlayingCard" PlacementTarget="{Binding ElementName=BarCover}" Placement="Top"
+                           HorizontalOffset="-14" VerticalOffset="-6" StaysOpen="False" AllowsTransparency="True"
+                           PopupAnimation="Fade" Closed="NowPlayingCard_Closed">
+                        <!-- the margin leaves room for the shadow -->
+                        <Border Margin="12" Width="304" CornerRadius="12" Background="{DynamicResource PlayerTintBrush}"
+                                BorderThickness="1" BorderBrush="{DynamicResource PlayerTrackBrush}">
+                            <Border.Effect>
+                                <DropShadowEffect BlurRadius="24" ShadowDepth="4" Opacity="0.45" Color="Black"/>
+                            </Border.Effect>
+                            <Border CornerRadius="12" Background="{DynamicResource PlayerVeilBrush}" Padding="16">
+                                <StackPanel>
+                                    <Grid Width="270" Height="270">
+                                        <Border CornerRadius="8" Background="{DynamicResource PlayerHoverBrush}">
+                                            <ui:SymbolIcon Symbol="MusicNote224" FontSize="64" Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
+                                        </Border>
+                                        <Border CornerRadius="8">
+                                            <Border.Background>
+                                                <ImageBrush ImageSource="{Binding CurrentCover}" Stretch="UniformToFill" RenderOptions.BitmapScalingMode="HighQuality"/>
+                                            </Border.Background>
+                                        </Border>
+                                    </Grid>
+                                    <TextBlock Text="{Binding NowPlayingTitle}" FontSize="17" FontWeight="SemiBold" Margin="2,14,2,0"
+                                               TextWrapping="Wrap" MaxHeight="48" TextTrimming="CharacterEllipsis"
+                                               Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                                    <TextBlock Text="{Binding NowPlayingSubtitle}" FontSize="13" Margin="2,2,2,0" TextTrimming="CharacterEllipsis"
+                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                    <TextBlock x:Name="CardDetails" Text="{Binding NowPlayingDetails}" FontSize="12" Margin="2,2,2,0" TextTrimming="CharacterEllipsis"
+                                               Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
+                                    <StackPanel Orientation="Horizontal" Margin="2,8,2,0">
+                                        <Border CornerRadius="4" Padding="6,1" Margin="0,0,8,0" VerticalAlignment="Center"
+                                                BorderThickness="1" BorderBrush="{DynamicResource PlayerAccentBrush}"
+                                                Visibility="{Binding HasQualityBadge, Converter={StaticResource BoolToVisibility}}">
+                                            <TextBlock Text="{Binding QualityBadge}" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource PlayerAccentBrush}"/>
+                                        </Border>
+                                        <TextBlock Text="{Binding QualityText}" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                                                   Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
+                                    </StackPanel>
+
+                                    <Rectangle Height="1" Margin="0,14,0,8" Fill="{DynamicResource PlayerTrackBrush}"/>
+
+                                    <StackPanel x:Name="CardActions">
+                                        <StackPanel.Resources>
+                                            <Style TargetType="ui:Button" BasedOn="{StaticResource {x:Type ui:Button}}">
+                                                <Setter Property="Appearance" Value="Transparent"/>
+                                                <Setter Property="BorderThickness" Value="0"/>
+                                                <Setter Property="HorizontalAlignment" Value="Stretch"/>
+                                                <Setter Property="HorizontalContentAlignment" Value="Left"/>
+                                                <Setter Property="Padding" Value="10,7"/>
+                                                <Setter Property="Margin" Value="0,1"/>
+                                                <Setter Property="CornerRadius" Value="6"/>
+                                                <Setter Property="MouseOverBackground" Value="{DynamicResource PlayerHoverBrush}"/>
+                                            </Style>
+                                        </StackPanel.Resources>
+                                        <ui:Button Content="재생 목록에서 보기" Icon="{ui:SymbolIcon TextBulletListLtr24}" Click="CardShowInList_Click"/>
+                                        <ui:Button x:Name="CardAlbumButton" Icon="{ui:SymbolIcon Album24}" Click="CardFindAlbum_Click"/>
+                                        <ui:Button x:Name="CardArtistButton" Icon="{ui:SymbolIcon Person24}" Click="CardFindArtist_Click"/>
+                                        <ui:Button x:Name="CardLyricsButton" Click="CardLyrics_Click"/>
+                                        <ui:Button Content="태그 관리에서 보기" Icon="{ui:SymbolIcon Tag24}" Click="CardTagManager_Click"/>
+                                        <ui:Button x:Name="CardFolderButton" Content="파일 위치 열기" Icon="{ui:SymbolIcon FolderOpen24}" Click="CardFolder_Click"/>
+                                        <ui:Button Content="파일 경로 복사" Icon="{ui:SymbolIcon Copy24}" Click="CardCopyPath_Click"/>
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
+                        </Border>
+                    </Popup>
                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
                         <TextBlock Text="{Binding NowPlayingTitle}" ToolTip="{Binding NowPlayingTitle}" FontSize="14" FontWeight="SemiBold"
                                    TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>

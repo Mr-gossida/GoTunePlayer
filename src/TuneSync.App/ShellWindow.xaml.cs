@@ -85,6 +85,12 @@ public partial class ShellWindow : FluentWindow
             e.Handled = true;
             return;
         }
+        if (e.Key == System.Windows.Input.Key.Escape && NowPlayingCard.IsOpen)
+        {
+            NowPlayingCard.IsOpen = false;
+            e.Handled = true;
+            return;
+        }
         if (e.Key == System.Windows.Input.Key.Escape && IsInFocusMode)
         {
             ExitFocusMode();
