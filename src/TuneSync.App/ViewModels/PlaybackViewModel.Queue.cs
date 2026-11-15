@@ -42,7 +42,6 @@ public sealed partial class PlaybackViewModel
         PlayRelative(-1);
     }
 
-    /// <summary>"다음" button: always moves on (wrapping around), regardless of repeat mode.</summary>
     // --- "다음에 재생": songs reserved from the queue's right-click menu, played before the
     // list order (or shuffle) continues ---
 
@@ -98,6 +97,7 @@ public sealed partial class PlaybackViewModel
         return null;
     }
 
+    /// <summary>"다음" button: always moves on (wrapping around), regardless of repeat mode.</summary>
     [RelayCommand]
     private void PlayNext()
     {

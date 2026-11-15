@@ -74,8 +74,6 @@ public sealed partial class PlaybackViewModel
     [ObservableProperty]
     private WaveformData? _waveform;
 
-    /// <summary>Decodes the track in the background (about a second for a typical song) so the
-    /// seek bar can draw its real waveform. Recently played tracks come from a small cache.</summary>
     /// <summary>The playing song's spectrum over time, for the analyzer bars (null until it has
     /// been worked out, about a second after the song starts).</summary>
     [ObservableProperty]
@@ -117,6 +115,8 @@ public sealed partial class PlaybackViewModel
             Spectrum = result;
     }
 
+    /// <summary>Decodes the track in the background (about a second for a typical song) so the
+    /// seek bar can draw its real waveform. Recently played tracks come from a small cache.</summary>
     private async void LoadWaveform(string path)
     {
         _waveformCts?.Cancel();
