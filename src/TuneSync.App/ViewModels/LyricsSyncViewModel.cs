@@ -148,7 +148,7 @@ public sealed partial class LyricsSyncViewModel : ObservableObject, IDisposable
                     LyricsSyncEngine.Stage.Decoding => ("노래를 읽는 중…", 0.02),
                     LyricsSyncEngine.Stage.Separating => ($"목소리를 분리하는 중… {(int)(p.Value * 100)}%", 0.03 + p.Value * 0.17),
                     LyricsSyncEngine.Stage.Listening => ($"노래를 듣는 중… {(int)(p.Value * 100)}%", 0.2 + p.Value * 0.77),
-                    _ => ("가사 줄에 시간을 맞추는 중…", 0.97),
+                    _ => ("가사 줄에 시간을 맞추는 중…", 1.0),
                 };
             });
             var result = await _engine.SyncAsync(audio, plain, progress, ct);

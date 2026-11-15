@@ -377,7 +377,7 @@
                 <!-- 정보 -->
                 <StackPanel Tag="About">
                     <ui:TextBlock Text="정보" Style="{StaticResource CategoryTitle}"/>
-                    <ui:Card Margin="0,12,0,4" Tag="정보 버전 GoTune">
+                    <ui:Card Margin="0,12,0,4" Tag="정보 버전 GoTune 크레딧 라이선스 UVR Whisper">
                         <StackPanel>
                             <StackPanel Orientation="Horizontal">
                                 <Image Source="pack://application:,,,/Assets/TuneSync.png" Width="40" Height="40" Margin="0,0,12,0"/>
@@ -391,6 +391,8 @@
                             </StackPanel>
                             <ui:TextBlock Margin="0,12,0,0" Style="{StaticResource Desc}"
                                           Text="태그·커버 정보는 MusicBrainz와 Cover Art Archive, 가사는 LRCLIB에서 가져옵니다."/>
+                            <ui:TextBlock Margin="0,6,0,0" Style="{StaticResource Desc}"
+                                          Text="싱크 가사 만들기는 OpenAI Whisper(whisper.cpp)로 노래를 듣습니다. 보컬 분리 모델(MDX-Net Voc FT)은 Ultimate Vocal Remover(UVR) 프로젝트와 그 개발자들이 만들었습니다."/>
                         </StackPanel>
                     </ui:Card>
                 </StackPanel>

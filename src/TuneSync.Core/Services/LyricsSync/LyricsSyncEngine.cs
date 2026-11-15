@@ -72,13 +72,16 @@ public sealed class LyricsSyncEngine : IDisposable
         var language = LanguageOf(lines);
         var passes = Passes(vocals is not null);
         var done = 0;
-        return await SyncAsync(lines, duration, passes, pass =>
+        var aligned = await SyncAsync(lines, duration, passes, pass =>
         {
             var from = done++ / (double)passes.Count;
             return Task.Run(() => _transcriber.TranscribeAsync(pass.Source == Source.Vocals ? vocals! : song, language,
                 pass.Hinted ? Prompt(lines) : null,
                 new Progress<int>(p => progress?.Report((Stage.Listening, from + p / 100.0 / passes.Count))), ct, windows), ct);
         });
+        // The last pass is skipped when the first ones already agree: finish the bar anyway.
+        progress?.Report((Stage.Aligning, 1));
+        return aligned;
     }
 
     /// <summary>The singing alone, at the 16 kHz speech recognition expects.</summary>
