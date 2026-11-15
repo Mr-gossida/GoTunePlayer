@@ -103,7 +103,7 @@ public sealed partial class PlaybackViewModel
     public void SaveSession()
     {
         _settings.LastFilePath = CurrentFile?.Path;
-        _settings.LastPositionSeconds = CurrentFile is null ? 0 : (_seekTarget ?? _player.Position).TotalSeconds;
+        _settings.LastPositionSeconds = CurrentFile is null ? 0 : CurrentOrShownPosition().TotalSeconds;
         AppSettingsStore.Save(_settings);
     }
 }

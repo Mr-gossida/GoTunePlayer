@@ -158,6 +158,15 @@ public sealed partial class PlaybackViewModel : ObservableObject, IDisposable
     /// renaming/moving it ("being used by another process"). If the playing file is among
     /// <paramref name="paths"/>, this closes it and returns a callback that reopens it - at its
     /// new path if it moved - and continues from the same position. Null when nothing was released.</summary>
+    /// <summary>Where the song is: the player's position, or - while the player is closed because
+    /// its file is released for a tag save - the position the seek bar kept showing.</summary>
+    private TimeSpan CurrentOrShownPosition()
+    {
+        if (_seekTarget is { } target) return target;
+        var position = _isReleased ? TimeSpan.Zero : _player.Position;
+        return position < TimeSpan.FromSeconds(0.5) && PositionSeconds > 0.5 ? TimeSpan.FromSeconds(PositionSeconds) : position;
+    }
+
     public async Task<Action<string?>?> ReleaseIfPlayingAsync(IEnumerable<string> paths)
     {
         if (CurrentFile is not { } file
@@ -236,7 +245,7 @@ public sealed partial class PlaybackViewModel : ObservableObject, IDisposable
             if (_streamWatch is { Retries: < 3 } watch && CurrentFile is { } failed
                 && TuneSync.Core.Models.RemotePath.IsRemote(failed.Path))
             {
-                ReopenStream(watch, failed.Path, _player.Position);
+                ReopenStream(watch, failed.Path, ResumeAfterFailure(watch));
                 return;
             }
             Stop();
@@ -253,8 +262,7 @@ public sealed partial class PlaybackViewModel : ObservableObject, IDisposable
         // Remember where we came from, so "이전" can retrace the real (shuffled) order.
         if (!fromHistory && CurrentFile is { } previous && previous != file)
         {
-            _history.Push(previous);
-            if (_history.Count > 500) _history.Clear();
+            RememberPlayed(previous);
         }
         _shuffleBag.Remove(file); // picked by hand or by shuffle - either way it has now played
         if (file.UpNextOrder > 0) CancelUpNext(file);

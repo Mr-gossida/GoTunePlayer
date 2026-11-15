@@ -41,7 +41,18 @@ public sealed partial class PlaybackViewModel
     {
         public DateTime LastProgress = since;
         public TimeSpan LastPosition = TimeSpan.MinValue;
+        /// <summary>The last place it was heard playing past the start - kept when a failing
+        /// player falls back to 0:00, so the song can be reopened where it was.</summary>
+        public TimeSpan LastGood = TimeSpan.Zero;
         public int Retries;
+    }
+
+    /// <summary>Where to reopen a network song whose player failed: its own position, unless it
+    /// fell back to 0:00 - then the last place it was heard playing.</summary>
+    private TimeSpan ResumeAfterFailure(StreamWatch watch)
+    {
+        var position = _player.Position;
+        return position < TimeSpan.FromSeconds(0.5) && watch.LastGood > position ? watch.LastGood : position;
     }
 
     private StreamWatch? _streamWatch;
@@ -60,6 +71,7 @@ public sealed partial class PlaybackViewModel
         if (position != watch.LastPosition)
         {
             watch.LastPosition = position;
+            if (position > TimeSpan.FromSeconds(0.5)) watch.LastGood = position;
             watch.LastProgress = now;
             return;
         }

@@ -14,7 +14,16 @@ namespace TuneSync.App.ViewModels;
 public sealed partial class PlaybackViewModel
 {
     private readonly List<LibraryFileViewModel> _shuffleBag = [];
-    private readonly Stack<LibraryFileViewModel> _history = new();
+    /// <summary>Songs played before the current one, newest last; "이전" walks back through it.</summary>
+    private readonly LinkedList<LibraryFileViewModel> _history = new();
+    private const int HistoryLimit = 500;
+
+    private void RememberPlayed(LibraryFileViewModel file)
+    {
+        _history.AddLast(file);
+        // Past the limit only the oldest goes (clearing it all lost "이전" in a long shuffle).
+        while (_history.Count > HistoryLimit) _history.RemoveFirst();
+    }
 
     /// <summary>"이전": like most players, restarts the current track if it's past the first few
     /// seconds; otherwise goes back (through the actual play history when shuffling).</summary>
@@ -32,7 +41,8 @@ public sealed partial class PlaybackViewModel
             var files = CurrentList();
             while (_history.Count > 0)
             {
-                var previous = _history.Pop();
+                var previous = _history.Last!.Value;
+                _history.RemoveLast();
                 if (!files.Contains(previous)) continue; // filtered out or removed since
                 PlayFile(previous, fromHistory: true);
                 return;
