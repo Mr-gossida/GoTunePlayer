@@ -75,9 +75,17 @@ public sealed partial class PlaybackViewModel
         var neededByte = duration > 0 ? (long)(item.Length * Math.Min(1, (position.TotalSeconds + 5) / duration)) : 0;
         if (!dead && !item.IsComplete && item.Downloaded < Math.Max(neededByte, 1_500_000)) return;
 
+        ReopenStream(watch, file.Path, position);
+    }
+
+    /// <summary>Opens the watched song again in a fresh player, to carry on from
+    /// <paramref name="position"/>. Opening starts a new watch; the count of attempts is carried
+    /// over to it, so the retries stay limited.</summary>
+    private void ReopenStream(StreamWatch watch, string path, TimeSpan position)
+    {
         var retries = watch.Retries + 1;
         _pendingRestore = (position, true);
-        OpenSource(UriFor(file.Path));
+        OpenSource(UriFor(path));
         if (_streamWatch is not null) _streamWatch.Retries = retries;
     }
 

@@ -13,8 +13,7 @@ namespace TuneSync.App.ViewModels;
 // quality line, waveform and spectrum.
 public sealed partial class PlaybackViewModel
 {
-    private readonly Dictionary<string, WaveformData?> _waveformCache = new(StringComparer.OrdinalIgnoreCase);
-    private readonly Queue<string> _waveformCacheOrder = new();
+    private readonly RecentCache<WaveformData?> _waveformCache = new(capacity: 30);
     private CancellationTokenSource? _waveformCts;
     private int _coverVersion;
 
@@ -80,15 +79,14 @@ public sealed partial class PlaybackViewModel
     private TuneSync.Core.Services.SpectrumData? _spectrum;
 
     private CancellationTokenSource? _spectrumCts;
-    private readonly Dictionary<string, TuneSync.Core.Services.SpectrumData> _spectrumCache = new(StringComparer.OrdinalIgnoreCase);
-    private readonly Queue<string> _spectrumCacheOrder = new();
+    private readonly RecentCache<TuneSync.Core.Services.SpectrumData> _spectrumCache = new(capacity: 10);
 
     /// <summary>Works out the spectrum in the background, like the waveform (and from the same
     /// downloaded copy for a network song). Recently played songs come from a small cache.</summary>
     private async void LoadSpectrum(string path)
     {
         _spectrumCts?.Cancel();
-        if (_spectrumCache.TryGetValue(path, out var cached))
+        if (_spectrumCache.TryGet(path, out var cached))
         {
             Spectrum = cached;
             return;
@@ -99,28 +97,31 @@ public sealed partial class PlaybackViewModel
         TuneSync.Core.Services.SpectrumData result;
         try
         {
-            var readable = TuneSync.Core.Models.RemotePath.IsRemote(path)
-                ? await _network.Cache.CompletedPathAsync(path, keep: false)
-                : PlayablePath.ResolveForReading(path);
+            var readable = await ReadablePathAsync(path);
             result = await Task.Run(() => TuneSync.Core.Services.SpectrumAnalyzer.Analyze(readable, ct: cts.Token), cts.Token);
         }
         catch (Exception)
         {
             return; // cancelled (another song) or unreadable: the bars just stay down
         }
-        _spectrumCache[path] = result;
-        _spectrumCacheOrder.Enqueue(path);
-        while (_spectrumCacheOrder.Count > 10) _spectrumCache.Remove(_spectrumCacheOrder.Dequeue());
+        _spectrumCache.Add(path, result);
         if (!cts.IsCancellationRequested && string.Equals(CurrentFile?.Path, path, StringComparison.OrdinalIgnoreCase))
             Spectrum = result;
     }
+
+    /// <summary>A local file the analyzers can read: the song itself, or for a network song its
+    /// cached copy once the download has finished.</summary>
+    private async Task<string> ReadablePathAsync(string path) =>
+        RemotePath.IsRemote(path)
+            ? await _network.Cache.CompletedPathAsync(path, keep: false)
+            : PlayablePath.ResolveForReading(path);
 
     /// <summary>Decodes the track in the background (about a second for a typical song) so the
     /// seek bar can draw its real waveform. Recently played tracks come from a small cache.</summary>
     private async void LoadWaveform(string path)
     {
         _waveformCts?.Cancel();
-        if (_waveformCache.TryGetValue(path, out var cached))
+        if (_waveformCache.TryGet(path, out var cached))
         {
             Waveform = cached;
             return;
@@ -132,10 +133,7 @@ public sealed partial class PlaybackViewModel
         WaveformData? result;
         try
         {
-            // A network song is analyzed from its cached copy once the download has finished.
-            var readable = TuneSync.Core.Models.RemotePath.IsRemote(path)
-                ? await _network.Cache.CompletedPathAsync(path, keep: false)
-                : PlayablePath.ResolveForReading(path);
+            var readable = await ReadablePathAsync(path);
             result = await Task.Run(() => WaveformAnalyzer.Analyze(readable, cts.Token), cts.Token);
         }
         catch (OperationCanceledException)
@@ -147,9 +145,7 @@ public sealed partial class PlaybackViewModel
             return; // network song couldn't be fetched: the seek bar just keeps its plain wave
         }
 
-        _waveformCache[path] = result;
-        _waveformCacheOrder.Enqueue(path);
-        while (_waveformCacheOrder.Count > 30) _waveformCache.Remove(_waveformCacheOrder.Dequeue());
+        _waveformCache.Add(path, result);
 
         if (!cts.IsCancellationRequested && string.Equals(CurrentFile?.Path, path, StringComparison.OrdinalIgnoreCase))
             Waveform = result;

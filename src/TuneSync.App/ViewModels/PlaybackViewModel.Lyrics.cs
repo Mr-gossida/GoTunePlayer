@@ -15,7 +15,6 @@ public sealed partial class PlaybackViewModel
 {
     /// <summary>The line being sung now (mini players), or the artist when there are no synced lyrics.</summary>
     public string CurrentLyricText => LyricAt(CurrentLyricsIndex) ?? (HasSyncedLyrics ? "♪" : NowPlayingSubtitle);
-    public string PreviousLyricText => HasSyncedLyrics ? LyricAt(CurrentLyricsIndex - 1) ?? "" : "";
     public string NextLyricText => HasSyncedLyrics ? LyricAt(CurrentLyricsIndex + 1) ?? "" : "";
 
     private string? LyricAt(int index) =>
@@ -26,7 +25,6 @@ public sealed partial class PlaybackViewModel
     private void RaiseLyricTexts()
     {
         OnPropertyChanged(nameof(CurrentLyricText));
-        OnPropertyChanged(nameof(PreviousLyricText));
         OnPropertyChanged(nameof(NextLyricText));
     }
 

@@ -236,10 +236,7 @@ public sealed partial class PlaybackViewModel : ObservableObject, IDisposable
             if (_streamWatch is { Retries: < 3 } watch && CurrentFile is { } failed
                 && TuneSync.Core.Models.RemotePath.IsRemote(failed.Path))
             {
-                var retries = watch.Retries + 1;
-                _pendingRestore = (_player.Position, true);
-                OpenSource(UriFor(failed.Path));
-                if (_streamWatch is not null) _streamWatch.Retries = retries;
+                ReopenStream(watch, failed.Path, _player.Position);
                 return;
             }
             Stop();
