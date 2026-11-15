@@ -500,7 +500,8 @@ public sealed partial class PlaybackViewModel : ObservableObject, IDisposable
     {
         _timer.Stop();
         _volumeSaveTimer.Stop();
-        _waveformCts?.Cancel();
+        _waveformAnalysis.Cancel();
+        _spectrumAnalysis.Cancel();
         _player.Close();
         PlayablePath.DeleteLastCopy();
     }

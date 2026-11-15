@@ -136,36 +136,12 @@ public partial class PlayView
         ClearTransitionLayer();
         BigCover.Opacity = 1;
         SmallCover.Opacity = 1;
-
-        var flyer = new System.Windows.Controls.Border
-        {
-            CornerRadius = new System.Windows.CornerRadius(cornerRadius),
-            Background = new System.Windows.Media.ImageBrush(cover) { Stretch = System.Windows.Media.Stretch.UniformToFill },
-            Width = from.Width,
-            Height = from.Height,
-        };
-        Canvas.SetLeft(flyer, from.Left);
-        Canvas.SetTop(flyer, from.Top);
-        TransitionLayer.Children.Add(flyer);
         target.Opacity = 0;
-
-        var ease = new System.Windows.Media.Animation.CubicEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseInOut };
-        System.Windows.Media.Animation.DoubleAnimation Anim(double a, double b) => new(a, b, length) { EasingFunction = ease };
-        var move = Anim(from.Left, to.Left);
-        move.Completed += (_, _) =>
-        {
-            if (!TransitionLayer.Children.Contains(flyer)) return; // superseded by a newer switch
-            TransitionLayer.Children.Remove(flyer);
-            target.Opacity = 1;
-        };
-        // The flyer waits at its start for the slow layout frame to pass, then moves.
-        OnNextFrame(() =>
-        {
-            flyer.BeginAnimation(Canvas.LeftProperty, move);
-            flyer.BeginAnimation(Canvas.TopProperty, Anim(from.Top, to.Top));
-            flyer.BeginAnimation(WidthProperty, Anim(from.Width, to.Width));
-            flyer.BeginAnimation(HeightProperty, Anim(from.Height, to.Height));
-        });
+        var picture = new System.Windows.Media.ImageBrush(cover) { Stretch = System.Windows.Media.Stretch.UniformToFill };
+        // The copy waits at its start for the slow layout frame to pass, then moves. A newer
+        // switch that took over meanwhile reveals its own target.
+        CoverFlight.Fly(TransitionLayer, picture, from, to, cornerRadius, length,
+            superseded => { if (!superseded) target.Opacity = 1; }, OnNextFrame);
     }
 
     private static void FadeSlideIn(System.Windows.UIElement element, double fromX, double fromY, bool fade = true,

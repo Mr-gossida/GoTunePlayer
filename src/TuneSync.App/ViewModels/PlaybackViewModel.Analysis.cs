@@ -13,8 +13,8 @@ namespace TuneSync.App.ViewModels;
 // quality line, waveform and spectrum.
 public sealed partial class PlaybackViewModel
 {
-    private readonly RecentCache<WaveformData?> _waveformCache = new(capacity: 30);
-    private CancellationTokenSource? _waveformCts;
+    private readonly BackgroundAnalysis<WaveformData?> _waveformAnalysis = new(capacity: 30);
+    private readonly BackgroundAnalysis<TuneSync.Core.Services.SpectrumData?> _spectrumAnalysis = new(capacity: 10);
     private int _coverVersion;
 
     /// <summary>The playing track's cover at full quality for the large art on the 플레이 page and
@@ -78,36 +78,12 @@ public sealed partial class PlaybackViewModel
     [ObservableProperty]
     private TuneSync.Core.Services.SpectrumData? _spectrum;
 
-    private CancellationTokenSource? _spectrumCts;
-    private readonly RecentCache<TuneSync.Core.Services.SpectrumData> _spectrumCache = new(capacity: 10);
-
     /// <summary>Works out the spectrum in the background, like the waveform (and from the same
-    /// downloaded copy for a network song). Recently played songs come from a small cache.</summary>
-    private async void LoadSpectrum(string path)
-    {
-        _spectrumCts?.Cancel();
-        if (_spectrumCache.TryGet(path, out var cached))
-        {
-            Spectrum = cached;
-            return;
-        }
-        Spectrum = null;
-        var cts = new CancellationTokenSource();
-        _spectrumCts = cts;
-        TuneSync.Core.Services.SpectrumData result;
-        try
-        {
-            var readable = await ReadablePathAsync(path);
-            result = await Task.Run(() => TuneSync.Core.Services.SpectrumAnalyzer.Analyze(readable, ct: cts.Token), cts.Token);
-        }
-        catch (Exception)
-        {
-            return; // cancelled (another song) or unreadable: the bars just stay down
-        }
-        _spectrumCache.Add(path, result);
-        if (!cts.IsCancellationRequested && string.Equals(CurrentFile?.Path, path, StringComparison.OrdinalIgnoreCase))
-            Spectrum = result;
-    }
+    /// downloaded copy for a network song); unreadable, the bars just stay down.</summary>
+    private void LoadSpectrum(string path) => _spectrumAnalysis.Load(path, ReadablePathAsync,
+        (file, ct) => TuneSync.Core.Services.SpectrumAnalyzer.Analyze(file, ct: ct), result => Spectrum = result, IsCurrentSong);
+
+    private bool IsCurrentSong(string path) => string.Equals(CurrentFile?.Path, path, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>A local file the analyzers can read: the song itself, or for a network song its
     /// cached copy once the download has finished.</summary>
@@ -117,39 +93,10 @@ public sealed partial class PlaybackViewModel
             : PlayablePath.ResolveForReading(path);
 
     /// <summary>Decodes the track in the background (about a second for a typical song) so the
-    /// seek bar can draw its real waveform. Recently played tracks come from a small cache.</summary>
-    private async void LoadWaveform(string path)
-    {
-        _waveformCts?.Cancel();
-        if (_waveformCache.TryGet(path, out var cached))
-        {
-            Waveform = cached;
-            return;
-        }
-
-        Waveform = null;
-        var cts = new CancellationTokenSource();
-        _waveformCts = cts;
-        WaveformData? result;
-        try
-        {
-            var readable = await ReadablePathAsync(path);
-            result = await Task.Run(() => WaveformAnalyzer.Analyze(readable, cts.Token), cts.Token);
-        }
-        catch (OperationCanceledException)
-        {
-            return; // another track started; its own analysis takes over
-        }
-        catch (Exception)
-        {
-            return; // network song couldn't be fetched: the seek bar just keeps its plain wave
-        }
-
-        _waveformCache.Add(path, result);
-
-        if (!cts.IsCancellationRequested && string.Equals(CurrentFile?.Path, path, StringComparison.OrdinalIgnoreCase))
-            Waveform = result;
-    }
+    /// seek bar can draw its real waveform. Recently played tracks come from a small cache;
+    /// unreadable (a network song that couldn't be fetched), the seek bar keeps its plain wave.</summary>
+    private void LoadWaveform(string path) => _waveformAnalysis.Load(path, ReadablePathAsync,
+        WaveformAnalyzer.Analyze, result => Waveform = result, IsCurrentSong);
 
     /// <summary>The cover of the playing song was changed (태그 관리 / 자동 채움): show the new one.</summary>
     private void CurrentFile_PropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)

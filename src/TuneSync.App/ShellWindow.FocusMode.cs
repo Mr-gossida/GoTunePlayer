@@ -49,7 +49,7 @@ public partial class ShellWindow
             Dispatcher.BeginInvoke(() =>
             {
                 if (_focusStage != stage) return;
-                if (CoverBounds(stage.Cover) is { } end) FlyCover(start, end, 10, 14, () => stage.Cover.Opacity = 1);
+                if (CoverBounds(stage.Cover) is { } end) FlyCover(start, end, 10, () => stage.Cover.Opacity = 1);
                 else stage.Cover.Opacity = 1;
             }, System.Windows.Threading.DispatcherPriority.Loaded);
         }
@@ -81,7 +81,7 @@ public partial class ShellWindow
         {
             stage.Cover.Opacity = 0;
             home.Opacity = 0;
-            FlyCover(from, to, 14, home == player.BigCover ? 10 : 8, () => home.Opacity = 1);
+            FlyCover(from, to, 14, () => home.Opacity = 1);
         }
         var fade = new System.Windows.Media.Animation.DoubleAnimation(0, TimeSpan.FromMilliseconds(320));
         fade.Completed += (_, _) => Done();
@@ -97,35 +97,15 @@ public partial class ShellWindow
         return element.TransformToVisual(FocusFlyLayer).TransformBounds(new Rect(element.RenderSize));
     }
 
-    private void FlyCover(Rect from, Rect to, double fromCorner, double toCorner, Action landed)
+    /// <summary>The cover flies between the page and the focus stage. <paramref name="landed"/>
+    /// runs even when a newer flight took over meanwhile: it reveals the cover it flew to.</summary>
+    private void FlyCover(Rect from, Rect to, double corner, Action landed)
     {
         FocusFlyLayer.Children.Clear();
-        var flyer = new System.Windows.Controls.Border
-        {
-            CornerRadius = new CornerRadius(fromCorner),
-            Background = _playback.CurrentCover is { } cover
-                ? new System.Windows.Media.ImageBrush(cover) { Stretch = System.Windows.Media.Stretch.UniformToFill }
-                : (System.Windows.Media.Brush)FindResource("PlayerHoverBrush"),
-            Width = from.Width,
-            Height = from.Height,
-        };
-        System.Windows.Controls.Canvas.SetLeft(flyer, from.Left);
-        System.Windows.Controls.Canvas.SetTop(flyer, from.Top);
-        FocusFlyLayer.Children.Add(flyer);
-
-        var length = TimeSpan.FromMilliseconds(460);
-        var ease = new System.Windows.Media.Animation.CubicEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseInOut };
-        System.Windows.Media.Animation.DoubleAnimation Anim(double a, double b) => new(a, b, length) { EasingFunction = ease };
-        var move = Anim(from.Left, to.Left);
-        move.Completed += (_, _) =>
-        {
-            FocusFlyLayer.Children.Remove(flyer);
-            landed();
-        };
-        flyer.BeginAnimation(System.Windows.Controls.Canvas.LeftProperty, move);
-        flyer.BeginAnimation(System.Windows.Controls.Canvas.TopProperty, Anim(from.Top, to.Top));
-        flyer.BeginAnimation(WidthProperty, Anim(from.Width, to.Width));
-        flyer.BeginAnimation(HeightProperty, Anim(from.Height, to.Height));
+        var picture = _playback.CurrentCover is { } cover
+            ? new System.Windows.Media.ImageBrush(cover) { Stretch = System.Windows.Media.Stretch.UniformToFill }
+            : (System.Windows.Media.Brush)FindResource("PlayerHoverBrush");
+        Views.CoverFlight.Fly(FocusFlyLayer, picture, from, to, corner, TimeSpan.FromMilliseconds(460), _ => landed());
     }
 
     /// <summary>The controls (and the pointer) show while the mouse moves, and step out of the
