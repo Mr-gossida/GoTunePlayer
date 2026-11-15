@@ -8,15 +8,17 @@ namespace TuneSync.Core.Services.LyricsSync;
 /// (<see cref="VoiceActivity.Windows"/>), not in fixed 30 s pieces that cut through words and
 /// leave Whisper guessing where in a long pause the next phrase begins.
 ///
-/// It listens up to three times, until one pass places enough lines, and the pass that placed
-/// the most wins: the song as it is; the vocals alone (better on some songs, worse on others);
-/// the song again with the lyrics as Whisper's prompt (given them it recognizes more on fast or
-/// heavily produced songs, but it also writes lyric lines where it isn't sure, at wrong times -
-/// so that comes last).
+/// It listens to the vocals alone and to the song as it is (each is better on some songs), and
+/// where those two disagree on too many lines, a third time to the song with the lyrics as
+/// Whisper's prompt (given them it recognizes more on fast or heavily produced songs, but it
+/// also writes lyric lines where it isn't sure, at wrong times). Each line then gets the time
+/// most passes agree on. Which single pass is best for a song can't be told from how many lines
+/// it placed - a pass can place lines confidently at wrong times - but two passes rarely make
+/// the same mistake on the same line.
 ///
 /// On ten songs with known timings (tools/SyncBench, 378 lines): lines within 1 s went from 61%
-/// to 71%, lines off by over 3 s from 19% to 9%. Without the separation model it falls back to
-/// fixed pieces and two passes.</summary>
+/// to 69%, lines off by over 3 s from 19% to 12%. Without the separation model it falls back
+/// to fixed pieces and up to two passes, of which the one that placed more lines wins.</summary>
 public sealed class LyricsSyncEngine : IDisposable
 {
     private readonly WhisperTranscriber _transcriber;
@@ -40,9 +42,10 @@ public sealed class LyricsSyncEngine : IDisposable
     /// <summary>One listen: to what, and whether with the lyrics as Whisper's prompt.</summary>
     public readonly record struct Pass(Source Source, bool Hinted);
 
-    /// <summary>The passes in the order they're tried.</summary>
+    /// <summary>The passes in the order they're listened to (and, where they disagree with no
+    /// majority, trusted).</summary>
     public static IReadOnlyList<Pass> Passes(bool separated) => separated
-        ? [new(Source.Song, false), new(Source.Vocals, false), new(Source.Song, true)]
+        ? [new(Source.Vocals, false), new(Source.Song, false), new(Source.Song, true)]
         : [new(Source.Song, false), new(Source.Song, true)];
 
     /// <param name="progress">Stage and 0..1 within it.</param>
@@ -92,22 +95,56 @@ public sealed class LyricsSyncEngine : IDisposable
     public static async Task<List<AlignedLine>> SyncAsync(IReadOnlyList<string> lines, TimeSpan duration,
         IReadOnlyList<Pass> passes, Func<Pass, Task<List<TimedText>>> listen)
     {
-        List<AlignedLine> best = [];
+        var separated = passes.Any(p => p.Source == Source.Vocals);
+        var results = new List<List<AlignedLine>>();
         foreach (var pass in passes)
         {
-            var result = LyricsAligner.Align(lines, await listen(pass), duration);
-            if (best.Count == 0 || Placed(result) > Placed(best)) best = result;
-            if (Placed(best) >= GoodEnough) break;
+            results.Add(LyricsAligner.Align(lines, await listen(pass), duration));
+            if (separated ? results.Count == 2 && Agreement(results[0], results[1]) >= AgreeEnough
+                          : Placed(results[^1]) >= PlacedEnough) break;
         }
-        return best;
+        return separated ? Combine(results) : results.MaxBy(Placed)!;
     }
+
+    /// <summary>Each line's time from several passes: the time the largest group of passes that
+    /// heard the line agree on (their median); with no two agreeing, the earliest pass that heard
+    /// it - marked to check when passes heard it at different times.</summary>
+    public static List<AlignedLine> Combine(IReadOnlyList<List<AlignedLine>> passes)
+    {
+        var combined = new List<AlignedLine>(passes[0].Count);
+        for (var i = 0; i < passes[0].Count; i++)
+        {
+            var heard = passes.Where(p => p[i].IsConfident).Select(p => p[i].Time.TotalSeconds).ToList();
+            if (heard.Count == 0) { combined.Add(passes[0][i]); continue; } // an estimate
+            var group = heard.Select(t => heard.Where(u => Math.Abs(u - t) <= AgreeSeconds).ToList()).MaxBy(g => g.Count)!;
+            var time = heard[0];
+            if (group.Count > 1)
+            {
+                group.Sort();
+                time = group.Count % 2 == 1 ? group[group.Count / 2] : (group[group.Count / 2 - 1] + group[group.Count / 2]) / 2;
+            }
+            combined.Add(new AlignedLine(passes[0][i].Text, TimeSpan.FromSeconds(time), group.Count > 1 || heard.Count == 1));
+        }
+        return combined;
+    }
+
+    /// <summary>Share of lines two passes both heard, at the same time.</summary>
+    private static double Agreement(List<AlignedLine> a, List<AlignedLine> b) =>
+        a.Count == 0 ? 0 : Enumerable.Range(0, a.Count).Count(i => a[i].IsConfident && b[i].IsConfident
+            && Math.Abs((a[i].Time - b[i].Time).TotalSeconds) <= AgreeSeconds) / (double)a.Count;
 
     /// <summary>Share of lines whose time was heard rather than estimated.</summary>
     private static double Placed(List<AlignedLine> lines) =>
         lines.Count == 0 ? 0 : lines.Count(l => l.IsConfident) / (double)lines.Count;
 
-    /// <summary>Above this share placed, no further pass is listened to.</summary>
-    private const double GoodEnough = 0.85;
+    /// <summary>Two passes' times for a line this close count as the same.</summary>
+    private const double AgreeSeconds = 1.0;
+
+    /// <summary>With this share of lines agreed on by the first two passes, the third isn't needed.</summary>
+    private const double AgreeEnough = 0.8;
+
+    /// <summary>Without separation: above this share placed, the first pass is kept without a second listen.</summary>
+    private const double PlacedEnough = 0.85;
 
     /// <summary>Korean when the lyrics are mostly Hangul, English when mostly Latin letters,
     /// otherwise let Whisper detect it.</summary>

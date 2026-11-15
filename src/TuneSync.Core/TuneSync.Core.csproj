@@ -10,6 +10,7 @@
 
   <ItemGroup>
     <PackageReference Include="FluentFTP" Version="55.1.0" />
+    <PackageReference Include="Microsoft.AI.DirectML" Version="1.15.4" GeneratePathProperty="true" />
     <PackageReference Include="Microsoft.ML.OnnxRuntime.DirectML" Version="1.24.4" />
     <PackageReference Include="NAudio.Core" Version="2.2.1" />
     <PackageReference Include="NAudio.Wasapi" Version="2.2.1" />
@@ -18,6 +19,13 @@
     <PackageReference Include="TagLibSharp" Version="2.3.0" />
     <PackageReference Include="Whisper.net" Version="1.9.1" />
     <PackageReference Include="Whisper.net.Runtime" Version="1.9.1" />
+  </ItemGroup>
+
+  <!-- The DirectML that this ONNX Runtime was built for, next to the app: the package only copies
+       it for native projects, and the one in Windows\System32 is too old on many PCs (the
+       vocal separation would then quietly run on the CPU). -->
+  <ItemGroup>
+    <None Include="$(PkgMicrosoft_AI_DirectML)\bin\x64-win\DirectML.dll" Link="DirectML.dll" CopyToOutputDirectory="PreserveNewest" Visible="false" />
   </ItemGroup>
 
 </Project>

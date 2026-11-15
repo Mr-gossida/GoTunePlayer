@@ -11,6 +11,7 @@
 //   BENCH_CACHE        a folder that keeps the separated vocals and what Whisper heard, per song
 //                      and pass: with it, a change to the aligner is measured in seconds instead
 //                      of minutes. Use a fresh folder after changing the listening itself.
+//   BENCH_ALL_PASSES=1 with BENCH_CACHE: listen to every pass (and keep it), not only until one is good enough
 using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.InteropServices;
@@ -103,7 +104,12 @@ async Task<List<AlignedLine>> SyncCached(string song, string plain)
     }
     var windows = vocals is null ? null : VoiceActivity.Detect(vocals).Windows();
 
-    return await LyricsSyncEngine.SyncAsync(lines, duration, LyricsSyncEngine.Passes(vocals is not null), async pass =>
+    var passes = LyricsSyncEngine.Passes(vocals is not null);
+    if (Environment.GetEnvironmentVariable("BENCH_ALL_PASSES") == "1")
+        foreach (var pass in passes) await Listen(pass);
+    return await LyricsSyncEngine.SyncAsync(lines, duration, passes, Listen);
+
+    async Task<List<TimedText>> Listen(LyricsSyncEngine.Pass pass)
     {
         var file = $"{name}.{pass.Source}.{(pass.Hinted ? "hinted" : "free")}.json";
         if (File.Exists(file)) return JsonSerializer.Deserialize<List<TimedText>>(File.ReadAllText(file))!;
@@ -111,7 +117,7 @@ async Task<List<AlignedLine>> SyncCached(string song, string plain)
             LyricsSyncEngine.LanguageOf(lines), pass.Hinted ? LyricsSyncEngine.Prompt(lines) : null, null, CancellationToken.None, windows);
         File.WriteAllText(file, JsonSerializer.Serialize(heard));
         return heard;
-    });
+    }
 }
 
 static string Summary(List<double> e)

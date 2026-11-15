@@ -148,4 +148,42 @@ public class LyricsAlignerTests
     [InlineData("君の名は", "ja")]
     public void Picks_the_recognition_language_from_the_lyrics(string text, string expected) =>
         Assert.Equal(expected, LyricsSyncEngine.LanguageOf([text]));
+
+    [Fact]
+    public void Combining_passes_takes_the_time_most_of_them_agree_on()
+    {
+        static AlignedLine Line(double seconds, bool heard = true) => new("가사", TimeSpan.FromSeconds(seconds), heard);
+        var combined = LyricsSyncEngine.Combine(
+        [
+            //  agreed by two     one stray pass   only one heard it   all differ    none heard it
+            [Line(10.0),        Line(40.0),      Line(50, false),    Line(70.0),   Line(90, false)],
+            [Line(10.4),        Line(20.2),      Line(52.0),         Line(75.0),   Line(95, false)],
+            [Line(30.0),        Line(20.0),      Line(58, false),    Line(80.0),   Line(99, false)],
+        ]);
+
+        Assert.Equal([10.2, 20.1, 52.0, 70.0, 90.0], combined.Select(l => Math.Round(l.Time.TotalSeconds, 2)));
+        // Passes that heard a line at different times, and lines nobody heard, are worth a check.
+        Assert.Equal([true, true, true, false, false], combined.Select(l => l.IsConfident));
+    }
+
+    [Fact]
+    public void Singing_is_found_in_the_vocals_and_cut_into_pieces_at_its_pauses()
+    {
+        // A tone from 1 s to 3 s and from 3.1 s to 4 s (a breath, not a pause), then from 20 s to 21 s.
+        var vocals = new float[AudioDecoder.SampleRate * 25];
+        foreach (var (from, to) in new[] { (1.0, 3.0), (3.1, 4.0), (20.0, 21.0) })
+            for (var i = (int)(from * AudioDecoder.SampleRate); i < (int)(to * AudioDecoder.SampleRate); i++)
+                vocals[i] = 0.3f * MathF.Sin(i * 0.2f);
+
+        var voice = VoiceActivity.Detect(vocals);
+
+        Assert.Equal(2, voice.Regions.Count);
+        Assert.InRange(voice.Regions[0].Start, 0.95, 1.05);
+        Assert.InRange(voice.Regions[0].End, 3.95, 4.05);
+        var windows = voice.Windows();
+        Assert.Equal(2, windows.Count); // the long pause is left out
+        Assert.InRange(windows[0].Start, 0.65, 0.75);
+        Assert.InRange(windows[0].End, 4.25, 4.35);
+        Assert.InRange(windows[1].Start, 19.65, 19.75);
+    }
 }
