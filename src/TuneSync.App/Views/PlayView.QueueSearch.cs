@@ -52,42 +52,10 @@ public partial class PlayView
         }
     }
 
-    /// <summary>Every song the search finds, best first: titles that are the query or start with
-    /// it, then titles containing it, then artists, then albums and file names, then songs where
-    /// all the words appear somewhere (e.g. "akmu love"). Within a rank, list order.</summary>
-    private void FindMatches()
-    {
-        var query = SearchBox.Text.Trim();
-        if (query.Length == 0)
-        {
-            _matches = [];
-            return;
-        }
-        var words = query.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        _matches = [.. _viewModel.Library.PlaylistView.Cast<LibraryFileViewModel>()
-            .Select((file, index) => (File: file, Index: index, Rank: Rank(file, query, words)))
-            .Where(m => m.Rank >= 0)
-            .OrderBy(m => m.Rank).ThenBy(m => m.Index)
-            .Select(m => m.File)];
-    }
-
-    private static int Rank(LibraryFileViewModel file, string query, string[] words)
-    {
-        const StringComparison ignore = StringComparison.CurrentCultureIgnoreCase;
-        var title = file.DisplayTitle;
-        if (title.Equals(query, ignore)) return 0;
-        if (title.StartsWith(query, ignore)) return 1;
-        if (title.Contains(query, ignore)) return 2;
-        if (file.Artist.Contains(query, ignore)) return 3;
-        if (file.Album.Contains(query, ignore)) return 4;
-        if (file.FileName.Contains(query, ignore)) return 5;
-        if (words.Length > 1)
-        {
-            var all = $"{title} {file.Artist} {file.Album} {file.FileName}";
-            if (words.All(w => all.Contains(w, ignore))) return 6;
-        }
-        return -1;
-    }
+    /// <summary>The songs the search finds, best first (see <see cref="TuneSync.Core.Services.SongSearch"/>).</summary>
+    private void FindMatches() =>
+        _matches = TuneSync.Core.Services.SongSearch.Find(_viewModel.Library.PlaylistView.Cast<LibraryFileViewModel>(), SearchBox.Text,
+            file => new(file.DisplayTitle, file.Artist, file.Album, file.FileName));
 
     private LibraryFileViewModel? _searchHit;
 
