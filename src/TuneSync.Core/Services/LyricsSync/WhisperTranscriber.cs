@@ -23,7 +23,7 @@ public sealed class WhisperTranscriber(string modelPath) : IDisposable
     /// or null to let it hear freely.</param>
     /// <param name="progress">0..100.</param>
     public async Task<List<TimedText>> TranscribeAsync(float[] samples, string? language, string? prompt,
-        IProgress<int>? progress, CancellationToken ct)
+        IProgress<int>? progress, CancellationToken ct, IReadOnlyList<(double Start, double End)>? windows = null)
     {
         _factory ??= WhisperFactory.FromPath(modelPath);
         var builder = _factory.CreateBuilder()
@@ -35,22 +35,33 @@ public sealed class WhisperTranscriber(string modelPath) : IDisposable
         builder = language is null ? builder.WithLanguageDetection() : builder.WithLanguage(language);
         if (!string.IsNullOrWhiteSpace(prompt)) builder = builder.WithPrompt(prompt);
 
-        const int window = AudioDecoder.SampleRate * WindowSeconds;
+        if (windows is null)
+        {
+            var fixedWindows = new List<(double, double)>();
+            var total = samples.Length / (double)AudioDecoder.SampleRate;
+            for (var t = 0.0; t < total; t += WindowSeconds) fixedWindows.Add((t, Math.Min(total, t + WindowSeconds)));
+            windows = fixedWindows;
+        }
+
         var words = new List<(double Onset, string Text)>();
-        for (var offset = 0; offset < samples.Length; offset += window)
+        for (var w = 0; w < windows.Count; w++)
         {
             ct.ThrowIfCancellationRequested();
-            var length = Math.Min(window, samples.Length - offset);
-            if (length < AudioDecoder.SampleRate) break; // a last scrap under a second
+            var offset = Math.Clamp((int)(windows[w].Start * AudioDecoder.SampleRate), 0, samples.Length);
+            var length = Math.Min((int)((windows[w].End - windows[w].Start) * AudioDecoder.SampleRate), samples.Length - offset);
+            if (length < AudioDecoder.SampleRate / 2) continue; // a scrap
             var start = offset / (double)AudioDecoder.SampleRate;
+            // Whisper won't take less than a second: a short piece is padded with silence.
+            var piece = new float[Math.Max(length, AudioDecoder.SampleRate + AudioDecoder.SampleRate / 10)];
+            samples.AsSpan(offset, length).CopyTo(piece);
             using var processor = builder.Build();
-            await foreach (var segment in processor.ProcessAsync(samples.AsSpan(offset, length).ToArray(), ct))
+            await foreach (var segment in processor.ProcessAsync(piece, ct))
             {
                 var text = segment.Text.Trim();
                 if (text.Length == 0 || text.StartsWith('[') || text.StartsWith('(') || text.Contains('♪')) continue;
-                words.Add((start + segment.Start.TotalSeconds, text));
+                words.Add((start + Math.Min(segment.Start.TotalSeconds, length / (double)AudioDecoder.SampleRate), text));
             }
-            progress?.Report((int)(100.0 * (offset + length) / samples.Length));
+            progress?.Report((int)(100.0 * (w + 1) / windows.Count));
         }
 
         // Each word from its onset, as long as its letters take at a steady pace - but never

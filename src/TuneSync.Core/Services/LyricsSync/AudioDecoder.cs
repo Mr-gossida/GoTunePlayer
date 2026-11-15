@@ -27,6 +27,59 @@ public static class AudioDecoder
         return [.. samples];
     }
 
+    /// <summary>The song as two channels at <paramref name="sampleRate"/> (a mono song twice,
+    /// the first two channels of a surround one).</summary>
+    public static (float[] Left, float[] Right) ReadStereo(string path, int sampleRate, CancellationToken ct = default)
+    {
+        using var reader = new MediaFoundationReader(path);
+        ISampleProvider source = reader.ToSampleProvider();
+        var channels = source.WaveFormat.Channels;
+        if (source.WaveFormat.SampleRate != sampleRate) source = new WdlResamplingSampleProvider(source, sampleRate);
+
+        var capacity = (int)Math.Min(int.MaxValue / 2, reader.TotalTime.TotalSeconds * sampleRate + sampleRate);
+        List<float> left = new(capacity), right = new(capacity);
+        var buffer = new float[sampleRate / 10 * channels];
+        int read;
+        while ((read = source.Read(buffer, 0, buffer.Length)) > 0)
+        {
+            ct.ThrowIfCancellationRequested();
+            for (var i = 0; i + channels <= read; i += channels)
+            {
+                left.Add(buffer[i]);
+                right.Add(buffer[channels > 1 ? i + 1 : i]);
+            }
+        }
+        return ([.. left], [.. right]);
+    }
+
+    /// <summary>One channel of sound at another sample rate.</summary>
+    public static float[] Resample(float[] samples, int from, int to)
+    {
+        if (from == to) return samples;
+        var source = new WdlResamplingSampleProvider(new Samples(samples, from), to);
+        var result = new List<float>((int)((long)samples.Length * to / from) + to);
+        var buffer = new float[to];
+        int read;
+        while ((read = source.Read(buffer, 0, buffer.Length)) > 0)
+            for (var i = 0; i < read; i++) result.Add(buffer[i]);
+        return [.. result];
+    }
+
+    private sealed class Samples(float[] samples, int sampleRate) : ISampleProvider
+    {
+        private int _position;
+
+        public WaveFormat WaveFormat { get; } = WaveFormat.CreateIeeeFloatWaveFormat(sampleRate, 1);
+
+        public int Read(float[] buffer, int offset, int count)
+        {
+            count = Math.Min(count, samples.Length - _position);
+            Array.Copy(samples, _position, buffer, offset, count);
+            _position += count;
+            return count;
+        }
+    }
+
     /// <summary>Averages all channels into one.</summary>
     private sealed class MonoMix(ISampleProvider source) : ISampleProvider
     {

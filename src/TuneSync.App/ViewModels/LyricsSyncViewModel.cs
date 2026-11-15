@@ -96,7 +96,8 @@ public sealed partial class LyricsSyncViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private bool _hasChanges;
 
-    public bool NeedsModel => !WhisperModelStore.IsDownloaded;
+    /// <summary>The speech recognition model or the vocal separation model is still to be downloaded.</summary>
+    public bool NeedsModel => !WhisperModelStore.IsDownloaded || !VocalModelStore.IsDownloaded;
 
     private void UpdateSummary()
     {
@@ -115,10 +116,17 @@ public sealed partial class LyricsSyncViewModel : ObservableObject, IDisposable
         if (IsBusy) return;
         if (NeedsModel)
         {
-            var ok = await Dialogs.ConfirmAsync("음성 인식 모델 받기",
-                $"자동 맞추기는 음성 인식 모델(Whisper, {WhisperModelStore.DisplaySize})로 노래를 이 PC에서 직접 듣고 가사 줄의 시간을 찾습니다." +
-                $"{Environment.NewLine}{Environment.NewLine}처음 한 번만 Hugging Face에서 모델을 받습니다. 노래와 가사는 외부로 보내지 않습니다.",
-                $"받기 ({WhisperModelStore.DisplaySize})");
+            // Someone who synced before the vocal separation came along has Whisper already.
+            var (title, text, size) = WhisperModelStore.IsDownloaded
+                ? ("보컬 분리 모델 받기",
+                    $"자동 맞추기가 더 정확해졌습니다. 노래에서 목소리만 분리하는 모델({VocalModelStore.DisplaySize})을 추가로 받아, 반주를 뺀 목소리로 가사 줄의 시간을 찾습니다." +
+                    $"{Environment.NewLine}{Environment.NewLine}처음 한 번만 GitHub에서 모델을 받습니다. 노래와 가사는 외부로 보내지 않습니다.",
+                    VocalModelStore.DisplaySize)
+                : ("음성 인식 모델 받기",
+                    $"자동 맞추기는 노래에서 목소리를 분리하는 모델({VocalModelStore.DisplaySize})과 음성 인식 모델(Whisper, {WhisperModelStore.DisplaySize})로 노래를 이 PC에서 직접 듣고 가사 줄의 시간을 찾습니다." +
+                    $"{Environment.NewLine}{Environment.NewLine}처음 한 번만 Hugging Face와 GitHub에서 모델을 받습니다. 노래와 가사는 외부로 보내지 않습니다.",
+                    "254MB");
+            var ok = await Dialogs.ConfirmAsync(title, text, $"받기 ({size})");
             if (!ok) return;
             if (!await DownloadModelAsync()) return;
         }
@@ -138,7 +146,8 @@ public sealed partial class LyricsSyncViewModel : ObservableObject, IDisposable
                 (Status, Progress) = p.Stage switch
                 {
                     LyricsSyncEngine.Stage.Decoding => ("노래를 읽는 중…", 0.02),
-                    LyricsSyncEngine.Stage.Listening => ($"노래를 듣는 중… {(int)(p.Value * 100)}%", 0.05 + p.Value * 0.9),
+                    LyricsSyncEngine.Stage.Separating => ($"목소리를 분리하는 중… {(int)(p.Value * 100)}%", 0.03 + p.Value * 0.17),
+                    LyricsSyncEngine.Stage.Listening => ($"노래를 듣는 중… {(int)(p.Value * 100)}%", 0.2 + p.Value * 0.77),
                     _ => ("가사 줄에 시간을 맞추는 중…", 0.97),
                 };
             });
@@ -179,12 +188,24 @@ public sealed partial class LyricsSyncViewModel : ObservableObject, IDisposable
         IsDownloading = true;
         try
         {
-            Status = "음성 인식 모델을 받는 중…";
-            await WhisperModelStore.DownloadAsync(new Progress<double>(p =>
+            if (!VocalModelStore.IsDownloaded)
             {
-                Progress = p;
-                Status = $"음성 인식 모델을 받는 중… {(int)(p * 100)}% ({p * 190:0}/{WhisperModelStore.DisplaySize})";
-            }), _work.Token);
+                Status = "보컬 분리 모델을 받는 중…";
+                await VocalModelStore.DownloadAsync(new Progress<double>(p =>
+                {
+                    Progress = p;
+                    Status = $"보컬 분리 모델을 받는 중… {(int)(p * 100)}% ({p * 64:0}/{VocalModelStore.DisplaySize})";
+                }), _work.Token);
+            }
+            if (!WhisperModelStore.IsDownloaded)
+            {
+                Status = "음성 인식 모델을 받는 중…";
+                await WhisperModelStore.DownloadAsync(new Progress<double>(p =>
+                {
+                    Progress = p;
+                    Status = $"음성 인식 모델을 받는 중… {(int)(p * 100)}% ({p * 190:0}/{WhisperModelStore.DisplaySize})";
+                }), _work.Token);
+            }
             OnPropertyChanged(nameof(NeedsModel));
             return true;
         }
@@ -196,7 +217,7 @@ public sealed partial class LyricsSyncViewModel : ObservableObject, IDisposable
         catch (Exception ex)
         {
             Status = "모델을 받지 못했습니다.";
-            Toast.Error("음성 인식 모델을 받지 못했습니다", ex.Message);
+            Toast.Error("모델을 받지 못했습니다", ex.Message);
             return false;
         }
         finally
