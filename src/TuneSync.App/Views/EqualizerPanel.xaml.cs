@@ -237,7 +237,7 @@ public partial class EqualizerPanel : UserControl
 
     private void Playback_PropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName is nameof(PlaybackViewModel.IsToneBypassed) or nameof(PlaybackViewModel.CurrentFile)) ShowBypass();
+        if (e.PropertyName is nameof(PlaybackViewModel.IsToneBypassed) or nameof(PlaybackViewModel.CurrentFile) or nameof(PlaybackViewModel.IsBitPerfect)) ShowBypass();
     }
 
     private void ViewModel_PropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -247,7 +247,15 @@ public partial class EqualizerPanel : UserControl
         Dispatcher.BeginInvoke(BringChosenChipIntoView, DispatcherPriority.Loaded);
     }
 
-    private void ShowBypass() => BypassNotice.Visibility = _playback.IsToneBypassed ? Visibility.Visible : Visibility.Collapsed;
+    /// <summary>Says why the equalizer isn't heard, when it isn't: the song needed Windows' own
+    /// player, or it goes out bit-perfect (설정 › 음향 › 출력).</summary>
+    private void ShowBypass()
+    {
+        BypassText.Text = _playback.IsToneBypassed
+            ? "이 곡은 Windows 기본 재생기로 재생되어 이퀄라이저가 적용되지 않습니다"
+            : "비트퍼펙트로 재생 중이라 이퀄라이저·잔향·볼륨이 적용되지 않습니다 (설정 › 음향 › 출력)";
+        BypassNotice.Visibility = _playback.IsToneBypassed || _playback.IsBitPerfect ? Visibility.Visible : Visibility.Collapsed;
+    }
 
     private void ShowCustomChip() => CustomChip.Visibility = _viewModel.SelectedPreset is null ? Visibility.Visible : Visibility.Collapsed;
 

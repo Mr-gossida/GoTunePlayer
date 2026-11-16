@@ -43,12 +43,13 @@ public partial class ShellWindow : FluentWindow
             if (WindowState != WindowState.Minimized)
             {
                 StartingQuietly = false;
+                _shownState = WindowState; // what to come back to from the mini player
                 return;
             }
-            // 설정 › 최소화하면 미니 플레이어로 (not when Windows started us minimized at sign-in)
+            // 설정 › 최소화하면 미니 플레이어로 (not when Windows started us minimized at sign-in).
+            // The window stays minimized while hidden; ExitMiniMode brings it back up as it was.
             if (!_settings.MinimizeToMini || StartingQuietly || IsClosing || !IsVisible) return;
-            Hide(); // first, so the window doesn't flash back up while being restored
-            WindowState = WindowState.Normal;
+            Hide();
             EnterLastMiniMode();
         };
         SleepTimerButton.DataContext = services.GetRequiredService<SleepTimerViewModel>();

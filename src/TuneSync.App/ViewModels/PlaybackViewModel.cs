@@ -116,6 +116,7 @@ public sealed partial class PlaybackViewModel : ObservableObject, IDisposable
         equalizer.ConfigChanged += config =>
         {
             if (_player is Audio.ToneEngine engine) engine.Config = config;
+            OnPropertyChanged(nameof(OutputDescription));
         };
         library.FilesRemoving += OnFilesRemoving;
         LibraryFileViewModel.ArtistFirst = settings.QueueArtistFirst;
@@ -372,11 +373,16 @@ public sealed partial class PlaybackViewModel : ObservableObject, IDisposable
     {
         _player.Volume = value;
         if (value > 0 && IsMuted) IsMuted = false;
+        OnPropertyChanged(nameof(OutputDescription));
         _volumeSaveTimer.Stop();
         _volumeSaveTimer.Start();
     }
 
-    partial void OnIsMutedChanged(bool value) => _player.IsMuted = value;
+    partial void OnIsMutedChanged(bool value)
+    {
+        _player.IsMuted = value;
+        OnPropertyChanged(nameof(OutputDescription));
+    }
 
     [RelayCommand]
     private void ToggleMute() => IsMuted = !IsMuted;

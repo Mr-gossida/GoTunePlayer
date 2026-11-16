@@ -90,22 +90,29 @@ public sealed class ChannelLayout
 }
 
 /// <summary>Turns float samples (-1..1) into what an exclusive-mode device takes: 16-, 24- or
-/// 32-bit integers, or float as it is. Going down to 16 bits adds a little triangular noise
-/// (dither), so the quietest sounds fade into hiss instead of breaking up.</summary>
+/// 32-bit integers, or float as it is. The scale is the decoder's own (2^15, 2^23, 2^31), so a
+/// sample decoded from an integer comes back as exactly that integer - nothing is lost on the way
+/// to a bit-perfect output. Processed sound going down to 16 bits gets a little triangular noise
+/// (dither), so the quietest sounds fade into hiss instead of breaking up; bit-perfect sound
+/// never does.</summary>
 public sealed class SampleWriter
 {
     private readonly int _bits, _container;
-    private readonly bool _float;
+    private readonly bool _float, _dither;
     private uint _seed = 0x9E3779B9;
 
     /// <param name="container">Bytes-wide slot of each sample, in bits (32 for 24-bit sound in
     /// four bytes, the sound in the top three); 0 = the same as <paramref name="bits"/>.</param>
-    public SampleWriter(int bits, bool isFloat, int container = 0)
+    public SampleWriter(int bits, bool isFloat, int container = 0, bool dither = true)
     {
         _bits = bits;
         _float = isFloat;
         _container = container > 0 ? container : bits;
+        _dither = dither;
     }
+
+    private static int ToInt(double sample, double scale, int max) =>
+        (int)Math.Clamp(Math.Round(sample * scale), -max - 1, max);
 
     public int BytesPerSample => _container / 8;
 
@@ -120,7 +127,7 @@ public sealed class SampleWriter
         {
             for (var i = 0; i < samples.Length; i++)
             {
-                var v = (int)Math.Round(Math.Clamp(samples[i], -1f, 1f) * 8388607.0) << 8;
+                var v = ToInt(samples[i], 8388608.0, 8388607) << 8;
                 target[4 * i] = (byte)v;
                 target[4 * i + 1] = (byte)(v >> 8);
                 target[4 * i + 2] = (byte)(v >> 16);
@@ -133,8 +140,8 @@ public sealed class SampleWriter
             case 16:
                 for (var i = 0; i < samples.Length; i++)
                 {
-                    var dither = (Random() - Random()) * (1f / 32768f);
-                    var v = (int)MathF.Round(Math.Clamp(samples[i] + dither, -1f, 1f) * 32767f);
+                    var dither = _dither ? (Random() - Random()) * (1f / 32768f) : 0f;
+                    var v = ToInt(samples[i] + dither, 32768.0, 32767);
                     target[2 * i] = (byte)v;
                     target[2 * i + 1] = (byte)(v >> 8);
                 }
@@ -142,7 +149,7 @@ public sealed class SampleWriter
             case 24:
                 for (var i = 0; i < samples.Length; i++)
                 {
-                    var v = (int)Math.Round(Math.Clamp(samples[i], -1f, 1f) * 8388607.0);
+                    var v = ToInt(samples[i], 8388608.0, 8388607);
                     target[3 * i] = (byte)v;
                     target[3 * i + 1] = (byte)(v >> 8);
                     target[3 * i + 2] = (byte)(v >> 16);
@@ -151,7 +158,7 @@ public sealed class SampleWriter
             default:
                 for (var i = 0; i < samples.Length; i++)
                 {
-                    var v = (int)Math.Round(Math.Clamp((double)samples[i], -1.0, 1.0) * 2147483647.0);
+                    var v = (int)Math.Clamp(Math.Round(samples[i] * 2147483648.0), int.MinValue, int.MaxValue);
                     target[4 * i] = (byte)v;
                     target[4 * i + 1] = (byte)(v >> 8);
                     target[4 * i + 2] = (byte)(v >> 16);

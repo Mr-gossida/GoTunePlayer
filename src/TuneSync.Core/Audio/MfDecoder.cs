@@ -58,6 +58,7 @@ public sealed class MfDecoder : IDisposable
 
             reader.GetCurrentMediaType(FirstAudioStream, out var nativeType);
             var native = new MediaType(nativeType);
+            ReadSource(native);
             var wanted = new MediaType
             {
                 MajorType = MediaTypes.MFMediaType_Audio,
@@ -90,6 +91,30 @@ public sealed class MfDecoder : IDisposable
         {
             Marshal.ReleaseComObject(reader);
             throw;
+        }
+    }
+
+    /// <summary>Bits per sample in the file itself, for lossless formats (PCM, FLAC, ALAC); 0
+    /// for lossy ones (MP3, AAC...), whose sound only exists once decoded.</summary>
+    public int SourceBits { get; private set; }
+
+    private static readonly Guid[] Lossless =
+    [
+        new("00000001-0000-0010-8000-00aa00389b71"), // PCM
+        new("00000003-0000-0010-8000-00aa00389b71"), // float
+        new("0000f1ac-0000-0010-8000-00aa00389b71"), // FLAC
+        new("63616c61-0000-0010-8000-00aa00389b71"), // ALAC
+    ];
+
+    private void ReadSource(MediaType native)
+    {
+        try
+        {
+            SourceBits = Lossless.Contains(native.SubType) ? native.BitsPerSample : 0;
+        }
+        catch (COMException)
+        {
+            SourceBits = 0; // not stated
         }
     }
 

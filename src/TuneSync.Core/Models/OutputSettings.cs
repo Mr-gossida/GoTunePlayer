@@ -24,6 +24,11 @@ public sealed class OutputSettings
     /// volume is at 100. Other programs can't play sound meanwhile.</summary>
     public bool Exclusive { get; set; }
 
+    /// <summary>In exclusive mode, the file's sound as it is: no equalizer, tone, reverb,
+    /// limiter or volume (the receiver sets the loudness), always at the song's own rate - the
+    /// samples reach the device unchanged.</summary>
+    public bool BitPerfect { get; set; }
+
     /// <summary>Exclusive mode's sample rate: 0 = each song's own rate.</summary>
     public int ExclusiveSampleRate { get; set; }
 

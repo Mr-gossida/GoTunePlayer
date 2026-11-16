@@ -29,6 +29,7 @@ public sealed partial class OutputViewModel : ObservableObject
         _deviceId = settings.Output.DeviceId ?? DefaultKey;
         _layout = settings.Output.Layout;
         _exclusive = settings.Output.Exclusive;
+        _bitPerfect = settings.Output.BitPerfect;
         _sampleRate = settings.Output.ExclusiveSampleRate;
         _bits = settings.Output.ExclusiveBits;
         playback.PropertyChanged += Playback_PropertyChanged;
@@ -51,6 +52,14 @@ public sealed partial class OutputViewModel : ObservableObject
 
     [ObservableProperty]
     private bool _exclusive;
+
+    /// <summary>The file's sound as it is (in exclusive mode): no processing, the song's own rate.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanChooseFormat))]
+    private bool _bitPerfect;
+
+    /// <summary>Rate and bits are GoTune's to choose only when the sound isn't sent bit-perfect.</summary>
+    public bool CanChooseFormat => !BitPerfect;
 
     [ObservableProperty]
     private int _sampleRate;
@@ -176,6 +185,13 @@ public sealed partial class OutputViewModel : ObservableObject
     {
         if (_loading) return;
         _settings.Output.Exclusive = value;
+        Apply();
+    }
+
+    partial void OnBitPerfectChanged(bool value)
+    {
+        if (_loading) return;
+        _settings.Output.BitPerfect = value;
         Apply();
     }
 

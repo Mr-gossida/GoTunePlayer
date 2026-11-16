@@ -30,6 +30,9 @@ public sealed partial class PlaybackViewModel
     /// it can't go out as set; null while nothing plays through the app's own player.</summary>
     public string? OutputDescription => _player is Audio.ToneEngine engine ? engine.OutputDescription : null;
 
+    /// <summary>The song goes out bit-perfect: the equalizer and the volume are left out.</summary>
+    public bool IsBitPerfect => _player is Audio.ToneEngine engine && engine.IsBitPerfect;
+
     /// <summary>The output settings changed (설정 › 음향 › 출력): the playing song moves to the
     /// new device or format right away, from where it was.</summary>
     public void ApplyOutput()
@@ -58,7 +61,11 @@ public sealed partial class PlaybackViewModel
         Audio.IPlayerEngine player = windows ? new Audio.WindowsEngine(source) : new Audio.ToneEngine(source, _equalizer.Config, _settings.Output);
         player.Volume = Volume;
         player.IsMuted = IsMuted;
-        if (player is Audio.ToneEngine tone) tone.OutputChanged += () => OnPropertyChanged(nameof(OutputDescription));
+        if (player is Audio.ToneEngine tone) tone.OutputChanged += () =>
+        {
+            OnPropertyChanged(nameof(OutputDescription));
+            OnPropertyChanged(nameof(IsBitPerfect));
+        };
         _player = player;
         Wire(player);
         player.Open();

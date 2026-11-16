@@ -130,6 +130,8 @@ internal sealed class ToneEngine : IPlayerEngine
     /// <summary>How the sound is going out right now, and why not as asked when it can't be.</summary>
     public string? OutputDescription => _player.OutputDescription;
 
+    public bool IsBitPerfect => _player.IsBitPerfect;
+
     public event Action? OutputChanged;
 
     public ToneConfig Config { set => _player.Config = value; }

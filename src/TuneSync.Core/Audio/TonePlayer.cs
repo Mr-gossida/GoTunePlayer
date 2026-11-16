@@ -103,6 +103,11 @@ public sealed class TonePlayer : IDisposable
     private int _outRate, _outChannels;
     private double _ratio = 1; // device frames per song frame
     private bool _exclusiveOpen;
+    // What the description says (output thread writes, any thread reads): the device part, why it
+    // isn't as asked, and whether the sound goes out bit-perfect.
+    private volatile string? _outputBase, _outputNote;
+    private volatile bool _bitPerfect, _resampling;
+    private int _sourceBits;
     private float[]? _resampleInput;
     private int _resampleOffset;
     private ChannelLayout? _layout;
@@ -141,7 +146,31 @@ public sealed class TonePlayer : IDisposable
 
     /// <summary>How the sound is going out right now ("독점 · 24비트 96kHz · 5.1"), and why it
     /// isn't the way <see cref="Output"/> asks, when it can't be.</summary>
-    public string? OutputDescription { get; private set; }
+    public string? OutputDescription
+    {
+        get
+        {
+            if (_outputBase is not { } device) return null;
+            if (_bitPerfect)
+            {
+                var source = _sourceBits > 0 ? $"원본 {_sourceBits}비트 그대로" : "디코딩한 소리 그대로";
+                return Join($"비트퍼펙트 · {device} · {source}", _outputNote);
+            }
+            // what changes the sound on the way, so "독점" isn't mistaken for untouched
+            var applied = new List<string>();
+            if (_resampling) applied.Add($"곡 {_sampleRate / 1000.0:0.#}kHz에서 변환");
+            if (!_exclusiveOpen) applied.Add("Windows 믹서 거침");
+            if (!ReferenceEquals(_config, ToneConfig.Neutral)) applied.Add("이퀄라이저 적용");
+            if (_muted) applied.Add("음소거");
+            else if (_volume < 1) applied.Add($"볼륨 {Math.Round(_volume * 100)}%");
+            var text = applied.Count > 0 ? $"{device} ({string.Join(" · ", applied)})" : device;
+            return Join(text, _outputNote);
+        }
+    }
+
+    /// <summary>The samples reach the device exactly as the file holds them (bit-perfect mode,
+    /// and the device took the song's own rate).</summary>
+    public bool IsBitPerfect => _bitPerfect;
 
     /// <summary>The device was (re)opened: <see cref="OutputDescription"/> may have changed.</summary>
     public event Action? OutputChanged;
@@ -296,6 +325,7 @@ public sealed class TonePlayer : IDisposable
             }
 
             _sampleRate = decoder.SampleRate;
+            _sourceBits = decoder.SourceBits;
             _duration = decoder.Duration;
             _ringCapacity = (int)(_sampleRate * RingSeconds);
             _ring = new float[_ringCapacity * 2];
@@ -613,7 +643,16 @@ public sealed class TonePlayer : IDisposable
                     if (frames > 0)
                     {
                         _decodeWake.Set();
-                        processor.Process(buffer.AsSpan(0, frames * 2));
+                        if (_bitPerfect)
+                        {
+                            // the file's samples as they are: none of the chain, no volume (only mute)
+                            if (_muted) Array.Clear(buffer, 0, frames * 2);
+                            processor.Scope.Write(buffer.AsSpan(0, frames * 2));
+                        }
+                        else
+                        {
+                            processor.Process(buffer.AsSpan(0, frames * 2));
+                        }
                         var written = Write(buffer, frames, room);
                         // the newest frames reach the speakers once the device's queue ahead of them
                         // has played (counted in the song's frames)
@@ -775,6 +814,15 @@ public sealed class TonePlayer : IDisposable
         var channels = ChannelLayout.Channels(layout);
         string? note = output.Layout != layout ? "이 장치에는 스피커가 그만큼 없어 스테레오로 재생 중" : null;
         if (output.DeviceId is not null && output.DeviceId != _deviceId) note = "고른 장치가 없어 기본 장치로 재생 중";
+        var wantBitPerfect = output.Exclusive && output.BitPerfect;
+        if (wantBitPerfect)
+        {
+            // the file's own channels: no spreading over more speakers
+            layout = SpeakerLayout.Stereo;
+            channels = 2;
+            note = null;
+        }
+        _bitPerfect = false;
 
         if (output.Exclusive)
         {
@@ -782,13 +830,21 @@ public sealed class TonePlayer : IDisposable
             if (format is not null && TryOpenExclusive(format))
             {
                 _exclusiveOpen = true;
-                Prepare(format.SampleRate, channels, layout, new SampleWriter(format.ValidBits, format.IsFloat, format.BitsPerSample));
-                OutputDescription = Join($"독점 · {format.ValidBits}비트 {format.SampleRate / 1000.0:0.#}kHz · {LayoutName(layout)}"
-                                         + (format.SampleRate != _sampleRate ? $" (곡 {_sampleRate / 1000.0:0.#}kHz에서 변환)" : ""), note);
+                var exact = wantBitPerfect && format.SampleRate == _sampleRate && (_sourceBits == 0 || format.ValidBits >= _sourceBits);
+                Prepare(format.SampleRate, channels, layout, new SampleWriter(format.ValidBits, format.IsFloat, format.BitsPerSample, dither: !exact));
+                var rate = $"{format.ValidBits}비트 {format.SampleRate / 1000.0:0.#}kHz";
+                if (wantBitPerfect && !exact)
+                    note = format.SampleRate != _sampleRate
+                        ? $"비트퍼펙트 아님: 장치가 {_sampleRate / 1000.0:0.#}kHz를 받지 않아 변환 중"
+                        : $"비트퍼펙트 아님: 장치가 {_sourceBits}비트를 받지 않음";
+                _outputBase = exact ? rate : $"독점 · {rate} · {LayoutName(layout)}";
+                _outputNote = note;
+                _bitPerfect = exact;
                 OutputChanged?.Invoke();
                 return;
             }
             note = Join(format is null ? "장치가 이 형식을 독점 모드로 받지 않아 공유 모드로 재생 중" : "다른 프로그램이 장치를 쓰고 있어 공유 모드로 재생 중", note);
+            if (wantBitPerfect) note = "비트퍼펙트 아님: " + note;
             CloseDevice();
             _device = OutputDevices.Open(_enumerator, output.DeviceId) ?? throw new InvalidOperationException("No playback device.");
             _deviceId = _device.ID;
@@ -803,7 +859,8 @@ public sealed class TonePlayer : IDisposable
         _bufferFrames = _client.BufferSize;
         _render = _client.AudioRenderClient;
         Prepare(_sampleRate, channels, layout, new SampleWriter(32, isFloat: true));
-        OutputDescription = Join($"공유 · {LayoutName(layout)}", note);
+        _outputBase = $"공유 · {LayoutName(layout)}";
+        _outputNote = note;
         OutputChanged?.Invoke();
     }
 
@@ -829,8 +886,12 @@ public sealed class TonePlayer : IDisposable
     private PcmFormat? PickExclusiveFormat(OutputSettings output, int channels)
     {
         using var probe = _device!.AudioClient;
-        var rate = output.ExclusiveSampleRate > 0 ? output.ExclusiveSampleRate : _sampleRate;
-        int[] bitsOrder = output.ExclusiveBits > 0 ? [output.ExclusiveBits, 32, 24, 16] : [32, 24, 16];
+        var bitPerfect = output.BitPerfect;
+        var rate = output.ExclusiveSampleRate > 0 && !bitPerfect ? output.ExclusiveSampleRate : _sampleRate;
+        // bit-perfect: 24 bits hold a 16- or 24-bit file exactly (and a decoded lossy one to its
+        // last audible bit), then 32; 16 last (exact only for a 16-bit file)
+        int[] bitsOrder = bitPerfect ? [24, 32, 16]
+            : output.ExclusiveBits > 0 ? [output.ExclusiveBits, 32, 24, 16] : [32, 24, 16];
         var rates = new List<int> { rate };
         rates.AddRange(OutputDevices.Rates
             .OrderBy(r => r % 11025 == 0 == (rate % 11025 == 0) ? 0 : 1)
@@ -881,6 +942,7 @@ public sealed class TonePlayer : IDisposable
         _outRate = rate;
         _outChannels = channels;
         _ratio = (double)rate / _sampleRate;
+        _resampling = rate != _sampleRate;
         _layout = new ChannelLayout(layout, rate);
         _writer = writer;
         if (rate == _sampleRate)

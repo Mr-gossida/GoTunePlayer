@@ -63,8 +63,28 @@ public partial class ShellWindow
         _settings.PlayerMode = PlayerMode.Full;
         AppSettingsStore.Save(_settings);
         Show();
-        if (WindowState == WindowState.Minimized) WindowState = WindowState.Normal;
+        RestoreFromMinimized();
         Activate();
         _mini?.Hide();
     }
+
+    /// <summary>Normal or maximized - the window's state before it was minimized.</summary>
+    private WindowState _shownState = WindowState.Normal;
+
+    /// <summary>Back up from minimized, the way it was before (maximized stays maximized). A
+    /// window hidden while minimized stays minimized in Windows even when WPF says otherwise, so
+    /// Windows itself is asked to restore it.</summary>
+    private void RestoreFromMinimized()
+    {
+        var handle = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+        if (handle != IntPtr.Zero && (IsIconic(handle) || WindowState == WindowState.Minimized))
+            ShowWindow(handle, _shownState == WindowState.Maximized ? 3 /* SW_SHOWMAXIMIZED */ : 9 /* SW_RESTORE */);
+        if (WindowState != _shownState) WindowState = _shownState;
+    }
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool IsIconic(IntPtr hWnd);
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool ShowWindow(IntPtr hWnd, int command);
 }
