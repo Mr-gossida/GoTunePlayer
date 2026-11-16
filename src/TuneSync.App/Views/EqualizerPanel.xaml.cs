@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
@@ -47,6 +48,8 @@ public partial class EqualizerPanel : UserControl
         _limiterTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(120) };
         _limiterTimer.Tick += (_, _) => ShowLimiter();
 
+        ReverbCard.CustomPopupPlacementCallback = PlaceReverbCard;
+
         IsVisibleChanged += (_, _) =>
         {
             if (IsVisible) Start();
@@ -81,6 +84,18 @@ public partial class EqualizerPanel : UserControl
         _limiterTimer.Stop();
         CompositionTarget.Rendering -= OnRendering;
         CloseNameBar();
+        ReverbCard.IsOpen = false;
+    }
+
+    /// <summary>The reverb card stands just above its button, right edges in line (the button is
+    /// at the panel's right end, so the card grows to the left, over the panel). The sizes come in
+    /// screen pixels and without the card's margin (the room for its shadow), so that margin is
+    /// added here, scaled to the screen.</summary>
+    private CustomPopupPlacement[] PlaceReverbCard(Size popup, Size target, Point offset)
+    {
+        var scale = VisualTreeHelper.GetDpi(ReverbOpener).DpiScaleX;
+        double margin = 12 * scale, gap = 6 * scale;
+        return [new CustomPopupPlacement(new Point(target.Width - popup.Width - margin, -popup.Height - margin - gap), PopupPrimaryAxis.Horizontal)];
     }
 
     /// <summary>Wide: the tone bars on the left of the bands. Narrow: under them. Either way

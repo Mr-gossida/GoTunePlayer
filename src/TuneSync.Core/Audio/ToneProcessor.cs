@@ -28,10 +28,18 @@ public sealed class ToneConfig
     /// <summary>Whether peaks past full scale are held down.</summary>
     public bool Limiter { get; private init; } = true;
 
+    public ReverbRoom ReverbRoom { get; private init; } = ReverbRooms.Find(null);
+
+    /// <summary>How much of the room is added (0 = no reverb at all).</summary>
+    public double ReverbMix { get; private init; }
+
+    public double ReverbDecaySeconds { get; private init; } = 1;
+
     public static ToneConfig From(ToneSettings settings)
     {
         if (!settings.Enabled) return Neutral;
         var headroom = settings.AutoHeadroom ? ToneCurve.HeadroomDb(settings) : 0;
+        var room = ReverbRooms.Find(settings.ReverbRoom);
         var config = new ToneConfig
         {
             GainDb = settings.PreampDb - headroom,
@@ -39,6 +47,10 @@ public sealed class ToneConfig
             Width = Math.Clamp(settings.Width, 0, 2),
             Balance = Math.Clamp(settings.Balance, -1, 1),
             Limiter = settings.Limiter,
+            ReverbRoom = room,
+            ReverbMix = settings.Reverb && double.IsFinite(settings.ReverbAmount) ? Math.Clamp(settings.ReverbAmount, 0, 1) : 0,
+            ReverbDecaySeconds = room.DecaySeconds * (double.IsFinite(settings.ReverbDecay)
+                ? Math.Clamp(settings.ReverbDecay, ReverbRooms.MinDecayScale, ReverbRooms.MaxDecayScale) : 1),
         };
         ToneCurve.FilterGains(settings, config._gains);
         return config;
@@ -46,8 +58,8 @@ public sealed class ToneConfig
 }
 
 /// <summary>The player's sound chain, run on stereo frames as they go to the speakers:
-/// preamp, bass shelf, ten equalizer bands, treble shelf, stereo width and balance, a limiter
-/// that keeps boosts from clipping, and the volume (with a copy of the sound before the volume
+/// preamp, bass shelf, ten equalizer bands, treble shelf, stereo width and balance, a reverb
+/// (<see cref="Audio.Reverb"/>), a limiter that keeps boosts from clipping, and the volume (with a copy of the sound before the volume
 /// kept for the live displays, <see cref="Scope"/>). Every level glides to a new setting over a
 /// few hundredths of a second, so moving a slider while music plays never clicks or "zips".
 /// Nothing here allocates once it is built.</summary>
@@ -64,6 +76,7 @@ public sealed class ToneProcessor
 
     private readonly int _sampleRate;
     private readonly PeakLimiter _limiter;
+    private readonly Reverb _reverb;
     private readonly double _filterStepDb;
     private readonly float _gainStep;
 
@@ -91,6 +104,7 @@ public sealed class ToneProcessor
     {
         _sampleRate = sampleRate;
         _limiter = new PeakLimiter(sampleRate);
+        _reverb = new Reverb(sampleRate);
         Scope = new OutputScope(sampleRate);
         _filterStepDb = 2 * ToneCurve.MaxFilterGainDb * Step / (FullSwingSeconds * sampleRate);
         _gainStep = (float)(1 - Math.Exp(-Step / (GainSettleSeconds * sampleRate)));
@@ -140,6 +154,7 @@ public sealed class ToneProcessor
         _right = _rightTarget;
         _volume = Volume;
         _volumeSet = true;
+        _reverb.Settle();
     }
 
     /// <summary>Stereo frames, left/right interleaved, processed in place.</summary>
@@ -162,6 +177,7 @@ public sealed class ToneProcessor
         _leftTarget = (float)Math.Min(1, 1 - config.Balance);
         _rightTarget = (float)Math.Min(1, 1 + config.Balance);
         _limiter.IsOn = config.Limiter;
+        _reverb.SetTarget(config.ReverbRoom, config.ReverbMix, config.ReverbDecaySeconds);
     }
 
     private void ProcessStep(Span<float> frames)
@@ -244,11 +260,14 @@ public sealed class ToneProcessor
         _left = leftNext;
         _right = rightNext;
 
-        // 4. Limiter.
+        // 4. Reverb (before the limiter, so the room added on top can't push the sound past full scale).
+        if (_reverb.IsActive) _reverb.Process(frames);
+
+        // 5. Limiter.
         _limiter.Process(frames);
         Scope.Write(frames);
 
-        // 5. Volume.
+        // 6. Volume.
         var volumeNext = Approach(_volume, Volume);
         if (_volume != 1 || volumeNext != 1)
         {

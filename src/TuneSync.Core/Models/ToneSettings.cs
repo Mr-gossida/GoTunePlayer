@@ -37,6 +37,21 @@ public sealed class ToneSettings
     /// <see cref="Audio.PeakLimiter"/>). Off, such peaks go out as they are and Windows clips them.</summary>
     public bool Limiter { get; set; } = true;
 
+    /// <summary>A room around the music (see <see cref="Audio.Reverb"/>). Off unless asked for.</summary>
+    public bool Reverb { get; set; }
+
+    /// <summary>Which room: an id from <see cref="Audio.ReverbRooms"/>.</summary>
+    public string ReverbRoom { get; set; } = Audio.ReverbRooms.DefaultId;
+
+    /// <summary>How much of the room is added, 0..1. A little goes a long way: the default is
+    /// a touch of air, not an effect.</summary>
+    public double ReverbAmount { get; set; } = DefaultReverbAmount;
+
+    /// <summary>The room's decay time, scaled (0.5..2; 1 = as the room is).</summary>
+    public double ReverbDecay { get; set; } = 1;
+
+    public const double DefaultReverbAmount = 0.2;
+
     /// <summary>The preset the bands were last set from: a built-in's id, a saved preset's name,
     /// or null once the bands were moved by hand.</summary>
     public string? Preset { get; set; } = "flat";
@@ -54,6 +69,9 @@ public sealed class ToneSettings
         TrebleDb = ClampGain(TrebleDb);
         Width = double.IsFinite(Width) ? Math.Clamp(Width, 0, 2) : 1;
         Balance = double.IsFinite(Balance) ? Math.Clamp(Balance, -1, 1) : 0;
+        ReverbRoom = Audio.ReverbRooms.Find(ReverbRoom).Id;
+        ReverbAmount = double.IsFinite(ReverbAmount) ? Math.Clamp(ReverbAmount, 0, 1) : DefaultReverbAmount;
+        ReverbDecay = double.IsFinite(ReverbDecay) ? Math.Clamp(ReverbDecay, Audio.ReverbRooms.MinDecayScale, Audio.ReverbRooms.MaxDecayScale) : 1;
         UserPresets ??= [];
         UserPresets.RemoveAll(p => p is null || string.IsNullOrWhiteSpace(p.Name));
         foreach (var preset in UserPresets) preset.Normalize();

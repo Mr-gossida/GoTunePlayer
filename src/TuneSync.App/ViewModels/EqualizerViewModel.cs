@@ -58,6 +58,10 @@ public sealed partial class EqualizerViewModel : ObservableObject
         _balance = _tone.Balance;
         _autoHeadroom = _tone.AutoHeadroom;
         _limiter = _tone.Limiter;
+        _reverb = _tone.Reverb;
+        _reverbRoom = ReverbRooms.Find(_tone.ReverbRoom);
+        _reverbAmount = _tone.ReverbAmount;
+        _reverbDecay = _tone.ReverbDecay;
         RebuildPresets();
         _selectedPreset = Presets.FirstOrDefault(p => p.Key == _tone.Preset);
 
@@ -83,7 +87,7 @@ public sealed partial class EqualizerViewModel : ObservableObject
     public ObservableCollection<EqPresetChoice> Presets { get; } = [];
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ToolTip))]
+    [NotifyPropertyChangedFor(nameof(ToolTip), nameof(IsReverbWorking))]
     private bool _isEnabled;
 
     [ObservableProperty]
@@ -111,6 +115,37 @@ public sealed partial class EqualizerViewModel : ObservableObject
 
     [ObservableProperty]
     private bool _limiter;
+
+    /// <summary>The rooms the reverb offers (the chips in its card).</summary>
+    public IReadOnlyList<ReverbRoom> ReverbRoomChoices => ReverbRooms.All;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsReverbWorking))]
+    private bool _reverb;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ReverbSummary), nameof(ReverbDecayText))]
+    private ReverbRoom _reverbRoom;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ReverbSummary), nameof(ReverbAmountText))]
+    private double _reverbAmount;
+
+    /// <summary>The room's decay, scaled (0.5..2).</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ReverbDecayText))]
+    private double _reverbDecay;
+
+    /// <summary>The reverb is adding its room (its lamp is lit).</summary>
+    public bool IsReverbWorking => IsEnabled && Reverb;
+
+    public string ReverbAmountText => $"{ReverbAmount * 100:0}%";
+
+    /// <summary>"1.7초" - how long the tail takes to die away.</summary>
+    public string ReverbDecayText => $"{ReverbRoom.DecaySeconds * ReverbDecay:0.0}초";
+
+    /// <summary>"홀 · 20%", beside the switch.</summary>
+    public string ReverbSummary => $"{ReverbRoom.Name} · {ReverbAmountText}";
 
     /// <summary>Null while the bands don't match a preset ("사용자 지정").</summary>
     [ObservableProperty]
@@ -166,6 +201,18 @@ public sealed partial class EqualizerViewModel : ObservableObject
     partial void OnBalanceChanged(double value) { _tone.Balance = value; Publish(); }
     partial void OnAutoHeadroomChanged(bool value) { _tone.AutoHeadroom = value; Publish(); }
     partial void OnLimiterChanged(bool value) { _tone.Limiter = value; Publish(); }
+    partial void OnReverbChanged(bool value) { _tone.Reverb = value; Publish(); }
+    // Picking a room or moving a reverb control is asking to hear it: it switches the reverb on.
+    partial void OnReverbRoomChanged(ReverbRoom value) { _tone.ReverbRoom = value.Id; ReverbEdited(); }
+    partial void OnReverbAmountChanged(double value) { _tone.ReverbAmount = value; ReverbEdited(); }
+    partial void OnReverbDecayChanged(double value) { _tone.ReverbDecay = value; ReverbEdited(); }
+
+    private void ReverbEdited()
+    {
+        if (_loading) return;
+        if (!Reverb) Reverb = true; // publishes
+        else Publish();
+    }
 
     partial void OnSelectedPresetChanged(EqPresetChoice? value)
     {
@@ -243,6 +290,10 @@ public sealed partial class EqualizerViewModel : ObservableObject
         _loading = true;
         Bass = Treble = Balance = 0;
         Width = 1;
+        ReverbRoom = ReverbRooms.Find(null);
+        ReverbAmount = ToneSettings.DefaultReverbAmount;
+        ReverbDecay = 1;
+        Reverb = false;
         _loading = false;
         SelectedPreset = null; // so that picking 플랫 applies even when it was already selected
         SelectedPreset = Presets[0];
