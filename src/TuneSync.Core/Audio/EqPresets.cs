@@ -11,27 +11,30 @@ public static class EqPresets
     public const string FlatId = "flat";
 
     // The shapes are the familiar ones for each kind of music (the "smile" for rock and
-    // electronic, a raised middle for voices...), set by hand and strong on purpose - up to
-    // 9 dB - so that picking one is heard at once, like turning the sliders of a hardware
-    // equalizer. They are a starting point, not a measured standard.
+    // electronic, presence for voices...), set by hand - a starting point, not a measured
+    // standard. Kept moderate (at most 6 dB) and away from what makes a sound muddy or boxy:
+    // nothing is raised around 250-500 Hz (a few use a small cut there instead, which reads as
+    // clarity), and the low end is lifted below 125 Hz, where it is felt rather than heard as
+    // boom. Stronger curves (up to 9 dB, with the middle raised) sounded smeared: every boost
+    // has to be taken back by the limiter on songs that already reach full scale.
     //                                                              31   62  125  250  500   1k   2k   4k   8k  16k
     public static readonly IReadOnlyList<BuiltInPreset> BuiltIn =
     [
         new(FlatId,       "플랫",          [ 0,   0,   0,   0,   0,   0,   0,   0,   0,   0]),
-        new("bass",       "저음 강화",     [ 9,   8,   6,   3,   0,   0,   0,   0,   0,   0]),
-        new("treble",     "고음 강화",     [ 0,   0,   0,   0,   0,   0,   2,   5,   8,   9]),
-        new("vocal",      "보컬",          [-4,  -3,  -2,   2,   5,   6,   6,   4,   2,   0]),
-        new("pop",        "팝",            [-2,   1,   4,   6,   5,   2,   0,  -1,   2,   3]),
-        new("rock",       "록",            [ 8,   6,   3,  -2,  -4,  -2,   2,   5,   7,   8]),
-        new("jazz",       "재즈",          [ 5,   4,   2,   3,  -2,  -2,   0,   2,   4,   5]),
-        new("classical",  "클래식",        [ 5,   4,   3,   1,   0,   0,   0,   2,   3,   5]),
-        new("electronic", "일렉트로닉",    [ 8,   7,   3,   0,  -4,   2,   0,   3,   6,   8]),
-        new("hiphop",     "힙합",          [ 9,   8,   3,   4,  -2,  -2,   2,   0,   3,   5]),
-        new("acoustic",   "어쿠스틱",      [ 5,   5,   3,   1,   2,   2,   3,   4,   4,   3]),
+        new("bass",       "저음 강화",     [ 6,   5,   3,   1,   0,   0,   0,   0,   0,   0]),
+        new("treble",     "고음 강화",     [ 0,   0,   0,   0,   0,   0,   1,   3,   5,   6]),
+        new("vocal",      "보컬",          [-3,  -2,  -1,   0,   1,   3,   4,   3,   1,   0]),
+        new("pop",        "팝",            [-1,   2,   3,   1,  -1,   0,   1,   2,   3,   3]),
+        new("rock",       "록",            [ 5,   4,   2,  -1,  -2,  -1,   1,   3,   4,   5]),
+        new("jazz",       "재즈",          [ 3,   2,   1,   0,  -1,  -1,   0,   1,   2,   3]),
+        new("classical",  "클래식",        [ 3,   2,   1,   0,   0,   0,   0,   1,   2,   3]),
+        new("electronic", "일렉트로닉",    [ 6,   5,   2,   0,  -2,   0,   1,   2,   4,   5]),
+        new("hiphop",     "힙합",          [ 6,   5,   3,   0,  -1,  -1,   1,   1,   2,   3]),
+        new("acoustic",   "어쿠스틱",      [ 2,   2,   1,  -1,   0,   1,   2,   3,   3,   2]),
         // What the ear loses at low volume: the two ends of the range.
-        new("loudness",   "라우드니스",    [ 9,   7,   2,   0,  -2,  -2,   0,   2,   5,   8]),
+        new("loudness",   "라우드니스",    [ 6,   4,   1,   0,  -1,  -1,   0,   1,   3,   5]),
         // Quiet listening that doesn't carry through walls: less rumble, clearer voices.
-        new("latenight",  "심야",          [-9,  -7,  -3,   0,   3,   5,   5,   3,   0,  -3]),
+        new("latenight",  "심야",          [-6,  -4,  -2,   0,   1,   3,   3,   2,   0,  -2]),
     ];
 
     public static BuiltInPreset? Find(string? id) => BuiltIn.FirstOrDefault(p => p.Id == id);

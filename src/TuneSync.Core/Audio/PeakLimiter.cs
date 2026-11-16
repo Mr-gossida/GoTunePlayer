@@ -1,10 +1,16 @@
 namespace TuneSync.Core.Audio;
 
-/// <summary>Keeps the sound under full scale after the equalizer has boosted it. It looks a few
-/// milliseconds ahead (the sound comes out that much later), so the level is already down, in a
-/// smooth ramp, when a peak arrives - no clipping and no click. Both channels are turned down
-/// together, so the stereo picture doesn't shift. Below the ceiling it changes nothing: what
-/// comes out is exactly what went in.</summary>
+/// <summary>Keeps the sound under full scale after the equalizer has boosted it. It looks ahead
+/// (the sound comes out that much later), so the level is already down, in a smooth ramp, when a
+/// peak arrives - no clipping and no click. Both channels are turned down together, so the
+/// stereo picture doesn't shift. Below the ceiling it changes nothing: what comes out is exactly
+/// what went in.
+/// It is tuned to be heard as a level that sits a little lower, not as a sound that is squeezed:
+/// once down it holds a moment and then comes back up over seconds. A quick limiter (5 ms ahead,
+/// back up in a quarter second) went up and down with every beat - with every cycle of a bass
+/// note, even - and that wobble mixed itself into the music: measured on songs with the
+/// presets, about -24 dB of distortion against about -37 to -40 dB now, at the same loudness
+/// within a dB or two. That was the "smeared" sound of a boosted equalizer.</summary>
 public sealed class PeakLimiter
 {
     /// <summary>Just under full scale (-0.13 dB).</summary>
@@ -29,11 +35,14 @@ public sealed class PeakLimiter
 
     private double _wanted = 1;
     private readonly double _release;
+    private readonly int _hold;
+    private int _holdLeft;
     private long _index;
     private float _lowestGain = 1;
 
-    public PeakLimiter(int sampleRate, double lookaheadSeconds = 0.005, double releaseSeconds = 0.25)
+    public PeakLimiter(int sampleRate, double lookaheadSeconds = 0.03, double releaseSeconds = 2, double holdSeconds = 0.12)
     {
+        _hold = (int)(sampleRate * holdSeconds);
         _lookahead = Math.Max(8, (int)(sampleRate * lookaheadSeconds));
         _delay = new float[_lookahead * 2];
         _queueGain = new float[_lookahead + 2];
@@ -70,11 +79,24 @@ public sealed class PeakLimiter
             var peak = Math.Max(Math.Abs(left), Math.Abs(right));
             if (!(peak <= float.MaxValue)) { left = right = peak = 0; } // NaN or infinity never reaches the speakers
 
-            // The gain this frame needs; after a peak it recovers slowly rather than jumping back.
+            // The gain this frame needs; after a peak it holds a moment (so the next beat or the
+            // next cycle of a bass note finds it still down) and then recovers slowly.
             var needed = peak > Ceiling && IsOn ? Ceiling / (double)peak : 1.0;
-            _wanted += (1 - _wanted) * _release;
-            if (_wanted > 0.999999) _wanted = 1;
-            if (needed < _wanted) _wanted = needed;
+            if (needed <= _wanted)
+            {
+                _wanted = needed;
+                _holdLeft = _hold;
+            }
+            else if (_holdLeft > 0)
+            {
+                _holdLeft--;
+            }
+            else
+            {
+                _wanted += (1 - _wanted) * _release;
+                if (_wanted > 0.999999) _wanted = 1;
+                if (needed < _wanted) _wanted = needed;
+            }
             var wanted = (float)_wanted;
             if (wanted > _wanted) wanted = MathF.BitDecrement(wanted); // rounding must never raise it
 

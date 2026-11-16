@@ -259,6 +259,34 @@ public class ToneTests
     }
 
     [Fact]
+    public void Limiter_HoldsSteadyThroughABassNote_InsteadOfWobblingWithEachCycle()
+    {
+        // A boosted 40 Hz note: a limiter that eases off between its peaks (every 25 ms) turns the
+        // level up and down 40 times a second, and that wobble is heard as a smeared sound.
+        var limiter = new PeakLimiter(Rate);
+        var data = Sine(40, 2.0, Rate * 3);
+        limiter.Process(data);
+        // after it has settled: the peak of every cycle the same, to within a hundredth of a dB
+        var cycle = Rate / 40 * 2; // samples, both channels
+        double lowest = double.MaxValue, highest = 0;
+        for (var start = Rate * 2; start + cycle <= data.Length; start += cycle)
+        {
+            var peak = 0f;
+            for (var i = start; i < start + cycle; i++) peak = Math.Max(peak, Math.Abs(data[i]));
+            lowest = Math.Min(lowest, peak);
+            highest = Math.Max(highest, peak);
+        }
+        Assert.True(20 * Math.Log10(highest / lowest) < 0.01, $"{20 * Math.Log10(highest / lowest):0.000} dB");
+        Assert.InRange(highest, 0.9, PeakLimiter.Ceiling + 1e-4);
+
+        // and once the loud part is over, the level comes back (to within 0.2 dB) within seconds
+        var after = Sine(1000, 0.5, Rate * 8);
+        limiter.Process(after);
+        var down = 20 * Math.Log10(0.5 / Math.Sqrt(2) / Rms(after, Rate * 15 / 2));
+        Assert.InRange(down, -0.01, 0.2);
+    }
+
+    [Fact]
     public void ChangingSettingsWhilePlaying_NeverJumps()
     {
         // A steady low tone: any jump in the output shows as a sample-to-sample step far above the tone's own.
@@ -309,7 +337,7 @@ public class ToneTests
     {
         var settings = Settings(s => { EqPresets.Apply(s, "bass"); s.AutoHeadroom = true; });
         var config = ToneConfig.From(settings);
-        Assert.InRange(config.HeadroomDb, 9, 15);
+        Assert.InRange(config.HeadroomDb, 6, 12);
         Assert.Equal(-config.HeadroomDb, config.GainDb, 6);
         // With it, no frequency comes out louder than it went in (to within the curve's sampling, a tenth of a dB).
         foreach (var f in new[] { 25.0, 40, 62.5, 90, 125, 500, 4000 })
@@ -368,7 +396,7 @@ public class ToneTests
         Assert.Equal("내 헤드폰", s.Preset);
 
         Assert.True(EqPresets.Apply(s, "rock"));
-        Assert.Equal(8, s.BandsDb[0]);
+        Assert.Equal(EqPresets.Find("rock")!.BandsDb[0], s.BandsDb[0]);
         Assert.Equal(0, s.PreampDb);
         Assert.True(EqPresets.Apply(s, "내 헤드폰"));
         Assert.Equal([1, 2, 3, 4, 5, 6, 7, 8, 9, 10], s.BandsDb);
