@@ -419,6 +419,8 @@
 
             <Grid x:Name="LyricsArea" Grid.Column="1" Grid.RowSpan="2"
                   Visibility="{Binding IsLyricsVisible, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}">
+                <!-- the lyrics, all of them: hidden (still laid out) while the equalizer takes their place -->
+                <Grid x:Name="LyricsLayer">
                 <!-- Synced lyrics: the current line glides to the center (LyricsScroller) while it
                      grows and brightens; the rest stay dim and the edges fade out. -->
                 <!-- Intro in the narrow layout (the song info is already in the strip above): a big
@@ -736,6 +738,10 @@
                     <TextBlock Text="재생 대기열에서 곡을 두 번 클릭하거나 ▶ 버튼을 누르면 재생됩니다." FontSize="12" Margin="0,4,0,0" HorizontalAlignment="Center"
                                Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
                 </StackPanel>
+                </Grid>
+
+                <!-- 이퀄라이저: shown in place of the lyrics (EqualizerViewModel.IsPanelOpen, PlayView.Equalizer.cs) -->
+                <views:EqualizerPanel x:Name="EqPanel" Visibility="Collapsed"/>
             </Grid>
         </Grid>
 

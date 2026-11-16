@@ -1,0 +1,250 @@
+<UserControl x:Class="TuneSync.App.Views.EqualizerPanel"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             xmlns:vm="clr-namespace:TuneSync.App.ViewModels"
+             xmlns:views="clr-namespace:TuneSync.App.Views"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance Type=vm:EqualizerViewModel}"
+             Foreground="{DynamicResource TextFillColorPrimaryBrush}">
+    <!-- The equalizer on the 플레이 page, in place of the lyrics: made for a wide (landscape) area.
+         Presets run along the top as chips; the tone knobs sit on the left; the band sliders on the
+         right stand on the response curve, drawn on their own scale so each handle sits on it.
+         In a narrow area the knobs move into a row above the bands (EqualizerPanel.ApplyLayout). -->
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVisibility"/>
+        <Style x:Key="Section" TargetType="Border">
+            <Setter Property="Background" Value="{DynamicResource PlayerPanelBrush}"/>
+            <Setter Property="CornerRadius" Value="14"/>
+        </Style>
+        <Style x:Key="Caption" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}"/>
+            <Setter Property="HorizontalAlignment" Value="Center"/>
+        </Style>
+        <Style x:Key="Reading" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="HorizontalAlignment" Value="Center"/>
+        </Style>
+        <Style x:Key="HeaderButton" TargetType="ui:Button" BasedOn="{StaticResource PlayerIconButtonStyle}">
+            <Setter Property="Margin" Value="2,0,0,0"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}"/>
+        </Style>
+
+        <!-- a preset chip: a rounded label, filled with the accent while chosen -->
+        <Style x:Key="ChipItem" TargetType="ListBoxItem">
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Margin" Value="0,0,6,0"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ListBoxItem">
+                        <Border x:Name="Chip" CornerRadius="15" Padding="14,6" Background="{DynamicResource PlayerPanelBrush}"
+                                BorderThickness="1" BorderBrush="Transparent">
+                            <TextBlock x:Name="ChipText" Text="{Binding Name}" FontSize="13" Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Chip" Property="Background" Value="{DynamicResource PlayerHoverBrush}"/>
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="Chip" Property="Background" Value="{DynamicResource PlayerAccentBrush}"/>
+                                <Setter TargetName="ChipText" Property="Foreground" Value="{DynamicResource PlayerOnAccentBrush}"/>
+                                <Setter TargetName="ChipText" Property="FontWeight" Value="SemiBold"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </UserControl.Resources>
+
+    <Grid Margin="20,12,20,14">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- ===== title, switch, preset actions, back to the lyrics ===== -->
+        <Grid Grid.Row="0" Margin="0,0,0,10">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                <ui:SymbolIcon Symbol="DeviceEq24" FontSize="20" Foreground="{DynamicResource PlayerAccentBrush}" Margin="0,0,8,0"/>
+                <TextBlock Text="이퀄라이저" FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center"/>
+            </StackPanel>
+            <ui:ToggleSwitch Grid.Column="1" IsChecked="{Binding IsEnabled}" OnContent="켜짐" OffContent="꺼짐" Margin="18,0,0,0"
+                             VerticalAlignment="Center" ToolTip="끄면 파일에 담긴 소리 그대로 재생합니다"/>
+
+            <ui:Button Grid.Column="3" Content="가사" Icon="{ui:SymbolIcon SlideText24}" Margin="12,0,0,0" Padding="12,5" CornerRadius="16"
+                       BorderThickness="0" Background="{DynamicResource PlayerHoverBrush}" MouseOverBackground="{DynamicResource PlayerTrackBrush}"
+                       Command="{Binding TogglePanelCommand}" ToolTip="이퀄라이저를 닫고 가사로 돌아갑니다 (Esc)"/>
+        </Grid>
+
+        <!-- ===== presets as chips ("사용자 지정" leads while the bands match none) ===== -->
+        <Grid Grid.Row="1" Margin="0,0,0,12">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <Border x:Name="CustomChip" CornerRadius="15" Padding="14,6" Margin="0,0,6,0" Background="{DynamicResource PlayerAccentBrush}"
+                    VerticalAlignment="Center" Visibility="Collapsed">
+                <TextBlock Text="사용자 지정" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource PlayerOnAccentBrush}"/>
+            </Border>
+            <ScrollViewer x:Name="ChipScroller" Grid.Column="1" HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Disabled"
+                          PreviewMouseWheel="ChipScroller_PreviewMouseWheel">
+                <ListBox x:Name="PresetChips" ItemsSource="{Binding Presets}" SelectedItem="{Binding SelectedPreset}"
+                         ItemContainerStyle="{StaticResource ChipItem}" Background="Transparent" BorderThickness="0" Padding="0"
+                         ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Disabled">
+                    <ListBox.Template>
+                        <ControlTemplate TargetType="ListBox">
+                            <ItemsPresenter/>
+                        </ControlTemplate>
+                    </ListBox.Template>
+                    <ListBox.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <StackPanel Orientation="Horizontal"/>
+                        </ItemsPanelTemplate>
+                    </ListBox.ItemsPanel>
+                </ListBox>
+            </ScrollViewer>
+
+            <!-- preset actions, at the end of the chips -->
+            <StackPanel x:Name="PresetActions" Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Margin="8,0,0,0">
+                <ui:Button Style="{StaticResource HeaderButton}" Icon="{ui:SymbolIcon Save24}" ToolTip="지금 설정을 프리셋으로 저장" Click="Save_Click"/>
+                <ui:Button Style="{StaticResource HeaderButton}" Icon="{ui:SymbolIcon Rename24}" ToolTip="프리셋 이름 바꾸기"
+                           IsEnabled="{Binding CanEditPreset}" Click="Rename_Click"/>
+                <ui:Button Style="{StaticResource HeaderButton}" Icon="{ui:SymbolIcon Delete24}" ToolTip="프리셋 삭제"
+                           IsEnabled="{Binding CanEditPreset}" Click="Delete_Click"/>
+                <ui:Button Style="{StaticResource HeaderButton}" Icon="{ui:SymbolIcon ArrowReset24}" ToolTip="모두 처음 상태로 (플랫)"
+                           Command="{Binding ResetCommand}"/>
+            </StackPanel>
+
+            <!-- naming a preset (in place of the actions) -->
+            <StackPanel x:Name="NameBar" Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Visibility="Collapsed">
+                <ui:TextBox x:Name="NameBox" Width="180" PlaceholderText="프리셋 이름" MaxLength="30" KeyDown="NameBox_KeyDown"/>
+                <ui:Button x:Name="NameConfirm" Content="저장" Appearance="Primary" Margin="6,0,0,0" Click="NameConfirm_Click"/>
+                <ui:Button Content="취소" Margin="6,0,0,0" Click="NameCancel_Click"/>
+            </StackPanel>
+        </Grid>
+
+        <!-- ===== knobs | bands (wide), or knobs over bands (narrow) ===== -->
+        <Grid x:Name="Body" Grid.Row="2">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition x:Name="KnobColumn" Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+                <RowDefinition x:Name="KnobRow" Height="0"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+
+            <Border x:Name="KnobSection" Grid.Row="1" Grid.Column="0" Style="{StaticResource Section}" Padding="16,14" Margin="0,0,12,0">
+                <UniformGrid x:Name="Knobs" Columns="2" VerticalAlignment="Center">
+                    <views:EqKnob x:Name="BassKnob" Label="저음" Value="{Binding Bass}" Text="{Binding BassText}" Margin="6,4"
+                                  ToolTip="저음 전체를 올리거나 내립니다 (위아래로 끌기 · 휠 · 더블클릭하면 0)"/>
+                    <views:EqKnob x:Name="TrebleKnob" Label="고음" Value="{Binding Treble}" Text="{Binding TrebleText}" Margin="6,4"
+                                  ToolTip="고음 전체를 올리거나 내립니다 (위아래로 끌기 · 휠 · 더블클릭하면 0)"/>
+                    <views:EqKnob x:Name="WidthKnob" Label="스테레오 폭" Minimum="0" Maximum="2" Rest="1" Step="0.05" Value="{Binding Width}"
+                                  Text="{Binding WidthText}" Margin="6,4" ToolTip="좌우로 퍼진 정도: 0%는 모노, 100%는 원래대로 (더블클릭)"/>
+                    <views:EqKnob x:Name="BalanceKnob" Label="좌우 균형" Minimum="-1" Maximum="1" Step="0.05" Value="{Binding Balance}"
+                                  Text="{Binding BalanceShortText}" Margin="6,4" ToolTip="왼쪽·오른쪽 음량의 균형 (더블클릭하면 가운데)"/>
+                </UniformGrid>
+            </Border>
+
+            <Border x:Name="BandSection" Grid.Row="1" Grid.Column="1" Style="{StaticResource Section}" Padding="10,12,16,10">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="56"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*" MinHeight="120"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <!-- preamp, set apart on the left -->
+                    <TextBlock Grid.Row="0" Grid.Column="0" Text="{Binding PreampText}" Style="{StaticResource Reading}" Margin="0,0,0,4"/>
+                    <views:EqSlider Grid.Row="1" Grid.Column="0" Value="{Binding Preamp}" HorizontalAlignment="Center"
+                                    ToolTip="프리앰프: 전체 음량 (끌기 · 휠 · 더블클릭하면 0)"/>
+                    <TextBlock Grid.Row="2" Grid.Column="0" Text="프리앰프" Style="{StaticResource Caption}" Margin="0,6,0,0"/>
+                    <Rectangle Grid.Row="0" Grid.RowSpan="3" Grid.Column="1" Width="1" Margin="4,4,10,4" Fill="{DynamicResource PlayerTrackBrush}"/>
+
+                    <!-- readings over the bands -->
+                    <ItemsControl x:Name="BandReadings" Grid.Row="0" Grid.Column="2" ItemsSource="{Binding Bands}" Focusable="False" Margin="0,0,0,4">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate><UniformGrid Rows="1"/></ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="{x:Type vm:EqBandViewModel}">
+                                <TextBlock Text="{Binding GainText}" Style="{StaticResource Reading}"/>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+
+                    <!-- the response curve, on the sliders' own scale: ±12 dB at their ends, inset by the handle's radius -->
+                    <views:EqCurve Grid.Row="1" Grid.Column="2" Range="12" ThroughBands="True" Margin="0,7" Settings="{Binding Settings}"
+                                   Version="{Binding CurveVersion}" IsActive="{Binding IsEnabled}"/>
+                    <ItemsControl Grid.Row="1" Grid.Column="2" ItemsSource="{Binding Bands}" Focusable="False">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate><UniformGrid Rows="1"/></ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="{x:Type vm:EqBandViewModel}">
+                                <views:EqSlider Value="{Binding Gain}" HorizontalAlignment="Center"
+                                                ToolTip="끌거나 마우스 휠로 조절 · 더블클릭하면 0"/>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+
+                    <ItemsControl Grid.Row="2" Grid.Column="2" ItemsSource="{Binding Bands}" Focusable="False" Margin="0,6,0,0">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate><UniformGrid Rows="1"/></ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="{x:Type vm:EqBandViewModel}">
+                                <TextBlock Text="{Binding Label}" Style="{StaticResource Caption}"/>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </Grid>
+            </Border>
+        </Grid>
+
+        <!-- ===== headroom, bypass note, limiter ===== -->
+        <Grid Grid.Row="3" Margin="2,12,2,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <CheckBox IsChecked="{Binding AutoHeadroom}" Content="자동 헤드룸" VerticalAlignment="Center"
+                      ToolTip="올린 만큼 전체 음량을 미리 낮춰, 소리가 찌그러지지 않게 합니다. 끄면 넘치는 부분만 리미터가 눌러 줍니다."/>
+            <TextBlock Grid.Column="1" Text="{Binding HeadroomText}" Margin="8,0,0,0" FontSize="12" VerticalAlignment="Center"
+                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+            <StackPanel x:Name="BypassNotice" Grid.Column="2" Orientation="Horizontal" Margin="16,0,8,0" VerticalAlignment="Center" Visibility="Collapsed">
+                <ui:SymbolIcon Symbol="Info24" FontSize="14" Margin="0,0,6,0" Foreground="{DynamicResource PlayerAccentBrush}"/>
+                <TextBlock Text="이 곡은 Windows 기본 재생기로 재생되어 이퀄라이저가 적용되지 않습니다" FontSize="12"
+                           VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+            </StackPanel>
+            <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center"
+                        ToolTip="소리가 최대 크기를 넘으려 할 때 부드럽게 눌러 주는 장치입니다. 불이 자주 켜지면 프리앰프를 낮추세요.">
+                <Ellipse x:Name="LimiterLamp" Width="8" Height="8" Fill="{DynamicResource PlayerAccentBrush}" Opacity="0.22" Margin="0,0,6,0"/>
+                <TextBlock x:Name="LimiterText" Text="리미터" FontSize="12" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+            </StackPanel>
+        </Grid>
+    </Grid>
+</UserControl>

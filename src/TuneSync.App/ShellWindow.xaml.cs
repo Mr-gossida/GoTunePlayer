@@ -98,6 +98,14 @@ public partial class ShellWindow : FluentWindow
             e.Handled = true;
             return;
         }
+        // Esc: from the equalizer back to the lyrics (not while typing, e.g. a preset name)
+        if (e.Key == System.Windows.Input.Key.Escape && System.Windows.Input.Keyboard.FocusedElement is not System.Windows.Controls.TextBox
+            && _services.GetRequiredService<EqualizerViewModel>() is { IsPanelOpen: true } equalizer)
+        {
+            equalizer.IsPanelOpen = false;
+            e.Handled = true;
+            return;
+        }
         if (System.Windows.Input.Keyboard.Modifiers == System.Windows.Input.ModifierKeys.Control)
         {
             switch (e.Key)

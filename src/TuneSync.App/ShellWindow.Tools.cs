@@ -24,10 +24,23 @@ public partial class ShellWindow
 
     private void OpenSettings_Click(object sender, RoutedEventArgs e) => OpenTool<SettingsView>("설정", 820, 720, playerColors: true);
 
-    private void OpenEqualizer_Click(object sender, RoutedEventArgs e) => OpenEqualizer();
+    /// <summary>The playback bar's button: the equalizer in the lyrics' place, or back to the lyrics.</summary>
+    private void OpenEqualizer_Click(object sender, RoutedEventArgs e)
+    {
+        var equalizer = _services.GetRequiredService<EqualizerViewModel>();
+        equalizer.IsPanelOpen = !equalizer.IsPanelOpen;
+    }
 
-    /// <summary>The equalizer window (from the playback bar, or 설정 › 음향).</summary>
-    public void OpenEqualizer() => OpenTool<EqualizerView>("이퀄라이저", 780, 640, playerColors: true);
+    /// <summary>설정 › 음향's "이퀄라이저 열기": the player comes to the front with the equalizer
+    /// showing (the full player, if a mini player was up).</summary>
+    public void OpenEqualizer()
+    {
+        if (!IsVisible) ExitMiniMode();
+        ExitFocusMode(animate: false);
+        if (WindowState == WindowState.Minimized) WindowState = WindowState.Normal;
+        Activate();
+        _services.GetRequiredService<EqualizerViewModel>().IsPanelOpen = true;
+    }
 
     /// <summary>The queue's "태그 관리에서 보기": opens (or raises) the tag manager on that song.</summary>
     public void ShowInTagManager(LibraryFileViewModel file)

@@ -176,6 +176,5 @@ public partial class App : Application
         services.AddSingleton<MergeView>();
         services.AddSingleton<RenameView>();
         services.AddSingleton<SettingsView>();
-        services.AddSingleton<EqualizerView>();
     }
 }

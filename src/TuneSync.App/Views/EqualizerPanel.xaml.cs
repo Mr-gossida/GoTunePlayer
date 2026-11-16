@@ -4,49 +4,96 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
+using Microsoft.Extensions.DependencyInjection;
 using TuneSync.App.ViewModels;
 
 namespace TuneSync.App.Views;
 
-/// <summary>The 이퀄라이저 window's page: switch and presets on top, the response curve over the
-/// band sliders, the tone controls, and the headroom/limiter line. Takes the player's colors
-/// like 설정 does.</summary>
-public partial class EqualizerView : Page
+/// <summary>The equalizer panel the 플레이 page shows in place of the lyrics (see the XAML for the
+/// layout). This file: the player-colored accent, the wide/narrow layouts, the preset chips,
+/// naming presets, the bypass note and the limiter lamp.</summary>
+public partial class EqualizerPanel : UserControl
 {
+    /// <summary>Below this width the knobs go into a row above the bands.</summary>
+    private const double WideFrom = 720;
+
+    /// <summary>Below this width the dB reading over each band is left out.</summary>
+    private const double ReadingsFrom = 560;
+
     private readonly EqualizerViewModel _viewModel;
     private readonly PlaybackViewModel _playback;
     private readonly DispatcherTimer _limiterTimer;
     private DateTime _limiterLitUntil;
     private bool _renaming;
+    private bool? _wide;
 
-    public EqualizerView(EqualizerViewModel viewModel, PlaybackViewModel playback)
+    public EqualizerPanel()
     {
         InitializeComponent();
-        DataContext = _viewModel = viewModel;
-        _playback = playback;
+        var services = ((App)Application.Current).Services;
+        DataContext = _viewModel = services.GetRequiredService<EqualizerViewModel>();
+        _playback = services.GetRequiredService<PlaybackViewModel>();
 
-        // The limiter lamp: looked at a few times a second while the page is open.
+        // The limiter lamp: looked at a few times a second while the panel shows.
         _limiterTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(120) };
         _limiterTimer.Tick += (_, _) => ShowLimiter();
 
-        Loaded += (_, _) =>
+        SizeChanged += (_, _) => ApplyLayout();
+        IsVisibleChanged += (_, _) =>
         {
-            UseAccent();
-            PlayerPalette.Changed += UseAccent;
-            _playback.PropertyChanged += Playback_PropertyChanged;
-            _viewModel.PropertyChanged += ViewModel_PropertyChanged;
-            ShowBypass();
-            ShowCustomLabel();
-            _limiterTimer.Start();
+            if (IsVisible) Start();
+            else Stop();
         };
-        Unloaded += (_, _) =>
-        {
-            PlayerPalette.Changed -= UseAccent;
-            _playback.PropertyChanged -= Playback_PropertyChanged;
-            _viewModel.PropertyChanged -= ViewModel_PropertyChanged;
-            _limiterTimer.Stop();
-            CloseNameBar();
-        };
+    }
+
+    private void Start()
+    {
+        UseAccent();
+        PlayerPalette.Changed -= UseAccent;
+        PlayerPalette.Changed += UseAccent;
+        _playback.PropertyChanged -= Playback_PropertyChanged;
+        _playback.PropertyChanged += Playback_PropertyChanged;
+        _viewModel.PropertyChanged -= ViewModel_PropertyChanged;
+        _viewModel.PropertyChanged += ViewModel_PropertyChanged;
+        ShowBypass();
+        ShowCustomChip();
+        ApplyLayout();
+        _limiterTimer.Start();
+        Dispatcher.BeginInvoke(BringChosenChipIntoView, DispatcherPriority.Loaded);
+    }
+
+    private void Stop()
+    {
+        PlayerPalette.Changed -= UseAccent;
+        _playback.PropertyChanged -= Playback_PropertyChanged;
+        _viewModel.PropertyChanged -= ViewModel_PropertyChanged;
+        _limiterTimer.Stop();
+        CloseNameBar();
+    }
+
+    /// <summary>Wide: knobs in two columns on the left of the bands. Narrow: the four knobs in a
+    /// row above them, a little smaller.</summary>
+    private void ApplyLayout()
+    {
+        if (ActualWidth <= 0) return;
+        // Too narrow for a reading over each band: the handles and the curve say it.
+        BandReadings.Visibility = ActualWidth >= ReadingsFrom ? Visibility.Visible : Visibility.Collapsed;
+        var wide = ActualWidth >= WideFrom;
+        if (_wide == wide) return;
+        _wide = wide;
+        Grid.SetRow(KnobSection, wide ? 1 : 0);
+        Grid.SetColumnSpan(KnobSection, wide ? 1 : 2);
+        Grid.SetColumn(BandSection, wide ? 1 : 0);
+        Grid.SetColumnSpan(BandSection, wide ? 1 : 2);
+        KnobRow.Height = wide ? new GridLength(0) : GridLength.Auto;
+        KnobSection.Margin = wide ? new Thickness(0, 0, 12, 0) : new Thickness(0, 0, 0, 10);
+        KnobSection.Padding = wide ? new Thickness(16, 14, 16, 14) : new Thickness(12, 8, 12, 8);
+        Knobs.Columns = wide ? 2 : 4;
+        foreach (var knob in new[] { BassKnob, TrebleKnob, WidthKnob, BalanceKnob })
+            knob.Diameter = wide ? 84 : 64;
+        // four in a row: the short names fit under the smaller dials
+        WidthKnob.Label = wide ? "스테레오 폭" : "폭";
+        BalanceKnob.Label = wide ? "좌우 균형" : "균형";
     }
 
     /// <summary>The Windows accent the switch and boxes use, swapped for the player's (as in 설정).</summary>
@@ -68,12 +115,27 @@ public partial class EqualizerView : Page
 
     private void ViewModel_PropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(EqualizerViewModel.SelectedPreset)) ShowCustomLabel();
+        if (e.PropertyName != nameof(EqualizerViewModel.SelectedPreset)) return;
+        ShowCustomChip();
+        Dispatcher.BeginInvoke(BringChosenChipIntoView, DispatcherPriority.Loaded);
     }
 
     private void ShowBypass() => BypassNotice.Visibility = _playback.IsToneBypassed ? Visibility.Visible : Visibility.Collapsed;
 
-    private void ShowCustomLabel() => CustomLabel.Visibility = _viewModel.SelectedPreset is null ? Visibility.Visible : Visibility.Collapsed;
+    private void ShowCustomChip() => CustomChip.Visibility = _viewModel.SelectedPreset is null ? Visibility.Visible : Visibility.Collapsed;
+
+    private void BringChosenChipIntoView()
+    {
+        if (_viewModel.SelectedPreset is { } preset && PresetChips.ItemContainerGenerator.ContainerFromItem(preset) is FrameworkElement chip)
+            chip.BringIntoView();
+    }
+
+    /// <summary>The wheel scrolls the chip strip sideways.</summary>
+    private void ChipScroller_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
+    {
+        ChipScroller.ScrollToHorizontalOffset(ChipScroller.HorizontalOffset - e.Delta / 2.0);
+        e.Handled = true;
+    }
 
     /// <summary>Lit (with how much it is holding back) while the limiter works, and for a moment
     /// after, so a single peak can be seen.</summary>
@@ -93,7 +155,7 @@ public partial class EqualizerView : Page
         }
     }
 
-    // --- naming a preset: the preset box gives way to a name box ---
+    // --- naming a preset: the action buttons give way to a name box ---
 
     private void Save_Click(object sender, RoutedEventArgs e) => OpenNameBar(renaming: false);
 
@@ -105,7 +167,7 @@ public partial class EqualizerView : Page
         // Saving over a preset of one's own is the usual wish: offer its name.
         NameBox.Text = _viewModel.SelectedPreset is { IsBuiltIn: false } preset ? preset.Name : "";
         NameConfirm.Content = renaming ? "바꾸기" : "저장";
-        PresetBar.Visibility = Visibility.Collapsed;
+        PresetActions.Visibility = Visibility.Collapsed;
         NameBar.Visibility = Visibility.Visible;
         NameBox.Focus();
         NameBox.SelectAll();
@@ -114,7 +176,7 @@ public partial class EqualizerView : Page
     private void CloseNameBar()
     {
         NameBar.Visibility = Visibility.Collapsed;
-        PresetBar.Visibility = Visibility.Visible;
+        PresetActions.Visibility = Visibility.Visible;
     }
 
     private void NameCancel_Click(object sender, RoutedEventArgs e) => CloseNameBar();
