@@ -147,7 +147,7 @@ public partial class PlayView : Page
                 if (_tilePanel is not null) _tilePanel.TileSize = _viewModel.Playback.QueueTileSize;
                 break;
             case nameof(PlaybackViewModel.ShowIntroGauge):
-                ShowHeroGauge(_viewModel.Playback.IsIntroVisible && _viewModel.Playback.ShowIntroGauge, animate: false);
+                ShowHeroGauge(_viewModel.Playback.IsIntroVisible && !IsEqualizerOpen && _viewModel.Playback.ShowIntroGauge, animate: false);
                 break;
         }
     }

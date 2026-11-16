@@ -26,7 +26,9 @@ public partial class PlayView
     {
         var playback = _viewModel.Playback;
         var intro = playback.IsIntroVisible;
-        var hero = intro && playback.IsLyricsVisible && _compact != true;
+        // With the equalizer in the lyrics' place there's no intro to stage: the card stays on
+        // the left with the song's details.
+        var hero = intro && playback.IsLyricsVisible && _compact != true && !IsEqualizerOpen;
         animate = animate && IsLoaded && !_trackChanging;
         // Only while an intro is on (it holds looping animations) - and, after it, until its
         // fade-out (the style's exit animation) has played instead of vanishing at once.
@@ -38,9 +40,9 @@ public partial class PlayView
         // Measured on the cover, which sits at the card's top-left corner: the card's width and
         // its cover's size needn't match (a short window gets a smaller cover), and the glide
         // has to scale the card by how the cover changes.
-        System.Windows.Rect? before = animate && _hero && !intro && NowPlayingPanel.IsVisible ? BoundsInLayer(BigCover) : null;
+        System.Windows.Rect? before = animate && _hero && !hero && NowPlayingPanel.IsVisible ? BoundsInLayer(BigCover) : null;
         var spectrumBefore = PanelSpectrum.ActualWidth;
-        ShowHeroGauge(intro && playback.ShowIntroGauge, animate);
+        ShowHeroGauge(intro && !IsEqualizerOpen && playback.ShowIntroGauge, animate);
 
         if (hero != _hero)
         {
@@ -118,7 +120,7 @@ public partial class PlayView
         };
         fade.Completed += (_, _) =>
         {
-            if (_viewModel.Playback.IsIntroVisible) return; // a new intro began meanwhile
+            if (_viewModel.Playback.IsIntroVisible && !IsEqualizerOpen) return; // a new intro began meanwhile
             HeroGauge.BeginAnimation(OpacityProperty, null);
             HeroGauge.Visibility = System.Windows.Visibility.Collapsed;
         };

@@ -16,6 +16,9 @@ public partial class PlayView
     /// itself): closing the equalizer hides it again.</summary>
     private bool _lyricsOpenedForEqualizer;
 
+    /// <summary>The equalizer is showing in the lyrics' place (no intro staging meanwhile).</summary>
+    private bool IsEqualizerOpen => _equalizer?.IsPanelOpen == true;
+
     private void HookEqualizer()
     {
         _equalizer = ((App)Application.Current).Services.GetRequiredService<EqualizerViewModel>();
@@ -36,6 +39,8 @@ public partial class PlayView
         if (e.PropertyName != nameof(EqualizerViewModel.IsPanelOpen) || _equalizer is null) return;
         if (_equalizer.IsPanelOpen) ShowEqualizer(animate: true);
         else HideEqualizer();
+        // An intro's hero card steps back to the left while the equalizer shows, and returns after.
+        ApplyIntroStage(animate: true);
     }
 
     private void ShowEqualizer(bool animate)
