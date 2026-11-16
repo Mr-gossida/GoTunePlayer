@@ -26,8 +26,12 @@ public sealed class ToneSettings
     public double Balance { get; set; }
 
     /// <summary>Lowers the overall level by as much as the curve boosts its loudest frequency,
-    /// so a boost makes room for itself instead of pushing peaks into the limiter.</summary>
-    public bool AutoHeadroom { get; set; } = true;
+    /// so a boost makes room for itself instead of pushing peaks into the limiter. Off unless
+    /// asked for: it makes every boost sound quieter and duller than the slider promises.
+    /// (Saved under a new name: it used to be on by default, and a settings file written then
+    /// holds that default, not a choice.)</summary>
+    [System.Text.Json.Serialization.JsonPropertyName("Headroom")]
+    public bool AutoHeadroom { get; set; }
 
     /// <summary>The preset the bands were last set from: a built-in's id, a saved preset's name,
     /// or null once the bands were moved by hand.</summary>

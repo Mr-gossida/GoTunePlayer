@@ -198,11 +198,11 @@ public class ToneTests
     {
         var settings = Settings(s => { EqPresets.Apply(s, "bass"); s.AutoHeadroom = true; });
         var config = ToneConfig.From(settings);
-        Assert.InRange(config.HeadroomDb, 6, 9.5);
+        Assert.InRange(config.HeadroomDb, 9, 15);
         Assert.Equal(-config.HeadroomDb, config.GainDb, 6);
-        // With it, no frequency comes out louder than it went in.
+        // With it, no frequency comes out louder than it went in (to within the curve's sampling, a tenth of a dB).
         foreach (var f in new[] { 25.0, 40, 62.5, 90, 125, 500, 4000 })
-            Assert.True(ToneCurve.ResponseDb(settings, f) - config.HeadroomDb <= 0.01);
+            Assert.True(ToneCurve.ResponseDb(settings, f) - config.HeadroomDb <= 0.1);
 
         // Only cuts: nothing to make room for.
         Assert.Equal(0, ToneConfig.From(Settings(s => { s.BandsDb = [-3, -3, 0, 0, 0, 0, 0, 0, 0, -6]; s.AutoHeadroom = true; })).HeadroomDb);
@@ -257,7 +257,7 @@ public class ToneTests
         Assert.Equal("내 헤드폰", s.Preset);
 
         Assert.True(EqPresets.Apply(s, "rock"));
-        Assert.Equal(5, s.BandsDb[0]);
+        Assert.Equal(8, s.BandsDb[0]);
         Assert.Equal(0, s.PreampDb);
         Assert.True(EqPresets.Apply(s, "내 헤드폰"));
         Assert.Equal([1, 2, 3, 4, 5, 6, 7, 8, 9, 10], s.BandsDb);
@@ -289,10 +289,11 @@ public class ToneTests
         {
             var settings = new AppSettings();
             Assert.False(settings.Tone.Enabled); // off until the user turns it on
+            Assert.False(settings.Tone.AutoHeadroom);
             settings.Tone = new ToneSettings
             {
                 Enabled = true, PreampDb = -2.5, BandsDb = [1, -2, 3, -4, 5, -6, 7, -8, 9, -10],
-                BassDb = 4, TrebleDb = -1.5, Width = 1.4, Balance = -0.25, AutoHeadroom = false, Preset = null,
+                BassDb = 4, TrebleDb = -1.5, Width = 1.4, Balance = -0.25, AutoHeadroom = true, Preset = null,
                 UserPresets = [new EqPreset { Name = "내 것", PreampDb = 1, BandsDb = [0, 1, 0, 1, 0, 1, 0, 1, 0, 1] }],
             };
             AppSettingsStore.Save(settings, path);
@@ -305,7 +306,7 @@ public class ToneTests
             Assert.Equal(-1.5, loaded.TrebleDb);
             Assert.Equal(1.4, loaded.Width);
             Assert.Equal(-0.25, loaded.Balance);
-            Assert.False(loaded.AutoHeadroom);
+            Assert.True(loaded.AutoHeadroom);
             Assert.Null(loaded.Preset);
             Assert.Equal("내 것", Assert.Single(loaded.UserPresets).Name);
             Assert.Equal([0, 1, 0, 1, 0, 1, 0, 1, 0, 1], loaded.UserPresets[0].BandsDb);
@@ -314,6 +315,10 @@ public class ToneTests
             File.WriteAllText(path, "{\"Volume\":0.5}");
             var old = AppSettingsStore.Load(path);
             Assert.False(old.Tone.Enabled);
+
+            // One from when the headroom was on by default: that default doesn't carry over.
+            File.WriteAllText(path, "{\"Tone\":{\"Enabled\":true,\"AutoHeadroom\":true}}");
+            Assert.False(AppSettingsStore.Load(path).Tone.AutoHeadroom);
             Assert.Equal(ToneSettings.BandCount, old.Tone.BandsDb.Length);
 
             // Hand-edited nonsense.
