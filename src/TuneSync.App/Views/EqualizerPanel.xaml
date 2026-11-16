@@ -254,7 +254,19 @@
 
             <Border x:Name="ToneSection" Grid.Row="0" Grid.Column="0" Style="{StaticResource Section}" Padding="20,16" Margin="0,0,12,0" Width="280">
                 <DockPanel>
-                <!-- limiter, headroom, reverb: at the bottom of the tone card. Stacked (one per row,
+                <!-- what is coming out: at the very bottom of the card (the first thing docked to the bottom) -->
+                <Border x:Name="MeterBlock" DockPanel.Dock="Bottom" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource PlayerTrackBrush}"
+                        Padding="0,12,0,0" Margin="0,8,0,0">
+                    <StackPanel>
+                        <Grid Margin="0,0,0,8">
+                            <TextBlock Text="출력 레벨" FontSize="12" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                            <TextBlock Text="dBFS" FontSize="11" HorizontalAlignment="Right" Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
+                        </Grid>
+                        <views:EqLevelMeter x:Name="Meter"
+                                            ToolTip="스피커로 나가는 소리의 크기 (볼륨 적용 전). 채운 부분은 평균, 옅은 부분은 순간 최대, 눈금은 최근 최고점입니다."/>
+                    </StackPanel>
+                </Border>
+                <!-- limiter, headroom, reverb: above the level meter. Stacked (one per row,
                      the reading beside each pill) where there's height, side by side where there
                      isn't (EqualizerPanel.ArrangeSwitches). A pill shows a lamp (lit while it is at
                      work) and its name only, so it never changes size; how many dB reads beside it
@@ -348,18 +360,6 @@
                     </Border>
                 </Border>
             </Popup>
-                <!-- what is coming out, under the tone bars -->
-                <Border x:Name="MeterBlock" DockPanel.Dock="Bottom" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource PlayerTrackBrush}"
-                        Padding="0,12,0,0" Margin="0,8,0,0">
-                    <StackPanel>
-                        <Grid Margin="0,0,0,8">
-                            <TextBlock Text="출력 레벨" FontSize="12" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-                            <TextBlock Text="dBFS" FontSize="11" HorizontalAlignment="Right" Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
-                        </Grid>
-                        <views:EqLevelMeter x:Name="Meter"
-                                            ToolTip="스피커로 나가는 소리의 크기 (볼륨 적용 전). 채운 부분은 평균, 옅은 부분은 순간 최대, 눈금은 최근 최고점입니다."/>
-                    </StackPanel>
-                </Border>
                 <UniformGrid x:Name="ToneBars" Columns="1" VerticalAlignment="Center">
                     <views:EqBar x:Name="BassBar" Label="저음" Value="{Binding Bass}" Text="{Binding BassText}" Margin="0,10"
                                  ToolTip="저음 전체를 올리거나 내립니다 (클릭·끌기 · 휠 · 더블클릭하면 0)"/>
