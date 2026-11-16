@@ -16,8 +16,9 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     private readonly Network.NetworkLibrary _network;
 
-    public SettingsViewModel(AppSettings settings, MergeViewModel merge, PlaybackViewModel playback, Network.NetworkLibrary network)
+    public SettingsViewModel(AppSettings settings, MergeViewModel merge, PlaybackViewModel playback, Network.NetworkLibrary network, EqualizerViewModel equalizer)
     {
+        Equalizer = equalizer;
         _settings = settings;
         _merge = merge;
         _network = network;
@@ -280,6 +281,9 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     /// <summary>For playback options (the switch binds straight to it, which also saves).</summary>
     public PlaybackViewModel Playback { get; }
+
+    /// <summary>설정 › 음향.</summary>
+    public EqualizerViewModel Equalizer { get; }
 
     /// <summary>For library options (폴더·파일을 추가할 때).</summary>
     public LibraryViewModel Library { get; }

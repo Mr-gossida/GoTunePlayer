@@ -285,6 +285,9 @@
                                        Visibility="{Binding IsActive, Converter={StaticResource BoolToVisibility}}"/>
                         </StackPanel>
                     </ui:Button>
+                    <!-- 이퀄라이저: lit while it is on. DataContext is the EqualizerViewModel (set in code). -->
+                    <ui:Button x:Name="EqualizerButton" Style="{StaticResource PlayerToggleButtonStyle}" Margin="0,0,2,0" Icon="{ui:SymbolIcon DeviceEq24}"
+                               Tag="{Binding IsEnabled}" ToolTip="{Binding ToolTip}" Click="OpenEqualizer_Click"/>
                     <ui:Button Style="{StaticResource PlayerToggleButtonStyle}" Icon="{ui:SymbolIcon SlideText24}"
                                Tag="{Binding IsLyricsVisible}" Command="{Binding ToggleLyricsCommand}" ToolTip="가사 보기"/>
                     <ui:Button Style="{StaticResource PlayerToggleButtonStyle}" Margin="2,0,0,0" Icon="{ui:SymbolIcon TextBulletListLtr24}"

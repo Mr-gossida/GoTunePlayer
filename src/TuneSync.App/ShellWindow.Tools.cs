@@ -24,6 +24,11 @@ public partial class ShellWindow
 
     private void OpenSettings_Click(object sender, RoutedEventArgs e) => OpenTool<SettingsView>("설정", 820, 720, playerColors: true);
 
+    private void OpenEqualizer_Click(object sender, RoutedEventArgs e) => OpenEqualizer();
+
+    /// <summary>The equalizer window (from the playback bar, or 설정 › 음향).</summary>
+    public void OpenEqualizer() => OpenTool<EqualizerView>("이퀄라이저", 780, 640, playerColors: true);
+
     /// <summary>The queue's "태그 관리에서 보기": opens (or raises) the tag manager on that song.</summary>
     public void ShowInTagManager(LibraryFileViewModel file)
     {

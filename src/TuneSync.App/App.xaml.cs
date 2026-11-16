@@ -162,6 +162,7 @@ public partial class App : Application
         services.AddSingleton<LibraryViewModel>();
         services.AddSingleton<AutoMatchViewModel>();
         services.AddSingleton<TagEditorViewModel>();
+        services.AddSingleton<EqualizerViewModel>();
         services.AddSingleton<PlaybackViewModel>();
         services.AddSingleton<LibraryPageViewModel>();
         services.AddSingleton<PlayPageViewModel>();
@@ -175,5 +176,6 @@ public partial class App : Application
         services.AddSingleton<MergeView>();
         services.AddSingleton<RenameView>();
         services.AddSingleton<SettingsView>();
+        services.AddSingleton<EqualizerView>();
     }
 }

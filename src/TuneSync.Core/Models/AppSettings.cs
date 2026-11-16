@@ -127,6 +127,9 @@ public sealed class AppSettings
 
     /// <summary>How the screen saver is left: any input (default), or only the Esc key.</summary>
     public ScreenSaverExit ScreenSaverExit { get; set; } = ScreenSaverExit.AnyInput;
+
+    /// <summary>The equalizer and tone controls.</summary>
+    public ToneSettings Tone { get; set; } = new();
 }
 
 public enum ScreenSaverExit

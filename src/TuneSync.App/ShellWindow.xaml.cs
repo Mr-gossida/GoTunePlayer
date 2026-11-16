@@ -51,6 +51,7 @@ public partial class ShellWindow : FluentWindow
             EnterLastMiniMode();
         };
         SleepTimerButton.DataContext = services.GetRequiredService<SleepTimerViewModel>();
+        EqualizerButton.DataContext = services.GetRequiredService<EqualizerViewModel>();
         ScreenSaver.Start(services);
 
         // Cover backdrop: the old picture fades out while the new one fades in, instead of a cut.

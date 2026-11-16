@@ -13,24 +13,36 @@ namespace TuneSync.App.ViewModels;
 // and fetching the next one ahead of time.
 public sealed partial class PlaybackViewModel
 {
-    private bool _lastWasStream;
+    /// <summary>What the current player was opened from (to hand it to the other engine if this one fails).</summary>
+    private Audio.PlaySource? _openSource;
 
-    /// <summary>Opens a song in the player. A network song gets a brand-new player: Windows'
-    /// media player, once it has played one song over the local stream server, read only the
-    /// first half-megabyte of the next one and then sat at 0:00 (a fresh one plays it at once).</summary>
-    private void OpenSource(Uri uri)
+    /// <summary>Songs the app's own player couldn't decode: Windows' player gets them straight away.</summary>
+    private readonly HashSet<string> _windowsOnly = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Whether the playing song goes around the equalizer (it needed Windows' own player).</summary>
+    public bool IsToneBypassed => CurrentFile is not null && _player is Audio.WindowsEngine;
+
+    /// <summary>How hard the limiter is holding the sound down right now, in dB (0 = not at all).</summary>
+    public double TakeLimiterReductionDb() => _player is Audio.ToneEngine engine && IsPlaying ? engine.TakeLimiterReductionDb() : 0;
+
+    /// <summary>Opens a song in a brand-new player: the app's own (with the equalizer), or
+    /// Windows' media player for the songs only that one can play. (Each song getting its own
+    /// player also matters for Windows' player: once it has played one song over the local
+    /// stream server, it read only the first half-megabyte of the next one and then sat at 0:00.)</summary>
+    private void OpenSource(Audio.PlaySource source, bool windows = false)
     {
-        var stream = uri.Scheme == Uri.UriSchemeHttp;
-        if (stream || _lastWasStream)
-        {
-            var old = _player;
-            _player = new MediaPlayer { Volume = Volume, IsMuted = IsMuted };
-            Wire(_player);
-            try { old.Pause(); old.Close(); } catch { /* already closed */ }
-        }
-        _lastWasStream = stream;
-        _streamWatch = stream ? new StreamWatch(DateTime.UtcNow) : null;
-        _player.Open(uri);
+        var old = _player;
+        try { old.Pause(); old.Close(); } catch { /* already closed */ }
+        _openSource = source;
+        _streamWatch = source.IsStream ? new StreamWatch(DateTime.UtcNow) : null;
+        windows |= CurrentFile is { } file && _windowsOnly.Contains(file.Path);
+        Audio.IPlayerEngine player = windows ? new Audio.WindowsEngine(source) : new Audio.ToneEngine(source, _equalizer.Config);
+        player.Volume = Volume;
+        player.IsMuted = IsMuted;
+        _player = player;
+        Wire(player);
+        player.Open();
+        OnPropertyChanged(nameof(IsToneBypassed));
     }
 
     // ---- getting a stuck network song going again ----
@@ -65,7 +77,7 @@ public sealed partial class PlaybackViewModel
     {
         if (_streamWatch is not { } watch || CurrentFile is not { } file || _isSeeking || _seekTarget is not null) return;
         // Still opening (never got as far as playing) - watched too, but only for a dead download.
-        var opening = !IsPlaying && !_player.NaturalDuration.HasTimeSpan;
+        var opening = !IsPlaying && _player.NaturalDuration is null;
         if (!IsPlaying && !opening) return;
         var now = DateTime.UtcNow;
         if (position != watch.LastPosition)
@@ -97,17 +109,17 @@ public sealed partial class PlaybackViewModel
     {
         var retries = watch.Retries + 1;
         _pendingRestore = (position, true);
-        OpenSource(UriFor(path));
+        OpenSource(SourceFor(path));
         if (_streamWatch is not null) _streamWatch.Retries = retries;
     }
 
     /// <summary>What the player opens: a network song is streamed from the local cache server
     /// (it starts playing while it downloads); everything else is the file itself.</summary>
-    private Uri UriFor(string path)
+    private Audio.PlaySource SourceFor(string path)
     {
-        if (!TuneSync.Core.Models.RemotePath.IsRemote(path)) return new Uri(path);
+        if (!TuneSync.Core.Models.RemotePath.IsRemote(path)) return new Audio.PlaySource(path);
         _network.Cache.Focus(path); // this song gets the connection(s) and the bandwidth
-        return _network.Server.UrlFor(_network.Cache.Open(path));
+        return new Audio.PlaySource(_network.Cache.Open(path), _network.Server);
     }
 
     /// <summary>Fetches the song that will play next (if it's a network song) so it starts at once.</summary>

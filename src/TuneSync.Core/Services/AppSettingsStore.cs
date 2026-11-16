@@ -19,7 +19,9 @@ public static class AppSettingsStore
         try
         {
             var json = File.ReadAllText(path);
-            return JsonSerializer.Deserialize<AppSettings>(json) ?? new AppSettings();
+            var settings = JsonSerializer.Deserialize<AppSettings>(json) ?? new AppSettings();
+            (settings.Tone ??= new ToneSettings()).Normalize();
+            return settings;
         }
         catch
         {

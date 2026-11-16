@@ -9,15 +9,16 @@ using TuneSync.Core.Services;
 
 namespace TuneSync.App.ViewModels;
 
-/// <summary>Drives the always-visible playback bar: play/pause/seek/volume over a
-/// <see cref="MediaPlayer"/>, plus the synced-lyrics state the 플레이 page shows (falls back to
-/// plain text when the file's lyrics aren't LRC-timestamped).</summary>
+/// <summary>Drives the always-visible playback bar: play/pause/seek/volume over a player engine
+/// (<see cref="Audio.IPlayerEngine"/>), plus the synced-lyrics state the 플레이 page shows (falls
+/// back to plain text when the file's lyrics aren't LRC-timestamped).</summary>
 public sealed partial class PlaybackViewModel : ObservableObject, IDisposable
 {
     private readonly LibraryViewModel _library;
     private readonly AppSettings _settings;
-    /// <summary>Replaced by a fresh one for each network song (see <see cref="OpenSource"/>).</summary>
-    private MediaPlayer _player = new();
+    private readonly EqualizerViewModel _equalizer;
+    /// <summary>What plays the current song; a fresh one for each song opened (see <see cref="OpenSource"/>).</summary>
+    private Audio.IPlayerEngine _player = new Audio.NoEngine();
     private readonly DispatcherTimer _timer;
     private readonly DispatcherTimer _volumeSaveTimer;
     private bool _isSeeking;
@@ -105,11 +106,17 @@ public sealed partial class PlaybackViewModel : ObservableObject, IDisposable
 
     private readonly Network.NetworkLibrary _network;
 
-    public PlaybackViewModel(LibraryViewModel library, AppSettings settings, Network.NetworkLibrary network)
+    public PlaybackViewModel(LibraryViewModel library, AppSettings settings, Network.NetworkLibrary network, EqualizerViewModel equalizer)
     {
         _library = library;
         _settings = settings;
         _network = network;
+        _equalizer = equalizer;
+        // A slider moved in the equalizer reaches the playing song at once.
+        equalizer.ConfigChanged += config =>
+        {
+            if (_player is Audio.ToneEngine engine) engine.Config = config;
+        };
         library.FilesRemoving += OnFilesRemoving;
         LibraryFileViewModel.ArtistFirst = settings.QueueArtistFirst;
         PickSeekLook();
@@ -130,8 +137,6 @@ public sealed partial class PlaybackViewModel : ObservableObject, IDisposable
         _isMiniQueueExpanded = settings.MiniQueueExpanded;
         _keepScreenOn = settings.KeepScreenOnWhilePlaying;
         WatchForSessionToResume();
-        _player.Volume = _volume;
-        Wire(_player);
 
         _timer = new DispatcherTimer(DispatcherPriority.Normal) { Interval = TimeSpan.FromMilliseconds(200) };
 
@@ -201,19 +206,15 @@ public sealed partial class PlaybackViewModel : ObservableObject, IDisposable
 
         _pendingRestore = (position, play);
         _isReleased = false;
-        OpenSource(UriFor(resolved));
+        OpenSource(SourceFor(resolved));
     }
 
     /// <summary>The player's events; ones from a player already replaced are ignored.</summary>
-    private void Wire(MediaPlayer player)
+    private void Wire(Audio.IPlayerEngine player)
     {
-        player.MediaOpened += (sender, _) =>
+        player.MediaOpened += sender =>
         {
             if (!ReferenceEquals(sender, _player)) return;
-            // MediaPlayer falls back to its default volume (0.5) whenever a source is (re)opened,
-            // so the saved volume shown on the slider must be re-applied every time.
-            _player.Volume = Volume;
-            _player.IsMuted = IsMuted;
             RefreshDuration();
 
             if (_pendingRestore is { } restore)
@@ -233,13 +234,30 @@ public sealed partial class PlaybackViewModel : ObservableObject, IDisposable
             _player.Play();
             IsPlaying = true;
         };
-        player.MediaEnded += (sender, _) =>
+        player.MediaEnded += sender =>
         {
             if (ReferenceEquals(sender, _player)) AdvanceOrStop();
         };
         player.MediaFailed += (sender, e) =>
         {
             if (!ReferenceEquals(sender, _player)) return;
+            // The app's own player can't play this one (a format only Windows' media player
+            // reads, or no sound device it can open): Windows' player takes over - the song
+            // plays, just without the equalizer - from the same spot.
+            if (e.CanFallBack && _openSource is { } source && CurrentFile is { } current)
+            {
+                if (e.WasOpen) _pendingRestore = (CurrentOrShownPosition(), IsPlaying);
+                if (e.Unsupported) _windowsOnly.Add(current.Path);
+                try
+                {
+                    OpenSource(source, windows: true);
+                    return;
+                }
+                catch
+                {
+                    // not something Windows' player can be pointed at either: report it below
+                }
+            }
             // A network song whose stream broke off (its download was stopped as another song
             // was picked): open it again in a fresh player before giving up on it.
             if (_streamWatch is { Retries: < 3 } watch && CurrentFile is { } failed
@@ -251,7 +269,7 @@ public sealed partial class PlaybackViewModel : ObservableObject, IDisposable
             Stop();
             ResetTimeline();
             Toast.Error("재생할 수 없습니다",
-                $"{CurrentFile?.FileName ?? "파일"}\n{e.ErrorException?.Message ?? "알 수 없는 오류"}");
+                $"{CurrentFile?.FileName ?? "파일"}\n{e.Error?.Message ?? "알 수 없는 오류"}");
         };
     }
 
@@ -301,7 +319,7 @@ public sealed partial class PlaybackViewModel : ObservableObject, IDisposable
 
         try
         {
-            OpenSource(UriFor(path));
+            OpenSource(SourceFor(path));
         }
         catch (Exception ex)
         {
@@ -318,7 +336,7 @@ public sealed partial class PlaybackViewModel : ObservableObject, IDisposable
     /// the track as one second long and pin the thumb to the end.</summary>
     private void RefreshDuration()
     {
-        var seconds = _player.NaturalDuration.HasTimeSpan ? _player.NaturalDuration.TimeSpan.TotalSeconds : 0;
+        var seconds = _player.NaturalDuration?.TotalSeconds ?? 0;
         if (seconds <= 0 && CurrentFile is not null) seconds = CurrentFile.Model.Duration.TotalSeconds;
         if (seconds <= 0) return;
 

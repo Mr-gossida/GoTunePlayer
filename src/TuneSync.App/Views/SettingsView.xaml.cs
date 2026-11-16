@@ -38,6 +38,8 @@ public partial class SettingsView : Page
         Resources["TextOnAccentFillColorSecondaryBrush"] = onAccent;
     }
 
+    private void OpenEqualizer_Click(object sender, RoutedEventArgs e) => (Application.Current.MainWindow as ShellWindow)?.OpenEqualizer();
+
     private IEnumerable<StackPanel> CategoryPanels => Categories.Children.OfType<StackPanel>().Where(p => p.Tag is string);
 
     private void NavList_SelectionChanged(object sender, SelectionChangedEventArgs e)

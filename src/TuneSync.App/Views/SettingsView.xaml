@@ -80,6 +80,9 @@
                     <ListBoxItem Tag="Playback">
                         <StackPanel Orientation="Horizontal"><ui:SymbolIcon Symbol="Play24" Margin="0,0,10,0"/><TextBlock Text="재생"/></StackPanel>
                     </ListBoxItem>
+                    <ListBoxItem Tag="Sound">
+                        <StackPanel Orientation="Horizontal"><ui:SymbolIcon Symbol="DeviceEq24" Margin="0,0,10,0"/><TextBlock Text="음향"/></StackPanel>
+                    </ListBoxItem>
                     <ListBoxItem Tag="ScreenSaver">
                         <StackPanel Orientation="Horizontal"><ui:SymbolIcon Symbol="SlideMultiple24" Margin="0,0,10,0"/><TextBlock Text="화면 보호기"/></StackPanel>
                     </ListBoxItem>
@@ -208,6 +211,53 @@
                             </StackPanel>
                         </ui:CardControl.Header>
                         <ui:ToggleSwitch IsChecked="{Binding Playback.KeepScreenOn}" OnContent="켬" OffContent="끔"/>
+                    </ui:CardControl>
+                </StackPanel>
+
+                <!-- 음향: the equalizer's switch and preset; the sliders are in its own window -->
+                <StackPanel Tag="Sound">
+                    <ui:TextBlock Text="음향" Style="{StaticResource CategoryTitle}"/>
+                    <ui:TextBlock Text="이퀄라이저와 음색" Style="{StaticResource CategoryLead}"/>
+                    <ui:CardControl Style="{StaticResource Card}" Margin="0,8,0,4" Icon="{ui:SymbolIcon DeviceEq24}" Tag="이퀄라이저 EQ 음향 음색 저음 고음 켜기 끄기"
+                                    ToolTip="끄면 파일에 담긴 소리 그대로 재생합니다.">
+                        <ui:CardControl.Header>
+                            <StackPanel>
+                                <ui:TextBlock Text="이퀄라이저" FontTypography="Body"/>
+                                <ui:TextBlock Text="10밴드 이퀄라이저와 저음·고음, 스테레오 폭 조절" Style="{StaticResource Desc}"/>
+                            </StackPanel>
+                        </ui:CardControl.Header>
+                        <ui:ToggleSwitch IsChecked="{Binding Equalizer.IsEnabled}" OnContent="켬" OffContent="끔"/>
+                    </ui:CardControl>
+                    <ui:CardControl Style="{StaticResource Card}" Icon="{ui:SymbolIcon MusicNote224}" Tag="이퀄라이저 프리셋 플랫 저음 강화 보컬 록 팝 재즈 클래식 일렉트로닉 라우드니스 심야"
+                                    ToolTip="직접 맞춘 설정은 이퀄라이저 창에서 프리셋으로 저장할 수 있습니다.">
+                        <ui:CardControl.Header>
+                            <StackPanel>
+                                <ui:TextBlock Text="프리셋" FontTypography="Body"/>
+                                <ui:TextBlock Text="{Binding Equalizer.PresetName, StringFormat=지금: {0}}" Style="{StaticResource Desc}"/>
+                            </StackPanel>
+                        </ui:CardControl.Header>
+                        <ComboBox Width="200" ItemsSource="{Binding Equalizer.Presets}" DisplayMemberPath="Name"
+                                  SelectedItem="{Binding Equalizer.SelectedPreset}"/>
+                    </ui:CardControl>
+                    <ui:CardControl Style="{StaticResource Card}" Icon="{ui:SymbolIcon ShieldCheckmark24}" Tag="자동 헤드룸 클리핑 리미터 찌그러짐 음량"
+                                    ToolTip="끄면 전체 음량은 그대로 두고, 최대 크기를 넘는 부분만 리미터가 눌러 줍니다.">
+                        <ui:CardControl.Header>
+                            <StackPanel>
+                                <ui:TextBlock Text="자동 헤드룸" FontTypography="Body"/>
+                                <ui:TextBlock Text="올린 만큼 전체 음량을 미리 낮춰 소리가 찌그러지지 않게" Style="{StaticResource Desc}"/>
+                            </StackPanel>
+                        </ui:CardControl.Header>
+                        <ui:ToggleSwitch IsChecked="{Binding Equalizer.AutoHeadroom}" OnContent="켬" OffContent="끔"/>
+                    </ui:CardControl>
+                    <ui:CardControl Style="{StaticResource Card}" Icon="{ui:SymbolIcon Options24}" Tag="이퀄라이저 열기 밴드 슬라이더 프리앰프 좌우 균형 스테레오 폭"
+                                    ToolTip="재생 바의 이퀄라이저 버튼으로도 열 수 있습니다.">
+                        <ui:CardControl.Header>
+                            <StackPanel>
+                                <ui:TextBlock Text="세부 조절" FontTypography="Body"/>
+                                <ui:TextBlock Text="밴드별 슬라이더, 저음·고음, 스테레오 폭, 좌우 균형" Style="{StaticResource Desc}"/>
+                            </StackPanel>
+                        </ui:CardControl.Header>
+                        <ui:Button Content="이퀄라이저 열기" Icon="{ui:SymbolIcon Open24}" Click="OpenEqualizer_Click"/>
                     </ui:CardControl>
                 </StackPanel>
 
