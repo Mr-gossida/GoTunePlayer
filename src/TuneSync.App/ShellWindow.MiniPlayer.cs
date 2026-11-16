@@ -41,6 +41,7 @@ public partial class ShellWindow
         _mini.Show();
         _mini.Activate();
         Hide();
+        LeaveTray();
     }
 
     /// <summary>The window hotkeys (설정 › 단축키): the mini player in and out, the HUD on and off.</summary>
@@ -66,6 +67,7 @@ public partial class ShellWindow
         RestoreFromMinimized();
         Activate();
         _mini?.Hide();
+        LeaveTray();
     }
 
     /// <summary>Normal or maximized - the window's state before it was minimized.</summary>

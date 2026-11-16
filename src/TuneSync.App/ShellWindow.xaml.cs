@@ -55,6 +55,7 @@ public partial class ShellWindow : FluentWindow
         SleepTimerButton.DataContext = services.GetRequiredService<SleepTimerViewModel>();
         EqualizerButton.DataContext = services.GetRequiredService<EqualizerViewModel>();
         ScreenSaver.Start(services);
+        SetUpTray();
 
         // Cover backdrop: the old picture fades out while the new one fades in, instead of a cut.
         playback.PropertyChanging += (_, e) =>
@@ -153,6 +154,7 @@ public partial class ShellWindow : FluentWindow
     protected override void OnClosed(EventArgs e)
     {
         _mini?.Close();
+        _tray?.Dispose();
         base.OnClosed(e);
     }
 
@@ -220,6 +222,15 @@ public partial class ShellWindow : FluentWindow
 
     protected override void OnClosing(CancelEventArgs e)
     {
+        // 설정 › 닫기 버튼을 누르면 › 시스템 트레이로 숨기기: hide and keep playing. (Nothing is lost
+        // while hidden, so unsaved tag edits are only asked about on a real exit.)
+        if (!_exitRequested && !IsClosing && _settings.CloseAction == CloseAction.Tray)
+        {
+            e.Cancel = true;
+            HideToTray();
+            return;
+        }
+
         // Unsaved tag edits: ask before they're lost.
         var editor = _services.GetService<TagEditorViewModel>();
         if (!_discardConfirmed && editor is { HasPending: true })
@@ -227,11 +238,15 @@ public partial class ShellWindow : FluentWindow
             e.Cancel = true;
             Dispatcher.BeginInvoke(async () =>
             {
+                if (IsInTray) RestoreFromTray(); // 종료 from the tray: the question needs a window
                 if (WindowState == WindowState.Minimized) WindowState = WindowState.Normal;
                 Activate();
                 if (!await Dialogs.ConfirmAsync("저장하지 않은 태그 변경",
                         $"저장하지 않은 변경 내용이 {editor.PendingFileCount}곡 있습니다. 저장하지 않고 닫을까요?", "저장하지 않고 닫기"))
+                {
+                    _exitRequested = false; // stays open; the close button goes back to what it's set to
                     return;
+                }
                 _discardConfirmed = true;
                 Close();
             });

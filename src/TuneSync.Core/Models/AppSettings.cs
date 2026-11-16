@@ -125,6 +125,13 @@ public sealed class AppSettings
     /// sending it to the taskbar.</summary>
     public bool MinimizeToMini { get; set; }
 
+    /// <summary>What the main window's close button (and the mini player's) does: quit, or hide
+    /// to the notification area and keep playing.</summary>
+    public CloseAction CloseAction { get; set; } = CloseAction.Exit;
+
+    /// <summary>The one-time "still playing in the notification area" notice has been shown.</summary>
+    public bool TrayNoticeShown { get; set; }
+
     /// <summary>How the screen saver is left: any input (default), or only the Esc key.</summary>
     public ScreenSaverExit ScreenSaverExit { get; set; } = ScreenSaverExit.AnyInput;
 
@@ -139,6 +146,14 @@ public sealed class AppSettings
 
     /// <summary>The always-on-top HUD.</summary>
     public HudSettings Hud { get; set; } = new();
+}
+
+public enum CloseAction
+{
+    /// <summary>Closing the window quits the app.</summary>
+    Exit,
+    /// <summary>Closing hides the player to the notification area; music keeps playing.</summary>
+    Tray,
 }
 
 public enum ScreenSaverExit

@@ -271,6 +271,18 @@
                         </ui:CardControl.Header>
                         <ui:ToggleSwitch IsChecked="{Binding MinimizeToMini}" OnContent="켬" OffContent="끔"/>
                     </ui:CardControl>
+                    <ui:CardControl Style="{StaticResource Card}" Icon="{ui:SymbolIcon Dismiss24}"
+                                    Tag="닫기 버튼 종료 끄기 시스템 트레이 알림 영역 백그라운드 숨기기 계속 재생 X"
+                                    ToolTip="시스템 트레이로 숨기면 창을 닫아도 음악이 계속 재생됩니다. 트레이 아이콘을 누르면 플레이어가 다시 열리고, 마우스 오른쪽 단추로 누르면 재생 버튼과 [종료]가 있는 메뉴가 나옵니다.">
+                        <ui:CardControl.Header>
+                            <StackPanel>
+                                <ui:TextBlock Text="닫기(✕) 버튼을 누르면" FontTypography="Body"/>
+                                <ui:TextBlock Text="트레이로 숨기면 창을 닫아도 음악이 계속 재생됩니다" Style="{StaticResource Desc}"/>
+                            </StackPanel>
+                        </ui:CardControl.Header>
+                        <ComboBox Width="200" ItemsSource="{Binding CloseActionOptions}" DisplayMemberPath="Label"
+                                  SelectedValuePath="Value" SelectedValue="{Binding CloseAction}" AutomationProperties.Name="닫기 버튼을 누르면"/>
+                    </ui:CardControl>
                     <ui:CardControl Style="{StaticResource Card}" Icon="{ui:SymbolIcon Desktop24}" Tag="화면 켜짐 유지 절전 모드 화면 꺼짐"
                                     ToolTip="음악이 재생되는 동안 화면이 꺼지거나 PC가 절전 모드로 들어가지 않게 합니다. 일시정지하거나 멈추면 원래대로 돌아갑니다.">
                         <ui:CardControl.Header>

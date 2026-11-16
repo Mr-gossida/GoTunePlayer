@@ -34,6 +34,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         _screenSaverMinutes = settings.ScreenSaverMinutes;
         _screenSaverExit = settings.ScreenSaverExit;
         _minimizeToMini = settings.MinimizeToMini;
+        _closeAction = settings.CloseAction;
         _cacheMegabytes = settings.StreamCacheMegabytes;
         _startWithWindows = AutoStart.IsEnabled();
         RefreshNetwork();
@@ -257,6 +258,23 @@ public sealed partial class SettingsViewModel : ObservableObject
     {
         _settings.MinimizeToMini = value;
         AppSettingsStore.Save(_settings);
+    }
+
+    [ObservableProperty]
+    private CloseAction _closeAction;
+
+    public IReadOnlyList<Choice<CloseAction>> CloseActionOptions { get; } =
+    [
+        new(CloseAction.Exit, "프로그램 종료"),
+        new(CloseAction.Tray, "시스템 트레이로 숨기기"),
+    ];
+
+    partial void OnCloseActionChanged(CloseAction value)
+    {
+        _settings.CloseAction = value;
+        AppSettingsStore.Save(_settings);
+        // the tray icon appears (or goes) right away, not on the next close
+        (Application.Current?.MainWindow as ShellWindow)?.UpdateTray();
     }
 
     [ObservableProperty]

@@ -24,6 +24,8 @@ public static class AppSettingsStore
             (settings.Hotkeys ??= new HotkeySettings()).Normalize();
             (settings.Output ??= new OutputSettings()).Normalize();
             (settings.Hud ??= new HudSettings()).Normalize();
+            // an unknown value (a newer version's choice, a hand edit) falls back to quitting
+            if (!Enum.IsDefined(settings.CloseAction)) settings.CloseAction = CloseAction.Exit;
             return settings;
         }
         catch

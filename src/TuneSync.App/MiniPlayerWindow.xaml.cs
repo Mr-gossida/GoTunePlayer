@@ -261,12 +261,14 @@ public partial class MiniPlayerWindow : FluentWindow
     private void Rotate_Click(object sender, RoutedEventArgs e) =>
         _shell.EnterMiniMode(_mode == PlayerMode.MiniVertical ? PlayerMode.MiniHorizontal : PlayerMode.MiniVertical);
 
-    /// <summary>Closing the mini player quits the app, like closing the full player does.</summary>
+    /// <summary>Closing the mini player does what closing the full player does (설정 › 닫기 버튼을
+    /// 누르면): quit, or hide to the system tray.</summary>
     private void Close_Click(object sender, RoutedEventArgs e) => _shell.Close();
 
     protected override void OnClosing(CancelEventArgs e)
     {
-        // Closed by Windows (Alt+F4, taskbar): quit the whole app, not just leave it windowless.
+        // Closed by Windows (Alt+F4, taskbar): the whole app quits (or hides to the tray), never
+        // left windowless.
         if (!_shell.IsClosing)
         {
             e.Cancel = true;

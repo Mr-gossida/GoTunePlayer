@@ -48,6 +48,12 @@ public partial class App : Application
 
     private void BringToFront()
     {
+        // Hidden in the notification area: back the way it was (the mini player or the full one).
+        if (MainWindow is ShellWindow { IsInTray: true } shell)
+        {
+            shell.RestoreFromTray();
+            return;
+        }
         var window = Windows.OfType<Window>().FirstOrDefault(w => w is MiniPlayerWindow && w.IsVisible)
                      ?? MainWindow;
         if (window is null) return;

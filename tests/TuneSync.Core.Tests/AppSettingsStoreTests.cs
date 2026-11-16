@@ -61,4 +61,24 @@ public class AppSettingsStoreTests : IDisposable
 
         Assert.Empty(settings.LibraryFolders);
     }
+
+    [Fact]
+    public void CloseAction_DefaultsToExit_AndRoundTrips()
+    {
+        Assert.Equal(CloseAction.Exit, AppSettingsStore.Load(_path).CloseAction);
+
+        AppSettingsStore.Save(new AppSettings { CloseAction = CloseAction.Tray, TrayNoticeShown = true }, _path);
+        var reloaded = AppSettingsStore.Load(_path);
+
+        Assert.Equal(CloseAction.Tray, reloaded.CloseAction);
+        Assert.True(reloaded.TrayNoticeShown);
+    }
+
+    [Fact]
+    public void Load_UnknownCloseAction_FallsBackToExit()
+    {
+        File.WriteAllText(_path, "{ \"CloseAction\": 7 }");
+
+        Assert.Equal(CloseAction.Exit, AppSettingsStore.Load(_path).CloseAction);
+    }
 }
