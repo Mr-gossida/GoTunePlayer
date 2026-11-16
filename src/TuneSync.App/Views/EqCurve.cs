@@ -93,7 +93,7 @@ public sealed class EqCurve : FrameworkElement
         }
 
         // Over band sliders, the main line runs smoothly through their handles (what the hand
-        // set), and the real response - the tone knobs and the bands' overlap included - is the
+        // set), and the real response - the tone bars and the bands' overlap included - is the
         // thin line beside it.
         var main = ThroughBands ? ThroughHandles(settings.BandsDb, width) : response;
         var line = Polyline(main, closeTo: null);

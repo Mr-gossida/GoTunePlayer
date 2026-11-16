@@ -124,7 +124,7 @@ public sealed partial class EqualizerViewModel : ObservableObject
     public string BalanceText => Math.Abs(Balance) < 0.005 ? "가운데" : Balance < 0 ? $"왼쪽 {-Balance * 100:0}" : $"오른쪽 {Balance * 100:0}";
     public string PresetName => SelectedPreset?.Name ?? "사용자 지정";
 
-    /// <summary>The balance as it fits in the middle of its knob: 좌 40 / 가운데 / 우 40.</summary>
+    /// <summary>The balance as it fits beside its bar: 좌 40 / 가운데 / 우 40.</summary>
     public string BalanceShortText => Math.Abs(Balance) < 0.005 ? "가운데" : Balance < 0 ? $"좌 {-Balance * 100:0}" : $"우 {Balance * 100:0}";
 
     /// <summary>The equalizer is showing in place of the lyrics on the 플레이 page (the playback

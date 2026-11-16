@@ -10,9 +10,9 @@
              d:DataContext="{d:DesignInstance Type=vm:EqualizerViewModel}"
              Foreground="{DynamicResource TextFillColorPrimaryBrush}">
     <!-- The equalizer on the 플레이 page, in place of the lyrics: made for a wide (landscape) area.
-         Presets run along the top as chips; the tone knobs sit on the left; the band sliders on the
+         Presets run along the top as chips; the tone bars (balance-style, filling out from their middle) sit on the left; the band sliders on the
          right stand on the response curve, drawn on their own scale so each handle sits on it.
-         In a narrow area the knobs move into a row above the bands (EqualizerPanel.ApplyLayout). -->
+         In a narrow area the bars move into two columns above the bands (EqualizerPanel.ApplyLayout). -->
     <UserControl.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVisibility"/>
         <Style x:Key="Section" TargetType="Border">
@@ -138,27 +138,27 @@
             </StackPanel>
         </Grid>
 
-        <!-- ===== knobs | bands (wide), or knobs over bands (narrow) ===== -->
+        <!-- ===== tone bars | bands (wide), or bars over bands (narrow) ===== -->
         <Grid x:Name="Body" Grid.Row="2">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition x:Name="KnobColumn" Width="Auto"/>
+                <ColumnDefinition x:Name="ToneColumn" Width="Auto"/>
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
             <Grid.RowDefinitions>
-                <RowDefinition x:Name="KnobRow" Height="0"/>
+                <RowDefinition x:Name="ToneRow" Height="0"/>
                 <RowDefinition Height="*"/>
             </Grid.RowDefinitions>
 
-            <Border x:Name="KnobSection" Grid.Row="1" Grid.Column="0" Style="{StaticResource Section}" Padding="16,14" Margin="0,0,12,0">
-                <UniformGrid x:Name="Knobs" Columns="2" VerticalAlignment="Center">
-                    <views:EqKnob x:Name="BassKnob" Label="저음" Value="{Binding Bass}" Text="{Binding BassText}" Margin="6,4"
-                                  ToolTip="저음 전체를 올리거나 내립니다 (위아래로 끌기 · 휠 · 더블클릭하면 0)"/>
-                    <views:EqKnob x:Name="TrebleKnob" Label="고음" Value="{Binding Treble}" Text="{Binding TrebleText}" Margin="6,4"
-                                  ToolTip="고음 전체를 올리거나 내립니다 (위아래로 끌기 · 휠 · 더블클릭하면 0)"/>
-                    <views:EqKnob x:Name="WidthKnob" Label="스테레오 폭" Minimum="0" Maximum="2" Rest="1" Step="0.05" Value="{Binding Width}"
-                                  Text="{Binding WidthText}" Margin="6,4" ToolTip="좌우로 퍼진 정도: 0%는 모노, 100%는 원래대로 (더블클릭)"/>
-                    <views:EqKnob x:Name="BalanceKnob" Label="좌우 균형" Minimum="-1" Maximum="1" Step="0.05" Value="{Binding Balance}"
-                                  Text="{Binding BalanceShortText}" Margin="6,4" ToolTip="왼쪽·오른쪽 음량의 균형 (더블클릭하면 가운데)"/>
+            <Border x:Name="ToneSection" Grid.Row="1" Grid.Column="0" Style="{StaticResource Section}" Padding="20,16" Margin="0,0,12,0" Width="280">
+                <UniformGrid x:Name="ToneBars" Columns="1" VerticalAlignment="Center">
+                    <views:EqBar x:Name="BassBar" Label="저음" Value="{Binding Bass}" Text="{Binding BassText}" Margin="0,10"
+                                 ToolTip="저음 전체를 올리거나 내립니다 (클릭·끌기 · 휠 · 더블클릭하면 0)"/>
+                    <views:EqBar x:Name="TrebleBar" Label="고음" Value="{Binding Treble}" Text="{Binding TrebleText}" Margin="0,10"
+                                 ToolTip="고음 전체를 올리거나 내립니다 (클릭·끌기 · 휠 · 더블클릭하면 0)"/>
+                    <views:EqBar x:Name="WidthBar" Label="스테레오 폭" Minimum="0" Maximum="2" Rest="1" Step="0.05" Value="{Binding Width}"
+                                 Text="{Binding WidthText}" Margin="0,10" ToolTip="좌우로 퍼진 정도: 왼쪽 끝은 모노, 가운데는 원래대로 (더블클릭)"/>
+                    <views:EqBar x:Name="BalanceBar" Label="좌우 균형" Minimum="-1" Maximum="1" Step="0.05" Value="{Binding Balance}"
+                                 Text="{Binding BalanceShortText}" Margin="0,10" ToolTip="왼쪽·오른쪽 음량의 균형 (더블클릭하면 가운데)"/>
                 </UniformGrid>
             </Border>
 

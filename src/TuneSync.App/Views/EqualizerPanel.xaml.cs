@@ -14,7 +14,7 @@ namespace TuneSync.App.Views;
 /// naming presets, the bypass note and the limiter lamp.</summary>
 public partial class EqualizerPanel : UserControl
 {
-    /// <summary>Below this width the knobs go into a row above the bands.</summary>
+    /// <summary>Below this width the tone bars go into two columns above the bands.</summary>
     private const double WideFrom = 720;
 
     /// <summary>Below this width the dB reading over each band is left out.</summary>
@@ -71,8 +71,8 @@ public partial class EqualizerPanel : UserControl
         CloseNameBar();
     }
 
-    /// <summary>Wide: knobs in two columns on the left of the bands. Narrow: the four knobs in a
-    /// row above them, a little smaller.</summary>
+    /// <summary>Wide: the four tone bars stacked on the left of the bands. Narrow: in two columns
+    /// above them.</summary>
     private void ApplyLayout()
     {
         if (ActualWidth <= 0) return;
@@ -81,19 +81,18 @@ public partial class EqualizerPanel : UserControl
         var wide = ActualWidth >= WideFrom;
         if (_wide == wide) return;
         _wide = wide;
-        Grid.SetRow(KnobSection, wide ? 1 : 0);
-        Grid.SetColumnSpan(KnobSection, wide ? 1 : 2);
+        Grid.SetRow(ToneSection, wide ? 1 : 0);
+        Grid.SetColumnSpan(ToneSection, wide ? 1 : 2);
         Grid.SetColumn(BandSection, wide ? 1 : 0);
         Grid.SetColumnSpan(BandSection, wide ? 1 : 2);
-        KnobRow.Height = wide ? new GridLength(0) : GridLength.Auto;
-        KnobSection.Margin = wide ? new Thickness(0, 0, 12, 0) : new Thickness(0, 0, 0, 10);
-        KnobSection.Padding = wide ? new Thickness(16, 14, 16, 14) : new Thickness(12, 8, 12, 8);
-        Knobs.Columns = wide ? 2 : 4;
-        foreach (var knob in new[] { BassKnob, TrebleKnob, WidthKnob, BalanceKnob })
-            knob.Diameter = wide ? 84 : 64;
-        // four in a row: the short names fit under the smaller dials
-        WidthKnob.Label = wide ? "스테레오 폭" : "폭";
-        BalanceKnob.Label = wide ? "좌우 균형" : "균형";
+        ToneRow.Height = wide ? new GridLength(0) : GridLength.Auto;
+        ToneSection.Margin = wide ? new Thickness(0, 0, 12, 0) : new Thickness(0, 0, 0, 10);
+        ToneSection.Padding = wide ? new Thickness(20, 16, 20, 16) : new Thickness(8, 6, 8, 6);
+        ToneSection.Width = wide ? 280 : double.NaN;
+        // narrow: two bars side by side
+        ToneBars.Columns = wide ? 1 : 2;
+        foreach (var bar in new[] { BassBar, TrebleBar, WidthBar, BalanceBar })
+            bar.Margin = wide ? new Thickness(0, 10, 0, 10) : new Thickness(8, 2, 8, 2);
     }
 
     /// <summary>The Windows accent the switch and boxes use, swapped for the player's (as in 설정).</summary>
