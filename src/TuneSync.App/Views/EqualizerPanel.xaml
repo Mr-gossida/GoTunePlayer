@@ -211,8 +211,14 @@
                     <!-- the response curve, on the sliders' own scale: ±12 dB at their ends, inset by the handle's radius -->
                     <!-- the live spectrum, faint behind the curve -->
                     <views:EqSpectrum x:Name="Spectrum" Grid.Row="1" Grid.Column="2" Margin="0,7"/>
+                    <!-- Kept as a picture (BitmapCache): the spectrum under it changes every frame, and
+                         without the cache its dashed lines were worked out again each time. -->
                     <views:EqCurve Grid.Row="1" Grid.Column="2" Range="12" ThroughBands="True" Margin="0,7" Settings="{Binding Settings}"
-                                   Version="{Binding CurveVersion}" IsActive="{Binding IsEnabled}"/>
+                                   Version="{Binding CurveVersion}" IsActive="{Binding IsEnabled}">
+                        <views:EqCurve.CacheMode>
+                            <BitmapCache SnapsToDevicePixels="True"/>
+                        </views:EqCurve.CacheMode>
+                    </views:EqCurve>
                     <ItemsControl Grid.Row="1" Grid.Column="2" ItemsSource="{Binding Bands}" Focusable="False">
                         <ItemsControl.ItemsPanel>
                             <ItemsPanelTemplate><UniformGrid Rows="1"/></ItemsPanelTemplate>

@@ -7,7 +7,11 @@ namespace TuneSync.App.Views;
 /// <summary>The live spectrum behind the equalizer's curve: what is coming out of the speakers
 /// right now, as thin columns on the curve's own frequency scale (so a band's slider stands over
 /// the pitches it moves), with a small mark where each column last peaked. Kept faint, so the
-/// curve and the handles stay in front. Fed a frame at a time by the panel (<see cref="Show"/>).</summary>
+/// curve and the handles stay in front. Fed a frame at a time by the panel (<see cref="Show"/>).
+/// Drawn without anti-aliasing, on whole screen pixels: WPF works out anti-aliased edges on the
+/// CPU, and for a few hundred columns redrawn sixty times a second over a maximized window that
+/// alone held its render thread at 100% (frames 20-40 ms apart - the stutter). Bars on pixel
+/// edges need no smoothing anyway.</summary>
 public sealed class EqSpectrum : FrameworkElement
 {
     /// <summary>Roughly this many pixels per column.</summary>
@@ -24,6 +28,8 @@ public sealed class EqSpectrum : FrameworkElement
         SetResourceReference(AccentProperty, PlayerPalette.AccentKey);
         IsHitTestVisible = false;
         ClipToBounds = true;
+        RenderOptions.SetEdgeMode(this, EdgeMode.Aliased);
+        UseLayoutRounding = true; // its own corner on a whole pixel too
     }
 
     public Brush Accent { get => (Brush)GetValue(AccentProperty); set => SetValue(AccentProperty, value); }
@@ -43,8 +49,13 @@ public sealed class EqSpectrum : FrameworkElement
         double width = ActualWidth, height = ActualHeight;
         var count = _levels.Length;
         if (count == 0 || width < 8 || height < 8) return;
-        var column = width / count;
-        var bar = Math.Max(1, column - 2);
+        // in device pixels, so every edge lands on a pixel boundary
+        var dpi = VisualTreeHelper.GetDpi(this);
+        double sx = dpi.DpiScaleX, sy = dpi.DpiScaleY;
+        double widthPx = width * sx, heightPx = Math.Round(height * sy);
+        var column = widthPx / count;
+        var gap = column >= 4 ? Math.Round(2 * sx) : 1;
+        var mark = Math.Max(1, Math.Round(1.5 * sy));
 
         var bars = new StreamGeometry();
         var marks = new StreamGeometry();
@@ -52,11 +63,18 @@ public sealed class EqSpectrum : FrameworkElement
         {
             for (var i = 0; i < count; i++)
             {
-                var x = i * column + (column - bar) / 2;
-                var top = height * (1 - _levels[i]);
-                if (_levels[i] > 0.002f) Rectangle(b, new Rect(x, top, bar, height - top));
+                var left = Math.Round(i * column + gap / 2);
+                var right = Math.Max(left + 1, Math.Round((i + 1) * column - gap / 2));
+                if (_levels[i] > 0.002f)
+                {
+                    var top = Math.Round(heightPx * (1 - _levels[i]));
+                    if (top < heightPx) Rectangle(b, left, top, right, heightPx, sx, sy);
+                }
                 if (i < _peaks.Length && _peaks[i] > 0.01f)
-                    Rectangle(m, new Rect(x, Math.Min(height - 1.5, height * (1 - _peaks[i])), bar, 1.5));
+                {
+                    var top = Math.Min(heightPx - mark, Math.Round(heightPx * (1 - _peaks[i])));
+                    Rectangle(m, left, top, right, top + mark, sx, sy);
+                }
             }
         }
         bars.Freeze();
@@ -74,11 +92,12 @@ public sealed class EqSpectrum : FrameworkElement
         dc.Pop();
     }
 
-    private static void Rectangle(StreamGeometryContext context, Rect rect)
+    /// <summary>A rectangle given in device pixels, added in this element's units.</summary>
+    private static void Rectangle(StreamGeometryContext context, double left, double top, double right, double bottom, double sx, double sy)
     {
-        context.BeginFigure(rect.TopLeft, isFilled: true, isClosed: true);
-        context.LineTo(rect.TopRight, isStroked: false, isSmoothJoin: false);
-        context.LineTo(rect.BottomRight, isStroked: false, isSmoothJoin: false);
-        context.LineTo(rect.BottomLeft, isStroked: false, isSmoothJoin: false);
+        context.BeginFigure(new Point(left / sx, top / sy), isFilled: true, isClosed: true);
+        context.LineTo(new Point(right / sx, top / sy), isStroked: false, isSmoothJoin: false);
+        context.LineTo(new Point(right / sx, bottom / sy), isStroked: false, isSmoothJoin: false);
+        context.LineTo(new Point(left / sx, bottom / sy), isStroked: false, isSmoothJoin: false);
     }
 }
