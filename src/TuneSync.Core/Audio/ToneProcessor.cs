@@ -92,7 +92,7 @@ public sealed class ToneProcessor
         _sampleRate = sampleRate;
         _limiter = new PeakLimiter(sampleRate);
         Scope = new OutputScope(sampleRate);
-        _filterStepDb = 2 * ToneSettings.MaxGainDb * Step / (FullSwingSeconds * sampleRate);
+        _filterStepDb = 2 * ToneCurve.MaxFilterGainDb * Step / (FullSwingSeconds * sampleRate);
         _gainStep = (float)(1 - Math.Exp(-Step / (GainSettleSeconds * sampleRate)));
         Array.Fill(_filters, BiquadCoefficients.Identity);
     }

@@ -47,10 +47,102 @@ public class ToneTests
     [InlineData(12.0)]
     public void Peaking_HasItsGainAtTheCenter_AndNoneFarAway(double gain)
     {
-        var filter = BiquadCoefficients.Peaking(Rate, 1000, ToneCurve.BandQ, gain);
+        var filter = BiquadCoefficients.Peaking(Rate, 1000, 1.41, gain);
         Assert.Equal(gain, filter.MagnitudeDb(Rate, 1000), 3);
         Assert.InRange(Math.Abs(filter.MagnitudeDb(Rate, 40)), 0, 0.15);
         Assert.InRange(Math.Abs(filter.MagnitudeDb(Rate, 18000)), 0, 0.3);
+    }
+
+    /// <summary>The analog bell the digital one is modeled on.</summary>
+    private static double AnalogBellDb(double center, double q, double gainDb, double frequency)
+    {
+        var a = Math.Pow(10, gainDb / 40);
+        var s = new System.Numerics.Complex(0, frequency / center);
+        return 20 * Math.Log10(((s * s + s * a / q + 1) / (s * s + s / (a * q) + 1)).Magnitude);
+    }
+
+    [Theory]
+    [InlineData(44100, 16000, 9, 1.3)]
+    [InlineData(44100, 16000, -12, 1.4)]
+    [InlineData(48000, 16000, 12, 1.4)]
+    [InlineData(44100, 8000, 6, 1.1)]
+    [InlineData(44100, 1000, -6, 1.0)]
+    [InlineData(96000, 31.25, 12, 1.4)]
+    public void Peaking_KeepsTheAnalogShape_UpToTheTopOfTheRange(int rate, double center, double gain, double q)
+    {
+        var filter = BiquadCoefficients.Peaking(rate, center, q, gain);
+        for (var frequency = 20.0; frequency <= 20000; frequency *= 1.05)
+            Assert.Equal(AnalogBellDb(center, q, gain, frequency), filter.MagnitudeDb(rate, frequency), 0.9); // the cookbook bell: 5 dB off
+        // The cookbook bell was already back at 0 dB at half the sample rate; this one isn't.
+        if (center == 16000) Assert.True(Math.Abs(filter.MagnitudeDb(rate, 20000)) > Math.Abs(gain) * 0.4);
+    }
+
+    [Fact]
+    public void Peaking_IsStableAndFinite_ForEveryBandRateAndLevel()
+    {
+        foreach (var rate in new[] { 8000, 22050, 32000, 44100, 48000, 88200, 96000, 192000 })
+            foreach (var center in ToneCurve.BandFrequencies)
+                for (var gain = -ToneCurve.MaxFilterGainDb; gain <= ToneCurve.MaxFilterGainDb; gain += 0.75)
+                {
+                    var f = BiquadCoefficients.Peaking(rate, center, ToneCurve.BandQ(gain), gain);
+                    Assert.True(double.IsFinite(f.B0) && double.IsFinite(f.B1) && double.IsFinite(f.B2) && double.IsFinite(f.A1) && double.IsFinite(f.A2));
+                    Assert.True(Math.Abs(f.A2) < 1 && Math.Abs(f.A1) < 1 + f.A2, $"unstable at {rate} Hz, {center} Hz, {gain} dB");
+                    if (f != BiquadCoefficients.Identity) Assert.Equal(gain, f.MagnitudeDb(rate, center), 2);
+                    // A cut undoes the boost of the same size.
+                    var back = BiquadCoefficients.Peaking(rate, center, ToneCurve.BandQ(gain), -gain);
+                    foreach (var frequency in new[] { 50.0, 900, 3000, 0.4 * rate })
+                        Assert.Equal(0, f.MagnitudeDb(rate, frequency) + back.MagnitudeDb(rate, frequency), 6);
+                }
+    }
+
+    [Fact]
+    public void Bands_AreBroadForSmallMoves_AndTighterForLargeOnes()
+    {
+        Assert.True(ToneCurve.BandQ(1) < ToneCurve.BandQ(6));
+        Assert.True(ToneCurve.BandQ(6) < ToneCurve.BandQ(12));
+        Assert.Equal(ToneCurve.BandQ(-9), ToneCurve.BandQ(9));
+        Assert.Equal(ToneCurve.BandQ(12), ToneCurve.BandQ(18));
+    }
+
+    public static IEnumerable<object[]> SliderSets()
+    {
+        foreach (var preset in EqPresets.BuiltIn) yield return [preset.BandsDb];
+        yield return [new double[] { 12, 12, 12, 12, 12, 12, 12, 12, 12, 12 }];
+        yield return [new double[] { 0, 0, 0, 0, 0, 12, 0, 0, 0, 0 }];
+        yield return [new double[] { -12, 0, 6, 6, -3, 0, 9, -9, 3, 12 }];
+        yield return [new double[] { 0, 0, 0, 0, 0, 0, 0, 0, 0, -12 }];
+    }
+
+    [Theory]
+    [MemberData(nameof(SliderSets))]
+    public void TheCurve_PassesThroughEverySlider(double[] sliders)
+    {
+        var settings = Settings(s => s.BandsDb = sliders);
+        for (var i = 0; i < sliders.Length; i++)
+            Assert.Equal(sliders[i], ToneCurve.ResponseDb(settings, ToneCurve.BandFrequencies[i]), 0.15);
+        // ...and stays near them in between: no humps where neighbors overlap.
+        double low = Math.Min(0, sliders.Min()) - 2.5, high = Math.Max(0, sliders.Max()) + 2.5;
+        for (var frequency = 25.0; frequency < 19000; frequency *= 1.06)
+            Assert.InRange(ToneCurve.ResponseDb(settings, frequency), low, high);
+    }
+
+    [Fact]
+    public void TheCurve_IsTheSameAtASongsOwnRate()
+    {
+        // The filters are worked out for 48 kHz; at 44.1 kHz the top band must still land on its slider.
+        var settings = Settings(s => EqPresets.Apply(s, "treble"));
+        for (var i = 0; i < ToneSettings.BandCount; i++)
+            Assert.Equal(settings.BandsDb[i], ToneCurve.ResponseDb(settings, ToneCurve.BandFrequencies[i], 44100), 0.5);
+        Assert.Equal(settings.BandsDb[5], MeasuredGainDb(settings, 1000, 44100), 0.2);
+        Assert.Equal(settings.BandsDb[9], MeasuredGainDb(settings, 16000, 44100), 0.5);
+    }
+
+    [Fact]
+    public void FlatSliders_LeaveEveryFilterOff()
+    {
+        Span<double> gains = stackalloc double[ToneCurve.FilterCount];
+        ToneCurve.FilterGains(Settings(), gains);
+        Assert.All(gains.ToArray(), g => Assert.Equal(0, g));
     }
 
     [Fact]
@@ -223,8 +315,8 @@ public class ToneTests
         foreach (var f in new[] { 25.0, 40, 62.5, 90, 125, 500, 4000 })
             Assert.True(ToneCurve.ResponseDb(settings, f) - config.HeadroomDb <= 0.1);
 
-        // Only cuts: nothing to make room for.
-        Assert.Equal(0, ToneConfig.From(Settings(s => { s.BandsDb = [-3, -3, 0, 0, 0, 0, 0, 0, 0, -6]; s.AutoHeadroom = true; })).HeadroomDb);
+        // Only cuts: next to nothing to make room for (the curve rises a hair between a cut band and a flat one).
+        Assert.InRange(ToneConfig.From(Settings(s => { s.BandsDb = [-3, -3, 0, 0, 0, 0, 0, 0, 0, -6]; s.AutoHeadroom = true; })).HeadroomDb, 0, 0.6);
     }
 
     [Fact]
