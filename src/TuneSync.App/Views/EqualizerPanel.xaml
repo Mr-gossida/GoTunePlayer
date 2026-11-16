@@ -6,6 +6,7 @@
              xmlns:views="clr-namespace:TuneSync.App.Views"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:sys="clr-namespace:System;assembly=mscorlib"
              mc:Ignorable="d"
              d:DataContext="{d:DesignInstance Type=vm:EqualizerViewModel}"
              Foreground="{DynamicResource TextFillColorPrimaryBrush}">
@@ -61,6 +62,30 @@
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
+        </Style>
+        <!-- the lamp in a switch: faint while idle, lit (Tag True) while at work -->
+        <Style x:Key="Lamp" TargetType="Ellipse">
+            <Setter Property="Width" Value="7"/>
+            <Setter Property="Height" Value="7"/>
+            <Setter Property="Margin" Value="0,0,7,0"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Opacity" Value="0.35"/>
+            <Setter Property="Fill" Value="{Binding Foreground, RelativeSource={RelativeSource AncestorType=ToggleButton}}"/>
+            <Style.Triggers>
+                <Trigger Property="Tag">
+                    <Trigger.Value><sys:Boolean>True</sys:Boolean></Trigger.Value>
+                    <Setter Property="Opacity" Value="1"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+        <!-- what a switch is doing, beside it: a fixed slot, digits of one width -->
+        <Style x:Key="SwitchReading" TargetType="TextBlock">
+            <Setter Property="Width" Value="62"/>
+            <Setter Property="Margin" Value="8,0,6,0"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Typography.NumeralAlignment" Value="Tabular"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}"/>
         </Style>
         <Style x:Key="HeaderButton" TargetType="ui:Button" BasedOn="{StaticResource PlayerIconButtonStyle}">
             <Setter Property="Margin" Value="2,0,0,0"/>
@@ -293,32 +318,35 @@
         </Grid>
         </ScrollViewer>
 
-        <!-- ===== limiter, headroom, bypass note ===== -->
+        <!-- ===== limiter, headroom, bypass note =====
+             Each switch is a pill with a lamp (lit while it is at work) and its name only, so it
+             never changes size; what it is doing (how many dB) reads beside it, in a slot of its
+             own width, so nothing moves when either is switched or starts working. -->
         <Grid Grid.Row="3" Margin="2,12,2,0">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="Auto"/>
-                <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
-            <!-- 리미터: on/off, with a lamp (and how much it holds back) while it works -->
             <ToggleButton Style="{StaticResource OnOff}" IsChecked="{Binding Limiter}" VerticalAlignment="Center"
-                          ToolTip="켜면 소리가 최대 크기를 넘으려 할 때 부드럽게 눌러 찌그러짐을 막습니다. 불이 자주 켜지면 프리앰프를 낮추세요. 끄면 넘친 부분이 그대로 나가 찌그러질 수 있습니다.">
+                          ToolTip="켜면 소리가 최대 크기를 넘으려 할 때 부드럽게 눌러 찌그러짐을 막습니다. 불이 켜져 있는 동안 옆의 수치만큼 음량을 낮추고 있습니다. 끄면 넘친 부분이 그대로 나가 찌그러질 수 있습니다.">
                 <StackPanel Orientation="Horizontal">
-                    <Ellipse x:Name="LimiterLamp" Width="7" Height="7" Opacity="0.35" Margin="0,0,7,0" VerticalAlignment="Center"
-                             Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=ToggleButton}}"/>
-                    <TextBlock x:Name="LimiterText" Text="리미터" VerticalAlignment="Center"/>
+                    <Ellipse x:Name="LimiterLamp" Style="{StaticResource Lamp}"/>
+                    <TextBlock Text="리미터" VerticalAlignment="Center"/>
                 </StackPanel>
             </ToggleButton>
-            <ToggleButton Grid.Column="1" Style="{StaticResource OnOff}" IsChecked="{Binding AutoHeadroom}" Margin="8,0,0,0" VerticalAlignment="Center"
-                          ToolTip="켜면 올린 만큼 전체 음량을 미리 낮춰 리미터가 걸릴 일을 없앱니다(소리가 작아집니다). 끄면 음량은 그대로 둡니다.">
+            <TextBlock x:Name="LimiterReading" Grid.Column="1" Style="{StaticResource SwitchReading}"/>
+            <ToggleButton Grid.Column="2" Style="{StaticResource OnOff}" IsChecked="{Binding AutoHeadroom}" VerticalAlignment="Center"
+                          ToolTip="켜면 이퀄라이저로 올린 만큼 전체 음량을 미리 낮춰 리미터가 걸릴 일을 없앱니다(소리가 작아집니다). 불이 켜져 있는 동안 옆의 수치만큼 낮추고 있습니다. 끄면 음량은 그대로 둡니다.">
                 <StackPanel Orientation="Horizontal">
-                    <TextBlock Text="자동 헤드룸" VerticalAlignment="Center"/>
-                    <TextBlock Text="{Binding HeadroomText}" Margin="7,0,0,0" VerticalAlignment="Center"
-                               Visibility="{Binding AutoHeadroom, Converter={StaticResource BoolToVisibility}}"/>
+                    <Ellipse Style="{StaticResource Lamp}" Tag="{Binding IsHeadroomWorking}"/>
+                    <TextBlock Text="헤드룸" VerticalAlignment="Center"/>
                 </StackPanel>
             </ToggleButton>
-            <StackPanel x:Name="BypassNotice" Grid.Column="2" Orientation="Horizontal" Margin="16,0,8,0" VerticalAlignment="Center" Visibility="Collapsed">
+            <TextBlock Grid.Column="3" Style="{StaticResource SwitchReading}" Text="{Binding HeadroomText}"/>
+            <StackPanel x:Name="BypassNotice" Grid.Column="4" Orientation="Horizontal" Margin="16,0,8,0" VerticalAlignment="Center" Visibility="Collapsed">
                 <ui:SymbolIcon Symbol="Info24" FontSize="14" Margin="0,0,6,0" Foreground="{DynamicResource PlayerAccentBrush}"/>
                 <TextBlock Text="이 곡은 Windows 기본 재생기로 재생되어 이퀄라이저가 적용되지 않습니다" FontSize="12"
                            VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>

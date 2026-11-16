@@ -146,8 +146,12 @@ public sealed partial class EqualizerViewModel : ObservableObject
     /// <summary>Rename/delete apply to saved presets only.</summary>
     public bool CanEditPreset => SelectedPreset is { IsBuiltIn: false };
 
-    /// <summary>"자동 헤드룸 −4.2 dB" - how much the overall level was lowered to make room for the boosts.</summary>
-    public string HeadroomText => Config.HeadroomDb > 0.05 ? $"−{Config.HeadroomDb:0.0} dB" : "0 dB";
+    /// <summary>The headroom is on and lowering the overall level (its lamp is lit).</summary>
+    public bool IsHeadroomWorking => Config.HeadroomDb > 0.05;
+
+    /// <summary>"−4.2 dB" - how much the headroom lowers the overall level to make room for the
+    /// boosts; empty while it does nothing.</summary>
+    public string HeadroomText => IsHeadroomWorking ? $"−{Config.HeadroomDb:0.0} dB" : "";
 
     public string ToolTip => IsEnabled ? $"이퀄라이저 · 켜짐 ({PresetName})" : "이퀄라이저";
 
@@ -203,6 +207,7 @@ public sealed partial class EqualizerViewModel : ObservableObject
         if (_loading) return;
         Config = ToneConfig.From(_tone);
         CurveVersion++;
+        OnPropertyChanged(nameof(IsHeadroomWorking));
         OnPropertyChanged(nameof(HeadroomText));
         ConfigChanged?.Invoke(Config);
         _saveTimer.Stop();

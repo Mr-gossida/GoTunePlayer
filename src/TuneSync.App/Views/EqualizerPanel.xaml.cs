@@ -252,13 +252,13 @@ public partial class EqualizerPanel : UserControl
         if (reduction > 0.1)
         {
             _limiterLitUntil = DateTime.UtcNow.AddMilliseconds(700);
-            LimiterText.Text = $"리미터 −{reduction:0.0} dB";
-            LimiterLamp.Opacity = 1;
+            LimiterReading.Text = $"−{reduction:0.0} dB";
+            LimiterLamp.Tag = true;
         }
-        else if (LimiterLamp.Opacity > 0.5 && DateTime.UtcNow > _limiterLitUntil)
+        else if (LimiterLamp.Tag is true && DateTime.UtcNow > _limiterLitUntil)
         {
-            LimiterText.Text = "리미터";
-            LimiterLamp.Opacity = 0.35;
+            LimiterReading.Text = "";
+            LimiterLamp.Tag = false;
         }
     }
 
