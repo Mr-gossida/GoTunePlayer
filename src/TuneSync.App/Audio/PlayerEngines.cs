@@ -129,6 +129,9 @@ internal sealed class ToneEngine : IPlayerEngine
 
     public int Underruns => _player.Underruns;
 
+    /// <summary>The sound going out, for the live spectrum and meters.</summary>
+    public OutputScope? Scope => _player.Scope;
+
     private void Post(Action action) => _dispatcher.BeginInvoke(() =>
     {
         if (!_closed) action();

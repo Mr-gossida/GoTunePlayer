@@ -13,8 +13,8 @@ public sealed class EqCurve : FrameworkElement
 {
     /// <summary>Half an octave below the first band to half an octave above the last: ten equal
     /// columns, each centered on its band.</summary>
-    private static readonly double LowHz = ToneCurve.BandFrequencies[0] / Math.Sqrt(2);
-    private static readonly double HighHz = ToneCurve.BandFrequencies[^1] * Math.Sqrt(2);
+    internal static readonly double LowHz = ToneCurve.BandFrequencies[0] / Math.Sqrt(2);
+    internal static readonly double HighHz = ToneCurve.BandFrequencies[^1] * Math.Sqrt(2);
 
     /// <summary>The top and bottom of the scale, in dB: 12 to run exactly along band sliders
     /// drawn over it (their ±12 dB ends), so each slider's handle sits on the curve.</summary>

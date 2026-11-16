@@ -25,6 +25,10 @@ public partial class EqualizerPanel : UserControl
     private readonly DispatcherTimer _limiterTimer;
     private DateTime _limiterLitUntil;
     private bool _renaming;
+    private readonly Core.Audio.LiveAnalyzer _analyzer = new();
+    private readonly System.Diagnostics.Stopwatch _clock = System.Diagnostics.Stopwatch.StartNew();
+    private double _lastFrame;
+    private bool _drawnQuiet;
     private bool? _wide;
 
     public EqualizerPanel()
@@ -59,6 +63,9 @@ public partial class EqualizerPanel : UserControl
         ShowCustomChip();
         ApplyLayout();
         _limiterTimer.Start();
+        CompositionTarget.Rendering -= OnRendering;
+        CompositionTarget.Rendering += OnRendering;
+        _lastFrame = 0;
         Dispatcher.BeginInvoke(BringChosenChipIntoView, DispatcherPriority.Loaded);
     }
 
@@ -68,6 +75,7 @@ public partial class EqualizerPanel : UserControl
         _playback.PropertyChanged -= Playback_PropertyChanged;
         _viewModel.PropertyChanged -= ViewModel_PropertyChanged;
         _limiterTimer.Stop();
+        CompositionTarget.Rendering -= OnRendering;
         CloseNameBar();
     }
 
@@ -134,6 +142,22 @@ public partial class EqualizerPanel : UserControl
     {
         ChipScroller.ScrollToHorizontalOffset(ChipScroller.HorizontalOffset - e.Delta / 2.0);
         e.Handled = true;
+    }
+
+    /// <summary>The live spectrum and the meters: a new picture with each screen frame (at most
+    /// ~60 a second), from what is being heard right now. Once all has sunk to nothing (paused,
+    /// stopped) it stops redrawing until sound comes back.</summary>
+    private void OnRendering(object? sender, EventArgs e)
+    {
+        var now = _clock.Elapsed.TotalSeconds;
+        var seconds = now - _lastFrame;
+        if (_lastFrame > 0 && seconds < 0.014) return;
+        _lastFrame = now;
+        _analyzer.Update(_playback.OutputScope, Spectrum.Columns, EqCurve.LowHz, EqCurve.HighHz, seconds);
+        if (_analyzer.IsQuiet && _drawnQuiet) return;
+        _drawnQuiet = _analyzer.IsQuiet;
+        Spectrum.Show(_analyzer);
+        Meter.Show(_analyzer);
     }
 
     /// <summary>Lit (with how much it is holding back) while the limiter works, and for a moment

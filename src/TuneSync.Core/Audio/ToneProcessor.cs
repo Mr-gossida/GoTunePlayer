@@ -43,7 +43,8 @@ public sealed class ToneConfig
 
 /// <summary>The player's sound chain, run on stereo frames as they go to the speakers:
 /// preamp, bass shelf, ten equalizer bands, treble shelf, stereo width and balance, a limiter
-/// that keeps boosts from clipping, and the volume. Every level glides to a new setting over a
+/// that keeps boosts from clipping, and the volume (with a copy of the sound before the volume
+/// kept for the live displays, <see cref="Scope"/>). Every level glides to a new setting over a
 /// few hundredths of a second, so moving a slider while music plays never clicks or "zips".
 /// Nothing here allocates once it is built.</summary>
 public sealed class ToneProcessor
@@ -86,10 +87,14 @@ public sealed class ToneProcessor
     {
         _sampleRate = sampleRate;
         _limiter = new PeakLimiter(sampleRate);
+        Scope = new OutputScope(sampleRate);
         _filterStepDb = 2 * ToneSettings.MaxGainDb * Step / (FullSwingSeconds * sampleRate);
         _gainStep = (float)(1 - Math.Exp(-Step / (GainSettleSeconds * sampleRate)));
         Array.Fill(_filters, BiquadCoefficients.Identity);
     }
+
+    /// <summary>What comes out of the chain (before the volume), for the live displays.</summary>
+    public OutputScope Scope { get; }
 
     /// <summary>How many frames later the sound comes out (the limiter's look-ahead).</summary>
     public int LatencyFrames => _limiter.LatencyFrames;
@@ -236,6 +241,7 @@ public sealed class ToneProcessor
 
         // 4. Limiter.
         _limiter.Process(frames);
+        Scope.Write(frames);
 
         // 5. Volume.
         var volumeNext = Approach(_volume, Volume);

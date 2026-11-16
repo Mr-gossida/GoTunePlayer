@@ -154,6 +154,9 @@ public sealed class TonePlayer : IDisposable
         if (_processor is { } processor) processor.Volume = _muted ? 0 : _volume;
     }
 
+    /// <summary>The sound going out, for the live spectrum and meters (null until the song is opened).</summary>
+    public OutputScope? Scope => _processor?.Scope;
+
     /// <summary>How hard the limiter worked since the last call, in dB (0 = not at all).</summary>
     public double TakeLimiterReductionDb() => _processor?.TakeLimiterReductionDb() ?? 0;
 
@@ -557,6 +560,8 @@ public sealed class TonePlayer : IDisposable
                         _decodeWake.Set();
                         processor.Process(buffer.AsSpan(0, frames * 2));
                         Write(buffer, frames);
+                        // the newest frames reach the speakers once the device's queue ahead of them has played
+                        processor.Scope.DelayFrames = padding + frames;
                         lock (_lock)
                         {
                             if (padding == 0 && _consumed > 0) Underruns++;

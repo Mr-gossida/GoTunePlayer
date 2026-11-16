@@ -22,6 +22,10 @@ public sealed partial class PlaybackViewModel
     /// <summary>Whether the playing song goes around the equalizer (it needed Windows' own player).</summary>
     public bool IsToneBypassed => CurrentFile is not null && _player is Audio.WindowsEngine;
 
+    /// <summary>The sound going out right now, for the equalizer's live displays: null while
+    /// nothing plays or the song goes around the equalizer (Windows' player).</summary>
+    public Core.Audio.OutputScope? OutputScope => _player is Audio.ToneEngine engine && IsPlaying ? engine.Scope : null;
+
     /// <summary>How hard the limiter is holding the sound down right now, in dB (0 = not at all).</summary>
     public double TakeLimiterReductionDb() => _player is Audio.ToneEngine engine && IsPlaying ? engine.TakeLimiterReductionDb() : 0;
 

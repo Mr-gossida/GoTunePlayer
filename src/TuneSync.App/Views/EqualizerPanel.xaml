@@ -150,6 +150,19 @@
             </Grid.RowDefinitions>
 
             <Border x:Name="ToneSection" Grid.Row="1" Grid.Column="0" Style="{StaticResource Section}" Padding="20,16" Margin="0,0,12,0" Width="280">
+                <DockPanel>
+                <!-- what is coming out, under the tone bars -->
+                <Border x:Name="MeterBlock" DockPanel.Dock="Bottom" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource PlayerTrackBrush}"
+                        Padding="0,12,0,0" Margin="0,8,0,0">
+                    <StackPanel>
+                        <Grid Margin="0,0,0,8">
+                            <TextBlock Text="출력 레벨" FontSize="12" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                            <TextBlock Text="dBFS" FontSize="11" HorizontalAlignment="Right" Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
+                        </Grid>
+                        <views:EqLevelMeter x:Name="Meter"
+                                            ToolTip="스피커로 나가는 소리의 크기 (볼륨 적용 전). 채운 부분은 평균, 옅은 부분은 순간 최대, 눈금은 최근 최고점입니다."/>
+                    </StackPanel>
+                </Border>
                 <UniformGrid x:Name="ToneBars" Columns="1" VerticalAlignment="Center">
                     <views:EqBar x:Name="BassBar" Label="저음" Value="{Binding Bass}" Text="{Binding BassText}" Margin="0,10"
                                  ToolTip="저음 전체를 올리거나 내립니다 (클릭·끌기 · 휠 · 더블클릭하면 0)"/>
@@ -160,6 +173,7 @@
                     <views:EqBar x:Name="BalanceBar" Label="좌우 균형" Minimum="-1" Maximum="1" Step="0.05" Value="{Binding Balance}"
                                  Text="{Binding BalanceShortText}" Margin="0,10" ToolTip="왼쪽·오른쪽 음량의 균형 (더블클릭하면 가운데)"/>
                 </UniformGrid>
+                </DockPanel>
             </Border>
 
             <Border x:Name="BandSection" Grid.Row="1" Grid.Column="1" Style="{StaticResource Section}" Padding="10,12,16,10">
@@ -195,6 +209,8 @@
                     </ItemsControl>
 
                     <!-- the response curve, on the sliders' own scale: ±12 dB at their ends, inset by the handle's radius -->
+                    <!-- the live spectrum, faint behind the curve -->
+                    <views:EqSpectrum x:Name="Spectrum" Grid.Row="1" Grid.Column="2" Margin="0,7"/>
                     <views:EqCurve Grid.Row="1" Grid.Column="2" Range="12" ThroughBands="True" Margin="0,7" Settings="{Binding Settings}"
                                    Version="{Binding CurveVersion}" IsActive="{Binding IsEnabled}"/>
                     <ItemsControl Grid.Row="1" Grid.Column="2" ItemsSource="{Binding Bands}" Focusable="False">
