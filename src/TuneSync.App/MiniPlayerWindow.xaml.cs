@@ -28,7 +28,7 @@ public partial class MiniPlayerWindow : FluentWindow
         _settings = settings;
         _shell = shell;
         DataContext = playback;
-        TaskbarControls.Attach(this, playback, new("전체 플레이어로", "\uE740", () => _shell.ExitMiniMode()));
+        TaskbarControls.Attach(this, playback, new("전체 플레이어로", TaskbarControls.SwitchIcon.ToFull, () => _shell.ExitMiniMode()));
         WindowSnapper.Attach(this); // magnetic screen edges while dragging
 
         playback.PropertyChanged += Playback_PropertyChanged;

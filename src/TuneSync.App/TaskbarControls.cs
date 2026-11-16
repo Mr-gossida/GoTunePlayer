@@ -1,37 +1,47 @@
 using System.ComponentModel;
 using System.Globalization;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Data;
+using System.Windows.Interop;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using System.Windows.Shell;
 using TuneSync.App.ViewModels;
 
 namespace TuneSync.App;
 
-/// <summary>Previous / play-pause / next buttons under the window's taskbar thumbnail (like
-/// Windows Media Player and Spotify), plus full/mini player switching, and the playing song as the window title, which is what
-/// the taskbar and Alt+Tab show.</summary>
+/// <summary>The window's taskbar button: its thumbnail shows the playing song's album cover
+/// (not a shrunken window), with previous / play-pause / next buttons under it (like Windows
+/// Media Player and Spotify) plus full/mini player switching, and the playing song as the window
+/// title, which is what the taskbar and Alt+Tab show.</summary>
 public static class TaskbarControls
 {
     /// <summary>A fourth button that switches between the full and the mini player.</summary>
-    public sealed record SwitchButton(string Description, string Glyph, Action Click);
+    public sealed record SwitchButton(string Description, SwitchIcon Icon, Action Click);
+
+    public enum SwitchIcon { ToMini, ToFull }
 
     public static void Attach(Window window, PlaybackViewModel playback, SwitchButton? switchButton = null)
     {
-        var previous = new ThumbButtonInfo { Description = "이전 곡", Command = playback.PlayPreviousCommand, ImageSource = Glyph("\uE892") };
+        var previous = new ThumbButtonInfo { Description = "이전 곡", Command = playback.PlayPreviousCommand, ImageSource = Icons.Previous };
         var playPause = new ThumbButtonInfo { Command = playback.TogglePlayPauseCommand };
-        var next = new ThumbButtonInfo { Description = "다음 곡", Command = playback.PlayNextCommand, ImageSource = Glyph("\uE893") };
+        var next = new ThumbButtonInfo { Description = "다음 곡", Command = playback.PlayNextCommand, ImageSource = Icons.Next };
         window.TaskbarItemInfo = new TaskbarItemInfo { ThumbButtonInfos = [previous, playPause, next] };
         if (switchButton is not null)
         {
-            var toggle = new ThumbButtonInfo { Description = switchButton.Description, ImageSource = Glyph(switchButton.Glyph) };
+            var toggle = new ThumbButtonInfo
+            {
+                Description = switchButton.Description,
+                ImageSource = switchButton.Icon == SwitchIcon.ToMini ? Icons.ToMini : Icons.ToFull,
+            };
             toggle.Click += (_, _) => switchButton.Click();
             window.TaskbarItemInfo.ThumbButtonInfos.Add(toggle);
         }
 
         void Refresh()
         {
-            playPause.ImageSource = Glyph(playback.IsPlaying ? "\uE769" : "\uE768");
+            playPause.ImageSource = playback.IsPlaying ? Icons.Pause : Icons.Play;
             playPause.Description = playback.IsPlaying ? "일시정지" : "재생";
         }
         Refresh();
@@ -42,29 +52,210 @@ public static class TaskbarControls
             Converter = new TitleConverter(),
         });
 
+        var thumbnail = new CoverThumbnail(window, playback);
         PropertyChangedEventHandler handler = (_, e) =>
         {
             if (e.PropertyName == nameof(PlaybackViewModel.IsPlaying)) Refresh();
+            if (e.PropertyName is nameof(PlaybackViewModel.CurrentCover) or nameof(PlaybackViewModel.CurrentFile)) thumbnail.Invalidate();
         };
         playback.PropertyChanged += handler;
         window.Closed += (_, _) => playback.PropertyChanged -= handler;
     }
 
-    /// <summary>A white icon from the Windows icon font (Segoe Fluent Icons on Windows 11,
-    /// Segoe MDL2 Assets before it), sized for the taskbar thumbnail toolbar.</summary>
-    private static ImageSource Glyph(string glyph)
+    /// <summary>The thumbnail toolbar's icons, drawn as filled shapes on a 16-unit grid (the font
+    /// icons they replace were thin outlines that read as hollow boxes at this size). Each sits
+    /// centered in the same square, so the row looks even.</summary>
+    internal static class Icons
     {
-        var typeface = new Typeface(new FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets"), FontStyles.Normal, FontWeights.Normal, FontStretches.Normal);
-        var text = new FormattedText(glyph, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, typeface, 16, Brushes.White, 1.0);
-        var geometry = text.BuildGeometry(new Point(0, 0));
-        var drawing = new GeometryDrawing(Brushes.White, null, geometry);
-        var group = new DrawingGroup();
-        // Pad to a square so every icon sits centered at the same size.
-        group.Children.Add(new GeometryDrawing(Brushes.Transparent, null, new RectangleGeometry(new Rect(0, 0, 16, 16))));
-        group.Children.Add(drawing);
-        var image = new DrawingImage(group);
-        image.Freeze();
-        return image;
+        public static readonly ImageSource Play = Make(Filled("M 5,2.6 L 13.4,8 L 5,13.4 Z"));
+        public static readonly ImageSource Pause = Make(Filled("M 4,2.5 h 2.8 v 11 h -2.8 Z M 9.2,2.5 h 2.8 v 11 h -2.8 Z"));
+        public static readonly ImageSource Previous = Make(Filled("M 2.8,3 h 2 v 10 h -2 Z M 13.2,3 L 5.6,8 L 13.2,13 Z"));
+        public static readonly ImageSource Next = Make(Filled("M 11.2,3 h 2 v 10 h -2 Z M 2.8,3 L 10.4,8 L 2.8,13 Z"));
+        // a window with the small player in its corner / a small window opening out to full size
+        public static readonly ImageSource ToMini = Make(
+            Outline("M 2,3.5 h 12 v 9 h -12 Z"),
+            Filled("M 8,8.2 h 4.4 v 2.9 h -4.4 Z"));
+        public static readonly ImageSource ToFull = Make(
+            Outline("M 2,3.5 h 12 v 9 h -12 Z"),
+            Outline("M 6.5,9.5 L 10.5,5.5 M 7.6,5.5 H 10.5 V 8.4"));
+
+        private static GeometryDrawing Filled(string path) =>
+            new(Brushes.White, new Pen(Brushes.White, 0.6) { LineJoin = PenLineJoin.Round }, Geometry.Parse(path));
+
+        private static GeometryDrawing Outline(string path) =>
+            new(null, new Pen(Brushes.White, 1.4) { LineJoin = PenLineJoin.Round, StartLineCap = PenLineCap.Round, EndLineCap = PenLineCap.Round },
+                Geometry.Parse(path));
+
+        private static ImageSource Make(params GeometryDrawing[] parts)
+        {
+            var group = new DrawingGroup();
+            // the same square for every icon, so each sits centered at the same size
+            group.Children.Add(new GeometryDrawing(Brushes.Transparent, null, new RectangleGeometry(new Rect(0, 0, 16, 16))));
+            foreach (var part in parts) group.Children.Add(part);
+            var image = new DrawingImage(group);
+            image.Freeze();
+            return image;
+        }
+    }
+
+    /// <summary>Hands Windows the album cover as the taskbar thumbnail (DWM "iconic" thumbnail):
+    /// the window says it has a picture of its own, Windows asks for it at the size it wants, and
+    /// gets the cover fitted into it (a music note on a dark square when the song has none).
+    /// The full-screen preview while hovering the thumbnail (Aero Peek) is turned off - it would
+    /// show the window, not the cover.</summary>
+    internal sealed class CoverThumbnail
+    {
+        private const int WmDwmSendIconicThumbnail = 0x0323;
+        private const int WmDwmSendIconicLivePreviewBitmap = 0x0326;
+        private const int DwmwaForceIconicRepresentation = 7;
+        private const int DwmwaHasIconicBitmap = 10;
+        private const int DwmwaDisallowPeek = 11;
+
+        private readonly Window _window;
+        private readonly PlaybackViewModel _playback;
+        private IntPtr _handle;
+
+        public CoverThumbnail(Window window, PlaybackViewModel playback)
+        {
+            _window = window;
+            _playback = playback;
+            if (new WindowInteropHelper(window).Handle != IntPtr.Zero) Hook();
+            else window.SourceInitialized += (_, _) => Hook();
+        }
+
+        /// <summary>The thumbnail Windows gets, last made (for checking).</summary>
+        public int LastSide { get; private set; }
+
+        private void Hook()
+        {
+            _handle = new WindowInteropHelper(_window).Handle;
+            if (_handle == IntPtr.Zero) return;
+            var on = 1;
+            DwmSetWindowAttribute(_handle, DwmwaForceIconicRepresentation, ref on, sizeof(int));
+            DwmSetWindowAttribute(_handle, DwmwaHasIconicBitmap, ref on, sizeof(int));
+            DwmSetWindowAttribute(_handle, DwmwaDisallowPeek, ref on, sizeof(int));
+            HwndSource.FromHwnd(_handle)?.AddHook(WndProc);
+        }
+
+        /// <summary>The cover changed: Windows asks again the next time it shows the thumbnail.</summary>
+        public void Invalidate()
+        {
+            if (_handle != IntPtr.Zero) DwmInvalidateIconicBitmaps(_handle);
+        }
+
+        private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
+        {
+            if (msg == WmDwmSendIconicThumbnail)
+            {
+                var size = lParam.ToInt64();
+                int width = (int)((size >> 16) & 0xFFFF), height = (int)(size & 0xFFFF);
+                SetThumbnail(width, height);
+                handled = true;
+            }
+            else if (msg == WmDwmSendIconicLivePreviewBitmap)
+            {
+                handled = true; // peek is off: nothing to give
+            }
+            return IntPtr.Zero;
+        }
+
+        private void SetThumbnail(int maxWidth, int maxHeight)
+        {
+            if (maxWidth <= 0 || maxHeight <= 0) return;
+            // a square cover, as large as fits
+            var side = Math.Min(maxWidth, maxHeight);
+            var bitmap = CreateBitmap(side, side, Render(side));
+            if (bitmap == IntPtr.Zero) return;
+            try
+            {
+                DwmSetIconicThumbnail(_handle, bitmap, 0);
+                LastSide = side;
+            }
+            finally
+            {
+                DeleteObject(bitmap);
+            }
+        }
+
+        /// <summary>The cover drawn into a square of this many pixels (premultiplied BGRA).</summary>
+        public byte[] Render(int side)
+        {
+            var visual = new DrawingVisual();
+            using (var dc = visual.RenderOpen())
+            {
+                var area = new Rect(0, 0, side, side);
+                var corner = Math.Max(4, side * 0.04);
+                if (_playback.CurrentCover is { } cover)
+                {
+                    // fill the square (cut to the middle if it isn't one), with softly rounded corners
+                    dc.PushClip(new RectangleGeometry(area, corner, corner));
+                    var scale = Math.Max(side / cover.Width, side / cover.Height);
+                    double w = cover.Width * scale, h = cover.Height * scale;
+                    dc.DrawImage(cover, new Rect((side - w) / 2, (side - h) / 2, w, h));
+                    dc.Pop();
+                }
+                else
+                {
+                    var tint = Application.Current.TryFindResource(PlayerPalette.AccentKey) as Brush ?? Brushes.SlateBlue;
+                    dc.DrawRoundedRectangle(new SolidColorBrush(Color.FromRgb(0x2A, 0x2D, 0x36)), null, area, corner, corner);
+                    var note = new FormattedText("", CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
+                        new Typeface("Segoe Fluent Icons, Segoe MDL2 Assets"), side * 0.4, tint, 1.0);
+                    dc.DrawText(note, new Point((side - note.Width) / 2, (side - note.Height) / 2));
+                }
+            }
+            var target = new RenderTargetBitmap(side, side, 96, 96, PixelFormats.Pbgra32);
+            target.Render(visual);
+            var pixels = new byte[side * side * 4];
+            target.CopyPixels(pixels, side * 4, 0);
+            return pixels;
+        }
+
+        private static IntPtr CreateBitmap(int width, int height, byte[] pixels)
+        {
+            var info = new BitmapInfoHeader
+            {
+                Size = Marshal.SizeOf<BitmapInfoHeader>(),
+                Width = width,
+                Height = -height, // top-down
+                Planes = 1,
+                BitCount = 32,
+            };
+            var bitmap = CreateDIBSection(IntPtr.Zero, ref info, 0, out var bits, IntPtr.Zero, 0);
+            if (bitmap == IntPtr.Zero || bits == IntPtr.Zero) return IntPtr.Zero;
+            Marshal.Copy(pixels, 0, bits, pixels.Length);
+            return bitmap;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct BitmapInfoHeader
+        {
+            public int Size;
+            public int Width;
+            public int Height;
+            public short Planes;
+            public short BitCount;
+            public int Compression;
+            public int SizeImage;
+            public int XPelsPerMeter;
+            public int YPelsPerMeter;
+            public int ClrUsed;
+            public int ClrImportant;
+        }
+
+        [DllImport("dwmapi.dll")]
+        private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attribute, ref int value, int size);
+
+        [DllImport("dwmapi.dll")]
+        private static extern int DwmSetIconicThumbnail(IntPtr hwnd, IntPtr bitmap, int flags);
+
+        [DllImport("dwmapi.dll")]
+        private static extern int DwmInvalidateIconicBitmaps(IntPtr hwnd);
+
+        [DllImport("gdi32.dll")]
+        private static extern IntPtr CreateDIBSection(IntPtr hdc, ref BitmapInfoHeader info, uint usage, out IntPtr bits, IntPtr section, uint offset);
+
+        [DllImport("gdi32.dll")]
+        private static extern bool DeleteObject(IntPtr handle);
     }
 
     private sealed class TitleConverter : IValueConverter

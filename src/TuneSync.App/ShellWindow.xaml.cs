@@ -37,7 +37,7 @@ public partial class ShellWindow : FluentWindow
         Toast.Register(this, snackbar);
 
         PlayerFrame.Navigate(services.GetRequiredService<PlayView>());
-        TaskbarControls.Attach(this, playback, new("미니 플레이어로", "\uE73F", EnterLastMiniMode));
+        TaskbarControls.Attach(this, playback, new("미니 플레이어로", TaskbarControls.SwitchIcon.ToMini, EnterLastMiniMode));
         StateChanged += (_, _) =>
         {
             if (WindowState != WindowState.Minimized)
