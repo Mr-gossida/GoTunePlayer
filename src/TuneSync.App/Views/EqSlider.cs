@@ -64,7 +64,8 @@ public sealed class EqSlider : FrameworkElement
     private double Coerce(double value) => double.IsFinite(value) ? Math.Clamp(value, Minimum, Maximum) : Rest;
 
     protected override Size MeasureOverride(Size availableSize) =>
-        IsVertical ? new Size(Thumb * 2 + 6, double.IsInfinity(availableSize.Height) ? 160 : availableSize.Height)
+        // unbounded (measuring what an arrangement takes): no more than the band row's least height
+        IsVertical ? new Size(Thumb * 2 + 6, double.IsInfinity(availableSize.Height) ? 104 : availableSize.Height)
                    : new Size(double.IsInfinity(availableSize.Width) ? 160 : availableSize.Width, Thumb * 2 + 6);
 
     /// <summary>The track's length in pixels, and where along it (0..1, from the low end) a value sits.</summary>

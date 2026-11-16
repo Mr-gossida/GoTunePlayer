@@ -14,8 +14,14 @@ namespace TuneSync.App.Views;
 /// naming presets, the bypass note and the limiter lamp.</summary>
 public partial class EqualizerPanel : UserControl
 {
-    /// <summary>Below this width the tone bars go into two columns above the bands.</summary>
+    /// <summary>Below this width the tone bars go under the bands.</summary>
     private const double WideFrom = 720;
+
+    /// <summary>Under the bands, from this width the four bars fit in one row.</summary>
+    private const double FourAcrossFrom = 440;
+
+    /// <summary>The tone section's width beside the bands, and the gap between them.</summary>
+    private const double ToneWidth = 280, SectionGap = 12;
 
     /// <summary>Below this width the dB reading over each band is left out.</summary>
     private const double ReadingsFrom = 560;
@@ -29,7 +35,6 @@ public partial class EqualizerPanel : UserControl
     private readonly System.Diagnostics.Stopwatch _clock = System.Diagnostics.Stopwatch.StartNew();
     private double _lastFrame;
     private bool _drawnQuiet;
-    private bool? _wide;
 
     public EqualizerPanel()
     {
@@ -42,7 +47,6 @@ public partial class EqualizerPanel : UserControl
         _limiterTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(120) };
         _limiterTimer.Tick += (_, _) => ShowLimiter();
 
-        SizeChanged += (_, _) => ApplyLayout();
         IsVisibleChanged += (_, _) =>
         {
             if (IsVisible) Start();
@@ -79,29 +83,103 @@ public partial class EqualizerPanel : UserControl
         CloseNameBar();
     }
 
-    /// <summary>Wide: the four tone bars stacked on the left of the bands. Narrow: in two columns
-    /// above them.</summary>
+    /// <summary>Wide: the tone bars on the left of the bands. Narrow: under them. Either way
+    /// fitted to the height there is, the bands coming first: the roomiest arrangement that fits
+    /// (bars stacked, the level meter, a dB reading over each band), else more compact ones
+    /// (bars side by side, no meter, no readings). Only when even the last is too tall does the
+    /// body scroll (the bands at the top).</summary>
     private void ApplyLayout()
     {
-        if (ActualWidth <= 0) return;
-        // Too narrow for a reading over each band: the handles and the curve say it.
-        BandReadings.Visibility = ActualWidth >= ReadingsFrom ? Visibility.Visible : Visibility.Collapsed;
+        double width = BodyScroller.ActualWidth, height = BodyScroller.ActualHeight;
+        if (width <= 0 || height <= 0) return;
         var wide = ActualWidth >= WideFrom;
-        if (_wide == wide) return;
-        _wide = wide;
-        Grid.SetRow(ToneSection, wide ? 1 : 0);
+        var readings = ActualWidth >= ReadingsFrom;
+        var across = wide ? 2 : width >= FourAcrossFrom ? 4 : 2;
+        // the last one also drops the dB readings (the preamp's too): the handles show the levels
+        (int Columns, bool Meter, bool Readings)[] tries = wide
+            ? [(1, true, true), (2, true, true), (2, false, true), (2, false, false)]
+            : [(2, true, true), (across, true, true), (across, false, true), (across, false, false)];
+
+        Grid.SetColumn(ToneSection, 0);
+        Grid.SetRow(ToneSection, wide ? 0 : 1);
         Grid.SetColumnSpan(ToneSection, wide ? 1 : 2);
         Grid.SetColumn(BandSection, wide ? 1 : 0);
         Grid.SetColumnSpan(BandSection, wide ? 1 : 2);
-        ToneRow.Height = wide ? new GridLength(0) : GridLength.Auto;
-        ToneSection.Margin = wide ? new Thickness(0, 0, 12, 0) : new Thickness(0, 0, 0, 10);
-        ToneSection.Padding = wide ? new Thickness(20, 16, 20, 16) : new Thickness(8, 6, 8, 6);
-        ToneSection.Width = wide ? 280 : double.NaN;
-        // narrow: two bars side by side
-        ToneBars.Columns = wide ? 1 : 2;
-        foreach (var bar in new[] { BassBar, TrebleBar, WidthBar, BalanceBar })
-            bar.Margin = wide ? new Thickness(0, 10, 0, 10) : new Thickness(8, 2, 8, 2);
+        BottomRow.Height = wide ? new GridLength(0) : GridLength.Auto;
+        ToneSection.Margin = wide ? new Thickness(0, 0, SectionGap, 0) : new Thickness(0, 8, 0, 0);
+        ToneSection.Padding = wide ? new Thickness(20, 16, 20, 16) : new Thickness(8, 4, 8, 4);
+        ToneSection.Width = wide ? ToneWidth : double.NaN;
+
+        var need = 0.0;
+        foreach (var (columns, meter, showReadings) in tries)
+        {
+            ToneBars.Columns = columns;
+            foreach (var bar in new[] { BassBar, TrebleBar, WidthBar, BalanceBar })
+                bar.Margin = columns == 1 ? new Thickness(0, 10, 0, 10) : new Thickness(4, 2, 4, 2);
+            MeterBlock.Visibility = meter ? Visibility.Visible : Visibility.Collapsed;
+            // a reading over each band also needs the width for it
+            BandReadings.Visibility = showReadings && readings ? Visibility.Visible : Visibility.Collapsed;
+            PreampReading.Visibility = showReadings ? Visibility.Visible : Visibility.Collapsed;
+            // what this arrangement takes, measured with no limit on height (a parent keeps its
+            // last size until told its children changed)
+            Remeasure(ToneBars, ToneSection);
+            Remeasure(MeterBlock, ToneSection);
+            Remeasure(BandReadings, BandSection);
+            Remeasure(PreampReading, BandSection);
+            var bandWidth = wide ? width - ToneWidth - SectionGap : width;
+            BandSection.Measure(new Size(Math.Max(0, bandWidth), double.PositiveInfinity));
+            ToneSection.Measure(new Size(width, double.PositiveInfinity));
+            double bands = BandSection.DesiredSize.Height, tone = ToneSection.DesiredSize.Height;
+            need = wide ? Math.Max(bands, tone) : bands + tone;
+            if (need <= height) break;
+        }
+        // set as the body's least height: within it the bands take what is left over
+        Body.MinHeight = need;
     }
+
+    private static void Remeasure(DependencyObject from, UIElement upTo)
+    {
+        for (var at = from; at is not null; at = VisualTreeHelper.GetParent(at))
+        {
+            (at as UIElement)?.InvalidateMeasure();
+            if (at == upTo) break;
+        }
+    }
+
+    private void BodyScroller_SizeChanged(object sender, SizeChangedEventArgs e) => ApplyLayout();
+
+    // --- the preset chips: arrows and faded edges when there are more than fit ---
+
+    private void ChipScroller_ScrollChanged(object sender, ScrollChangedEventArgs e) => ShowChipArrows();
+
+    private void ShowChipArrows()
+    {
+        var offset = ChipScroller.HorizontalOffset;
+        var back = offset > 1;
+        var on = offset < ChipScroller.ScrollableWidth - 1;
+        ChipsBack.Visibility = back ? Visibility.Visible : Visibility.Collapsed;
+        ChipsOn.Visibility = on ? Visibility.Visible : Visibility.Collapsed;
+        var width = ChipScroller.ActualWidth;
+        if (!back && !on || width <= 0)
+        {
+            ChipScroller.OpacityMask = null;
+            return;
+        }
+        var fade = Math.Min(0.3, 64 / width);
+        var mask = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(1, 0) };
+        mask.GradientStops.Add(new GradientStop(back ? Colors.Transparent : Colors.Black, 0));
+        mask.GradientStops.Add(new GradientStop(Colors.Black, back ? fade : 0));
+        mask.GradientStops.Add(new GradientStop(Colors.Black, on ? 1 - fade : 1));
+        mask.GradientStops.Add(new GradientStop(on ? Colors.Transparent : Colors.Black, 1));
+        mask.Freeze();
+        ChipScroller.OpacityMask = mask;
+    }
+
+    private void ChipsBack_Click(object sender, RoutedEventArgs e) =>
+        ChipScroller.ScrollToHorizontalOffset(ChipScroller.HorizontalOffset - ChipScroller.ViewportWidth * 0.7);
+
+    private void ChipsOn_Click(object sender, RoutedEventArgs e) =>
+        ChipScroller.ScrollToHorizontalOffset(ChipScroller.HorizontalOffset + ChipScroller.ViewportWidth * 0.7);
 
     /// <summary>The Windows accent the switch and boxes use, swapped for the player's (as in 설정).</summary>
     private void UseAccent()

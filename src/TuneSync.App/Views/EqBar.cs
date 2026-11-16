@@ -134,17 +134,20 @@ public sealed class EqBar : FrameworkElement
         var family = new FontFamily("Segoe UI Variable Text, Segoe UI");
         var regular = new Typeface(family, FontStyles.Normal, FontWeights.Normal, FontStretches.Normal);
         var semibold = new Typeface(family, FontStyles.Normal, FontWeights.SemiBold, FontStretches.Normal);
-        if (Label.Length > 0)
-        {
-            var name = new FormattedText(Label, CultureInfo.CurrentUICulture, FlowDirection.LeftToRight, regular, 13, LabelBrush, dpi)
-                { MaxTextWidth = Math.Max(1, ActualWidth * 0.6), MaxLineCount = 1, Trimming = TextTrimming.CharacterEllipsis };
-            dc.DrawText(name, new Point(1, TextRow - 2 - name.Height));
-        }
+        // the reading at the right; the name takes what it leaves (shortened only when that's too little)
+        var readingWidth = 0.0;
         if (Text.Length > 0)
         {
             var reading = new FormattedText(Text, CultureInfo.CurrentUICulture, FlowDirection.LeftToRight, semibold, 13, hot ? Accent : TextBrush, dpi)
                 { MaxLineCount = 1 };
+            readingWidth = reading.Width;
             dc.DrawText(reading, new Point(ActualWidth - 1 - reading.Width, TextRow - 2 - reading.Height));
+        }
+        if (Label.Length > 0)
+        {
+            var name = new FormattedText(Label, CultureInfo.CurrentUICulture, FlowDirection.LeftToRight, regular, 13, LabelBrush, dpi)
+                { MaxTextWidth = Math.Max(1, ActualWidth - 2 - readingWidth - 6), MaxLineCount = 1, Trimming = TextTrimming.CharacterEllipsis };
+            dc.DrawText(name, new Point(1, TextRow - 2 - name.Height));
         }
     }
 

@@ -12,7 +12,7 @@
     <!-- The equalizer on the 플레이 page, in place of the lyrics: made for a wide (landscape) area.
          Presets run along the top as chips; the tone bars (balance-style, filling out from their middle) sit on the left; the band sliders on the
          right stand on the response curve, drawn on their own scale so each handle sits on it.
-         In a narrow area the bars move into two columns above the bands (EqualizerPanel.ApplyLayout). -->
+         In a narrow area the bars go under the bands; both fit the height there is (EqualizerPanel.ApplyLayout). -->
     <UserControl.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVisibility"/>
         <Style x:Key="Section" TargetType="Border">
@@ -101,8 +101,11 @@
                     VerticalAlignment="Center" Visibility="Collapsed">
                 <TextBlock Text="사용자 지정" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource PlayerOnAccentBrush}"/>
             </Border>
-            <ScrollViewer x:Name="ChipScroller" Grid.Column="1" HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Disabled"
-                          PreviewMouseWheel="ChipScroller_PreviewMouseWheel">
+            <!-- more chips than fit: the strip fades at the side that goes on, with an arrow there
+                 (EqualizerPanel.ShowChipArrows) -->
+            <Grid Grid.Column="1">
+            <ScrollViewer x:Name="ChipScroller" HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Disabled"
+                          PreviewMouseWheel="ChipScroller_PreviewMouseWheel" ScrollChanged="ChipScroller_ScrollChanged">
                 <ListBox x:Name="PresetChips" ItemsSource="{Binding Presets}" SelectedItem="{Binding SelectedPreset}"
                          ItemContainerStyle="{StaticResource ChipItem}" Background="Transparent" BorderThickness="0" Padding="0"
                          ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Disabled">
@@ -118,6 +121,13 @@
                     </ListBox.ItemsPanel>
                 </ListBox>
             </ScrollViewer>
+            <ui:Button x:Name="ChipsBack" Style="{StaticResource HeaderButton}" Icon="{ui:SymbolIcon ChevronLeft24}" Margin="0"
+                       Width="30" Height="30" FontSize="14" HorizontalAlignment="Left" VerticalAlignment="Center" Visibility="Collapsed"
+                       Background="{DynamicResource PlayerPanelBrush}" ToolTip="앞의 프리셋" Click="ChipsBack_Click"/>
+            <ui:Button x:Name="ChipsOn" Style="{StaticResource HeaderButton}" Icon="{ui:SymbolIcon ChevronRight24}" Margin="0"
+                       Width="30" Height="30" FontSize="14" HorizontalAlignment="Right" VerticalAlignment="Center" Visibility="Collapsed"
+                       Background="{DynamicResource PlayerPanelBrush}" ToolTip="다음 프리셋" Click="ChipsOn_Click"/>
+            </Grid>
 
             <!-- preset actions, at the end of the chips -->
             <StackPanel x:Name="PresetActions" Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Margin="8,0,0,0">
@@ -138,18 +148,22 @@
             </StackPanel>
         </Grid>
 
-        <!-- ===== tone bars | bands (wide), or bars over bands (narrow) ===== -->
-        <Grid x:Name="Body" Grid.Row="2">
+        <!-- ===== tone bars | bands (wide), or bands over the bars (narrow) =====
+             Fitted to the height there is (EqualizerPanel.ApplyLayout); it scrolls only when even
+             the most compact arrangement is too tall, the bands first. -->
+        <ScrollViewer x:Name="BodyScroller" Grid.Row="2" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                      Focusable="False" SizeChanged="BodyScroller_SizeChanged">
+        <Grid x:Name="Body">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition x:Name="ToneColumn" Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
             <Grid.RowDefinitions>
-                <RowDefinition x:Name="ToneRow" Height="0"/>
                 <RowDefinition Height="*"/>
+                <RowDefinition x:Name="BottomRow" Height="0"/>
             </Grid.RowDefinitions>
 
-            <Border x:Name="ToneSection" Grid.Row="1" Grid.Column="0" Style="{StaticResource Section}" Padding="20,16" Margin="0,0,12,0" Width="280">
+            <Border x:Name="ToneSection" Grid.Row="0" Grid.Column="0" Style="{StaticResource Section}" Padding="20,16" Margin="0,0,12,0" Width="280">
                 <DockPanel>
                 <!-- what is coming out, under the tone bars -->
                 <Border x:Name="MeterBlock" DockPanel.Dock="Bottom" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource PlayerTrackBrush}"
@@ -176,7 +190,7 @@
                 </DockPanel>
             </Border>
 
-            <Border x:Name="BandSection" Grid.Row="1" Grid.Column="1" Style="{StaticResource Section}" Padding="10,12,16,10">
+            <Border x:Name="BandSection" Grid.Row="0" Grid.Column="1" Style="{StaticResource Section}" Padding="10,12,16,10">
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="56"/>
@@ -185,12 +199,12 @@
                     </Grid.ColumnDefinitions>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="*" MinHeight="120"/>
+                        <RowDefinition Height="*" MinHeight="104"/>
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
 
                     <!-- preamp, set apart on the left -->
-                    <TextBlock Grid.Row="0" Grid.Column="0" Text="{Binding PreampText}" Style="{StaticResource Reading}" Margin="0,0,0,4"/>
+                    <TextBlock x:Name="PreampReading" Grid.Row="0" Grid.Column="0" Text="{Binding PreampText}" Style="{StaticResource Reading}" Margin="0,0,0,4"/>
                     <views:EqSlider Grid.Row="1" Grid.Column="0" Value="{Binding Preamp}" HorizontalAlignment="Center"
                                     ToolTip="프리앰프: 전체 음량 (끌기 · 휠 · 더블클릭하면 0)"/>
                     <TextBlock Grid.Row="2" Grid.Column="0" Text="프리앰프" Style="{StaticResource Caption}" Margin="0,6,0,0"/>
@@ -244,6 +258,7 @@
                 </Grid>
             </Border>
         </Grid>
+        </ScrollViewer>
 
         <!-- ===== headroom, bypass note, limiter ===== -->
         <Grid Grid.Row="3" Margin="2,12,2,0">
