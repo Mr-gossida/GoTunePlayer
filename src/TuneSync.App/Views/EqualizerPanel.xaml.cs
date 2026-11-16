@@ -247,15 +247,25 @@ public partial class EqualizerPanel : UserControl
         Dispatcher.BeginInvoke(BringChosenChipIntoView, DispatcherPriority.Loaded);
     }
 
-    /// <summary>Says why the equalizer isn't heard, when it isn't: the song needed Windows' own
-    /// player, or it goes out bit-perfect (설정 › 음향 › 출력).</summary>
+    /// <summary>Says why the equalizer isn't heard, when it isn't. Bit-perfect (설정 › 음향 ›
+    /// 출력): a banner over the panel, and the controls greyed out - nothing they do would be
+    /// heard. A song that needed Windows' own player: a note at the bottom.</summary>
     private void ShowBypass()
     {
-        BypassText.Text = _playback.IsToneBypassed
-            ? "이 곡은 Windows 기본 재생기로 재생되어 이퀄라이저가 적용되지 않습니다"
-            : "비트퍼펙트로 재생 중이라 이퀄라이저·잔향·볼륨이 적용되지 않습니다 (설정 › 음향 › 출력)";
-        BypassNotice.Visibility = _playback.IsToneBypassed || _playback.IsBitPerfect ? Visibility.Visible : Visibility.Collapsed;
+        var bitPerfect = _playback.IsBitPerfect;
+        BitPerfectBanner.Visibility = bitPerfect ? Visibility.Visible : Visibility.Collapsed;
+        foreach (var part in new UIElement[] { PresetRow, BodyScroller, EnableSwitch })
+        {
+            part.IsEnabled = !bitPerfect;
+            part.Opacity = bitPerfect ? 0.4 : 1;
+        }
+        if (bitPerfect) ReverbCard.IsOpen = false;
+        BypassNotice.Visibility = _playback.IsToneBypassed ? Visibility.Visible : Visibility.Collapsed;
     }
+
+    /// <summary>The banner's button: bit-perfect off, the equalizer heard again.</summary>
+    private void BitPerfectOff_Click(object sender, RoutedEventArgs e) =>
+        ((App)Application.Current).Services.GetRequiredService<OutputViewModel>().BitPerfect = false;
 
     private void ShowCustomChip() => CustomChip.Visibility = _viewModel.SelectedPreset is null ? Visibility.Visible : Visibility.Collapsed;
 
