@@ -31,7 +31,7 @@ public partial class PlayView
         // re-laying out its grouped list at a new width cost ~100ms in one frame, which was the
         // stutter felt while resizing.
         var content = width - (playback.IsQueueVisible ? QueuePanel.Width : 0);
-        var compact = playback.IsLyricsVisible && (_compact == true ? content < 800 : content < 760);
+        var compact = playback.IsLyricsAreaShown && (_compact == true ? content < 800 : content < 760);
 
         // Lyrics hidden: the big cover alone, never wider than the space it has.
         NowPlayingPanel.MaxWidth = Math.Max(200, content - 64);

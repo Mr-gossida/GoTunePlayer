@@ -98,7 +98,7 @@ public partial class ShellWindow : FluentWindow
             e.Handled = true;
             return;
         }
-        // Esc: from the equalizer back to the lyrics (not while typing, e.g. a preset name)
+        // Esc: closes the equalizer (not while typing, e.g. a preset name)
         if (e.Key == System.Windows.Input.Key.Escape && System.Windows.Input.Keyboard.FocusedElement is not System.Windows.Controls.TextBox
             && _services.GetRequiredService<EqualizerViewModel>() is { IsPanelOpen: true } equalizer)
         {

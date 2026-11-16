@@ -361,8 +361,8 @@
                         <Setter Property="Width" Value="300"/>
                         <Setter Property="Margin" Value="0,0,48,0"/>
                         <Style.Triggers>
-                            <!-- Lyrics hidden: the cover alone, larger and centered. -->
-                            <DataTrigger Binding="{Binding IsLyricsVisible}" Value="False">
+                            <!-- Lyrics hidden (and no equalizer in their place): the cover alone, larger and centered. -->
+                            <DataTrigger Binding="{Binding IsLyricsAreaShown}" Value="False">
                                 <Setter Property="Grid.ColumnSpan" Value="2"/>
                                 <Setter Property="HorizontalAlignment" Value="Center"/>
                                 <Setter Property="Width" Value="400"/>
@@ -418,7 +418,7 @@
             </StackPanel>
 
             <Grid x:Name="LyricsArea" Grid.Column="1" Grid.RowSpan="2"
-                  Visibility="{Binding IsLyricsVisible, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}">
+                  Visibility="{Binding IsLyricsAreaShown, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}">
                 <!-- the lyrics, all of them: hidden (still laid out) while the equalizer takes their place -->
                 <Grid x:Name="LyricsLayer">
                 <!-- Synced lyrics: the current line glides to the center (LyricsScroller) while it

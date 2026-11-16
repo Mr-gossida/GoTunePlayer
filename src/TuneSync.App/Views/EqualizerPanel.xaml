@@ -1,4 +1,4 @@
-<UserControl x:Class="TuneSync.App.Views.EqualizerPanel"
+﻿<UserControl x:Class="TuneSync.App.Views.EqualizerPanel"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
@@ -70,7 +70,7 @@
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <!-- ===== title, switch, preset actions, back to the lyrics ===== -->
+        <!-- ===== title, switch, close (back to what was beside the cover) ===== -->
         <Grid Grid.Row="0" Margin="0,0,0,10">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto"/>
@@ -85,9 +85,9 @@
             <ui:ToggleSwitch Grid.Column="1" IsChecked="{Binding IsEnabled}" OnContent="켜짐" OffContent="꺼짐" Margin="18,0,0,0"
                              VerticalAlignment="Center" ToolTip="끄면 파일에 담긴 소리 그대로 재생합니다"/>
 
-            <ui:Button Grid.Column="3" Content="가사" Icon="{ui:SymbolIcon SlideText24}" Margin="12,0,0,0" Padding="12,5" CornerRadius="16"
+            <ui:Button Grid.Column="3" Content="닫기" Icon="{ui:SymbolIcon Dismiss24}" Margin="12,0,0,0" Padding="12,5" CornerRadius="16"
                        BorderThickness="0" Background="{DynamicResource PlayerHoverBrush}" MouseOverBackground="{DynamicResource PlayerTrackBrush}"
-                       Command="{Binding TogglePanelCommand}" ToolTip="이퀄라이저를 닫고 가사로 돌아갑니다 (Esc)"/>
+                       Command="{Binding ClosePanelCommand}" ToolTip="이퀄라이저 닫기 (Esc)" AutomationProperties.Name="이퀄라이저 닫기"/>
         </Grid>
 
         <!-- ===== presets as chips ("사용자 지정" leads while the bands match none) ===== -->

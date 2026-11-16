@@ -1,4 +1,4 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using System.Linq;
 using System.Windows.Media;
 using System.Windows.Threading;
@@ -19,7 +19,17 @@ public sealed partial class PlaybackViewModel
 
     /// <summary>Lyrics next to the cover; off shows a larger cover alone.</summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsLyricsAreaShown))]
     private bool _isLyricsVisible;
+
+    /// <summary>The equalizer is showing in the lyrics' place on the 플레이 page (set by the page).
+    /// Not the lyrics setting: the 가사 button stays as the user left it.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsLyricsAreaShown))]
+    private bool _isEqualizerShown;
+
+    /// <summary>The area beside the cover is showing: the lyrics, or the equalizer in their place.</summary>
+    public bool IsLyricsAreaShown => IsLyricsVisible || IsEqualizerShown;
 
     [ObservableProperty]
     private bool _isMiniTopmost;

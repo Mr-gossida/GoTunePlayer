@@ -1,4 +1,4 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using System.Windows.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -134,6 +134,10 @@ public sealed partial class EqualizerViewModel : ObservableObject
 
     [RelayCommand]
     private void TogglePanel() => IsPanelOpen = !IsPanelOpen;
+
+    /// <summary>The panel's own 닫기: back to what was beside the cover before.</summary>
+    [RelayCommand]
+    private void ClosePanel() => IsPanelOpen = false;
 
     /// <summary>Rename/delete apply to saved presets only.</summary>
     public bool CanEditPreset => SelectedPreset is { IsBuiltIn: false };

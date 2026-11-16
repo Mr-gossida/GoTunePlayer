@@ -17,7 +17,7 @@ public partial class PlayView
     /// enough the spectrum and then the quality/album lines step aside - nothing is cut off.</summary>
     private void FitNowPlayingPanel()
     {
-        var full = _hero ? 340.0 : _viewModel.Playback.IsLyricsVisible ? 300.0 : 400.0;
+        var full = _hero ? 340.0 : _viewModel.Playback.IsLyricsAreaShown ? 300.0 : 400.0;
         if (_hero) NowPlayingPanel.Width = full;
         else NowPlayingPanel.ClearValue(WidthProperty); // the style's width
 

@@ -121,7 +121,7 @@ public partial class PlayView : Page
                 SyncPlaylistToCurrentTrack();
                 break;
             case nameof(PlaybackViewModel.IsQueueVisible):
-            case nameof(PlaybackViewModel.IsLyricsVisible):
+            case nameof(PlaybackViewModel.IsLyricsAreaShown):
                 ApplyResponsiveLayout();
                 ApplyIntroStage(animate: false);
                 Dispatcher.BeginInvoke(FitNowPlayingPanel, System.Windows.Threading.DispatcherPriority.Loaded);
