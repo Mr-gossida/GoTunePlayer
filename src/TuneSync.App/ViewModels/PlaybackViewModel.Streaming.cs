@@ -26,6 +26,21 @@ public sealed partial class PlaybackViewModel
     /// nothing plays or the song goes around the equalizer (Windows' player).</summary>
     public Core.Audio.OutputScope? OutputScope => _player is Audio.ToneEngine engine && IsPlaying ? engine.Scope : null;
 
+    /// <summary>How the sound is going out right now ("독점 · 24비트 96kHz · 스테레오"), or why
+    /// it can't go out as set; null while nothing plays through the app's own player.</summary>
+    public string? OutputDescription => _player is Audio.ToneEngine engine ? engine.OutputDescription : null;
+
+    /// <summary>The output settings changed (설정 › 음향 › 출력): the playing song moves to the
+    /// new device or format right away, from where it was.</summary>
+    public void ApplyOutput()
+    {
+        if (_player is not Audio.ToneEngine engine) return;
+        var at = CurrentPosition;
+        engine.Output = _settings.Output;
+        if (CurrentFile is not null) _player.Position = at; // what the old device still held is heard again from here
+        OnPropertyChanged(nameof(OutputDescription));
+    }
+
     /// <summary>How hard the limiter is holding the sound down right now, in dB (0 = not at all).</summary>
     public double TakeLimiterReductionDb() => _player is Audio.ToneEngine engine && IsPlaying ? engine.TakeLimiterReductionDb() : 0;
 
@@ -40,9 +55,10 @@ public sealed partial class PlaybackViewModel
         _openSource = source;
         _streamWatch = source.IsStream ? new StreamWatch(DateTime.UtcNow) : null;
         windows |= CurrentFile is { } file && _windowsOnly.Contains(file.Path);
-        Audio.IPlayerEngine player = windows ? new Audio.WindowsEngine(source) : new Audio.ToneEngine(source, _equalizer.Config);
+        Audio.IPlayerEngine player = windows ? new Audio.WindowsEngine(source) : new Audio.ToneEngine(source, _equalizer.Config, _settings.Output);
         player.Volume = Volume;
         player.IsMuted = IsMuted;
+        if (player is Audio.ToneEngine tone) tone.OutputChanged += () => OnPropertyChanged(nameof(OutputDescription));
         _player = player;
         Wire(player);
         player.Open();

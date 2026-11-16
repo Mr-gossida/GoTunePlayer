@@ -254,6 +254,100 @@
 
             <Border x:Name="ToneSection" Grid.Row="0" Grid.Column="0" Style="{StaticResource Section}" Padding="20,16" Margin="0,0,12,0" Width="280">
                 <DockPanel>
+                <!-- limiter, headroom, reverb: at the bottom of the tone card. Stacked (one per row,
+                     the reading beside each pill) where there's height, side by side where there
+                     isn't (EqualizerPanel.ArrangeSwitches). A pill shows a lamp (lit while it is at
+                     work) and its name only, so it never changes size; how many dB reads beside it
+                     in a slot of its own width, so nothing moves when one is switched. -->
+                <Border x:Name="SwitchBlock" DockPanel.Dock="Bottom" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource PlayerTrackBrush}"
+                        Padding="0,8,0,0" Margin="0,8,0,0">
+                    <UniformGrid x:Name="Switches" Columns="1">
+                        <DockPanel Margin="0,3">
+                            <ToggleButton x:Name="LimiterPill" Style="{StaticResource OnOff}" IsChecked="{Binding Limiter}" VerticalAlignment="Center"
+                                          ToolTip="켜면 소리가 최대 크기를 넘으려 할 때 부드럽게 눌러 찌그러짐을 막습니다. 불이 켜져 있는 동안 옆의 수치만큼 음량을 낮추고 있습니다. 끄면 넘친 부분이 그대로 나가 찌그러질 수 있습니다.">
+                                <StackPanel Orientation="Horizontal">
+                                    <Ellipse x:Name="LimiterLamp" Style="{StaticResource Lamp}"/>
+                                    <TextBlock Text="리미터" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </ToggleButton>
+                            <TextBlock x:Name="LimiterReading" Style="{StaticResource SwitchReading}"/>
+                        </DockPanel>
+                        <DockPanel Margin="0,3">
+                            <ToggleButton x:Name="HeadroomPill" Style="{StaticResource OnOff}" IsChecked="{Binding AutoHeadroom}" VerticalAlignment="Center"
+                                          ToolTip="켜면 이퀄라이저로 올린 만큼 전체 음량을 미리 낮춰 리미터가 걸릴 일을 없앱니다(소리가 작아집니다). 불이 켜져 있는 동안 옆의 수치만큼 낮추고 있습니다. 끄면 음량은 그대로 둡니다.">
+                                <StackPanel Orientation="Horizontal">
+                                    <Ellipse Style="{StaticResource Lamp}" Tag="{Binding IsHeadroomWorking}"/>
+                                    <TextBlock Text="헤드룸" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </ToggleButton>
+                            <TextBlock x:Name="HeadroomReading" Style="{StaticResource SwitchReading}" Text="{Binding HeadroomText}"/>
+                        </DockPanel>
+                        <DockPanel Margin="0,3">
+                            <ToggleButton x:Name="ReverbPill" Style="{StaticResource OnOff}" IsChecked="{Binding Reverb}" VerticalAlignment="Center"
+                                          ToolTip="켜면 음악에 공간의 울림(잔향)을 더합니다. 옆 버튼에서 공간과 양을 고릅니다.">
+                                <StackPanel Orientation="Horizontal">
+                                    <Ellipse Style="{StaticResource Lamp}" Tag="{Binding IsReverbWorking}"/>
+                                    <TextBlock Text="잔향" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </ToggleButton>
+                            <!-- the room and amount; opens the reverb's card beside it -->
+                            <ToggleButton x:Name="ReverbOpener" Style="{StaticResource CardOpener}" Margin="4,0,0,0" VerticalAlignment="Center"
+                                          HorizontalAlignment="Left" IsChecked="{Binding IsOpen, ElementName=ReverbCard}" ToolTip="잔향 공간·양·길이"
+                                          AutomationProperties.Name="잔향 설정">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock x:Name="ReverbSummary" Text="{Binding ReverbSummary}" VerticalAlignment="Center" Margin="0,0,4,0"
+                                               Typography.NumeralAlignment="Tabular" TextTrimming="CharacterEllipsis"/>
+                                    <ui:SymbolIcon Symbol="ChevronRight16" FontSize="12" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </ToggleButton>
+                        </DockPanel>
+                    </UniformGrid>
+                </Border>
+                <!-- the reverb's card, beside the button that opened it (EqualizerPanel.PlaceReverbCard) -->
+            <Popup x:Name="ReverbCard" PlacementTarget="{Binding ElementName=ReverbOpener}" Placement="Custom"
+                   StaysOpen="False" AllowsTransparency="True" PopupAnimation="Fade">
+                <!-- the margin leaves room for the shadow -->
+                <Border Margin="12" Width="340" CornerRadius="12" Background="{DynamicResource PlayerTintBrush}"
+                        BorderThickness="1" BorderBrush="{DynamicResource PlayerTrackBrush}">
+                    <Border.Effect>
+                        <DropShadowEffect BlurRadius="24" ShadowDepth="4" Opacity="0.45" Color="Black"/>
+                    </Border.Effect>
+                    <Border CornerRadius="12" Background="{DynamicResource PlayerVeilBrush}" Padding="18,14,18,12">
+                        <StackPanel>
+                            <Grid Margin="0,0,0,12">
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                    <ui:SymbolIcon Symbol="ConferenceRoom24" FontSize="18" Foreground="{DynamicResource PlayerAccentBrush}" Margin="0,0,8,0"/>
+                                    <TextBlock Text="잔향" FontSize="15" FontWeight="SemiBold" VerticalAlignment="Center"
+                                               Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                                </StackPanel>
+                                <ui:ToggleSwitch IsChecked="{Binding Reverb}" OnContent="켜짐" OffContent="꺼짐" HorizontalAlignment="Right"
+                                                 VerticalAlignment="Center"/>
+                            </Grid>
+                            <ListBox ItemsSource="{Binding ReverbRoomChoices}" SelectedItem="{Binding ReverbRoom}"
+                                     ItemContainerStyle="{StaticResource ChipItem}" Background="Transparent" BorderThickness="0" Padding="0"
+                                     ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Disabled"
+                                     AutomationProperties.Name="잔향 공간">
+                                <ListBox.Template>
+                                    <ControlTemplate TargetType="ListBox">
+                                        <ItemsPresenter/>
+                                    </ControlTemplate>
+                                </ListBox.Template>
+                                <ListBox.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <StackPanel Orientation="Horizontal"/>
+                                    </ItemsPanelTemplate>
+                                </ListBox.ItemsPanel>
+                            </ListBox>
+                            <views:EqBar Label="양" Minimum="0" Maximum="1" Rest="0" Step="0.01" Value="{Binding ReverbAmount}"
+                                         Text="{Binding ReverbAmountText}" Margin="0,14,0,6"
+                                         ToolTip="원래 소리에 더하는 울림의 양 (조금만 더해도 공간감이 생깁니다 · 더블클릭하면 0)"/>
+                            <views:EqBar Label="길이" Minimum="0.5" Maximum="2" Rest="1" Step="0.05" Value="{Binding ReverbDecay}"
+                                         Text="{Binding ReverbDecayText}" Margin="0,6"
+                                         ToolTip="울림이 사라지는 데 걸리는 시간 (더블클릭하면 공간의 기본값)"/>
+                        </StackPanel>
+                    </Border>
+                </Border>
+            </Popup>
                 <!-- what is coming out, under the tone bars -->
                 <Border x:Name="MeterBlock" DockPanel.Dock="Bottom" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource PlayerTrackBrush}"
                         Padding="0,12,0,0" Margin="0,8,0,0">
@@ -349,107 +443,11 @@
         </Grid>
         </ScrollViewer>
 
-        <!-- ===== limiter, headroom, bypass note, reverb =====
-             Each switch is a pill with a lamp (lit while it is at work) and its name only, so it
-             never changes size; what it is doing (how many dB) reads beside it, in a slot of its
-             own width, so nothing moves when either is switched or starts working. The reverb
-             sits at the right end: its pill switches it, and the button beside it (the room and
-             amount) opens its card above. -->
-        <Grid Grid.Row="3" Margin="2,12,2,0">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="Auto"/>
-                <ColumnDefinition Width="Auto"/>
-                <ColumnDefinition Width="Auto"/>
-                <ColumnDefinition Width="Auto"/>
-                <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="Auto"/>
-                <ColumnDefinition Width="Auto"/>
-            </Grid.ColumnDefinitions>
-            <ToggleButton Style="{StaticResource OnOff}" IsChecked="{Binding Limiter}" VerticalAlignment="Center"
-                          ToolTip="켜면 소리가 최대 크기를 넘으려 할 때 부드럽게 눌러 찌그러짐을 막습니다. 불이 켜져 있는 동안 옆의 수치만큼 음량을 낮추고 있습니다. 끄면 넘친 부분이 그대로 나가 찌그러질 수 있습니다.">
-                <StackPanel Orientation="Horizontal">
-                    <Ellipse x:Name="LimiterLamp" Style="{StaticResource Lamp}"/>
-                    <TextBlock Text="리미터" VerticalAlignment="Center"/>
-                </StackPanel>
-            </ToggleButton>
-            <TextBlock x:Name="LimiterReading" Grid.Column="1" Style="{StaticResource SwitchReading}"/>
-            <ToggleButton Grid.Column="2" Style="{StaticResource OnOff}" IsChecked="{Binding AutoHeadroom}" VerticalAlignment="Center"
-                          ToolTip="켜면 이퀄라이저로 올린 만큼 전체 음량을 미리 낮춰 리미터가 걸릴 일을 없앱니다(소리가 작아집니다). 불이 켜져 있는 동안 옆의 수치만큼 낮추고 있습니다. 끄면 음량은 그대로 둡니다.">
-                <StackPanel Orientation="Horizontal">
-                    <Ellipse Style="{StaticResource Lamp}" Tag="{Binding IsHeadroomWorking}"/>
-                    <TextBlock Text="헤드룸" VerticalAlignment="Center"/>
-                </StackPanel>
-            </ToggleButton>
-            <TextBlock Grid.Column="3" Style="{StaticResource SwitchReading}" Text="{Binding HeadroomText}"/>
-            <StackPanel x:Name="BypassNotice" Grid.Column="4" Orientation="Horizontal" Margin="16,0,8,0" VerticalAlignment="Center" Visibility="Collapsed">
-                <ui:SymbolIcon Symbol="Info24" FontSize="14" Margin="0,0,6,0" Foreground="{DynamicResource PlayerAccentBrush}"/>
-                <TextBlock Text="이 곡은 Windows 기본 재생기로 재생되어 이퀄라이저가 적용되지 않습니다" FontSize="12"
-                           VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
-            </StackPanel>
-
-            <ToggleButton Grid.Column="5" Style="{StaticResource OnOff}" IsChecked="{Binding Reverb}" VerticalAlignment="Center"
-                          ToolTip="켜면 음악에 공간의 울림(잔향)을 더합니다. 옆 버튼에서 공간과 양을 고릅니다.">
-                <StackPanel Orientation="Horizontal">
-                    <Ellipse Style="{StaticResource Lamp}" Tag="{Binding IsReverbWorking}"/>
-                    <TextBlock Text="잔향" VerticalAlignment="Center"/>
-                </StackPanel>
-            </ToggleButton>
-            <ToggleButton x:Name="ReverbOpener" Grid.Column="6" Style="{StaticResource CardOpener}" Margin="4,0,0,0" VerticalAlignment="Center"
-                          IsChecked="{Binding IsOpen, ElementName=ReverbCard}" ToolTip="잔향 공간·양·길이"
-                          AutomationProperties.Name="잔향 설정">
-                <StackPanel Orientation="Horizontal">
-                    <TextBlock x:Name="ReverbSummary" Text="{Binding ReverbSummary}" VerticalAlignment="Center" Margin="0,0,4,0"
-                               Typography.NumeralAlignment="Tabular"/>
-                    <ui:SymbolIcon Symbol="ChevronUp16" FontSize="12" VerticalAlignment="Center"/>
-                </StackPanel>
-            </ToggleButton>
-
-            <!-- the reverb's card, over the button that opened it (its right edge on the button's:
-                 EqualizerPanel.PlaceReverbCard) -->
-            <Popup x:Name="ReverbCard" PlacementTarget="{Binding ElementName=ReverbOpener}" Placement="Custom"
-                   StaysOpen="False" AllowsTransparency="True" PopupAnimation="Fade">
-                <!-- the margin leaves room for the shadow -->
-                <Border Margin="12" Width="340" CornerRadius="12" Background="{DynamicResource PlayerTintBrush}"
-                        BorderThickness="1" BorderBrush="{DynamicResource PlayerTrackBrush}">
-                    <Border.Effect>
-                        <DropShadowEffect BlurRadius="24" ShadowDepth="4" Opacity="0.45" Color="Black"/>
-                    </Border.Effect>
-                    <Border CornerRadius="12" Background="{DynamicResource PlayerVeilBrush}" Padding="18,14,18,12">
-                        <StackPanel>
-                            <Grid Margin="0,0,0,12">
-                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                    <ui:SymbolIcon Symbol="ConferenceRoom24" FontSize="18" Foreground="{DynamicResource PlayerAccentBrush}" Margin="0,0,8,0"/>
-                                    <TextBlock Text="잔향" FontSize="15" FontWeight="SemiBold" VerticalAlignment="Center"
-                                               Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
-                                </StackPanel>
-                                <ui:ToggleSwitch IsChecked="{Binding Reverb}" OnContent="켜짐" OffContent="꺼짐" HorizontalAlignment="Right"
-                                                 VerticalAlignment="Center"/>
-                            </Grid>
-                            <ListBox ItemsSource="{Binding ReverbRoomChoices}" SelectedItem="{Binding ReverbRoom}"
-                                     ItemContainerStyle="{StaticResource ChipItem}" Background="Transparent" BorderThickness="0" Padding="0"
-                                     ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Disabled"
-                                     AutomationProperties.Name="잔향 공간">
-                                <ListBox.Template>
-                                    <ControlTemplate TargetType="ListBox">
-                                        <ItemsPresenter/>
-                                    </ControlTemplate>
-                                </ListBox.Template>
-                                <ListBox.ItemsPanel>
-                                    <ItemsPanelTemplate>
-                                        <StackPanel Orientation="Horizontal"/>
-                                    </ItemsPanelTemplate>
-                                </ListBox.ItemsPanel>
-                            </ListBox>
-                            <views:EqBar Label="양" Minimum="0" Maximum="1" Rest="0" Step="0.01" Value="{Binding ReverbAmount}"
-                                         Text="{Binding ReverbAmountText}" Margin="0,14,0,6"
-                                         ToolTip="원래 소리에 더하는 울림의 양 (조금만 더해도 공간감이 생깁니다 · 더블클릭하면 0)"/>
-                            <views:EqBar Label="길이" Minimum="0.5" Maximum="2" Rest="1" Step="0.05" Value="{Binding ReverbDecay}"
-                                         Text="{Binding ReverbDecayText}" Margin="0,6"
-                                         ToolTip="울림이 사라지는 데 걸리는 시간 (더블클릭하면 공간의 기본값)"/>
-                        </StackPanel>
-                    </Border>
-                </Border>
-            </Popup>
-        </Grid>
+        <!-- ===== a note when this song can't be equalized (the switches live with the tone bars) ===== -->
+        <StackPanel x:Name="BypassNotice" Grid.Row="3" Orientation="Horizontal" Margin="2,12,2,0" VerticalAlignment="Center" Visibility="Collapsed">
+            <ui:SymbolIcon Symbol="Info24" FontSize="14" Margin="0,0,6,0" Foreground="{DynamicResource PlayerAccentBrush}"/>
+            <TextBlock Text="이 곡은 Windows 기본 재생기로 재생되어 이퀄라이저가 적용되지 않습니다" FontSize="12"
+                       VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+        </StackPanel>
     </Grid>
 </UserControl>

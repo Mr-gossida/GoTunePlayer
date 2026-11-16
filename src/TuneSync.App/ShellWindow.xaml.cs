@@ -30,6 +30,7 @@ public partial class ShellWindow : FluentWindow
 
         RestorePlacement();
         ThemeHelper.Apply(settings.Theme, this);
+        Loaded += (_, _) => WatchHud();
 
         var snackbar = new Wpf.Ui.SnackbarService();
         snackbar.SetSnackbarPresenter(SnackbarPresenter);

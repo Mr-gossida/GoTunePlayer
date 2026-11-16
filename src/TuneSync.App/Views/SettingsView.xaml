@@ -3,6 +3,7 @@
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
       xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
       xmlns:vm="clr-namespace:TuneSync.App.ViewModels"
+      xmlns:views="clr-namespace:TuneSync.App.Views"
       xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
       xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
       mc:Ignorable="d"
@@ -12,6 +13,7 @@
     <!-- Settings in categories (list on the left, like Windows Settings) with a search over all of
          them. Each card's Tag holds the words the search looks for (SettingsView.ApplySearch). -->
     <Page.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVisibility"/>
         <Style x:Key="Desc" TargetType="ui:TextBlock">
             <Setter Property="FontSize" Value="12"/>
             <Setter Property="TextWrapping" Value="Wrap"/>
@@ -28,6 +30,43 @@
             <Setter Property="FontTypography" Value="BodyStrong"/>
             <Setter Property="Margin" Value="0,14,0,6"/>
             <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}"/>
+        </Style>
+        <!-- a hotkey's key: a box that reads the key, and waits for a new one when clicked -->
+        <Style x:Key="HotkeyKey" TargetType="views:HotkeyBox">
+            <Setter Property="Content" Value="{Binding KeyText}"/>
+            <Setter Property="Width" Value="128"/>
+            <Setter Property="Height" Value="32"/>
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="views:HotkeyBox">
+                        <Border x:Name="Bd" CornerRadius="4" BorderThickness="1" Padding="10,0"
+                                Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}">
+                            <Grid>
+                                <ContentPresenter VerticalAlignment="Center" TextElement.FontSize="13"/>
+                                <ui:SymbolIcon x:Name="Pen" Symbol="Keyboard16" FontSize="13" HorizontalAlignment="Right" VerticalAlignment="Center"
+                                               Foreground="{DynamicResource TextFillColorTertiaryBrush}" Opacity="0"/>
+                            </Grid>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource ControlFillColorSecondaryBrush}"/>
+                                <Setter TargetName="Pen" Property="Opacity" Value="1"/>
+                            </Trigger>
+                            <Trigger Property="IsListening" Value="True">
+                                <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource PlayerAccentBrush}"/>
+                                <Setter TargetName="Bd" Property="BorderThickness" Value="2"/>
+                                <Setter Property="Foreground" Value="{DynamicResource PlayerAccentBrush}"/>
+                                <Setter TargetName="Pen" Property="Opacity" Value="1"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.45"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
         <Style x:Key="Card" TargetType="ui:CardControl" BasedOn="{StaticResource {x:Type ui:CardControl}}">
             <Setter Property="Margin" Value="0,0,0,4"/>
@@ -82,6 +121,9 @@
                     </ListBoxItem>
                     <ListBoxItem Tag="Sound">
                         <StackPanel Orientation="Horizontal"><ui:SymbolIcon Symbol="DeviceEq24" Margin="0,0,10,0"/><TextBlock Text="음향"/></StackPanel>
+                    </ListBoxItem>
+                    <ListBoxItem Tag="Hotkeys">
+                        <StackPanel Orientation="Horizontal"><ui:SymbolIcon Symbol="Keyboard24" Margin="0,0,10,0"/><TextBlock Text="단축키"/></StackPanel>
                     </ListBoxItem>
                     <ListBoxItem Tag="ScreenSaver">
                         <StackPanel Orientation="Horizontal"><ui:SymbolIcon Symbol="SlideMultiple24" Margin="0,0,10,0"/><TextBlock Text="화면 보호기"/></StackPanel>
@@ -191,6 +233,33 @@
                         </ui:CardControl.Header>
                         <ui:ToggleSwitch IsChecked="{Binding ShowIntroGauge}" OnContent="표시" OffContent="숨김"/>
                     </ui:CardControl>
+                    <ui:TextBlock Text="HUD" Style="{StaticResource Group}"/>
+                    <ui:CardControl Style="{StaticResource Card}" DataContext="{Binding Hud}" Icon="{ui:SymbolIcon Board24}"
+                                    Tag="HUD 항상 위 오버레이 가사 스펙트럼 재생 버튼 떠 있는 창"
+                                    ToolTip="어떤 프로그램을 쓰든 그 위에 작은 카드로 곡 정보, 가사, 스펙트럼과 재생 버튼을 띄웁니다. 끌어서 옮길 수 있고, 제목 표시줄의 HUD 버튼이나 단축키(HUD 전환)로도 켜고 끕니다.">
+                        <ui:CardControl.Header>
+                            <StackPanel>
+                                <ui:TextBlock Text="HUD" FontTypography="Body"/>
+                                <ui:TextBlock Text="다른 프로그램 위에 곡 정보 · 가사 · 스펙트럼 · 재생 버튼을 띄우기" Style="{StaticResource Desc}"/>
+                            </StackPanel>
+                        </ui:CardControl.Header>
+                        <ui:ToggleSwitch IsChecked="{Binding IsOpen}" OnContent="켬" OffContent="끔"/>
+                    </ui:CardControl>
+                    <ui:CardControl Style="{StaticResource Card}" DataContext="{Binding Hud}" Icon="{ui:SymbolIcon Blur24}" Tag="HUD 투명도 불투명도 반투명"
+                                    ToolTip="마우스를 올리면 잠시 선명해져 버튼을 누르기 쉽습니다. HUD의 메뉴(⚙)에서도 바꿀 수 있습니다.">
+                        <ui:CardControl.Header>
+                            <StackPanel>
+                                <ui:TextBlock Text="HUD 투명도" FontTypography="Body"/>
+                                <ui:TextBlock Text="낮출수록 뒤가 비쳐 보입니다" Style="{StaticResource Desc}"/>
+                            </StackPanel>
+                        </ui:CardControl.Header>
+                        <StackPanel Orientation="Horizontal">
+                            <Slider Width="180" Minimum="0.2" Maximum="1" SmallChange="0.05" LargeChange="0.1" Value="{Binding Opacity}"
+                                    IsMoveToPointEnabled="True" VerticalAlignment="Center" AutomationProperties.Name="HUD 투명도"/>
+                            <TextBlock Text="{Binding OpacityText}" Width="44" TextAlignment="Right" VerticalAlignment="Center" Margin="8,0,0,0"
+                                       Typography.NumeralAlignment="Tabular"/>
+                        </StackPanel>
+                    </ui:CardControl>
                     <ui:TextBlock Text="창과 전원" Style="{StaticResource Group}"/>
                     <ui:CardControl Style="{StaticResource Card}" Icon="{ui:SymbolIcon PictureInPictureEnter24}" Tag="최소화 미니 플레이어"
                                     ToolTip="최소화(─) 버튼을 누르면 작업 표시줄로 숨는 대신 미니 플레이어로 바뀝니다. 미니 플레이어를 더블클릭하면 돌아옵니다.">
@@ -217,8 +286,96 @@
                 <!-- 음향: the equalizer's switch and preset; the sliders are in its own window -->
                 <StackPanel Tag="Sound">
                     <ui:TextBlock Text="음향" Style="{StaticResource CategoryTitle}"/>
-                    <ui:TextBlock Text="이퀄라이저와 음색" Style="{StaticResource CategoryLead}"/>
-                    <ui:CardControl Style="{StaticResource Card}" Margin="0,8,0,4" Icon="{ui:SymbolIcon DeviceEq24}" Tag="이퀄라이저 EQ 음향 음색 저음 고음 켜기 끄기"
+                    <ui:TextBlock Text="소리가 나가는 장치와 형식, 이퀄라이저와 음색" Style="{StaticResource CategoryLead}"/>
+
+                    <!-- 출력: device, speakers, exclusive mode (OutputViewModel) -->
+                    <ui:TextBlock Text="출력" Style="{StaticResource Group}"/>
+                    <Border Tag="출력 장치 스피커 헤드폰 사운드 카드 지금 재생 형식" DataContext="{Binding Output}" Margin="0,0,0,4" Padding="16,12"
+                            CornerRadius="8" BorderThickness="1"
+                            Background="{DynamicResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}">
+                        <DockPanel>
+                            <ui:SymbolIcon Symbol="Speaker224" FontSize="24" Margin="0,0,16,0" VerticalAlignment="Center" Foreground="{DynamicResource PlayerAccentBrush}"/>
+                            <ui:Button DockPanel.Dock="Right" Content="Windows 소리 설정" Icon="{ui:SymbolIcon Open24}" VerticalAlignment="Center"
+                                       Command="{Binding OpenWindowsSoundCommand}" ToolTip="공유 모드의 샘플 속도·비트(장치 속성 › 고급)는 Windows 소리 설정에서 바꿉니다"/>
+                            <StackPanel VerticalAlignment="Center">
+                                <ui:TextBlock Text="지금 재생" FontTypography="Caption" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                <ui:TextBlock Text="{Binding Now}" FontTypography="BodyStrong" TextWrapping="Wrap"/>
+                                <ui:TextBlock Text="{Binding WindowsFormat}" Style="{StaticResource Desc}"/>
+                            </StackPanel>
+                        </DockPanel>
+                    </Border>
+                    <ui:CardControl Style="{StaticResource Card}" DataContext="{Binding Output}" Icon="{ui:SymbolIcon Headphones24}" Tag="출력 장치 스피커 헤드폰 사운드 카드 오디오 장치"
+                                    ToolTip="Windows 기본 장치를 고르면 헤드폰을 꽂는 등 기본 장치가 바뀔 때 따라갑니다. 고른 장치가 빠지면 기본 장치로 재생하고, 다시 연결되면 돌아갑니다.">
+                        <ui:CardControl.Header>
+                            <StackPanel>
+                                <ui:TextBlock Text="출력 장치" FontTypography="Body"/>
+                                <ui:TextBlock Text="소리가 나갈 스피커나 헤드폰" Style="{StaticResource Desc}"/>
+                            </StackPanel>
+                        </ui:CardControl.Header>
+                        <ComboBox Width="260" ItemsSource="{Binding Devices}" DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding DeviceId}"/>
+                    </ui:CardControl>
+                    <ui:CardControl Style="{StaticResource Card}" DataContext="{Binding Output}" Icon="{ui:SymbolIcon SpeakerSettings24}" Tag="스피커 구성 채널 스테레오 서라운드 5.1 7.1 4채널 업믹스"
+                                    ToolTip="스테레오 음악을 더 많은 스피커에 나눠 보냅니다: 앞은 원래 좌우, 센터는 둘의 공통된 소리, 서브우퍼는 100Hz 아래 저음, 뒤는 좌우를 조금 작게. 장치에 있는 스피커 수만큼만 고를 수 있습니다.">
+                        <ui:CardControl.Header>
+                            <StackPanel>
+                                <ui:TextBlock Text="스피커 구성" FontTypography="Body"/>
+                                <ui:TextBlock Text="음악을 장치의 스피커에 나누는 방법" Style="{StaticResource Desc}"/>
+                            </StackPanel>
+                        </ui:CardControl.Header>
+                        <ComboBox Width="260" ItemsSource="{Binding Layouts}" DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding Layout}"/>
+                    </ui:CardControl>
+                    <ui:CardExpander Margin="0,0,0,4" DataContext="{Binding Output}" Icon="{ui:SymbolIcon LockClosed24}" IsExpanded="{Binding Exclusive, Mode=OneWay}"
+                                     Tag="오디오 독점 모드 패스스루 비트퍼펙트 WASAPI 샘플 속도 비트 수준 고음질 하이레졸루션"
+                                     ToolTip="GoTune Player가 장치를 혼자 씁니다. Windows의 믹서와 형식 변환을 거치지 않아, 이퀄라이저를 끄고 볼륨을 100으로 두면 파일의 소리가 그대로(비트퍼펙트) 나갑니다. 그동안 다른 프로그램의 소리는 나지 않습니다.">
+                        <ui:CardExpander.Header>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Margin="0,0,16,0">
+                                    <ui:TextBlock Text="오디오 독점 모드 (패스스루)" FontTypography="Body"/>
+                                    <ui:TextBlock Text="Windows 믹서를 거치지 않고 장치로 바로 보내기 · 그동안 다른 프로그램 소리는 나지 않습니다" Style="{StaticResource Desc}"/>
+                                </StackPanel>
+                                <ui:ToggleSwitch Grid.Column="1" VerticalAlignment="Center" Margin="0,0,16,0"
+                                                 IsChecked="{Binding Exclusive}" OnContent="켬" OffContent="끔"/>
+                            </Grid>
+                        </ui:CardExpander.Header>
+                        <StackPanel Margin="40,0,0,0" IsEnabled="{Binding Exclusive}">
+                            <Grid Margin="0,4">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel VerticalAlignment="Center" Margin="0,0,16,0">
+                                    <ui:TextBlock Text="샘플 속도" FontTypography="Body"/>
+                                    <ui:TextBlock Text="'곡과 같게'는 곡마다 그 곡의 속도로 바꿔 변환 없이 보냅니다" Style="{StaticResource Desc}"/>
+                                </StackPanel>
+                                <ComboBox Grid.Column="1" Width="230" ItemsSource="{Binding SampleRates}" DisplayMemberPath="Label"
+                                          SelectedValuePath="Value" SelectedValue="{Binding SampleRate}"/>
+                            </Grid>
+                            <Grid Margin="0,8,0,4">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel VerticalAlignment="Center" Margin="0,0,16,0">
+                                    <ui:TextBlock Text="비트 수준" FontTypography="Body"/>
+                                    <ui:TextBlock Text="이 장치가 받는 것만 보입니다" Style="{StaticResource Desc}"/>
+                                </StackPanel>
+                                <ComboBox Grid.Column="1" Width="230" ItemsSource="{Binding BitDepths}" DisplayMemberPath="Label"
+                                          SelectedValuePath="Value" SelectedValue="{Binding Bits}"/>
+                            </Grid>
+                            <ui:TextBlock Margin="0,6,0,0" Style="{StaticResource Desc}" Text="장치에 지원되는 형식을 묻는 중…"
+                                          Visibility="{Binding IsProbing, Converter={StaticResource BoolToVisibility}}"/>
+                            <ui:TextBlock Margin="0,6,0,0" Style="{StaticResource Desc}" Foreground="{DynamicResource SystemFillColorCautionBrush}"
+                                          Text="이 장치는 독점 모드 형식을 알려 주지 않습니다(다른 프로그램이 독점 중일 수 있습니다). 켜 두면 가능한 형식을 찾아 보고, 안 되면 공유 모드로 재생합니다."
+                                          Visibility="{Binding NoExclusiveFormats, Converter={StaticResource BoolToVisibility}}"/>
+                        </StackPanel>
+                    </ui:CardExpander>
+
+                    <ui:TextBlock Text="이퀄라이저" Style="{StaticResource Group}"/>
+                    <ui:CardControl Style="{StaticResource Card}" Icon="{ui:SymbolIcon DeviceEq24}" Tag="이퀄라이저 EQ 음향 음색 저음 고음 켜기 끄기"
                                     ToolTip="끄면 파일에 담긴 소리 그대로 재생합니다.">
                         <ui:CardControl.Header>
                             <StackPanel>
@@ -249,11 +406,11 @@
                         </ui:CardControl.Header>
                         <ui:ToggleSwitch IsChecked="{Binding Equalizer.Limiter}" OnContent="켬" OffContent="끔"/>
                     </ui:CardControl>
-                    <ui:CardControl Style="{StaticResource Card}" Icon="{ui:SymbolIcon ArrowDown24}" Tag="자동 헤드룸 클리핑 리미터 찌그러짐 음량"
+                    <ui:CardControl Style="{StaticResource Card}" Icon="{ui:SymbolIcon ArrowDown24}" Tag="헤드룸 자동 헤드룸 클리핑 리미터 찌그러짐 음량"
                                     ToolTip="끄면 전체 음량은 그대로 둡니다.">
                         <ui:CardControl.Header>
                             <StackPanel>
-                                <ui:TextBlock Text="자동 헤드룸" FontTypography="Body"/>
+                                <ui:TextBlock Text="헤드룸" FontTypography="Body"/>
                                 <ui:TextBlock Text="올린 만큼 전체 음량을 미리 낮추기 (소리가 작아집니다)" Style="{StaticResource Desc}"/>
                             </StackPanel>
                         </ui:CardControl.Header>
@@ -269,6 +426,79 @@
                         </ui:CardControl.Header>
                         <ui:Button Content="이퀄라이저 열기" Icon="{ui:SymbolIcon Open24}" Click="OpenEqualizer_Click"/>
                     </ui:CardControl>
+                </StackPanel>
+
+                <!-- 단축키 -->
+                <StackPanel Tag="Hotkeys" DataContext="{Binding Hotkeys}">
+                    <ui:TextBlock Text="단축키" Style="{StaticResource CategoryTitle}"/>
+                    <ui:TextBlock Text="GoTune Player가 실행 중이면 다른 프로그램을 쓰는 중에도 어디서든 작동하는 키" Style="{StaticResource CategoryLead}"/>
+                    <ui:CardControl Style="{StaticResource Card}" Icon="{ui:SymbolIcon Keyboard24}" Tag="단축키 핫키 사용 전역 키보드">
+                        <ui:CardControl.Header>
+                            <StackPanel>
+                                <ui:TextBlock Text="단축키 사용" FontTypography="Body"/>
+                                <ui:TextBlock Text="아래에서 켠 단축키가 어디서든 작동합니다" Style="{StaticResource Desc}"/>
+                            </StackPanel>
+                        </ui:CardControl.Header>
+                        <ui:ToggleSwitch IsChecked="{Binding Enabled}" OnContent="켬" OffContent="끔"/>
+                    </ui:CardControl>
+                    <ui:CardControl Style="{StaticResource Card}" Icon="{ui:SymbolIcon MusicNote124}" Tag="멀티미디어 키 미디어 키보드 재생 일시정지 이전 다음 정지"
+                                    ToolTip="키보드의 재생/일시정지 · 이전 곡 · 다음 곡 · 정지 키로 GoTune Player를 조작합니다. 다른 플레이어가 먼저 쓰고 있으면 그쪽에 남습니다.">
+                        <ui:CardControl.Header>
+                            <StackPanel>
+                                <ui:TextBlock Text="멀티미디어 키 사용" FontTypography="Body"/>
+                                <ui:TextBlock Text="키보드의 재생 · 이전 · 다음 · 정지 키" Style="{StaticResource Desc}"/>
+                            </StackPanel>
+                        </ui:CardControl.Header>
+                        <ui:ToggleSwitch IsChecked="{Binding MediaKeys}" OnContent="켬" OffContent="끔"/>
+                    </ui:CardControl>
+
+                    <Grid Margin="0,14,0,6" Tag="단축키 목록 이전 곡 재생 일시정지 정지 다음 곡 뒤로 앞으로 반복 무작위 음소거 소리 높임 낮춤 미니 플레이어 HUD 기본값">
+                        <ui:TextBlock Text="단축키 목록" FontTypography="BodyStrong" Foreground="{DynamicResource TextFillColorSecondaryBrush}" VerticalAlignment="Center"/>
+                        <ui:Button Content="기본값으로" Icon="{ui:SymbolIcon ArrowReset24}" HorizontalAlignment="Right" Padding="10,4"
+                                   Command="{Binding ResetCommand}" ToolTip="모든 단축키를 처음 설정(Ctrl+Alt + PageUp/Insert/End/PageDown 켜짐)으로 되돌립니다"/>
+                    </Grid>
+                    <Border Tag="단축키 목록 이전 곡 재생 일시정지 정지 다음 곡 뒤로 앞으로 반복 무작위 음소거 소리 높임 낮춤 미니 플레이어 HUD 키 바꾸기"
+                            CornerRadius="8" BorderThickness="1" Padding="16,8"
+                            Background="{DynamicResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
+                            IsEnabled="{Binding Enabled}">
+                        <StackPanel>
+                            <ui:TextBlock Text="키 칸을 클릭한 뒤 원하는 키를 누르면 바뀝니다 (Ctrl+Alt+F5처럼 조합째 눌러도 됩니다 · Esc는 취소)"
+                                          Style="{StaticResource Desc}" Margin="0,4,0,8"/>
+                            <ItemsControl ItemsSource="{Binding Rows}" Focusable="False">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="{x:Type vm:HotkeyRowViewModel}">
+                                        <Grid Margin="0,3">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" MinWidth="150"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="28"/>
+                                            </Grid.ColumnDefinitions>
+                                            <CheckBox Content="{Binding Name}" IsChecked="{Binding Enabled}" VerticalAlignment="Center"/>
+                                            <ComboBox Grid.Column="1" Width="150" Margin="8,0,0,0" IsEnabled="{Binding Enabled}"
+                                                      ItemsSource="{Binding DataContext.ModifierOptions, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                      DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding Modifiers}"/>
+                                            <views:HotkeyBox Grid.Column="2" Margin="8,0,0,0" Style="{StaticResource HotkeyKey}" IsEnabled="{Binding Enabled}"
+                                                             Service="{Binding DataContext.Service, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                             AutomationProperties.Name="{Binding Name}"/>
+                                            <ui:SymbolIcon Grid.Column="3" Symbol="Warning20" FontSize="16" HorizontalAlignment="Right" VerticalAlignment="Center"
+                                                           Foreground="{DynamicResource SystemFillColorCautionBrush}" ToolTip="{Binding Problem}"
+                                                           Visibility="{Binding HasProblem, Converter={StaticResource BoolToVisibility}}"/>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <Border Visibility="{Binding HasProblems, Converter={StaticResource BoolToVisibility}}" Margin="0,10,0,4" Padding="10,8"
+                                    CornerRadius="6" Background="{DynamicResource SystemFillColorCautionBackgroundBrush}">
+                                <DockPanel>
+                                    <ui:SymbolIcon Symbol="Warning20" FontSize="16" Margin="0,0,8,0" VerticalAlignment="Top"
+                                                   Foreground="{DynamicResource SystemFillColorCautionBrush}"/>
+                                    <ui:TextBlock TextWrapping="Wrap" FontSize="12"
+                                                  Text="표시된 키는 작동하지 않습니다. 다른 프로그램(다른 음악 플레이어 등)이 먼저 쓰고 있거나 다른 단축키와 겹칩니다. 키를 바꾸거나 그 프로그램의 단축키를 끄세요. 아이콘에 마우스를 올리면 이유가 보입니다."/>
+                                </DockPanel>
+                            </Border>
+                        </StackPanel>
+                    </Border>
                 </StackPanel>
 
                 <!-- 화면 보호기: everything about it in one card -->

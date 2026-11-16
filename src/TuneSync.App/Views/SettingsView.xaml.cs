@@ -18,6 +18,7 @@ public partial class SettingsView : Page
         Loaded += (_, _) =>
         {
             viewModel.RefreshNetwork();
+            viewModel.Output.Refresh();
             UseAccent();
             PlayerPalette.Changed += UseAccent;
         };

@@ -2,6 +2,7 @@ using System.Windows.Media;
 using System.Windows.Threading;
 using TuneSync.App.Network;
 using TuneSync.Core.Audio;
+using TuneSync.Core.Models;
 
 namespace TuneSync.App.Audio;
 
@@ -103,9 +104,10 @@ internal sealed class ToneEngine : IPlayerEngine
     private readonly Dispatcher _dispatcher = Dispatcher.CurrentDispatcher;
     private bool _closed;
 
-    public ToneEngine(PlaySource source, ToneConfig config)
+    public ToneEngine(PlaySource source, ToneConfig config, OutputSettings output)
     {
-        _player = source.LocalPath is { } path ? new TonePlayer(path, config) : new TonePlayer(source, config);
+        _player = source.LocalPath is { } path ? new TonePlayer(path, config, output) : new TonePlayer(source, config, output);
+        _player.OutputChanged += () => Post(() => OutputChanged?.Invoke());
         _player.Opened += () => Post(() => MediaOpened?.Invoke(this));
         _player.Ended += () => Post(() => MediaEnded?.Invoke(this));
         _player.Failed += (error, kind) =>
@@ -121,6 +123,14 @@ internal sealed class ToneEngine : IPlayerEngine
     public event Action<IPlayerEngine, PlayerFailure>? MediaFailed;
 
     public bool HasTone => true;
+
+    /// <summary>Where and how the sound goes out (reopens the device when changed while playing).</summary>
+    public OutputSettings Output { set => _player.Output = value; }
+
+    /// <summary>How the sound is going out right now, and why not as asked when it can't be.</summary>
+    public string? OutputDescription => _player.OutputDescription;
+
+    public event Action? OutputChanged;
 
     public ToneConfig Config { set => _player.Config = value; }
 

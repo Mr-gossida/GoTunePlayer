@@ -1,7 +1,9 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using NAudio.CoreAudioApi;
+using NAudio.Dsp;
 using NAudio.Wave;
+using TuneSync.Core.Models;
 
 namespace TuneSync.Core.Audio;
 
@@ -34,9 +36,12 @@ public interface IProgressiveSource
 
 /// <summary>Plays one song through the sound chain (<see cref="ToneProcessor"/>): a decoding
 /// thread fills a short buffer of raw samples, and an output thread takes them from there, runs
-/// the equalizer and hands them to Windows (WASAPI, shared mode) - so a slider moved in the
-/// equalizer is heard a fraction of a second later, and a slow disk or network never stalls the
-/// sound device. One player per song; <see cref="Close"/> releases the file.
+/// the equalizer and hands them to Windows (WASAPI) - so a slider moved in the equalizer is heard
+/// a fraction of a second later, and a slow disk or network never stalls the sound device. Where
+/// the sound goes is <see cref="Output"/>: a chosen device or Windows' default, stereo or spread
+/// over more speakers, shared with other programs or (exclusive mode) sent to the device alone at
+/// a sample rate and bit depth it takes - the song's own rate when it can, resampled when not.
+/// One player per song; <see cref="Close"/> releases the file.
 /// Events arrive on the player's own threads.</summary>
 public sealed class TonePlayer : IDisposable
 {
@@ -91,17 +96,55 @@ public sealed class TonePlayer : IDisposable
     private string? _deviceId;
     private int _bufferFrames;
 
-    public TonePlayer(string path, ToneConfig config)
+    // How the sound goes out (output thread only): the device's rate and channels, the format the
+    // samples are written in, and the resampler when the device runs at another rate.
+    private OutputSettings _output = new();
+    private volatile bool _reopen;
+    private int _outRate, _outChannels;
+    private double _ratio = 1; // device frames per song frame
+    private bool _exclusiveOpen;
+    private float[]? _resampleInput;
+    private int _resampleOffset;
+    private ChannelLayout? _layout;
+    private SampleWriter? _writer;
+    private WdlResampler? _resampler;
+    private float[] _expanded = [];
+    private float[] _resampled = [];
+    private byte[] _bytes = [];
+
+    public TonePlayer(string path, ToneConfig config, OutputSettings? output = null)
     {
         _path = path;
         _config = config;
+        _output = output?.Clone() ?? new OutputSettings();
     }
 
-    public TonePlayer(IProgressiveSource source, ToneConfig config)
+    public TonePlayer(IProgressiveSource source, ToneConfig config, OutputSettings? output = null)
     {
         _source = source;
         _config = config;
+        _output = output?.Clone() ?? new OutputSettings();
     }
+
+    /// <summary>Where and how the sound goes out. Changing it while playing reopens the device
+    /// (what it still held is dropped: the caller seeks back to the position to pick up there).</summary>
+    public OutputSettings Output
+    {
+        get => _output.Clone();
+        set
+        {
+            _output = value.Clone();
+            _reopen = true;
+            _renderWake.Set();
+        }
+    }
+
+    /// <summary>How the sound is going out right now ("독점 · 24비트 96kHz · 5.1"), and why it
+    /// isn't the way <see cref="Output"/> asks, when it can't be.</summary>
+    public string? OutputDescription { get; private set; }
+
+    /// <summary>The device was (re)opened: <see cref="OutputDescription"/> may have changed.</summary>
+    public event Action? OutputChanged;
 
     /// <summary>The song is open and its length known; nothing plays until <see cref="Play"/>.</summary>
     public event Action? Opened;
@@ -460,10 +503,10 @@ public sealed class TonePlayer : IDisposable
             if (!_closing) Opened?.Invoke();
 
             var processor = _processor!;
-            var buffer = new float[_bufferFrames * 2];
+            var buffer = EnsureBuffer([]);
             WaitHandle[] handles = [_audioEvent, _renderWake];
             long serial = 0, nextDeviceCheck = 0;
-            bool started = false, ended = false, tailWritten = false;
+            bool started = false, ended = false, tailWritten = false, silenceAfterTail = false;
             while (!_closing && !_failed)
             {
                 try
@@ -481,8 +524,16 @@ public sealed class TonePlayer : IDisposable
                             _renderWake.WaitOne(500);
                             continue;
                         }
-                        if (buffer.Length < _bufferFrames * 2) buffer = new float[_bufferFrames * 2];
+                        buffer = EnsureBuffer(buffer);
                         started = false;
+                    }
+                    if (_reopen)
+                    {
+                        // Output settings changed: let go of the device and open it the new way.
+                        _reopen = false;
+                        if (started) Freeze();
+                        CloseDevice();
+                        continue;
                     }
                     var client = _client!;
 
@@ -502,7 +553,7 @@ public sealed class TonePlayer : IDisposable
                             _anchorFrames = _lastReported = 0;
                             _running = false;
                         }
-                        ended = tailWritten = false;
+                        ended = tailWritten = silenceAfterTail = false;
                     }
 
                     var play = _wantPlay && !ended;
@@ -528,14 +579,14 @@ public sealed class TonePlayer : IDisposable
                         continue;
                     }
 
-                    WaitHandle.WaitAny(handles, 200);
+                    var woke = WaitHandle.WaitAny(handles, 200);
                     if (_closing) break;
 
                     var now = Stopwatch.GetTimestamp();
                     if (now >= nextDeviceCheck)
                     {
                         nextDeviceCheck = now + Stopwatch.Frequency;
-                        if (DefaultDeviceId() != _deviceId)
+                        if (WantedDeviceId() != _deviceId)
                         {
                             Freeze();
                             CloseDevice();
@@ -543,35 +594,47 @@ public sealed class TonePlayer : IDisposable
                         }
                     }
 
-                    var padding = client.CurrentPadding;
+                    // Exclusive: the device hands over one whole buffer per signal, and only then.
+                    if (_exclusiveOpen && woke != 0) continue;
+                    var padding = _exclusiveOpen ? 0 : client.CurrentPadding;
                     var room = _bufferFrames - padding;
                     if (room <= 0) continue;
 
+                    // How many of the song's frames fill the room (the resampler says, when there is one).
+                    var wantedFrames = SongFramesFor(room);
                     int frames;
                     bool songOver;
                     lock (_lock)
                     {
                         var flowing = _ringSerial == serial && _seekSerial == serial;
-                        frames = flowing ? Pull(buffer, room) : 0;
+                        frames = flowing ? Pull(buffer, Math.Min(wantedFrames, buffer.Length / 2)) : 0;
                         songOver = flowing && _endOfSong && _ringCount == 0;
                     }
                     if (frames > 0)
                     {
                         _decodeWake.Set();
                         processor.Process(buffer.AsSpan(0, frames * 2));
-                        Write(buffer, frames);
-                        // the newest frames reach the speakers once the device's queue ahead of them has played
-                        processor.Scope.DelayFrames = padding + frames;
+                        var written = Write(buffer, frames, room);
+                        // the newest frames reach the speakers once the device's queue ahead of them
+                        // has played (counted in the song's frames)
+                        var queued = (padding + written) / _ratio;
+                        processor.Scope.DelayFrames = (int)queued;
                         lock (_lock)
                         {
-                            if (padding == 0 && _consumed > 0) Underruns++;
+                            if (padding == 0 && _consumed > 0 && !_exclusiveOpen) Underruns++;
                             _consumed += frames;
                             if (_seekSerial == serial)
                             {
-                                _anchorFrames = _consumed - (padding + frames);
+                                _anchorFrames = _consumed - queued;
                                 _anchorTicks = Stopwatch.GetTimestamp();
                             }
                         }
+                    }
+                    else if (_exclusiveOpen && !songOver)
+                    {
+                        // nothing to play yet (just sought, or the decoder is behind): the device
+                        // alone would play its old buffer again, so it gets silence
+                        WriteSilence(room);
                     }
                     else if (songOver)
                     {
@@ -579,10 +642,16 @@ public sealed class TonePlayer : IDisposable
                         {
                             // The limiter still holds the song's last few milliseconds: push them out.
                             tailWritten = true;
-                            var tail = Math.Min(room, processor.LatencyFrames);
+                            var tail = Math.Min(Math.Min((int)(room / _ratio), buffer.Length / 2), processor.LatencyFrames);
                             Array.Clear(buffer, 0, tail * 2);
                             processor.Process(buffer.AsSpan(0, tail * 2));
-                            Write(buffer, tail);
+                            Write(buffer, tail, room);
+                        }
+                        else if (_exclusiveOpen && !silenceAfterTail)
+                        {
+                            // let the tail play out over one buffer of silence before stopping
+                            silenceAfterTail = true;
+                            WriteSilence(room);
                         }
                         else if (padding == 0)
                         {
@@ -627,28 +696,203 @@ public sealed class TonePlayer : IDisposable
         }
     }
 
-    private void Write(float[] buffer, int frames)
+    /// <summary>The song's processed stereo frames out to the device: resampled to its rate,
+    /// spread over its speakers, in its sample format. Returns the device frames written.</summary>
+    private int Write(float[] buffer, int frames, int room)
     {
-        if (frames <= 0) return;
-        var target = _render!.GetBuffer(frames);
-        Marshal.Copy(buffer, 0, target, frames * 2);
-        _render.ReleaseBuffer(frames, AudioClientBufferFlags.None);
+        if (frames <= 0) return 0;
+        ReadOnlySpan<float> stereo = buffer.AsSpan(0, frames * 2);
+        var count = frames;
+        if (_resampler is { } resampler)
+        {
+            // the frames go where SongFramesFor was told they would
+            stereo.CopyTo(_resampleInput.AsSpan(_resampleOffset, frames * 2));
+            if (_resampled.Length < room * 2) _resampled = new float[room * 2];
+            count = resampler.ResampleOut(_resampled, 0, frames, room, 2);
+            stereo = _resampled.AsSpan(0, count * 2);
+        }
+        if (count <= 0) return 0;
+        var device = count;
+        if (_exclusiveOpen && count < room)
+        {
+            // exclusive takes whole buffers: the rest is silence
+            device = room;
+        }
+        var samples = count * _outChannels;
+        if (_expanded.Length < samples) _expanded = new float[samples];
+        _layout!.Expand(stereo, _expanded.AsSpan(0, samples));
+        var bytes = samples * _writer!.BytesPerSample;
+        if (_bytes.Length < bytes) _bytes = new byte[bytes];
+        _writer.Write(_expanded.AsSpan(0, samples), _bytes.AsSpan(0, bytes));
+        var allBytes = device * _outChannels * _writer.BytesPerSample;
+        if (_bytes.Length < allBytes) Array.Resize(ref _bytes, allBytes);
+        if (allBytes > bytes) Array.Clear(_bytes, bytes, allBytes - bytes);
+        var target = _render!.GetBuffer(device);
+        Marshal.Copy(_bytes, 0, target, allBytes);
+        _render.ReleaseBuffer(device, AudioClientBufferFlags.None);
+        return count;
     }
 
-    /// <summary>Opens the default playback device for two-channel float sound at the song's own
-    /// rate; Windows converts to whatever the device runs at.</summary>
+    private void WriteSilence(int frames)
+    {
+        if (frames <= 0) return;
+        _render!.GetBuffer(frames);
+        _render.ReleaseBuffer(frames, AudioClientBufferFlags.Silent);
+    }
+
+    /// <summary>How many of the song's frames make <paramref name="room"/> device frames. With a
+    /// resampler that is its call (it keeps a few back between calls), and it is then told where
+    /// they will be put - so exactly that many must follow in <see cref="Write"/>.</summary>
+    private int SongFramesFor(int room)
+    {
+        if (_resampler is not { } resampler) return room;
+        var needed = resampler.ResamplePrepare(room, 2, out var input, out var offset);
+        _resampleInput = input;
+        _resampleOffset = offset;
+        return needed;
+    }
+
+    /// <summary>Song frames enough to fill the device's whole buffer once.</summary>
+    private float[] EnsureBuffer(float[] buffer)
+    {
+        var frames = (int)Math.Ceiling(_bufferFrames / _ratio) + 64;
+        return buffer.Length >= frames * 2 ? buffer : new float[frames * 2];
+    }
+
+    /// <summary>Opens the playback device as <see cref="Output"/> says. Shared: float at the
+    /// song's own rate, Windows converting to what the device runs at. Exclusive: the device
+    /// alone, at the song's rate (or the chosen one) and the most bits it takes (or the chosen
+    /// number) - falling back to a rate it does take, and to shared mode when the device can't
+    /// be had (another program holds it, or it takes none of these formats).</summary>
     private void OpenDevice()
     {
+        var output = _output;
         _enumerator ??= new MMDeviceEnumerator();
-        _device = _enumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
+        _device = OutputDevices.Open(_enumerator, output.DeviceId) ?? throw new InvalidOperationException("No playback device.");
         _deviceId = _device.ID;
+        var deviceChannels = SafeMixChannels(_device);
+        var layout = ChannelLayout.Channels(output.Layout) <= deviceChannels ? output.Layout : SpeakerLayout.Stereo;
+        var channels = ChannelLayout.Channels(layout);
+        string? note = output.Layout != layout ? "이 장치에는 스피커가 그만큼 없어 스테레오로 재생 중" : null;
+        if (output.DeviceId is not null && output.DeviceId != _deviceId) note = "고른 장치가 없어 기본 장치로 재생 중";
+
+        if (output.Exclusive)
+        {
+            var format = PickExclusiveFormat(output, channels);
+            if (format is not null && TryOpenExclusive(format))
+            {
+                _exclusiveOpen = true;
+                Prepare(format.SampleRate, channels, layout, new SampleWriter(format.ValidBits, format.IsFloat, format.BitsPerSample));
+                OutputDescription = Join($"독점 · {format.ValidBits}비트 {format.SampleRate / 1000.0:0.#}kHz · {LayoutName(layout)}"
+                                         + (format.SampleRate != _sampleRate ? $" (곡 {_sampleRate / 1000.0:0.#}kHz에서 변환)" : ""), note);
+                OutputChanged?.Invoke();
+                return;
+            }
+            note = Join(format is null ? "장치가 이 형식을 독점 모드로 받지 않아 공유 모드로 재생 중" : "다른 프로그램이 장치를 쓰고 있어 공유 모드로 재생 중", note);
+            CloseDevice();
+            _device = OutputDevices.Open(_enumerator, output.DeviceId) ?? throw new InvalidOperationException("No playback device.");
+            _deviceId = _device.ID;
+        }
+
+        _exclusiveOpen = false;
         _client = _device.AudioClient;
         _client.Initialize(AudioClientShareMode.Shared,
             AudioClientStreamFlags.EventCallback | AudioClientStreamFlags.AutoConvertPcm | AudioClientStreamFlags.SrcDefaultQuality,
-            DeviceBufferMilliseconds * 10_000L, 0, WaveFormat.CreateIeeeFloatWaveFormat(_sampleRate, 2), Guid.Empty);
+            DeviceBufferMilliseconds * 10_000L, 0, PcmFormat.CreateFloat(_sampleRate, channels), Guid.Empty);
         _client.SetEventHandle(_audioEvent.SafeWaitHandle.DangerousGetHandle());
         _bufferFrames = _client.BufferSize;
         _render = _client.AudioRenderClient;
+        Prepare(_sampleRate, channels, layout, new SampleWriter(32, isFloat: true));
+        OutputDescription = Join($"공유 · {LayoutName(layout)}", note);
+        OutputChanged?.Invoke();
+    }
+
+    private static string Join(string first, string? second) => second is null ? first : $"{first} — {second}";
+
+    private static string LayoutName(SpeakerLayout layout) => layout switch
+    {
+        SpeakerLayout.Quad => "4채널",
+        SpeakerLayout.Surround51 => "5.1채널",
+        SpeakerLayout.Surround71 => "7.1채널",
+        _ => "스테레오",
+    };
+
+    private static int SafeMixChannels(MMDevice device)
+    {
+        try { return device.AudioClient.MixFormat.Channels; }
+        catch (COMException) { return 2; }
+    }
+
+    /// <summary>The exclusive format: the wanted rate (the song's, or the chosen one) if the
+    /// device takes it, else the nearest it does (preferring the same family - 44.1/88.2/176.4 or
+    /// 48/96/192 - so the conversion is gentler); the wanted bits, else the most it takes.</summary>
+    private PcmFormat? PickExclusiveFormat(OutputSettings output, int channels)
+    {
+        using var probe = _device!.AudioClient;
+        var rate = output.ExclusiveSampleRate > 0 ? output.ExclusiveSampleRate : _sampleRate;
+        int[] bitsOrder = output.ExclusiveBits > 0 ? [output.ExclusiveBits, 32, 24, 16] : [32, 24, 16];
+        var rates = new List<int> { rate };
+        rates.AddRange(OutputDevices.Rates
+            .OrderBy(r => r % 11025 == 0 == (rate % 11025 == 0) ? 0 : 1)
+            .ThenBy(r => r < rate ? 1 : 0) // above first: no detail lost
+            .ThenBy(r => Math.Abs(r - rate)));
+        foreach (var r in rates.Distinct())
+            foreach (var bits in bitsOrder.Distinct())
+                if (OutputDevices.Format(probe, r, bits, channels) is { } format)
+                    return format;
+        return null;
+    }
+
+    /// <summary>Exclusive, event driven: the buffer is one device period, so it has to be a size
+    /// the device lines up with - when it says "not aligned", the size it wants is taken.</summary>
+    private bool TryOpenExclusive(PcmFormat format)
+    {
+        const int alignmentError = unchecked((int)0x88890019);
+        var period = Math.Max(_device!.AudioClient.DefaultDevicePeriod, 30 * 10_000L); // at least 30 ms: rides out a GC pause
+        for (var attempt = 0; attempt < 2; attempt++)
+        {
+            var client = _device.AudioClient;
+            try
+            {
+                client.Initialize(AudioClientShareMode.Exclusive, AudioClientStreamFlags.EventCallback, period, period, format, Guid.Empty);
+                _client = client;
+                _client.SetEventHandle(_audioEvent.SafeWaitHandle.DangerousGetHandle());
+                _bufferFrames = _client.BufferSize;
+                _render = _client.AudioRenderClient;
+                return true;
+            }
+            catch (COMException ex) when (ex.HResult == alignmentError && attempt == 0)
+            {
+                var frames = client.BufferSize;
+                client.Dispose();
+                period = (long)Math.Round(10_000_000.0 * frames / format.SampleRate);
+            }
+            catch (COMException)
+            {
+                client.Dispose();
+                return false;
+            }
+        }
+        return false;
+    }
+
+    private void Prepare(int rate, int channels, SpeakerLayout layout, SampleWriter writer)
+    {
+        _outRate = rate;
+        _outChannels = channels;
+        _ratio = (double)rate / _sampleRate;
+        _layout = new ChannelLayout(layout, rate);
+        _writer = writer;
+        if (rate == _sampleRate)
+        {
+            _resampler = null;
+            return;
+        }
+        _resampler = new WdlResampler();
+        _resampler.SetMode(true, 2, false);
+        _resampler.SetFilterParms();
+        _resampler.SetFeedMode(false); // asked for so many out, it says how many in
+        _resampler.SetRates(_sampleRate, rate);
     }
 
     private void CloseDevice()
@@ -663,12 +907,14 @@ public sealed class TonePlayer : IDisposable
         _deviceId = null;
     }
 
-    private string? DefaultDeviceId()
+    /// <summary>The device the sound should be on now: the chosen one while it is there, else
+    /// Windows' default (null when there is none).</summary>
+    private string? WantedDeviceId()
     {
         try
         {
-            using var device = _enumerator!.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
-            return device.ID;
+            using var device = OutputDevices.Open(_enumerator!, _output.DeviceId);
+            return device?.ID;
         }
         catch
         {

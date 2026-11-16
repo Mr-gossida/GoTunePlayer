@@ -16,8 +16,12 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     private readonly Network.NetworkLibrary _network;
 
-    public SettingsViewModel(AppSettings settings, MergeViewModel merge, PlaybackViewModel playback, Network.NetworkLibrary network, EqualizerViewModel equalizer)
+    public SettingsViewModel(AppSettings settings, MergeViewModel merge, PlaybackViewModel playback, Network.NetworkLibrary network, EqualizerViewModel equalizer,
+        HotkeysViewModel hotkeys, OutputViewModel output, HudViewModel hud)
     {
+        Hud = hud;
+        Hotkeys = hotkeys;
+        Output = output;
         Equalizer = equalizer;
         _settings = settings;
         _merge = merge;
@@ -34,6 +38,15 @@ public sealed partial class SettingsViewModel : ObservableObject
         _startWithWindows = AutoStart.IsEnabled();
         RefreshNetwork();
     }
+
+    /// <summary>설정 › 단축키.</summary>
+    public HotkeysViewModel Hotkeys { get; }
+
+    /// <summary>설정 › 음향 › 출력.</summary>
+    public OutputViewModel Output { get; }
+
+    /// <summary>설정 › 재생 › HUD.</summary>
+    public HudViewModel Hud { get; }
 
     // --- network ---
 

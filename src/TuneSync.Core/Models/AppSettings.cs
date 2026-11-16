@@ -130,6 +130,15 @@ public sealed class AppSettings
 
     /// <summary>The equalizer and tone controls.</summary>
     public ToneSettings Tone { get; set; } = new();
+
+    /// <summary>Keys that control the player from anywhere in Windows.</summary>
+    public HotkeySettings Hotkeys { get; set; } = new();
+
+    /// <summary>The playback device and how the sound goes to it.</summary>
+    public OutputSettings Output { get; set; } = new();
+
+    /// <summary>The always-on-top HUD.</summary>
+    public HudSettings Hud { get; set; } = new();
 }
 
 public enum ScreenSaverExit

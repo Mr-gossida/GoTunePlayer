@@ -87,15 +87,19 @@ public partial class EqualizerPanel : UserControl
         ReverbCard.IsOpen = false;
     }
 
-    /// <summary>The reverb card stands just above its button, right edges in line (the button is
-    /// at the panel's right end, so the card grows to the left, over the panel). The sizes come in
-    /// screen pixels and without the card's margin (the room for its shadow), so that margin is
-    /// added here, scaled to the screen.</summary>
+    /// <summary>The reverb card opens beside its button, out over the bands, bottom edges in line
+    /// (the button sits at the bottom of the tone card); where there's no room there, above the
+    /// button. The sizes come in screen pixels and without the card's margin (the room for its
+    /// shadow), so that margin is added here, scaled to the screen.</summary>
     private CustomPopupPlacement[] PlaceReverbCard(Size popup, Size target, Point offset)
     {
         var scale = VisualTreeHelper.GetDpi(ReverbOpener).DpiScaleX;
-        double margin = 12 * scale, gap = 6 * scale;
-        return [new CustomPopupPlacement(new Point(target.Width - popup.Width - margin, -popup.Height - margin - gap), PopupPrimaryAxis.Horizontal)];
+        double margin = 12 * scale, gap = 8 * scale;
+        return
+        [
+            new CustomPopupPlacement(new Point(target.Width + gap - margin, target.Height - popup.Height - margin), PopupPrimaryAxis.Horizontal),
+            new CustomPopupPlacement(new Point(-margin, -popup.Height - gap - margin), PopupPrimaryAxis.Vertical),
+        ];
     }
 
     /// <summary>Wide: the tone bars on the left of the bands. Narrow: under them. Either way
@@ -110,10 +114,12 @@ public partial class EqualizerPanel : UserControl
         var wide = ActualWidth >= WideFrom;
         var readings = ActualWidth >= ReadingsFrom;
         var across = wide ? 2 : width >= FourAcrossFrom ? 4 : 2;
-        // the last one also drops the dB readings (the preamp's too): the handles show the levels
-        (int Columns, bool Meter, bool Readings)[] tries = wide
-            ? [(1, true, true), (2, true, true), (2, false, true), (2, false, false)]
-            : [(2, true, true), (across, true, true), (across, false, true), (across, false, false)];
+        // Stacked switches (one per row) where the tone card is beside the bands; side by side
+        // when it is short of height, and always under the bands (it's wide there).
+        // The last one also drops the dB readings (the preamp's too): the handles show the levels.
+        (int Columns, bool Meter, bool Stacked, bool Readings)[] tries = wide
+            ? [(1, true, true, true), (2, true, true, true), (2, false, true, true), (2, false, false, true), (2, false, false, false)]
+            : [(2, true, false, true), (across, true, false, true), (across, false, false, true), (across, false, false, false)];
 
         Grid.SetColumn(ToneSection, 0);
         Grid.SetRow(ToneSection, wide ? 0 : 1);
@@ -126,8 +132,9 @@ public partial class EqualizerPanel : UserControl
         ToneSection.Width = wide ? ToneWidth : double.NaN;
 
         var need = 0.0;
-        foreach (var (columns, meter, showReadings) in tries)
+        foreach (var (columns, meter, stacked, showReadings) in tries)
         {
+            ArrangeSwitches(stacked, wide ? ToneWidth - 40 : width - 16);
             ToneBars.Columns = columns;
             foreach (var bar in new[] { BassBar, TrebleBar, WidthBar, BalanceBar })
                 bar.Margin = columns == 1 ? new Thickness(0, 10, 0, 10) : new Thickness(4, 2, 4, 2);
@@ -139,6 +146,7 @@ public partial class EqualizerPanel : UserControl
             // last size until told its children changed)
             Remeasure(ToneBars, ToneSection);
             Remeasure(MeterBlock, ToneSection);
+            Remeasure(Switches, ToneSection);
             Remeasure(BandReadings, BandSection);
             Remeasure(PreampReading, BandSection);
             var bandWidth = wide ? width - ToneWidth - SectionGap : width;
@@ -151,6 +159,25 @@ public partial class EqualizerPanel : UserControl
         // set as the body's least height: within it the bands take what is left over
         Body.MinHeight = need;
     }
+
+    /// <summary>The limiter, headroom and reverb switches: stacked, a row each with its reading
+    /// beside it, or side by side; side by side, the readings stay only if each has the room.
+    /// A pill keeps one width (all three the same) so the readings line up when stacked.</summary>
+    private void ArrangeSwitches(bool stacked, double width)
+    {
+        Switches.Columns = stacked ? 1 : 3;
+        var readings = stacked || width / 3 >= SwitchWithReadingWidth;
+        // stacked, one width so the readings line up; side by side, each as wide as its name
+        foreach (var pill in new[] { LimiterPill, HeadroomPill, ReverbPill })
+            pill.Width = stacked ? PillWidth : double.NaN;
+        var shown = readings ? Visibility.Visible : Visibility.Collapsed;
+        LimiterReading.Visibility = shown;
+        HeadroomReading.Visibility = shown;
+        ReverbSummary.Visibility = shown;
+    }
+
+    /// <summary>A switch's pill, and a pill with the reading beside it.</summary>
+    private const double PillWidth = 86, SwitchWithReadingWidth = 150;
 
     private static void Remeasure(DependencyObject from, UIElement upTo)
     {

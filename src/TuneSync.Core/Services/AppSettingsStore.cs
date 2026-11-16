@@ -21,6 +21,9 @@ public static class AppSettingsStore
             var json = File.ReadAllText(path);
             var settings = JsonSerializer.Deserialize<AppSettings>(json) ?? new AppSettings();
             (settings.Tone ??= new ToneSettings()).Normalize();
+            (settings.Hotkeys ??= new HotkeySettings()).Normalize();
+            (settings.Output ??= new OutputSettings()).Normalize();
+            (settings.Hud ??= new HudSettings()).Normalize();
             return settings;
         }
         catch

@@ -43,6 +43,21 @@ public partial class ShellWindow
         Hide();
     }
 
+    /// <summary>The window hotkeys (설정 › 단축키): the mini player in and out, the HUD on and off.</summary>
+    public void RunWindowHotkey(HotkeyAction action)
+    {
+        switch (action)
+        {
+            case HotkeyAction.MiniPlayer:
+                if (_settings.PlayerMode == PlayerMode.Full) EnterLastMiniMode();
+                else ExitMiniMode();
+                break;
+            case HotkeyAction.Hud:
+                ToggleHud();
+                break;
+        }
+    }
+
     public void ExitMiniMode()
     {
         _settings.PlayerMode = PlayerMode.Full;

@@ -103,6 +103,12 @@ public partial class App : Application
                 shell.EnterMiniMode(settings.PlayerMode); // reopen in the mini player last used
             }
             try { AutoStart.Refresh(); } catch { /* registry unavailable - the toggle shows its state */ }
+            // keys that work from anywhere in Windows (설정 › 단축키)
+            var hotkeys = _host.Services.GetRequiredService<GlobalHotkeys>();
+            hotkeys.WindowAction = shell.RunWindowHotkey;
+            hotkeys.Start();
+            // the HUD, if it was showing when the app last closed
+            _host.Services.GetRequiredService<HudViewModel>().Restore();
         }
         catch (Exception ex)
         {
@@ -116,6 +122,8 @@ public partial class App : Application
 
     protected override void OnExit(ExitEventArgs e)
     {
+        _host?.Services.GetService<GlobalHotkeys>()?.Dispose();
+        _host?.Services.GetService<HudViewModel>()?.Shutdown();
         _host?.Dispose();
         base.OnExit(e);
     }
@@ -170,6 +178,10 @@ public partial class App : Application
         services.AddSingleton<RenameViewModel>();
         services.AddSingleton<SettingsViewModel>();
         services.AddSingleton<SleepTimerViewModel>();
+        services.AddSingleton<GlobalHotkeys>();
+        services.AddSingleton<HotkeysViewModel>();
+        services.AddSingleton<OutputViewModel>();
+        services.AddSingleton<HudViewModel>();
 
         services.AddSingleton<LibraryView>();
         services.AddSingleton<PlayView>();
