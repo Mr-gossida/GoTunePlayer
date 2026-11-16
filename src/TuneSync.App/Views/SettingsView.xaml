@@ -239,12 +239,22 @@
                         <ComboBox Width="200" ItemsSource="{Binding Equalizer.Presets}" DisplayMemberPath="Name"
                                   SelectedItem="{Binding Equalizer.SelectedPreset}"/>
                     </ui:CardControl>
-                    <ui:CardControl Style="{StaticResource Card}" Icon="{ui:SymbolIcon ShieldCheckmark24}" Tag="자동 헤드룸 클리핑 리미터 찌그러짐 음량"
-                                    ToolTip="끄면 전체 음량은 그대로 두고, 최대 크기를 넘는 부분만 리미터가 눌러 줍니다.">
+                    <ui:CardControl Style="{StaticResource Card}" Icon="{ui:SymbolIcon ShieldCheckmark24}" Tag="리미터 클리핑 찌그러짐 음량 최대 크기"
+                                    ToolTip="끄면 올린 소리가 최대 크기를 넘을 때 그대로 나가 찌그러질 수 있습니다.">
+                        <ui:CardControl.Header>
+                            <StackPanel>
+                                <ui:TextBlock Text="리미터" FontTypography="Body"/>
+                                <ui:TextBlock Text="소리가 최대 크기를 넘으려 할 때 부드럽게 눌러 찌그러짐을 막기" Style="{StaticResource Desc}"/>
+                            </StackPanel>
+                        </ui:CardControl.Header>
+                        <ui:ToggleSwitch IsChecked="{Binding Equalizer.Limiter}" OnContent="켬" OffContent="끔"/>
+                    </ui:CardControl>
+                    <ui:CardControl Style="{StaticResource Card}" Icon="{ui:SymbolIcon ArrowDown24}" Tag="자동 헤드룸 클리핑 리미터 찌그러짐 음량"
+                                    ToolTip="끄면 전체 음량은 그대로 둡니다.">
                         <ui:CardControl.Header>
                             <StackPanel>
                                 <ui:TextBlock Text="자동 헤드룸" FontTypography="Body"/>
-                                <ui:TextBlock Text="올린 만큼 전체 음량을 미리 낮춰 소리가 찌그러지지 않게" Style="{StaticResource Desc}"/>
+                                <ui:TextBlock Text="올린 만큼 전체 음량을 미리 낮추기 (소리가 작아집니다)" Style="{StaticResource Desc}"/>
                             </StackPanel>
                         </ui:CardControl.Header>
                         <ui:ToggleSwitch IsChecked="{Binding Equalizer.AutoHeadroom}" OnContent="켬" OffContent="끔"/>

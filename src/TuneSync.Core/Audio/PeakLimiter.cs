@@ -44,6 +44,10 @@ public sealed class PeakLimiter
         _release = 1 - Math.Exp(-1.0 / (sampleRate * releaseSeconds));
     }
 
+    /// <summary>Off, nothing is turned down (the sound still comes out the same few milliseconds
+    /// later, so switching it while music plays doesn't skip); a reduction in progress fades out.</summary>
+    public bool IsOn { get; set; } = true;
+
     /// <summary>How many frames later the sound comes out.</summary>
     public int LatencyFrames => _lookahead;
 
@@ -67,7 +71,7 @@ public sealed class PeakLimiter
             if (!(peak <= float.MaxValue)) { left = right = peak = 0; } // NaN or infinity never reaches the speakers
 
             // The gain this frame needs; after a peak it recovers slowly rather than jumping back.
-            var needed = peak > Ceiling ? Ceiling / (double)peak : 1.0;
+            var needed = peak > Ceiling && IsOn ? Ceiling / (double)peak : 1.0;
             _wanted += (1 - _wanted) * _release;
             if (_wanted > 0.999999) _wanted = 1;
             if (needed < _wanted) _wanted = needed;

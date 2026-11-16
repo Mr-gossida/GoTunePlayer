@@ -33,6 +33,10 @@ public sealed class ToneSettings
     [System.Text.Json.Serialization.JsonPropertyName("Headroom")]
     public bool AutoHeadroom { get; set; }
 
+    /// <summary>Holds the sound just under full scale when a boost would push it past (see
+    /// <see cref="Audio.PeakLimiter"/>). Off, such peaks go out as they are and Windows clips them.</summary>
+    public bool Limiter { get; set; } = true;
+
     /// <summary>The preset the bands were last set from: a built-in's id, a saved preset's name,
     /// or null once the bands were moved by hand.</summary>
     public string? Preset { get; set; } = "flat";

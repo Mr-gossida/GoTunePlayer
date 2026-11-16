@@ -135,6 +135,25 @@ public class ToneTests
     }
 
     [Fact]
+    public void LimiterOff_LetsTheBoostThrough_AndOnAgainHoldsIt()
+    {
+        var boosted = Settings(s => { s.PreampDb = 12; s.Limiter = false; });
+        var processor = new ToneProcessor(Rate) { Config = ToneConfig.From(boosted) };
+        var data = Sine(1000, 0.5, Rate);
+        processor.Process(data);
+        Assert.Equal(0.5 * Math.Pow(10, 12 / 20.0), data.Skip(Rate).Max(Math.Abs), 2); // +12 dB, untouched
+        Assert.Equal(0, processor.TakeLimiterReductionDb());
+
+        boosted.Limiter = true;
+        processor.Config = ToneConfig.From(boosted);
+        data = Sine(1000, 0.5, Rate);
+        processor.Process(data);
+        Assert.All(data.Skip(Rate / 10), v => Assert.InRange(Math.Abs(v), 0, 1f));
+        Assert.True(processor.TakeLimiterReductionDb() > 5);
+        Assert.True(new ToneSettings().Limiter); // on unless switched off
+    }
+
+    [Fact]
     public void Limiter_TurnsALoudToneDownToTheCeiling_WithoutDistortingItsShape()
     {
         var limiter = new PeakLimiter(Rate);

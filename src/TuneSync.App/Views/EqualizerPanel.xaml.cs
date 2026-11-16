@@ -243,6 +243,12 @@ public partial class EqualizerPanel : UserControl
     private void ShowLimiter()
     {
         var reduction = _playback.TakeLimiterReductionDb();
+        if (!_viewModel.Limiter)
+        {
+            // Switched off: nothing to show, not even the tail of a reduction that is fading out.
+            reduction = 0;
+            _limiterLitUntil = default;
+        }
         if (reduction > 0.1)
         {
             _limiterLitUntil = DateTime.UtcNow.AddMilliseconds(700);
@@ -252,7 +258,7 @@ public partial class EqualizerPanel : UserControl
         else if (LimiterLamp.Opacity > 0.5 && DateTime.UtcNow > _limiterLitUntil)
         {
             LimiterText.Text = "리미터";
-            LimiterLamp.Opacity = 0.22;
+            LimiterLamp.Opacity = 0.35;
         }
     }
 

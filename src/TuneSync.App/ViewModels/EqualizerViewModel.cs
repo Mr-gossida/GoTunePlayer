@@ -57,6 +57,7 @@ public sealed partial class EqualizerViewModel : ObservableObject
         _width = _tone.Width;
         _balance = _tone.Balance;
         _autoHeadroom = _tone.AutoHeadroom;
+        _limiter = _tone.Limiter;
         RebuildPresets();
         _selectedPreset = Presets.FirstOrDefault(p => p.Key == _tone.Preset);
 
@@ -108,6 +109,9 @@ public sealed partial class EqualizerViewModel : ObservableObject
     [ObservableProperty]
     private bool _autoHeadroom;
 
+    [ObservableProperty]
+    private bool _limiter;
+
     /// <summary>Null while the bands don't match a preset ("사용자 지정").</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(PresetName), nameof(CanEditPreset))]
@@ -157,6 +161,7 @@ public sealed partial class EqualizerViewModel : ObservableObject
     partial void OnWidthChanged(double value) { _tone.Width = value; Publish(); }
     partial void OnBalanceChanged(double value) { _tone.Balance = value; Publish(); }
     partial void OnAutoHeadroomChanged(bool value) { _tone.AutoHeadroom = value; Publish(); }
+    partial void OnLimiterChanged(bool value) { _tone.Limiter = value; Publish(); }
 
     partial void OnSelectedPresetChanged(EqPresetChoice? value)
     {

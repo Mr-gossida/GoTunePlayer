@@ -29,6 +29,39 @@
             <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="HorizontalAlignment" Value="Center"/>
         </Style>
+        <!-- an on/off button: an outlined pill, filled with the accent while on -->
+        <Style x:Key="OnOff" TargetType="ToggleButton">
+            <Setter Property="Height" Value="30"/>
+            <Setter Property="Padding" Value="14,0"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ToggleButton">
+                        <Border x:Name="Bd" CornerRadius="15" Background="Transparent" BorderThickness="1"
+                                BorderBrush="{DynamicResource PlayerTrackBrush}" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource PlayerHoverBrush}"/>
+                            </Trigger>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource PlayerAccentBrush}"/>
+                                <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource PlayerAccentBrush}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource PlayerOnAccentBrush}"/>
+                                <Setter Property="FontWeight" Value="SemiBold"/>
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource PlayerAccentBrush}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
         <Style x:Key="HeaderButton" TargetType="ui:Button" BasedOn="{StaticResource PlayerIconButtonStyle}">
             <Setter Property="Margin" Value="2,0,0,0"/>
             <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}"/>
@@ -260,7 +293,7 @@
         </Grid>
         </ScrollViewer>
 
-        <!-- ===== headroom, bypass note, limiter ===== -->
+        <!-- ===== limiter, headroom, bypass note ===== -->
         <Grid Grid.Row="3" Margin="2,12,2,0">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto"/>
@@ -268,19 +301,27 @@
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
-            <CheckBox IsChecked="{Binding AutoHeadroom}" Content="자동 헤드룸" VerticalAlignment="Center"
-                      ToolTip="올린 만큼 전체 음량을 미리 낮춰, 소리가 찌그러지지 않게 합니다. 끄면 넘치는 부분만 리미터가 눌러 줍니다."/>
-            <TextBlock Grid.Column="1" Text="{Binding HeadroomText}" Margin="8,0,0,0" FontSize="12" VerticalAlignment="Center"
-                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+            <!-- 리미터: on/off, with a lamp (and how much it holds back) while it works -->
+            <ToggleButton Style="{StaticResource OnOff}" IsChecked="{Binding Limiter}" VerticalAlignment="Center"
+                          ToolTip="켜면 소리가 최대 크기를 넘으려 할 때 부드럽게 눌러 찌그러짐을 막습니다. 불이 자주 켜지면 프리앰프를 낮추세요. 끄면 넘친 부분이 그대로 나가 찌그러질 수 있습니다.">
+                <StackPanel Orientation="Horizontal">
+                    <Ellipse x:Name="LimiterLamp" Width="7" Height="7" Opacity="0.35" Margin="0,0,7,0" VerticalAlignment="Center"
+                             Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=ToggleButton}}"/>
+                    <TextBlock x:Name="LimiterText" Text="리미터" VerticalAlignment="Center"/>
+                </StackPanel>
+            </ToggleButton>
+            <ToggleButton Grid.Column="1" Style="{StaticResource OnOff}" IsChecked="{Binding AutoHeadroom}" Margin="8,0,0,0" VerticalAlignment="Center"
+                          ToolTip="켜면 올린 만큼 전체 음량을 미리 낮춰 리미터가 걸릴 일을 없앱니다(소리가 작아집니다). 끄면 음량은 그대로 둡니다.">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="자동 헤드룸" VerticalAlignment="Center"/>
+                    <TextBlock Text="{Binding HeadroomText}" Margin="7,0,0,0" VerticalAlignment="Center"
+                               Visibility="{Binding AutoHeadroom, Converter={StaticResource BoolToVisibility}}"/>
+                </StackPanel>
+            </ToggleButton>
             <StackPanel x:Name="BypassNotice" Grid.Column="2" Orientation="Horizontal" Margin="16,0,8,0" VerticalAlignment="Center" Visibility="Collapsed">
                 <ui:SymbolIcon Symbol="Info24" FontSize="14" Margin="0,0,6,0" Foreground="{DynamicResource PlayerAccentBrush}"/>
                 <TextBlock Text="이 곡은 Windows 기본 재생기로 재생되어 이퀄라이저가 적용되지 않습니다" FontSize="12"
                            VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
-            </StackPanel>
-            <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center"
-                        ToolTip="소리가 최대 크기를 넘으려 할 때 부드럽게 눌러 주는 장치입니다. 불이 자주 켜지면 프리앰프를 낮추세요.">
-                <Ellipse x:Name="LimiterLamp" Width="8" Height="8" Fill="{DynamicResource PlayerAccentBrush}" Opacity="0.22" Margin="0,0,6,0"/>
-                <TextBlock x:Name="LimiterText" Text="리미터" FontSize="12" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
             </StackPanel>
         </Grid>
     </Grid>

@@ -25,6 +25,9 @@ public sealed class ToneConfig
     public double Width { get; private init; } = 1;
     public double Balance { get; private init; }
 
+    /// <summary>Whether peaks past full scale are held down.</summary>
+    public bool Limiter { get; private init; } = true;
+
     public static ToneConfig From(ToneSettings settings)
     {
         if (!settings.Enabled) return Neutral;
@@ -35,6 +38,7 @@ public sealed class ToneConfig
             HeadroomDb = headroom,
             Width = Math.Clamp(settings.Width, 0, 2),
             Balance = Math.Clamp(settings.Balance, -1, 1),
+            Limiter = settings.Limiter,
         };
         ToneCurve.FilterGains(settings, config._gains);
         return config;
@@ -157,6 +161,7 @@ public sealed class ToneProcessor
         _sideTarget = (float)config.Width;
         _leftTarget = (float)Math.Min(1, 1 - config.Balance);
         _rightTarget = (float)Math.Min(1, 1 + config.Balance);
+        _limiter.IsOn = config.Limiter;
     }
 
     private void ProcessStep(Span<float> frames)
