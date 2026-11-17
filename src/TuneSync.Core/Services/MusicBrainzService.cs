@@ -12,7 +12,7 @@ namespace TuneSync.Core.Services;
 /// See https://musicbrainz.org/doc/MusicBrainz_API/Rate_Limiting.</summary>
 public sealed class MusicBrainzService : IMusicBrainzService, IDisposable
 {
-    private const string UserAgentString = "GoTunePlayer/1.0";
+    public const string UserAgentString = "GoTunePlayer/1.0";
     private static readonly TimeSpan MinRequestInterval = TimeSpan.FromMilliseconds(1100);
 
     private readonly HttpClient _mbHttp;
@@ -37,28 +37,7 @@ public sealed class MusicBrainzService : IMusicBrainzService, IDisposable
         if (string.IsNullOrWhiteSpace(artist) || string.IsNullOrWhiteSpace(title))
             return null;
 
-        var query = $"artist:\"{EscapeLucene(artist)}\" AND recording:\"{EscapeLucene(title)}\"";
-        var url = $"recording?query={Uri.EscapeDataString(query)}&fmt=json&limit=5";
-
-        // A failed request is an error, not "no match": the caller shows it (검색 오류: …) instead
-        // of telling the user the song doesn't exist.
-        JsonNode? root;
-        try
-        {
-            using var resp = await RateLimitedGetAsync(url, ct);
-            if (!resp.IsSuccessStatusCode)
-                throw new HttpRequestException(resp.StatusCode is HttpStatusCode.ServiceUnavailable or HttpStatusCode.TooManyRequests
-                    ? "MusicBrainz가 요청이 많아 잠시 응답하지 않습니다. 조금 뒤 다시 시도하세요."
-                    : $"MusicBrainz 응답 오류 ({(int)resp.StatusCode})");
-            var json = await resp.Content.ReadAsStringAsync(ct);
-            root = JsonNode.Parse(json);
-        }
-        catch (Exception ex) when (!ct.IsCancellationRequested && ex is not HttpRequestException { InnerException: null })
-        {
-            throw new HttpRequestException("MusicBrainz에 연결하지 못했습니다. 인터넷 연결을 확인하세요.", ex);
-        }
-
-        var recordings = root?["recordings"]?.AsArray();
+        var recordings = await SearchRecordingsAsync(artist, title, 5, ct);
         if (recordings is null || recordings.Count == 0) return null;
 
         // MusicBrainz treats a studio recording and a live/session recording of the same song as
@@ -133,6 +112,35 @@ public sealed class MusicBrainzService : IMusicBrainzService, IDisposable
             var secondaryTypes = releaseGroup["secondary-types"]?.AsArray();
             return secondaryTypes is null || secondaryTypes.Count == 0;
         }
+    }
+
+    /// <summary>The raw recording search (each recording with its releases), one request through
+    /// the shared rate limit. Also used by the cover search to list every release a song is on.
+    /// Throws <see cref="HttpRequestException"/> with a Korean message the caller can show.</summary>
+    public async Task<JsonArray?> SearchRecordingsAsync(string artist, string title, int limit, CancellationToken ct = default)
+    {
+        var query = $"artist:\"{EscapeLucene(artist)}\" AND recording:\"{EscapeLucene(title)}\"";
+        var url = $"recording?query={Uri.EscapeDataString(query)}&fmt=json&limit={limit}";
+
+        // A failed request is an error, not "no match": the caller shows it (검색 오류: …) instead
+        // of telling the user the song doesn't exist.
+        JsonNode? root;
+        try
+        {
+            using var resp = await RateLimitedGetAsync(url, ct);
+            if (!resp.IsSuccessStatusCode)
+                throw new HttpRequestException(resp.StatusCode is HttpStatusCode.ServiceUnavailable or HttpStatusCode.TooManyRequests
+                    ? "MusicBrainz가 요청이 많아 잠시 응답하지 않습니다. 조금 뒤 다시 시도하세요."
+                    : $"MusicBrainz 응답 오류 ({(int)resp.StatusCode})");
+            var json = await resp.Content.ReadAsStringAsync(ct);
+            root = JsonNode.Parse(json);
+        }
+        catch (Exception ex) when (!ct.IsCancellationRequested && ex is not HttpRequestException { InnerException: null })
+        {
+            throw new HttpRequestException("MusicBrainz에 연결하지 못했습니다. 인터넷 연결을 확인하세요.", ex);
+        }
+
+        return root?["recordings"]?.AsArray();
     }
 
     /// <summary>Downloads front cover art for a release from the Cover Art Archive. Returns null

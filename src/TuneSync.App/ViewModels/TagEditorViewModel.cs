@@ -9,6 +9,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using TuneSync.Core.Models;
 using TuneSync.Core.Services;
+using TuneSync.Core.Services.CoverSearch;
 
 namespace TuneSync.App.ViewModels;
 
@@ -48,11 +49,12 @@ public sealed partial class TagEditorViewModel : ObservableObject
 
     private readonly IAutoFillService _autoFill;
 
-    public TagEditorViewModel(LibraryViewModel library, PlaybackViewModel playback, IAutoFillService autoFill)
+    public TagEditorViewModel(LibraryViewModel library, PlaybackViewModel playback, IAutoFillService autoFill, ICoverSearchService coverSearch)
     {
         _library = library;
         _playback = playback;
         _autoFill = autoFill;
+        _coverSearch = coverSearch;
 
         TitleField = new(this, TagField.Title);
         ArtistField = new(this, TagField.Artist, usesSuggestions: true);
@@ -336,7 +338,10 @@ public sealed partial class TagEditorViewModel : ObservableObject
     private Task SearchTagsAsync() => SearchAsync(new AutoFillOptions(Tags: true, Cover: false, Lyrics: false, ReplaceExisting: true, ReplaceTags: true), "태그");
 
     [RelayCommand]
-    private Task SearchCoverAsync() => SearchAsync(new AutoFillOptions(Tags: false, Cover: true, Lyrics: false, ReplaceExisting: true), "커버");
+    private Task SearchCoverAsync() =>
+        IsSearching ? Task.CompletedTask
+        : _selection.Count == 1 ? SearchCoverCandidatesAsync(_selection[0])
+        : SearchAsync(new AutoFillOptions(Tags: false, Cover: true, Lyrics: false, ReplaceExisting: true), "커버");
 
     [RelayCommand]
     private Task SearchLyricsAsync() => SearchAsync(new AutoFillOptions(Tags: false, Cover: false, Lyrics: true, ReplaceExisting: true), "가사");
@@ -435,6 +440,7 @@ public sealed partial class TagEditorViewModel : ObservableObject
     private void LoadCover()
     {
         var version = ++_coverVersion;
+        RefreshCandidateList();
         CoverTiles.Clear();
         OnPropertyChanged(nameof(ShowCoverPlaceholder));
         IsCoverPending = _selection.Any(f => f.PendingCover is not null);
@@ -445,7 +451,11 @@ public sealed partial class TagEditorViewModel : ObservableObject
             if (file.PendingCover is { } pending)
             {
                 CoverImage = pending.Length > 0 ? ImageHelper.ToBitmapImage(pending) : null;
-                CoverInfo = pending.Length > 0 ? $"새 커버 · {Dimensions(CoverImage)} (저장 전)" : "커버를 지웁니다 (저장 전)";
+                var picked = CoverCandidates.FirstOrDefault(c => c.IsSelected && !c.IsOriginal);
+                CoverInfo = pending.Length == 0 ? "커버를 지웁니다 (저장 전)"
+                    : picked?.Candidate is { } found
+                        ? $"{(picked.IsRecommended ? "추천 커버" : "새 커버")} · {Dimensions(CoverImage)} · {found.Source} · 일치 {found.ScorePercent}%"
+                        : $"새 커버 · {Dimensions(CoverImage)} (저장 전)";
                 return;
             }
             CoverImage = file.CoverThumbnail;

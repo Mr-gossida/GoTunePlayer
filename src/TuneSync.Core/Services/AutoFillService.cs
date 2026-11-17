@@ -1,5 +1,6 @@
 using System.Text.Json;
 using TuneSync.Core.Models;
+using TuneSync.Core.Services.CoverSearch;
 
 namespace TuneSync.Core.Services;
 
@@ -7,8 +8,11 @@ namespace TuneSync.Core.Services;
 /// regardless of "완전 자동" vs "검토 후 적용" - the caller (AutoMatchViewModel) is what decides
 /// whether to call ApplyProposals immediately on everything or wait for the user to pick rows.
 /// Keeping that decision entirely in the caller is what lets both modes share one pipeline.</summary>
-public sealed class AutoFillService(IMusicBrainzService musicBrainz, ILyricsService lyrics) : IAutoFillService
+public sealed class AutoFillService(IMusicBrainzService musicBrainz, ILyricsService lyrics, ICoverSearchService? covers = null) : IAutoFillService
 {
+    /// <summary>A cover put in without the user choosing it must match at least this well.</summary>
+    public const double AutoCoverMinScore = 0.7;
+
     public async Task<List<AutoFillProposal>> BuildProposalsAsync(
         IEnumerable<LibraryFile> files,
         IProgress<string>? progress = null,
@@ -48,7 +52,9 @@ public sealed class AutoFillService(IMusicBrainzService musicBrainz, ILyricsServ
             // when MusicBrainz has no match).
             MusicBrainzMatch? match = null;
             string? searchError = null;
-            if (wantTags || wantCover)
+            // With the cover search, a cover-only search doesn't need the MusicBrainz match: the
+            // cover search asks MusicBrainz (and the other sources) itself.
+            if (wantTags || (wantCover && covers is null))
             {
                 try
                 {
@@ -63,7 +69,22 @@ public sealed class AutoFillService(IMusicBrainzService musicBrainz, ILyricsServ
             if (wantTags && match is not null)
                 FillProposedTagFields(proposal, file.Tags, match, opt.ReplaceTags);
 
-            if (wantCover && !string.IsNullOrWhiteSpace(match?.ReleaseMbid))
+            if (wantCover && covers is not null)
+            {
+                try
+                {
+                    var album = string.IsNullOrWhiteSpace(file.Tags.Album) ? match?.Album : file.Tags.Album;
+                    var found = await covers.SearchAsync(new CoverQuery(artist, title, album, file.Duration), null, ct);
+                    // The best few that match well enough; the first whose image downloads wins.
+                    foreach (var candidate in found.Candidates.Where(c => c.Score >= AutoCoverMinScore).Take(3))
+                    {
+                        proposal.ProposedCoverBytes = await covers.GetFullAsync(candidate, ct);
+                        if (proposal.ProposedCoverBytes is not null) break;
+                    }
+                }
+                catch (Exception ex) when (ct.IsCancellationRequested == false) { searchError ??= ex.Message; }
+            }
+            else if (wantCover && !string.IsNullOrWhiteSpace(match?.ReleaseMbid))
             {
                 try { proposal.ProposedCoverBytes = await musicBrainz.GetCoverAsync(match.ReleaseMbid, ct); }
                 catch (Exception) when (ct.IsCancellationRequested == false) { /* best-effort */ }
@@ -84,7 +105,7 @@ public sealed class AutoFillService(IMusicBrainzService musicBrainz, ILyricsServ
 
             proposal.Status = proposal.HasAnyProposal ? "제안 생성됨"
                 : searchError is not null ? $"검색 오류: {searchError}"
-                : match is null && !wantLyrics ? "매칭 실패"
+                : match is null && !wantLyrics && !(wantCover && covers is not null) ? "매칭 실패"
                 : "찾지 못함";
         }
 
@@ -106,6 +127,13 @@ public sealed class AutoFillService(IMusicBrainzService musicBrainz, ILyricsServ
         if (Text(current.AlbumArtist, match.AlbumArtist)) proposal.ProposedAlbumArtist = match.AlbumArtist;
         if (Number(current.Track, match.Track)) proposal.ProposedTrack = match.Track;
         if (Number(current.Disc, match.Disc)) proposal.ProposedDisc = match.Disc;
+    }
+
+    /// <summary>What the cover search looks for: the tags, or the file name when they're empty.</summary>
+    public static CoverQuery CoverQueryFor(LibraryFile file)
+    {
+        var (artist, title) = ResolveSearchKey(file);
+        return new CoverQuery(artist, title, string.IsNullOrWhiteSpace(file.Tags.Album) ? null : file.Tags.Album, file.Duration);
     }
 
     private static (string Artist, string Title) ResolveSearchKey(LibraryFile file)

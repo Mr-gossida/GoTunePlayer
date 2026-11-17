@@ -529,7 +529,8 @@
                 </ScrollViewer>
 
                 <!-- ===== 커버 ===== -->
-                <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Focusable="False"
+                <ScrollViewer x:Name="CoverScroll" Grid.Row="2" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Focusable="False"
+                              ScrollChanged="CoverScroll_ScrollChanged"
                               Visibility="{Binding Tab, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=Cover}">
                     <Grid Margin="0,0,14,8">
                         <StackPanel Visibility="{Binding HasSelection, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}">
@@ -537,8 +538,20 @@
                             <Border x:Name="CoverDropZone" CornerRadius="8" Background="{DynamicResource ControlFillColorSecondaryBrush}"
                                     Cursor="Hand" ToolTip="클릭하면 크게 봅니다" MouseLeftButtonUp="EditorCover_Click"
                                     BorderThickness="1" BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
-                                    Height="{Binding ActualWidth, RelativeSource={RelativeSource Self}}" MaxHeight="340"
+                                    Height="{Binding ActualWidth, RelativeSource={RelativeSource Self}}"
                                     AllowDrop="True" DragEnter="CoverDrop_DragOver" DragOver="CoverDrop_DragOver" DragLeave="CoverDrop_DragLeave" Drop="CoverDrop_Drop">
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Setter Property="MaxHeight" Value="340"/>
+                                        <Style.Triggers>
+                                            <!-- smaller while search results are shown, so the gallery is in view without scrolling -->
+                                            <DataTrigger Binding="{Binding HasCoverCandidates}" Value="True">
+                                                <Setter Property="MaxHeight" Value="240"/>
+                                                <Setter Property="MaxWidth" Value="240"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
                                 <Grid>
                                     <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center"
                                                 Visibility="{Binding ShowCoverPlaceholder, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}">
@@ -569,6 +582,17 @@
                                             </DataTemplate>
                                         </ItemsControl.ItemTemplate>
                                     </ItemsControl>
+                                    <!-- the search's best match is the one shown -->
+                                    <Border CornerRadius="5" Padding="7,2,8,3" Margin="10" HorizontalAlignment="Left" VerticalAlignment="Top"
+                                            Background="{DynamicResource AccentFillColorDefaultBrush}" IsHitTestVisible="False"
+                                            Visibility="{Binding IsRecommendedCoverShown, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}">
+                                        <StackPanel Orientation="Horizontal">
+                                            <ui:SymbolIcon Symbol="Star16" Filled="True" FontSize="12" Margin="0,0,4,0" VerticalAlignment="Center"
+                                                           Foreground="{DynamicResource TextOnAccentFillColorPrimaryBrush}"/>
+                                            <TextBlock Text="추천 커버" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center"
+                                                       Foreground="{DynamicResource TextOnAccentFillColorPrimaryBrush}"/>
+                                        </StackPanel>
+                                    </Border>
                                     <Border x:Name="CoverDropHighlight" CornerRadius="7" BorderThickness="2" Visibility="Collapsed"
                                             BorderBrush="{DynamicResource TagChangeBrush}" Background="#33000000">
                                         <TextBlock Text="놓으면 커버로 사용합니다" HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="White" FontWeight="SemiBold"/>
@@ -585,6 +609,19 @@
                                 <TextBlock Text="{Binding CoverInfo}" FontSize="12" VerticalAlignment="Center" TextWrapping="Wrap"
                                            Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
                             </StackPanel>
+                            <!-- which album the chosen online cover belongs to -->
+                            <TextBlock Text="{Binding CoverCandidateDetail}" FontSize="12" Margin="0,3,0,0" TextTrimming="CharacterEllipsis"
+                                       ToolTip="{Binding CoverCandidateDetail}" Foreground="{DynamicResource TextFillColorTertiaryBrush}">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding CoverCandidateDetail}" Value="">
+                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
 
                             <WrapPanel Margin="0,12,0,0">
                                 <ui:Button Content="커버 찾기" Icon="{ui:SymbolIcon Search24}" Command="{Binding SearchCoverCommand}" Margin="0,0,6,6"
@@ -602,6 +639,104 @@
                             <TextBlock Text="여러 곡을 선택한 상태에서 바꾸면 모두 같은 커버가 됩니다." FontSize="11" Margin="0,4,0,0" TextWrapping="Wrap"
                                        Foreground="{DynamicResource TextFillColorTertiaryBrush}"
                                        Visibility="{Binding IsMulti, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}"/>
+
+                            <!-- 커버 찾기 results: the song's own cover, the recommendation, then the other matches -->
+                            <StackPanel Visibility="{Binding HasCoverCandidates, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}">
+                                <DockPanel Margin="0,0,0,2">
+                                    <TextBlock DockPanel.Dock="Right" Text="일치율 순" FontSize="11" Margin="0,16,0,4" VerticalAlignment="Bottom"
+                                               Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
+                                    <TextBlock Text="{Binding CoverCandidatesHeader}" Style="{StaticResource EditorSection}"/>
+                                </DockPanel>
+                                <ItemsControl x:Name="CoverCandidateList" ItemsSource="{Binding CoverCandidates}" Margin="-4,0" Focusable="False">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <UniformGrid Columns="3"/>
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Button Command="{Binding DataContext.PickCoverCandidateCommand, ElementName=CoverCandidateList}" CommandParameter="{Binding}"
+                                                    ToolTip="{Binding ToolTip}" Cursor="Hand" Margin="0" Padding="0"
+                                                    HorizontalAlignment="Stretch" VerticalAlignment="Top"
+                                                    Loaded="CoverCandidate_Loaded" IsVisibleChanged="CoverCandidate_IsVisibleChanged">
+                                                <Button.Template>
+                                                    <ControlTemplate TargetType="Button">
+                                                        <Border x:Name="Frame" CornerRadius="8" Padding="4" Margin="0,0,0,4" BorderThickness="2"
+                                                                BorderBrush="Transparent" Background="Transparent">
+                                                            <StackPanel>
+                                                                <Grid>
+                                                                    <Border CornerRadius="5" Background="{DynamicResource ControlFillColorSecondaryBrush}"
+                                                                            Height="{Binding ActualWidth, RelativeSource={RelativeSource Self}}">
+                                                                        <ui:SymbolIcon x:Name="Placeholder" Symbol="Image24" FontSize="22" Visibility="Collapsed"
+                                                                                       Foreground="{DynamicResource TextFillColorDisabledBrush}"/>
+                                                                    </Border>
+                                                                    <Border CornerRadius="5">
+                                                                        <Border.Background>
+                                                                            <ImageBrush ImageSource="{Binding Thumbnail}" Stretch="UniformToFill"/>
+                                                                        </Border.Background>
+                                                                    </Border>
+                                                                    <Border x:Name="SizeBadge" CornerRadius="3" Padding="4,0,4,1" Margin="4" Background="#A0000000"
+                                                                            HorizontalAlignment="Left" VerticalAlignment="Bottom">
+                                                                        <TextBlock Text="{Binding SizeText}" FontSize="10" Foreground="White"/>
+                                                                    </Border>
+                                                                    <Border x:Name="RecBadge" CornerRadius="3" Padding="3,1,4,1" Margin="4" Visibility="Collapsed"
+                                                                            Background="{DynamicResource AccentFillColorDefaultBrush}"
+                                                                            HorizontalAlignment="Left" VerticalAlignment="Top">
+                                                                        <StackPanel Orientation="Horizontal">
+                                                                            <ui:SymbolIcon Symbol="Star16" Filled="True" FontSize="10" Margin="0,0,2,0" VerticalAlignment="Center"
+                                                                                           Foreground="{DynamicResource TextOnAccentFillColorPrimaryBrush}"/>
+                                                                            <TextBlock Text="추천" FontSize="10" FontWeight="SemiBold" VerticalAlignment="Center"
+                                                                                       Foreground="{DynamicResource TextOnAccentFillColorPrimaryBrush}"/>
+                                                                        </StackPanel>
+                                                                    </Border>
+                                                                    <Border x:Name="Busy" CornerRadius="5" Background="#80000000" Visibility="Collapsed">
+                                                                        <ui:ProgressRing IsIndeterminate="True" Width="22" Height="22"/>
+                                                                    </Border>
+                                                                    <Border x:Name="Check" Width="20" Height="20" CornerRadius="10" Margin="4" Visibility="Collapsed"
+                                                                            HorizontalAlignment="Right" VerticalAlignment="Top"
+                                                                            Background="{DynamicResource AccentFillColorDefaultBrush}">
+                                                                        <ui:SymbolIcon Symbol="Checkmark16" FontSize="12" Foreground="{DynamicResource TextOnAccentFillColorPrimaryBrush}"/>
+                                                                    </Border>
+                                                                </Grid>
+                                                                <TextBlock Text="{Binding AlbumText}" FontSize="12" Margin="1,5,1,0" TextTrimming="CharacterEllipsis"
+                                                                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                                                                <TextBlock Text="{Binding DetailText}" FontSize="11" Margin="1,1,1,0" TextTrimming="CharacterEllipsis"
+                                                                           Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
+                                                            </StackPanel>
+                                                        </Border>
+                                                        <ControlTemplate.Triggers>
+                                                            <Trigger Property="IsMouseOver" Value="True">
+                                                                <Setter TargetName="Frame" Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}"/>
+                                                            </Trigger>
+                                                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                                                <Setter TargetName="Frame" Property="BorderBrush" Value="{DynamicResource ControlStrokeColorDefaultBrush}"/>
+                                                            </Trigger>
+                                                            <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                                                                <Setter TargetName="Frame" Property="BorderBrush" Value="{DynamicResource AccentFillColorDefaultBrush}"/>
+                                                                <Setter TargetName="Check" Property="Visibility" Value="Visible"/>
+                                                            </DataTrigger>
+                                                            <DataTrigger Binding="{Binding IsRecommended}" Value="True">
+                                                                <Setter TargetName="RecBadge" Property="Visibility" Value="Visible"/>
+                                                            </DataTrigger>
+                                                            <DataTrigger Binding="{Binding IsLoadingFull}" Value="True">
+                                                                <Setter TargetName="Busy" Property="Visibility" Value="Visible"/>
+                                                            </DataTrigger>
+                                                            <DataTrigger Binding="{Binding Thumbnail}" Value="{x:Null}">
+                                                                <Setter TargetName="Placeholder" Property="Visibility" Value="Visible"/>
+                                                            </DataTrigger>
+                                                            <DataTrigger Binding="{Binding SizeText}" Value="">
+                                                                <Setter TargetName="SizeBadge" Property="Visibility" Value="Collapsed"/>
+                                                            </DataTrigger>
+                                                        </ControlTemplate.Triggers>
+                                                    </ControlTemplate>
+                                                </Button.Template>
+                                            </Button>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                <TextBlock Text="썸네일을 누르면 그 커버로 바뀝니다. 저장하기 전까지 파일은 그대로입니다." FontSize="11" Margin="0,2,0,0"
+                                           TextWrapping="Wrap" Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
+                            </StackPanel>
                         </StackPanel>
                         <StackPanel Style="{StaticResource EditorEmpty}"
                                     Visibility="{Binding IsEmpty, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}">

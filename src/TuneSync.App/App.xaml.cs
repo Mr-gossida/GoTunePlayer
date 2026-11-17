@@ -6,6 +6,7 @@ using TuneSync.App.ViewModels;
 using TuneSync.App.Views;
 using TuneSync.Core.Models;
 using TuneSync.Core.Services;
+using TuneSync.Core.Services.CoverSearch;
 
 namespace TuneSync.App;
 
@@ -167,7 +168,9 @@ public partial class App : Application
         services.AddSingleton(_ => AppSettingsStore.Load());
         services.AddSingleton<Network.NetworkLibrary>();
 
-        services.AddSingleton<IMusicBrainzService, MusicBrainzService>();
+        services.AddSingleton<MusicBrainzService>();
+        services.AddSingleton<IMusicBrainzService>(sp => sp.GetRequiredService<MusicBrainzService>());
+        services.AddSingleton<ICoverSearchService, CoverSearchService>();
         services.AddSingleton<ILyricsService, LrcLibLyricsService>();
         services.AddSingleton<IAutoFillService, AutoFillService>();
 

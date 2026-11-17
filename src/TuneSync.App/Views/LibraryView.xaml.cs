@@ -153,6 +153,35 @@ public partial class LibraryView : Page
         CoverPreviewWindow.Open(Window.GetWindow(this), items);
     }
 
+    // 커버 찾기 gallery: thumbnails are downloaded only for tiles that are (nearly) on screen.
+    private bool _thumbCheckQueued;
+
+    private void CoverCandidate_Loaded(object sender, RoutedEventArgs e) => QueueThumbnailCheck();
+
+    private void CoverCandidate_IsVisibleChanged(object sender, DependencyPropertyChangedEventArgs e) => QueueThumbnailCheck();
+
+    private void CoverScroll_ScrollChanged(object sender, ScrollChangedEventArgs e) => QueueThumbnailCheck();
+
+    private void QueueThumbnailCheck()
+    {
+        if (_thumbCheckQueued) return;
+        _thumbCheckQueued = true;
+        // After layout, so the tiles have their positions.
+        Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Loaded, () =>
+        {
+            _thumbCheckQueued = false;
+            if (!CoverScroll.IsVisible) return;
+            var view = new Rect(0, 0, CoverScroll.ViewportWidth, CoverScroll.ViewportHeight);
+            view.Inflate(0, 120); // a row ahead, so scrolling finds them ready
+            foreach (var item in CoverCandidateList.Items.OfType<CoverCandidateViewModel>())
+            {
+                if (CoverCandidateList.ItemContainerGenerator.ContainerFromItem(item) is not FrameworkElement tile || !tile.IsVisible) continue;
+                var bounds = tile.TransformToAncestor(CoverScroll).TransformBounds(new Rect(tile.RenderSize));
+                if (bounds.IntersectsWith(view)) item.EnsureThumbnail();
+            }
+        });
+    }
+
     private static string? DroppedImage(DragEventArgs e) =>
         e.Data.GetData(DataFormats.FileDrop) is string[] files ? files.FirstOrDefault(TagEditorViewModel.IsImageFile) : null;
 
