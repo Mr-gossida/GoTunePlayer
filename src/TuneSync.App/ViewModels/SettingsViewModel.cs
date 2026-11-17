@@ -318,6 +318,14 @@ public sealed partial class SettingsViewModel : ObservableObject
     [ObservableProperty]
     private ScreenSaverExit _screenSaverExit;
 
+    /// <summary>설정 › 화면 보호기 › 오로라 조명 (bound to Playback.AuroraMode).</summary>
+    public IReadOnlyList<Choice<AuroraMode>> AuroraModeOptions { get; } =
+    [
+        new(AuroraMode.On, "켜기"),
+        new(AuroraMode.Saver, "절전 (천천히 움직임)"),
+        new(AuroraMode.Off, "끄기"),
+    ];
+
     public IReadOnlyList<Choice<ScreenSaverExit>> ScreenSaverExitOptions { get; } =
     [
         new(ScreenSaverExit.AnyInput, "마우스·키보드 조작 시"),

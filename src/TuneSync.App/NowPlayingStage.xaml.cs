@@ -7,6 +7,7 @@ using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Threading;
 using TuneSync.App.ViewModels;
+using TuneSync.Core.Models;
 
 namespace TuneSync.App;
 
@@ -62,14 +63,7 @@ public partial class NowPlayingStage : UserControl
             MainStack.Margin = new Thickness(0, 0, 0, 84);
         }
 
-        // The aurora needs pixel shader 3.0 (any GPU from the last ~15 years); without it the
-        // plain backdrop is shown, full size (with no light changing it, it is only redrawn where
-        // something over it changes).
-        if (!RenderCapability.IsPixelShaderVersionSupported(3, 0))
-        {
-            AuroraLayer.Effect = null;
-            AuroraLayer.CacheMode = null;
-        }
+        _auroraCache = AuroraLayer.CacheMode;
 
         // The column changes height too, not just the window: the lyrics appear or go with the
         // song (no synced lyrics -> none), and a long title wraps. Fit again after each change.
@@ -110,7 +104,7 @@ public partial class NowPlayingStage : UserControl
         _running = false;
         _playback.PropertyChanged -= Playback_PropertyChanged;
         PlayerPalette.Changed -= RecolorAurora;
-        FrameTicker.Remove(AdvanceAurora);
+        StopAuroraSteps();
         Views.LyricsScroller.Stop(LyricsViewer);
         _lyricsGate.Stop();
         _clock.Stop();
@@ -138,6 +132,9 @@ public partial class NowPlayingStage : UserControl
                 break;
             case nameof(PlaybackViewModel.HasSyncedLyrics):
                 UpdateWall(animate: true);
+                break;
+            case nameof(PlaybackViewModel.AuroraMode):
+                ApplyAuroraMode();
                 break;
         }
     }
@@ -305,10 +302,48 @@ public partial class NowPlayingStage : UserControl
         AuroraLight.Color1 = main;
         AuroraLight.Color2 = second;
         if (!AuroraClock.IsRunning) NewAuroraSession();
-        AdvanceAurora(null, EventArgs.Empty);
-        FrameTicker.Add(AdvanceAurora);
+        ShowAuroraNow();
+        ApplyAuroraMode();
         // The light fades in over the backdrop (the light, not the layer: the backdrop is in it).
         AuroraLight.BeginAnimation(Effects.AuroraEffect.IntensityProperty, AuroraTimeline(new DoubleAnimation(0, 0.7, TimeSpan.FromSeconds(2.5))));
+    }
+
+    // The aurora needs pixel shader 3.0 (any GPU from the last ~15 years).
+    private static readonly bool AuroraSupported = RenderCapability.IsPixelShaderVersionSupported(3, 0);
+    private readonly CacheMode? _auroraCache;
+    private bool _auroraStepping;
+    private int _auroraEvery = 2;
+
+    /// <summary>설정 › 오로라 조명 (or no shader support): the light on, stepping less often, or
+    /// off - then the plain backdrop is shown full size, and with nothing changing it, it is only
+    /// redrawn where something over it changes.</summary>
+    private void ApplyAuroraMode()
+    {
+        if (!_running) return;
+        var mode = AuroraSupported ? _playback.AuroraMode : AuroraMode.Off;
+        if (mode == AuroraMode.Off)
+        {
+            AuroraLayer.Effect = null;
+            AuroraLayer.CacheMode = null;
+            StopAuroraSteps();
+            return;
+        }
+        AuroraLayer.Effect = AuroraLight;
+        AuroraLayer.CacheMode = _auroraCache;
+        _auroraEvery = mode == AuroraMode.Saver ? 4 : 2;
+        if (!_auroraStepping)
+        {
+            _auroraStepping = true;
+            ShowAuroraNow();
+            FrameTicker.Add(AdvanceAurora);
+        }
+    }
+
+    private void StopAuroraSteps()
+    {
+        if (!_auroraStepping) return;
+        _auroraStepping = false;
+        FrameTicker.Remove(AdvanceAurora);
     }
 
     /// <summary>Every change of the light redraws the whole screen: no more often than the light
@@ -321,13 +356,17 @@ public partial class NowPlayingStage : UserControl
 
     private int _auroraTick;
 
-    /// <summary>15 times a second (every other tick of the shared ~30 fps clock): the light
-    /// drifts too slowly for more to show, and each update redraws the whole screen.</summary>
+    /// <summary>15 times a second (every other tick of the shared ~30 fps clock; 절전: every
+    /// fourth): the light drifts too slowly for more to show, and each update redraws the whole
+    /// screen. (The ticker's sender is always null; skipping ticks only for a non-null sender
+    /// meant the light really moved at the clock's full ~30 a second.)</summary>
     private void AdvanceAurora(object? sender, EventArgs e)
     {
-        if (sender is not null && (++_auroraTick & 1) == 1) return;
-        AuroraLight.Time = _auroraStart + AuroraClock.Elapsed.TotalSeconds;
+        if (++_auroraTick % _auroraEvery != 0) return;
+        ShowAuroraNow();
     }
+
+    private void ShowAuroraNow() => AuroraLight.Time = _auroraStart + AuroraClock.Elapsed.TotalSeconds;
 
     /// <summary>A new song: the light slowly takes on its cover's colors.</summary>
     private void RecolorAurora()

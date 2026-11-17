@@ -110,6 +110,11 @@ public sealed class AppSettings
     /// on screen). Released as soon as playback pauses or stops.</summary>
     public bool KeepScreenOnWhilePlaying { get; set; } = true;
 
+    /// <summary>The moving light behind 음악 집중 모드 and the screen saver. Every step of it
+    /// redraws the whole screen, which keeps an integrated GPU busy: Saver moves it less often,
+    /// Off leaves the backdrop still.</summary>
+    public AuroraMode AuroraMode { get; set; } = AuroraMode.On;
+
     /// <summary>What the player opens with when the app starts.</summary>
     public StartupResume StartupResume { get; set; } = StartupResume.LastPosition;
 
@@ -168,6 +173,16 @@ public enum LyricsSyncCpuUsage
     Low,
     Normal,
     Max,
+}
+
+public enum AuroraMode
+{
+    /// <summary>Smooth: about 15 steps a second.</summary>
+    On,
+    /// <summary>About 8 steps a second: half the light's steps, a little less fluid.</summary>
+    Saver,
+    /// <summary>No light: the backdrop stands still and is redrawn only where something over it changes.</summary>
+    Off,
 }
 
 public enum ScreenSaverExit

@@ -57,6 +57,17 @@ public sealed partial class PlaybackViewModel : ObservableObject, IDisposable
 
     partial void OnIsPlayingChanged(bool value) => UpdateKeepAwake();
 
+    /// <summary>The aurora light behind focus mode and the screen saver (설정 › 화면 보호기);
+    /// open stages follow a change at once.</summary>
+    [ObservableProperty]
+    private AuroraMode _auroraMode;
+
+    partial void OnAuroraModeChanged(AuroraMode value)
+    {
+        _settings.AuroraMode = value;
+        AppSettingsStore.Save(_settings);
+    }
+
     partial void OnKeepScreenOnChanged(bool value)
     {
         _settings.KeepScreenOnWhilePlaying = value;
@@ -139,6 +150,7 @@ public sealed partial class PlaybackViewModel : ObservableObject, IDisposable
         _isMiniTopmost = settings.MiniTopmost;
         _isMiniQueueExpanded = settings.MiniQueueExpanded;
         _keepScreenOn = settings.KeepScreenOnWhilePlaying;
+        _auroraMode = settings.AuroraMode;
         WatchForSessionToResume();
 
         _timer = new DispatcherTimer(DispatcherPriority.Normal) { Interval = TimeSpan.FromMilliseconds(200) };

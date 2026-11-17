@@ -554,6 +554,17 @@
                             </Grid>
                         </StackPanel>
                     </ui:CardExpander>
+                    <ui:CardControl Style="{StaticResource Card}" Icon="{ui:SymbolIcon WeatherSunny24}" Tag="오로라 조명 빛 배경 음악 집중 모드 저사양 내장 그래픽 GPU 절전 성능"
+                                    ToolTip="음악 집중 모드와 화면 보호기 뒤에서 흐르는 빛입니다. 빛이 움직일 때마다 화면 전체를 다시 그리므로, 내장 그래픽에서 GPU 사용량이 높으면 절전이나 끄기를 고르세요. 절전은 빛이 덜 자주 움직이고, 끄기는 배경이 멈춘 채로 보입니다.">
+                        <ui:CardControl.Header>
+                            <StackPanel>
+                                <ui:TextBlock Text="오로라 조명" FontTypography="Body"/>
+                                <ui:TextBlock Text="집중 모드·화면 보호기의 흐르는 빛 · 내장 그래픽이면 절전이나 끄기" Style="{StaticResource Desc}"/>
+                            </StackPanel>
+                        </ui:CardControl.Header>
+                        <ComboBox Width="200" ItemsSource="{Binding AuroraModeOptions}" DisplayMemberPath="Label"
+                                  SelectedValuePath="Value" SelectedValue="{Binding Playback.AuroraMode}" AutomationProperties.Name="오로라 조명"/>
+                    </ui:CardControl>
                     <ui:CardControl Style="{StaticResource Card}" Icon="{ui:SymbolIcon Desktop24}" Tag="화면 켜짐 유지 절전 모드 화면 꺼짐"
                                     ToolTip="음악이 재생되는 동안 화면이 꺼지거나 PC가 절전 모드로 들어가지 않게 합니다. 일시정지하거나 멈추면 원래대로 돌아갑니다.">
                         <ui:CardControl.Header>
