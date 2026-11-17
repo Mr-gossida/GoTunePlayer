@@ -86,6 +86,29 @@ public class LyricsAlignerTests
     }
 
     [Fact]
+    public async Task Lines_no_pass_heard_are_listened_to_again_with_their_words_as_the_prompt()
+    {
+        // Every pass misses lines 2 and 3; listened to again from line 1 to line 4, they're heard.
+        var missing = Heard(Lines, Starts, (i, word) => i is 2 or 3 ? null : word);
+        LyricsSyncEngine.Gap? asked = null;
+        var result = await LyricsSyncEngine.SyncAsync(Lines, TimeSpan.FromSeconds(60), null, LyricsSyncEngine.Passes(false),
+            _ => Task.FromResult(missing),
+            gap =>
+            {
+                asked = gap;
+                return Task.FromResult(Heard(Lines, Starts).Where(w => w.Start.TotalSeconds >= gap.Start && w.Start.TotalSeconds < gap.End).ToList());
+            });
+
+        Assert.NotNull(asked);
+        Assert.Contains(Lines[2], asked.Value.Prompt);
+        Assert.Contains(Lines[3], asked.Value.Prompt);
+        AssertNear(Starts[1], TimeSpan.FromSeconds(asked.Value.Start));
+        AssertNear(Starts[2], result[2].Time);
+        AssertNear(Starts[3], result[3].Time);
+        Assert.False(result[2].IsConfident); // given the words, still worth a listen
+    }
+
+    [Fact]
     public void Estimates_a_line_that_was_not_heard_between_its_neighbors()
     {
         var heard = Heard(Lines, Starts, (line, word) => line == 2 ? null : word);

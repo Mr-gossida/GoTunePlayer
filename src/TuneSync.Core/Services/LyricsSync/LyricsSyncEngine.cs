@@ -52,8 +52,10 @@ public sealed class LyricsSyncEngine : IDisposable
 
     /// <summary>Where a sync is: the stage and 0..1 within it. While listening, that's within the
     /// current pass (<paramref name="PassIndex"/>, 0-based; <paramref name="Listen"/> is what it
-    /// listens to) - how many passes there will be is only known once the first two are compared.</summary>
-    public readonly record struct SyncProgress(Stage Stage, double Value, int PassIndex = 0, Pass Listen = default);
+    /// listens to) - how many passes there will be is only known once the first two are compared.
+    /// <paramref name="Relistening"/>: listening again to a stretch no pass heard (PassIndex
+    /// counts those stretches).</summary>
+    public readonly record struct SyncProgress(Stage Stage, double Value, int PassIndex = 0, Pass Listen = default, bool Relistening = false);
 
     /// <summary>True when the singing is separated first (the vocal separation model is there).</summary>
     public bool Separates => _vocalModelPath is not null;
@@ -92,7 +94,7 @@ public sealed class LyricsSyncEngine : IDisposable
         WhisperTranscriber.ForgetDevice();
         var language = LanguageOf(lines);
         var passes = Passes(vocals is not null);
-        var done = 0;
+        int done = 0, gaps = 0;
         var aligned = await SyncAsync(lines, duration, voice, passes, pass =>
         {
             var index = done++;
@@ -100,6 +102,12 @@ public sealed class LyricsSyncEngine : IDisposable
             return Task.Run(() => _transcriber.TranscribeAsync(pass.Source == Source.Vocals ? vocals! : song, language,
                 pass.Hinted ? Prompt(lines) : null,
                 new Progress<int>(p => progress?.Report(new(Stage.Listening, p / 100.0, index, pass))), ct, windows), ct);
+        }, gap =>
+        {
+            var index = gaps++;
+            progress?.Report(new(Stage.Listening, 0, index, default, true));
+            return Task.Run(() => _transcriber.TranscribeAsync(gap.Source == Source.Vocals ? vocals! : song, language, gap.Prompt,
+                new Progress<int>(p => progress?.Report(new(Stage.Listening, p / 100.0, index, default, true))), ct, Pieces(gap)), ct);
         });
         progress?.Report(new(Stage.Aligning, 1));
         return aligned;
@@ -122,10 +130,16 @@ public sealed class LyricsSyncEngine : IDisposable
         return AudioDecoder.Resample(vocals, VocalSeparator.SampleRate, AudioDecoder.SampleRate);
     }
 
+    /// <summary>One more listen, to a stretch of the song where no pass heard the lines: with
+    /// those lines (and the heard ones around them) as Whisper's prompt.</summary>
+    public readonly record struct Gap(Source Source, string Prompt, double Start, double End);
+
     /// <summary>The decision between passes, apart from how the listening is done (tools/SyncBench
     /// keeps what was heard between runs, so aligner changes can be measured in seconds).</summary>
+    /// <param name="relisten">Listens to a stretch again (see <see cref="Gap"/>), or null not to.</param>
     public static async Task<List<AlignedLine>> SyncAsync(IReadOnlyList<string> lines, TimeSpan duration,
-        VoiceActivity? voice, IReadOnlyList<Pass> passes, Func<Pass, Task<List<TimedText>>> listen)
+        VoiceActivity? voice, IReadOnlyList<Pass> passes, Func<Pass, Task<List<TimedText>>> listen,
+        Func<Gap, Task<List<TimedText>>>? relisten = null)
     {
         var separated = passes.Any(p => p.Source == Source.Vocals);
         var results = new List<List<AlignedLine>>();
@@ -135,10 +149,78 @@ public sealed class LyricsSyncEngine : IDisposable
             if (separated ? results.Count == 2 && Agreement(results[0], results[1]) >= AgreeEnough
                           : Placed(results[^1]) >= PlacedEnough) break;
         }
-        if (!separated) return results.MaxBy(Placed)!;
+        if (!separated)
+        {
+            var best = results.MaxBy(Placed)!;
+            return relisten is null ? best : await FillGapsAsync(lines, best, [.. best.Select(l => l.IsConfident)], duration, voice, Source.Song, relisten);
+        }
         var heard = Enumerable.Range(0, lines.Count).Select(i => results.Any(r => r[i].IsConfident)).ToArray();
-        return LyricsAligner.Refill(Combine(results), duration, voice, heard);
+        var combined = LyricsAligner.Refill(Combine(results), duration, voice, heard);
+        return relisten is null ? combined : await FillGapsAsync(lines, combined, heard, duration, voice, Source.Vocals, relisten);
     }
+
+
+    /// <summary>The lines no pass heard, listened to again a stretch at a time - from the heard
+    /// line before them to the heard line after - with just those lines as the prompt. Whisper
+    /// given the whole song's opening lyrics, or none, loses its place in such stretches (a held
+    /// note, a key change, a chant it took for a song title); told what comes there, it often
+    /// hears it. A line heard this way keeps its time where it falls between its neighbors
+    /// (still marked to check: Whisper given the words may write them where it isn't sure).
+    /// The vocals are listened to (on the songs with known timings they did better than the
+    /// song as it is: 91.4% of lines within 1 s against 91.0%).</summary>
+    private static async Task<List<AlignedLine>> FillGapsAsync(IReadOnlyList<string> lines, List<AlignedLine> result,
+        bool[] heard, TimeSpan duration, VoiceActivity? voice, Source source, Func<Gap, Task<List<TimedText>>> relisten)
+    {
+        var updated = result.ToList();
+        var known = (bool[])heard.Clone();
+        var found = false;
+        for (var i = 0; i < lines.Count; i++)
+        {
+            if (updated[i].IsConfident) continue;
+            var j = i;
+            while (j + 1 < lines.Count && !updated[j + 1].IsConfident) j++;
+            int before = i - 1, after = j + 1;
+            var start = before >= 0 ? updated[before].Time.TotalSeconds : 0;
+            var end = after < lines.Count ? updated[after].Time.TotalSeconds + 1 : duration.TotalSeconds;
+            if (end - start >= 1 && j - i < MaxGapLines)
+            {
+                int from = Math.Max(0, before), to = Math.Min(lines.Count - 1, after);
+                var part = lines.Skip(from).Take(to - from + 1).ToList();
+                var prompt = string.Join(" ", part);
+                var again = await relisten(new Gap(source, prompt.Length <= 300 ? prompt : prompt[..300], start, end));
+                var aligned = LyricsAligner.Align(part, again, duration, voice);
+                var texts = part.Select(LyricsAligner.Normalize).ToList();
+                var floor = start;
+                for (var k = i; k <= j; k++)
+                {
+                    var line = aligned[k - from];
+                    // A line repeated in the stretch ("La-la-la" eight times, a chant): given
+                    // them all, Whisper writes them out wherever, not where each is sung.
+                    if (texts.Where((t, n) => n != k - from && LyricsAligner.Similar(t, texts[k - from])).Any()) continue;
+                    var ceiling = after < lines.Count ? updated[after].Time.TotalSeconds : duration.TotalSeconds;
+                    if (!line.IsConfident || line.Time.TotalSeconds <= floor + 0.25 || line.Time.TotalSeconds >= ceiling - 0.25) continue;
+                    updated[k] = updated[k] with { Time = line.Time };
+                    known[k] = found = true;
+                    floor = line.Time.TotalSeconds;
+                }
+            }
+            i = j;
+        }
+        return found ? LyricsAligner.Refill(updated, duration, voice, known) : result;
+    }
+
+    /// <summary>A stretch as pieces Whisper takes (up to 30 s each).</summary>
+    public static List<(double Start, double End)> Pieces(Gap gap)
+    {
+        var count = Math.Max(1, (int)Math.Ceiling((gap.End - gap.Start) / 28));
+        var length = (gap.End - gap.Start) / count;
+        return [.. Enumerable.Range(0, count).Select(k => (gap.Start + k * length, gap.Start + (k + 1) * length))];
+    }
+
+    /// <summary>Longer runs of unheard lines aren't listened to again: given many lines at once,
+    /// Whisper tends to write them out rather than hear them (with up to 12: 91.3% within 1 s,
+    /// 2.2% off by over 3 s; up to 6: 91.4%, 2.0%).</summary>
+    private const int MaxGapLines = 6;
 
     /// <summary>Each line's time from several passes: the time the largest group of passes that
     /// heard the line agree on (their median); with no two agreeing, the earliest pass that heard

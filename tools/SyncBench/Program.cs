@@ -18,6 +18,7 @@
 //   BENCH_MIN_REPEATED when picking songs from a folder: only songs where at least this share of
 //                      the lines occur more than once (choruses); BENCH_EXCLUDE: a songs.txt
 //                      whose songs aren't picked (to make a second set)
+//   BENCH_NOGAPS=1     don't listen again to the stretches no pass heard
 //   BENCH_TRUTH        a folder of "<song file name>.lrc" files: the timings to compare against,
 //                      for songs whose tags have plain lyrics only
 using System.Diagnostics;
@@ -124,7 +125,19 @@ async Task<List<AlignedLine>> SyncCached(string song, string plain)
     var passes = LyricsSyncEngine.Passes(vocals is not null);
     if (Environment.GetEnvironmentVariable("BENCH_ALL_PASSES") == "1")
         foreach (var pass in passes) await Listen(pass);
-    return await LyricsSyncEngine.SyncAsync(lines, duration, voice, passes, Listen);
+    return await LyricsSyncEngine.SyncAsync(lines, duration, voice, passes, Listen,
+        Environment.GetEnvironmentVariable("BENCH_NOGAPS") == "1" ? null : Relisten);
+
+    async Task<List<TimedText>> Relisten(LyricsSyncEngine.Gap gap)
+    {
+        var key = Convert.ToHexString(System.Security.Cryptography.SHA1.HashData(System.Text.Encoding.UTF8.GetBytes($"{gap.Source}|{gap.Start:0.00}|{gap.End:0.00}|{gap.Prompt}")))[..12];
+        var file = $"{name}.gap.{key}.json";
+        if (File.Exists(file)) return JsonSerializer.Deserialize<List<TimedText>>(File.ReadAllText(file))!;
+        var heard = await transcriber.TranscribeAsync(gap.Source == LyricsSyncEngine.Source.Vocals ? vocals! : Mix(),
+            LyricsSyncEngine.LanguageOf(lines), gap.Prompt, null, CancellationToken.None, LyricsSyncEngine.Pieces(gap));
+        File.WriteAllText(file, JsonSerializer.Serialize(heard));
+        return heard;
+    }
 
     async Task<List<TimedText>> Listen(LyricsSyncEngine.Pass pass)
     {

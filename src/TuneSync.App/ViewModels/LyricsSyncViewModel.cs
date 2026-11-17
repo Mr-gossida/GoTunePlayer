@@ -284,8 +284,8 @@ public sealed partial class LyricsSyncViewModel : ObservableObject, IDisposable
                 var device = LyricsSyncEngine.ListeningDevice;
                 ProcessingDevice = device switch { null => "", "CPU" => "CPU", _ => "GPU" };
                 (Status, Progress, StepPercent) = device is null
-                    ? ($"{PassName(p.PassIndex, p.Listen)} · 음성 인식 준비 중…", 0, "")
-                    : (PassName(p.PassIndex, p.Listen), p.Value, Percent(p.Value));
+                    ? ($"{PassName(p)} · 음성 인식 준비 중…", 0, "")
+                    : (PassName(p), p.Value, Percent(p.Value));
                 break;
             default:
                 SetStep(Steps.Count - 1);
@@ -297,11 +297,13 @@ public sealed partial class LyricsSyncViewModel : ObservableObject, IDisposable
     private static string Percent(double value) => $"{(int)(value * 100)}%";
 
     /// <summary>"첫 번째 듣기 · 목소리만" and so on: a third listen only happens when the first two
-    /// disagree, so it's "한 번 더", not "세 번째" of a count that was never announced.</summary>
-    private static string PassName(int index, LyricsSyncEngine.Pass pass)
+    /// disagree, so it's "한 번 더", not "세 번째" of a count that was never announced.
+    /// Then the stretches no listen heard: "놓친 부분 다시 듣기 · 2번째 구간".</summary>
+    private static string PassName(LyricsSyncEngine.SyncProgress p)
     {
-        var which = index switch { 0 => "첫 번째 듣기", 1 => "두 번째 듣기", _ => "한 번 더 듣기" };
-        var what = pass.Source == LyricsSyncEngine.Source.Vocals ? "목소리만" : pass.Hinted ? "가사를 참고해서" : "원곡";
+        if (p.Relistening) return $"놓친 부분 다시 듣기 · {p.PassIndex + 1}번째 구간";
+        var which = p.PassIndex switch { 0 => "첫 번째 듣기", 1 => "두 번째 듣기", _ => "한 번 더 듣기" };
+        var what = p.Listen.Source == LyricsSyncEngine.Source.Vocals ? "목소리만" : p.Listen.Hinted ? "가사를 참고해서" : "원곡";
         return $"{which} · {what}";
     }
 

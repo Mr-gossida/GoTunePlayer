@@ -245,7 +245,7 @@ public static class LyricsAligner
 
     /// <summary>Two lines that would be easy to mistake for each other: most of their letter
     /// pairs are shared ("Just beat it (beat it)" and "Just beat it (beat it, uh)").</summary>
-    private static bool Similar(string a, string b)
+    internal static bool Similar(string a, string b)
     {
         if (a.Length < 2 || b.Length < 2) return a == b;
         var pairs = new Dictionary<(char, char), int>();
