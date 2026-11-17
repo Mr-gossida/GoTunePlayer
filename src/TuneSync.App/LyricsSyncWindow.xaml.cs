@@ -56,6 +56,7 @@ public partial class LyricsSyncWindow : Wpf.Ui.Controls.FluentWindow
             services.GetRequiredService<PlaybackViewModel>(),
             services.GetRequiredService<LibraryViewModel>(),
             services.GetRequiredService<Network.NetworkLibrary>(),
+            services.GetRequiredService<TuneSync.Core.Models.AppSettings>(),
             file, lyrics);
         return new LyricsSyncWindow(viewModel);
     }

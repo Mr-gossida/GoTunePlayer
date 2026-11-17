@@ -19,6 +19,7 @@
     <PackageReference Include="TagLibSharp" Version="2.3.0" />
     <PackageReference Include="Whisper.net" Version="1.9.1" />
     <PackageReference Include="Whisper.net.Runtime" Version="1.9.1" />
+    <PackageReference Include="Whisper.net.Runtime.Vulkan" Version="1.9.1" />
   </ItemGroup>
 
   <!-- The DirectML that this ONNX Runtime was built for, next to the app: the package only copies
@@ -27,5 +28,13 @@
   <ItemGroup>
     <None Include="$(PkgMicrosoft_AI_DirectML)\bin\x64-win\DirectML.dll" Link="DirectML.dll" CopyToOutputDirectory="PreserveNewest" Visible="false" />
   </ItemGroup>
+
+  <!-- Whisper.net.Runtime.Vulkan brings its Linux libraries along unconditionally (59 MB); the
+       app runs on Windows only. -->
+  <Target Name="LeaveOutLinuxWhisper" BeforeTargets="AssignTargetPaths">
+    <ItemGroup>
+      <None Remove="@(None)" Condition="$([System.String]::Copy('%(None.Identity)').Contains('linux-x64'))" />
+    </ItemGroup>
+  </Target>
 
 </Project>

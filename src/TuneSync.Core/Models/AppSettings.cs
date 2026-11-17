@@ -135,6 +135,13 @@ public sealed class AppSettings
     /// <summary>How the screen saver is left: any input (default), or only the Esc key.</summary>
     public ScreenSaverExit ScreenSaverExit { get; set; } = ScreenSaverExit.AnyInput;
 
+    /// <summary>"싱크 가사 만들기" uses the graphics card when there's one (about four times
+    /// faster, and the CPU stays free); off, it runs on the CPU only.</summary>
+    public bool LyricsSyncUseGpu { get; set; } = true;
+
+    /// <summary>How much of the CPU "싱크 가사 만들기" may use for what runs on it.</summary>
+    public LyricsSyncCpuUsage LyricsSyncCpuUsage { get; set; } = LyricsSyncCpuUsage.Normal;
+
     /// <summary>The equalizer and tone controls.</summary>
     public ToneSettings Tone { get; set; } = new();
 
@@ -154,6 +161,13 @@ public enum CloseAction
     Exit,
     /// <summary>Closing hides the player to the notification area; music keeps playing.</summary>
     Tray,
+}
+
+public enum LyricsSyncCpuUsage
+{
+    Low,
+    Normal,
+    Max,
 }
 
 public enum ScreenSaverExit

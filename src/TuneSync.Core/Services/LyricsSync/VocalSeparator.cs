@@ -33,29 +33,34 @@ public sealed class VocalSeparator : IDisposable
     /// <summary>True when the model runs on the graphics card.</summary>
     public bool UsesGpu { get; }
 
-    public VocalSeparator(string modelPath, bool allowGpu = true)
+    private readonly ParallelOptions _parallel;
+
+    /// <param name="threads">CPU threads for the spectrograms (and the model itself, on the CPU).</param>
+    public VocalSeparator(string modelPath, bool allowGpu = true, int threads = 0)
     {
-        (_session, UsesGpu) = Open(modelPath, allowGpu);
+        if (threads <= 0) threads = Environment.ProcessorCount;
+        _parallel = new ParallelOptions { MaxDegreeOfParallelism = threads };
+        (_session, UsesGpu) = Open(modelPath, allowGpu, threads);
         _input = _session.InputMetadata.Keys.First();
         for (var i = 0; i < FftSize; i++) _window[i] = (float)(0.5 - 0.5 * Math.Cos(2 * Math.PI * i / FftSize));
         for (var t = 0; t < Frames; t++)
             for (var i = 0; i < FftSize; i++) _windowSum[t * Hop + i] += _window[i] * _window[i];
     }
 
-    private static (InferenceSession, bool) Open(string modelPath, bool allowGpu)
+    private static (InferenceSession, bool) Open(string modelPath, bool allowGpu, int threads)
     {
         if (allowGpu)
         {
             try
             {
                 // DirectML wants its memory handled this way.
-                using var gpu = new SessionOptions { EnableMemoryPattern = false, ExecutionMode = ExecutionMode.ORT_SEQUENTIAL };
+                using var gpu = new SessionOptions { EnableMemoryPattern = false, ExecutionMode = ExecutionMode.ORT_SEQUENTIAL, IntraOpNumThreads = threads };
                 gpu.AppendExecutionProvider_DML(0);
                 return (new InferenceSession(modelPath, gpu), true);
             }
             catch (Exception) { /* no usable graphics card or driver: the CPU does it, slower */ }
         }
-        using var cpu = new SessionOptions();
+        using var cpu = new SessionOptions { IntraOpNumThreads = threads };
         return (new InferenceSession(modelPath, cpu), false);
     }
 
@@ -100,7 +105,7 @@ public sealed class VocalSeparator : IDisposable
     private void Forward(ReadOnlySpan<float> samples, float[] spectrum, int channel)
     {
         var source = samples.ToArray();
-        Parallel.For(0, Frames, () => (new Complex[FftSize], new Complex[FftSize], new Complex[FftSize]), (t, _, buffers) =>
+        Parallel.For(0, Frames, _parallel, () => (new Complex[FftSize], new Complex[FftSize], new Complex[FftSize]), (t, _, buffers) =>
         {
             var (input, output, scratch) = buffers;
             for (var i = 0; i < FftSize; i++)
@@ -127,7 +132,7 @@ public sealed class VocalSeparator : IDisposable
     {
         var data = spectrum.ToArray();
         var frames = new float[Frames][];
-        Parallel.For(0, Frames, () => (new Complex[FftSize], new Complex[FftSize], new Complex[FftSize]), (t, _, buffers) =>
+        Parallel.For(0, Frames, _parallel, () => (new Complex[FftSize], new Complex[FftSize], new Complex[FftSize]), (t, _, buffers) =>
         {
             var (input, output, scratch) = buffers;
             var re = (channel * 2) * Bins * Frames + t;

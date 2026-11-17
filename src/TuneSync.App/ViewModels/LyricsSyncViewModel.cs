@@ -2,6 +2,7 @@
 using System.Linq;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using TuneSync.Core.Models;
 using TuneSync.Core.Services;
 using TuneSync.Core.Services.LyricsSync;
 
@@ -46,12 +47,14 @@ public sealed partial class LyricsSyncViewModel : ObservableObject, IDisposable
     private readonly PlaybackViewModel _playback;
     private readonly LibraryViewModel _library;
     private readonly Network.NetworkLibrary _network;
+    private readonly AppSettings _settings;
     private LyricsSyncEngine? _engine;
     private CancellationTokenSource? _work;
 
     public LyricsSyncViewModel(PlaybackViewModel playback, LibraryViewModel library, Network.NetworkLibrary network,
-        LibraryFileViewModel file, string lyrics)
+        AppSettings settings, LibraryFileViewModel file, string lyrics)
     {
+        _settings = settings;
         _playback = playback;
         _library = library;
         _network = network;
@@ -169,14 +172,14 @@ public sealed partial class LyricsSyncViewModel : ObservableObject, IDisposable
             var audio = File.IsRemote ? await _network.Cache.CompletedPathAsync(File.Path) : File.Path;
             var sung = Lines.Where(l => !l.IsGap).ToList();
             var plain = string.Join("\n", sung.Select(l => l.Text));
-            _engine ??= new LyricsSyncEngine();
+            _engine ??= new LyricsSyncEngine(LyricsSyncOptions.From(_settings));
             var progress = new Progress<(LyricsSyncEngine.Stage Stage, double Value)>(p =>
             {
                 (Status, Progress) = p.Stage switch
                 {
                     LyricsSyncEngine.Stage.Decoding => ("노래를 읽는 중…", 0.02),
                     LyricsSyncEngine.Stage.Separating => ($"목소리를 분리하는 중… {(int)(p.Value * 100)}%", 0.03 + p.Value * 0.17),
-                    LyricsSyncEngine.Stage.Listening => ($"노래를 듣는 중… {(int)(p.Value * 100)}%", 0.2 + p.Value * 0.77),
+                    LyricsSyncEngine.Stage.Listening => ($"노래를 듣는 중… {(int)(p.Value * 100)}%{DeviceNote()}", 0.2 + p.Value * 0.77),
                     _ => ("가사 줄에 시간을 맞추는 중…", 1.0),
                 };
             });
@@ -213,6 +216,14 @@ public sealed partial class LyricsSyncViewModel : ObservableObject, IDisposable
             UpdateSummary();
         }
     }
+
+    /// <summary>" · 그래픽 카드" or " · CPU" once the listening has started, for the status line.</summary>
+    private static string DeviceNote() => LyricsSyncEngine.ListeningDevice switch
+    {
+        null => "",
+        "CPU" => " · CPU",
+        _ => " · 그래픽 카드",
+    };
 
     private async Task<bool> DownloadModelAsync()
     {

@@ -669,8 +669,9 @@
                 <!-- 도구 -->
                 <StackPanel Tag="Tools">
                     <ui:TextBlock Text="도구" Style="{StaticResource CategoryTitle}"/>
-                    <ui:TextBlock Text="폴더 합치기와 데이터" Style="{StaticResource CategoryLead}"/>
-                    <ui:CardControl Style="{StaticResource Card}" Margin="0,8,0,4" Icon="{ui:SymbolIcon FolderProhibited24}" Tag="폴더 합치기 격리 폴더 충돌"
+                    <ui:TextBlock Text="폴더 합치기, 가사 싱크와 데이터" Style="{StaticResource CategoryLead}"/>
+                    <ui:TextBlock Text="폴더 합치기" Style="{StaticResource Group}"/>
+                    <ui:CardControl Style="{StaticResource Card}" Icon="{ui:SymbolIcon FolderProhibited24}" Tag="폴더 합치기 격리 폴더 충돌"
                                     ToolTip="충돌한 파일을 삭제하지 않고 옮겨 두는, 타겟 폴더 안의 폴더 이름입니다.">
                         <ui:CardControl.Header>
                             <StackPanel>
@@ -680,6 +681,31 @@
                         </ui:CardControl.Header>
                         <ui:TextBox Width="200" Text="{Binding QuarantineFolderName, UpdateSourceTrigger=PropertyChanged}" ClearButtonEnabled="False"/>
                     </ui:CardControl>
+                    <ui:TextBlock Text="가사 싱크" Style="{StaticResource Group}"/>
+                    <ui:CardControl Style="{StaticResource Card}" Icon="{ui:SymbolIcon DeveloperBoard24}"
+                                    Tag="가사 싱크 싱크 가사 만들기 자동 맞추기 그래픽 카드 GPU 가속 Vulkan 음성 인식 처리 장치 속도"
+                                    ToolTip="싱크 가사를 자동으로 맞출 때 음성 인식과 목소리 분리를 그래픽 카드로 처리합니다. 그래픽 카드가 없거나 쓸 수 없으면 CPU로 처리합니다. 끄면 모두 CPU로 처리해 곡당 몇 분씩 걸릴 수 있습니다.">
+                        <ui:CardControl.Header>
+                            <StackPanel>
+                                <ui:TextBlock Text="그래픽 카드(GPU) 사용" FontTypography="Body"/>
+                                <ui:TextBlock Text="자동으로 맞추기가 여러 배 빨라지고 CPU를 거의 쓰지 않습니다" Style="{StaticResource Desc}"/>
+                            </StackPanel>
+                        </ui:CardControl.Header>
+                        <ui:ToggleSwitch IsChecked="{Binding LyricsSyncUseGpu}" OnContent="켬" OffContent="끔"/>
+                    </ui:CardControl>
+                    <ui:CardControl Style="{StaticResource Card}" Icon="{ui:SymbolIcon Gauge24}"
+                                    Tag="가사 싱크 싱크 가사 만들기 자동 맞추기 CPU 사용량 자원 제한 스레드 코어 점유 느려짐"
+                                    ToolTip="CPU로 처리하는 부분이 쓸 수 있는 CPU의 양입니다. 낮을수록 다른 작업이 덜 느려지지만 오래 걸립니다. 그래픽 카드로 처리할 때는 CPU를 거의 쓰지 않습니다.">
+                        <ui:CardControl.Header>
+                            <StackPanel>
+                                <ui:TextBlock Text="CPU 사용량" FontTypography="Body"/>
+                                <ui:TextBlock Text="낮을수록 다른 작업이 덜 느려지지만 오래 걸립니다" Style="{StaticResource Desc}"/>
+                            </StackPanel>
+                        </ui:CardControl.Header>
+                        <ComboBox Width="200" ItemsSource="{Binding LyricsSyncCpuUsageOptions}" DisplayMemberPath="Label"
+                                  SelectedValuePath="Value" SelectedValue="{Binding LyricsSyncCpuUsage}"/>
+                    </ui:CardControl>
+                    <ui:TextBlock Text="데이터" Style="{StaticResource Group}"/>
                     <ui:CardControl Style="{StaticResource Card}" Icon="{ui:SymbolIcon FolderOpen24}" Tag="데이터 폴더 설정 파일 저장 위치"
                                     ToolTip="설정, 라이브러리 목록, 네트워크 음악 캐시, 가사 싱크용 음성 인식 모델이 저장되는 폴더입니다.">
                         <ui:CardControl.Header>

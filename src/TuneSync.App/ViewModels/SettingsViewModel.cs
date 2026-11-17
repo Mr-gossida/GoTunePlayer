@@ -35,6 +35,8 @@ public sealed partial class SettingsViewModel : ObservableObject
         _screenSaverExit = settings.ScreenSaverExit;
         _minimizeToMini = settings.MinimizeToMini;
         _closeAction = settings.CloseAction;
+        _lyricsSyncUseGpu = settings.LyricsSyncUseGpu;
+        _lyricsSyncCpuUsage = settings.LyricsSyncCpuUsage;
         _cacheMegabytes = settings.StreamCacheMegabytes;
         _startWithWindows = AutoStart.IsEnabled();
         RefreshNetwork();
@@ -275,6 +277,33 @@ public sealed partial class SettingsViewModel : ObservableObject
         AppSettingsStore.Save(_settings);
         // the tray icon appears (or goes) right away, not on the next close
         (Application.Current?.MainWindow as ShellWindow)?.UpdateTray();
+    }
+
+    // ---- 가사 싱크 (applies from the next "자동으로 맞추기") ----
+
+    [ObservableProperty]
+    private bool _lyricsSyncUseGpu;
+
+    partial void OnLyricsSyncUseGpuChanged(bool value)
+    {
+        _settings.LyricsSyncUseGpu = value;
+        AppSettingsStore.Save(_settings);
+    }
+
+    [ObservableProperty]
+    private LyricsSyncCpuUsage _lyricsSyncCpuUsage;
+
+    public IReadOnlyList<Choice<LyricsSyncCpuUsage>> LyricsSyncCpuUsageOptions { get; } =
+    [
+        new(LyricsSyncCpuUsage.Low, "낮음 (약 25%)"),
+        new(LyricsSyncCpuUsage.Normal, "보통 (약 50%)"),
+        new(LyricsSyncCpuUsage.Max, "최대 (가장 빠름)"),
+    ];
+
+    partial void OnLyricsSyncCpuUsageChanged(LyricsSyncCpuUsage value)
+    {
+        _settings.LyricsSyncCpuUsage = value;
+        AppSettingsStore.Save(_settings);
     }
 
     [ObservableProperty]

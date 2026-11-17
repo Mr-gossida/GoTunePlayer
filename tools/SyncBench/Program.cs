@@ -12,6 +12,9 @@
 //                      and pass: with it, a change to the aligner is measured in seconds instead
 //                      of minutes. Use a fresh folder after changing the listening itself.
 //   BENCH_ALL_PASSES=1 with BENCH_CACHE: listen to every pass (and keep it), not only until one is good enough
+//   BENCH_GPU=0        listen and separate on the CPU only (the default, like the app's, is the
+//                      graphics card when there is one); BENCH_CPU=low|normal|max: CPU threads
+//                      (default normal); measurements before 2026-11-17 ran on the CPU, 15 threads
 //   BENCH_MIN_REPEATED when picking songs from a folder: only songs where at least this share of
 //                      the lines occur more than once (choruses); BENCH_EXCLUDE: a songs.txt
 //                      whose songs aren't picked (to make a second set)
@@ -31,6 +34,8 @@ WhisperModelStore.Folder = Path.GetDirectoryName(model)!;
 var vocalModel = Environment.GetEnvironmentVariable("BENCH_VOCAL_MODEL") is { Length: > 0 } given ? given : VocalModelStore.ModelPath;
 if (Environment.GetEnvironmentVariable("BENCH_NOSEP") == "1" || !File.Exists(vocalModel)) vocalModel = null;
 Console.WriteLine(vocalModel is null ? "without vocal separation" : $"vocal separation: {Path.GetFileName(vocalModel)}");
+var options = LyricsSyncOptions.From(Environment.GetEnvironmentVariable("BENCH_GPU") != "0",
+    Enum.TryParse<TuneSync.Core.Models.LyricsSyncCpuUsage>(Environment.GetEnvironmentVariable("BENCH_CPU"), true, out var cpu) ? cpu : TuneSync.Core.Models.LyricsSyncCpuUsage.Normal);
 var cache = Environment.GetEnvironmentVariable("BENCH_CACHE") is { Length: > 0 } c ? c : null;
 if (cache is not null) Directory.CreateDirectory(cache);
 
@@ -63,8 +68,8 @@ else
 }
 
 var all = new List<double>();
-using var engine = new LyricsSyncEngine(model, vocalModel);
-using var transcriber = new WhisperTranscriber(model);
+using var engine = new LyricsSyncEngine(model, vocalModel, options);
+using var transcriber = new WhisperTranscriber(model, options);
 foreach (var song in songs)
 {
     string lyrics;
@@ -81,7 +86,7 @@ foreach (var song in songs)
         for (var i = 0; i < truth.Count; i++)
             Console.WriteLine($"   {truth[i].Time.TotalSeconds,7:0.00} {result[i].Time.TotalSeconds,7:0.00} {(result[i].IsConfident ? ' ' : '?')} {errors[i],5:0.00}  {truth[i].Text}");
 }
-Console.WriteLine($"{"ALL",-50} {Summary(all)}");
+Console.WriteLine($"{"ALL",-50} {Summary(all)}  listened on {LyricsSyncEngine.ListeningDevice ?? "-"}, {options.Threads} CPU threads");
 
 // The engine's own steps, with the vocals and what was heard kept in the cache folder.
 async Task<List<AlignedLine>> SyncCached(string song, string plain)

@@ -1,3 +1,4 @@
+using TuneSync.Core.Models;
 using TuneSync.Core.Services;
 using TuneSync.Core.Services.LyricsSync;
 
@@ -269,4 +270,14 @@ public class LyricsAlignerTests
         Assert.True(result[4].Time > result[3].Time);
         Assert.Equal([true, false, false, true, false], result.Select(l => l.IsConfident));
     }
+
+    [Theory]
+    [InlineData(LyricsSyncCpuUsage.Low, 16, 4)]
+    [InlineData(LyricsSyncCpuUsage.Normal, 16, 8)]
+    [InlineData(LyricsSyncCpuUsage.Max, 16, 15)]
+    [InlineData(LyricsSyncCpuUsage.Low, 2, 1)]
+    [InlineData(LyricsSyncCpuUsage.Normal, 1, 1)]
+    [InlineData(LyricsSyncCpuUsage.Max, 1, 1)]
+    public void Cpu_usage_levels_give_a_share_of_the_processors(LyricsSyncCpuUsage usage, int processors, int threads) =>
+        Assert.Equal(threads, LyricsSyncOptions.ThreadsFor(usage, processors));
 }

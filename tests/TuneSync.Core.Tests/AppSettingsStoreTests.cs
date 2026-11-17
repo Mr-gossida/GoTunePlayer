@@ -19,6 +19,8 @@ public class AppSettingsStoreTests : IDisposable
 
         Assert.Empty(settings.LibraryFolders);
         Assert.Equal(MergeConflictResolution.KeepLargerFile, settings.MergeConflictResolution);
+        Assert.True(settings.LyricsSyncUseGpu);
+        Assert.Equal(LyricsSyncCpuUsage.Normal, settings.LyricsSyncCpuUsage);
     }
 
     [Fact]
@@ -36,6 +38,8 @@ public class AppSettingsStoreTests : IDisposable
             MergeConflictResolution = MergeConflictResolution.RenameWithSuffix,
             RenameIsAlbumMode = true,
             AutoFillIsAutomaticMode = true,
+            LyricsSyncUseGpu = false,
+            LyricsSyncCpuUsage = LyricsSyncCpuUsage.Low,
         };
 
         AppSettingsStore.Save(settings, _path);
@@ -50,6 +54,8 @@ public class AppSettingsStoreTests : IDisposable
         Assert.Equal(settings.MergeConflictResolution, reloaded.MergeConflictResolution);
         Assert.Equal(settings.RenameIsAlbumMode, reloaded.RenameIsAlbumMode);
         Assert.Equal(settings.AutoFillIsAutomaticMode, reloaded.AutoFillIsAutomaticMode);
+        Assert.False(reloaded.LyricsSyncUseGpu);
+        Assert.Equal(LyricsSyncCpuUsage.Low, reloaded.LyricsSyncCpuUsage);
     }
 
     [Fact]

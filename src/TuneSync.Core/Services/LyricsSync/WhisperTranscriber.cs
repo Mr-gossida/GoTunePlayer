@@ -1,4 +1,5 @@
 using Whisper.net;
+using Whisper.net.Logger;
 
 namespace TuneSync.Core.Services.LyricsSync;
 
@@ -11,12 +12,47 @@ namespace TuneSync.Core.Services.LyricsSync;
 /// instrumental or a slow ballad it often stays lost (or repeats itself) to the end, and the
 /// lyrics after that couldn't be placed. Measured on songs with known timings (tools/SyncBench),
 /// the pieces got far more lines placed. (whisper.cpp's DTW token times were tried as well: more
-/// lines placed than whole-song decoding, but about 0.3 s late and less exact than these.)</summary>
-public sealed class WhisperTranscriber(string modelPath) : IDisposable
+/// lines placed than whole-song decoding, but about 0.3 s late and less exact than these.)
+///
+/// It runs on the graphics card through Vulkan when asked to and one works (whisper.cpp falls
+/// back to the CPU by itself otherwise; without a Vulkan driver at all, Whisper.net goes on to
+/// its CPU-only library).</summary>
+public sealed class WhisperTranscriber(string modelPath, LyricsSyncOptions options) : IDisposable
 {
     private const int WindowSeconds = 30;
 
     private WhisperFactory? _factory;
+
+    public WhisperTranscriber(string modelPath) : this(modelPath, LyricsSyncOptions.Default) { }
+
+    /// <summary>Where the listening runs: the graphics card's name, "CPU", or null until the first
+    /// piece has started (read from whisper.cpp's log, which says which device it took).</summary>
+    public static string? Device => !_deviceKnown ? null : _gpuInUse ?? "CPU";
+
+    private static volatile string? _gpuInUse;
+    private static volatile bool _deviceKnown;
+
+    /// <summary>Forgets where the last listening ran, so a new one isn't shown with the old device.</summary>
+    public static void ForgetDevice() => _deviceKnown = false;
+    private static string? _gpuName;
+    private static int _logging;
+
+    private static void WatchLog()
+    {
+        if (Interlocked.Exchange(ref _logging, 1) == 1) return;
+        LogProvider.AddLogger((_, text) =>
+        {
+            if (string.IsNullOrEmpty(text)) return;
+            // "ggml_vulkan: 0 = NVIDIA GeForce RTX 5080 (NVIDIA) | uma: 0 | ..."
+            if (text.Contains("ggml_vulkan: 0 = "))
+            {
+                var name = text[(text.IndexOf("0 = ", StringComparison.Ordinal) + 4)..];
+                _gpuName = name.Split('|')[0].Trim();
+            }
+            else if (text.Contains("whisper_backend_init_gpu: using")) { _gpuInUse = _gpuName ?? "GPU"; _deviceKnown = true; }
+            else if (text.Contains("whisper_backend_init_gpu: no GPU found")) { _gpuInUse = null; _deviceKnown = true; }
+        });
+    }
 
     /// <param name="language">"ko", "en", … or null to let Whisper decide.</param>
     /// <param name="prompt">Text that biases recognition toward the expected words (the lyrics),
@@ -25,9 +61,11 @@ public sealed class WhisperTranscriber(string modelPath) : IDisposable
     public async Task<List<TimedText>> TranscribeAsync(float[] samples, string? language, string? prompt,
         IProgress<int>? progress, CancellationToken ct, IReadOnlyList<(double Start, double End)>? windows = null)
     {
-        _factory ??= WhisperFactory.FromPath(modelPath);
+        WatchLog();
+        _factory ??= WhisperFactory.FromPath(modelPath, new WhisperFactoryOptions { UseGpu = options.UseGpu });
+        _deviceKnown = false;
         var builder = _factory.CreateBuilder()
-            .WithThreads(Math.Max(1, Environment.ProcessorCount - 1))
+            .WithThreads(options.Threads)
             .WithTokenTimestamps()
             .SplitOnWord()
             .WithMaxSegmentLength(1) // one word per piece, each with its own time

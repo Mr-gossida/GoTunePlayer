@@ -24,16 +24,25 @@ public sealed class LyricsSyncEngine : IDisposable
 {
     private readonly WhisperTranscriber _transcriber;
     private readonly string? _vocalModelPath;
+    private readonly LyricsSyncOptions _options;
     private VocalSeparator? _separator;
 
-    public LyricsSyncEngine() : this(WhisperModelStore.ModelPath, VocalModelStore.IsDownloaded ? VocalModelStore.ModelPath : null) { }
+    public LyricsSyncEngine() : this(LyricsSyncOptions.Default) { }
+
+    public LyricsSyncEngine(LyricsSyncOptions options)
+        : this(WhisperModelStore.ModelPath, VocalModelStore.IsDownloaded ? VocalModelStore.ModelPath : null, options) { }
 
     /// <param name="vocalModelPath">The vocal separation model, or null to do without.</param>
-    public LyricsSyncEngine(string modelPath, string? vocalModelPath)
+    public LyricsSyncEngine(string modelPath, string? vocalModelPath, LyricsSyncOptions? options = null)
     {
-        _transcriber = new WhisperTranscriber(modelPath);
+        _options = options ?? LyricsSyncOptions.Default;
+        _transcriber = new WhisperTranscriber(modelPath, _options);
         _vocalModelPath = vocalModelPath;
     }
+
+    /// <summary>Where the listening runs, for the status line: the graphics card's name, "CPU",
+    /// or null until it has begun.</summary>
+    public static string? ListeningDevice => WhisperTranscriber.Device;
 
     public enum Stage { Decoding, Separating, Listening, Aligning }
 
@@ -69,6 +78,7 @@ public sealed class LyricsSyncEngine : IDisposable
         }
         var (windows, voice) = UseVocals(vocals);
 
+        WhisperTranscriber.ForgetDevice();
         progress?.Report((Stage.Listening, 0));
         var language = LanguageOf(lines);
         var passes = Passes(vocals is not null);
@@ -96,7 +106,7 @@ public sealed class LyricsSyncEngine : IDisposable
     /// <summary>The singing alone, at the 16 kHz speech recognition expects.</summary>
     public float[] SeparateVocals(string audioPath, IProgress<double>? progress, CancellationToken ct)
     {
-        _separator ??= new VocalSeparator(_vocalModelPath!);
+        _separator ??= new VocalSeparator(_vocalModelPath!, _options.UseGpu, _options.Threads);
         var (left, right) = AudioDecoder.ReadStereo(audioPath, VocalSeparator.SampleRate, ct);
         var vocals = _separator.Separate(left, right, progress, ct);
         return AudioDecoder.Resample(vocals, VocalSeparator.SampleRate, AudioDecoder.SampleRate);
