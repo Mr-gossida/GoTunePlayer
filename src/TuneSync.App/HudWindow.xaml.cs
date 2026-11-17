@@ -40,6 +40,7 @@ public partial class HudWindow : Window
         };
         Menu.Closed += (_, _) => { if (!IsMouseOver) Settle(); };
         SizeChanged += (_, e) => StayInPlace(e);
+        IsVisibleChanged += (_, _) => UpdatePointerTracking();
         Closing += (_, e) =>
         {
             // Alt+F4 on it: just hide (the app stays)
@@ -124,24 +125,6 @@ public partial class HudWindow : Window
         if (!_hovered && IsVisible) Fade(Idle, 0.12);
     }
 
-    /// <summary>Mouse pass-through on or off. A transparent window style makes Windows hand every
-    /// click (and hover) to the window below, so the card can't be grabbed until it is switched
-    /// off again from 설정 or the tray menu.</summary>
-    public void ApplyClickThrough()
-    {
-        var handle = new WindowInteropHelper(this).Handle;
-        if (handle == IntPtr.Zero) return; // applied once the window exists
-        var style = GetWindowLong(handle, GwlExStyle);
-        var through = _settings.Hud.ClickThrough;
-        SetWindowLong(handle, GwlExStyle, through ? style | WsExTransparent : style & ~WsExTransparent);
-        if (through)
-        {
-            // it stops getting the mouse now: drop the hover look and the menu
-            Menu.IsOpen = false;
-            if (IsVisible) Settle();
-        }
-    }
-
     private double Idle => Math.Clamp(_settings.Hud.Opacity, HudSettings.MinOpacity, 1);
 
     private void Fade(double to, double seconds) =>
@@ -149,6 +132,9 @@ public partial class HudWindow : Window
 
     private void Window_MouseEnter(object sender, MouseEventArgs e)
     {
+        // click-through with reachable buttons: the pointer tracking handles the look (and the
+        // menu and close buttons stay away, as they couldn't be pressed)
+        if (_settings.Hud.ClickThrough) return;
         _hovered = true;
         Fade(1, 0.15);
         ShowHoverParts(1, 0.15);
@@ -165,6 +151,7 @@ public partial class HudWindow : Window
     private void Window_MouseLeave(object sender, MouseEventArgs e)
     {
         if (Menu.IsOpen) return; // the menu is a window of its own: the pointer is in it
+        if (_settings.Hud.ClickThrough) return;
         Settle();
     }
 

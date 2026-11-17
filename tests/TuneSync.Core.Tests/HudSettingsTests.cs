@@ -11,6 +11,7 @@ public class HudSettingsTests
         var hud = new HudSettings();
         Assert.Equal(HudLayout.Card, hud.Layout);
         Assert.False(hud.ClickThrough);
+        Assert.False(hud.ClickThroughButtons);
     }
 
     [Fact]
@@ -25,10 +26,11 @@ public class HudSettingsTests
     [Fact]
     public void LayoutAndClickThrough_SurviveARoundTrip()
     {
-        var json = JsonSerializer.Serialize(new HudSettings { Layout = HudLayout.Vertical, ClickThrough = true, Left = 12, Top = 34 });
+        var json = JsonSerializer.Serialize(new HudSettings { Layout = HudLayout.Vertical, ClickThrough = true, ClickThroughButtons = true, Left = 12, Top = 34 });
         var back = JsonSerializer.Deserialize<HudSettings>(json)!;
         Assert.Equal(HudLayout.Vertical, back.Layout);
         Assert.True(back.ClickThrough);
+        Assert.True(back.ClickThroughButtons);
         Assert.Equal(12, back.Left);
         Assert.Equal(34, back.Top);
     }

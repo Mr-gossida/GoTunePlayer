@@ -375,6 +375,11 @@
                             </Grid>
                             <TextBlock Text="클릭이 뒤의 창으로 갑니다. 트레이 메뉴나 설정에서 끕니다" FontSize="11" Margin="0,4,0,0" TextWrapping="Wrap"
                                        local:KeepWords.IsEnabled="True" Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
+                            <!-- set before turning it on: this menu can't be reached while clicks pass through -->
+                            <CheckBox IsChecked="{Binding ClickThroughButtons}" Margin="0,6,0,0" FontSize="12"
+                                      Foreground="{DynamicResource TextFillColorSecondaryBrush}" AutomationProperties.Name="HUD 버튼은 누를 수 있게">
+                                <TextBlock Text="켜도 재생 버튼은 누를 수 있게" TextWrapping="Wrap" local:KeepWords.IsEnabled="True"/>
+                            </CheckBox>
                             <ui:Button Content="HUD 끄기" Icon="{ui:SymbolIcon Dismiss24}" HorizontalAlignment="Stretch" Margin="0,10,0,0"
                                        Command="{Binding CloseCommand}"/>
                         </StackPanel>

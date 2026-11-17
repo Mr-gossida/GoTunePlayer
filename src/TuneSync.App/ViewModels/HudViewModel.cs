@@ -19,6 +19,7 @@ public sealed partial class HudViewModel : ObservableObject
         _isOpen = false;
         _opacity = settings.Hud.Opacity;
         _clickThrough = settings.Hud.ClickThrough;
+        _clickThroughButtons = settings.Hud.ClickThroughButtons;
         _layout = settings.Hud.Layout;
     }
 
@@ -51,6 +52,18 @@ public sealed partial class HudViewModel : ObservableObject
     partial void OnClickThroughChanged(bool value)
     {
         _settings.Hud.ClickThrough = value;
+        AppSettingsStore.Save(_settings);
+        _window?.ApplyClickThrough();
+    }
+
+    /// <summary>With click-through on, the playback buttons can still be pressed (and the card
+    /// brightens while the mouse is over it); everywhere else clicks still go through.</summary>
+    [ObservableProperty]
+    private bool _clickThroughButtons;
+
+    partial void OnClickThroughButtonsChanged(bool value)
+    {
+        _settings.Hud.ClickThroughButtons = value;
         AppSettingsStore.Save(_settings);
         _window?.ApplyClickThrough();
     }

@@ -279,17 +279,37 @@
                                        Typography.NumeralAlignment="Tabular"/>
                         </StackPanel>
                     </ui:CardControl>
-                    <ui:CardControl Style="{StaticResource Card}" DataContext="{Binding Hud}" Icon="{ui:SymbolIcon CursorClick24}"
-                                    Tag="HUD 마우스 통과 클릭 통과 클릭 무시 투명 고정"
-                                    ToolTip="켜 두면 HUD를 눌러도 그 뒤의 창이 클릭됩니다. 그동안 HUD는 옮기거나 누를 수 없으니, 끌 때는 여기나 트레이 아이콘의 메뉴(HUD 마우스 통과 끄기)를 쓰세요.">
-                        <ui:CardControl.Header>
-                            <StackPanel>
-                                <ui:TextBlock Text="HUD 마우스 통과" FontTypography="Body"/>
-                                <ui:TextBlock Text="클릭이 HUD를 지나 뒤의 창으로 갑니다 · 트레이 메뉴에서도 끌 수 있습니다" Style="{StaticResource Desc}"/>
+                    <ui:CardExpander Margin="0,0,0,4" DataContext="{Binding Hud}" Icon="{ui:SymbolIcon CursorClick24}" IsExpanded="{Binding ClickThrough, Mode=OneWay}"
+                                     Tag="HUD 마우스 통과 클릭 통과 클릭 무시 투명 고정 버튼 누르기 재생 버튼"
+                                     ToolTip="켜 두면 HUD를 눌러도 그 뒤의 창이 클릭됩니다. 그동안 HUD는 옮길 수 없으니, 끌 때는 여기나 트레이 아이콘의 메뉴(HUD 마우스 통과 끄기)를 쓰세요.">
+                        <ui:CardExpander.Header>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Margin="0,0,16,0">
+                                    <ui:TextBlock Text="HUD 마우스 통과" FontTypography="Body"/>
+                                    <ui:TextBlock Text="클릭이 HUD를 지나 뒤의 창으로 갑니다 · 트레이 메뉴에서도 끌 수 있습니다" Style="{StaticResource Desc}"/>
+                                </StackPanel>
+                                <ui:ToggleSwitch Grid.Column="1" VerticalAlignment="Center" Margin="0,0,16,0"
+                                                 IsChecked="{Binding ClickThrough}" OnContent="켬" OffContent="끔" AutomationProperties.Name="HUD 마우스 통과"/>
+                            </Grid>
+                        </ui:CardExpander.Header>
+                        <Grid Margin="40,4,0,4" IsEnabled="{Binding ClickThrough}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel VerticalAlignment="Center" Margin="0,0,16,0">
+                                <ui:TextBlock Text="버튼은 누를 수 있게" FontTypography="BodyStrong"/>
+                                <ui:TextBlock Style="{StaticResource Desc}"
+                                              Text="이전 곡 · 재생 · 다음 곡 버튼만 눌리고, 나머지 자리의 클릭은 뒤의 창으로 갑니다. 마우스를 올리면 HUD가 선명해집니다."/>
                             </StackPanel>
-                        </ui:CardControl.Header>
-                        <ui:ToggleSwitch IsChecked="{Binding ClickThrough}" OnContent="켬" OffContent="끔"/>
-                    </ui:CardControl>
+                            <ui:ToggleSwitch Grid.Column="1" VerticalAlignment="Center" IsChecked="{Binding ClickThroughButtons}" OnContent="켬" OffContent="끔"
+                                             AutomationProperties.Name="HUD 버튼은 누를 수 있게"/>
+                        </Grid>
+                    </ui:CardExpander>
                 </StackPanel>
 
                 <!-- 재생 -->

@@ -18,6 +18,10 @@ public sealed class HudSettings
     /// turned off again from 설정 or the tray menu).</summary>
     public bool ClickThrough { get; set; }
 
+    /// <summary>With <see cref="ClickThrough"/>: the playback buttons still take clicks; the rest
+    /// of the card lets them through.</summary>
+    public bool ClickThroughButtons { get; set; }
+
     /// <summary>How the card is laid out (설정 › HUD 레이아웃).</summary>
     public HudLayout Layout { get; set; } = HudLayout.Card;
 
