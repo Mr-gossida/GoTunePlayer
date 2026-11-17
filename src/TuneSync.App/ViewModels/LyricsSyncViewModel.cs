@@ -8,6 +8,25 @@ using TuneSync.Core.Services.LyricsSync;
 
 namespace TuneSync.App.ViewModels;
 
+/// <summary>One step of the automatic sync, shown as a chip above the progress bar.</summary>
+public sealed partial class SyncStepViewModel(int number, string name) : ObservableObject
+{
+    public int Number { get; } = number;
+    public string Name { get; } = name;
+
+    /// <summary>Not the first chip: a chevron goes before it.</summary>
+    public bool HasPrevious => Number > 1;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsDone), nameof(IsActive))]
+    private SyncStepState _state;
+
+    public bool IsDone => State == SyncStepState.Done;
+    public bool IsActive => State == SyncStepState.Active;
+}
+
+public enum SyncStepState { Waiting, Active, Done }
+
 /// <summary>One lyric line in the sync editor.</summary>
 public sealed partial class SyncLineViewModel(string text) : ObservableObject
 {
@@ -116,6 +135,15 @@ public sealed partial class LyricsSyncViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private string _status = "";
 
+    /// <summary>The current step's own percentage, beside the status (empty when there's none).</summary>
+    [ObservableProperty]
+    private string _stepPercent = "";
+
+    /// <summary>The automatic sync's steps while it runs (empty otherwise, e.g. while downloading
+    /// a model). The bar and the percentage are the current step's, not the whole sync's: how long
+    /// each step takes depends too much on the graphics card and the song to split one bar fairly.</summary>
+    public ObservableCollection<SyncStepViewModel> Steps { get; } = [];
+
     [ObservableProperty]
     private string _summary = "";
 
@@ -173,16 +201,8 @@ public sealed partial class LyricsSyncViewModel : ObservableObject, IDisposable
             var sung = Lines.Where(l => !l.IsGap).ToList();
             var plain = string.Join("\n", sung.Select(l => l.Text));
             _engine ??= new LyricsSyncEngine(LyricsSyncOptions.From(_settings));
-            var progress = new Progress<(LyricsSyncEngine.Stage Stage, double Value)>(p =>
-            {
-                (Status, Progress) = p.Stage switch
-                {
-                    LyricsSyncEngine.Stage.Decoding => ("노래를 읽는 중…", 0.02),
-                    LyricsSyncEngine.Stage.Separating => ($"목소리를 분리하는 중… {(int)(p.Value * 100)}%", 0.03 + p.Value * 0.17),
-                    LyricsSyncEngine.Stage.Listening => ($"노래를 듣는 중… {(int)(p.Value * 100)}%{DeviceNote()}", 0.2 + p.Value * 0.77),
-                    _ => ("가사 줄에 시간을 맞추는 중…", 1.0),
-                };
-            });
+            ShowSteps(_engine.Separates);
+            var progress = new Progress<LyricsSyncEngine.SyncProgress>(Show);
             var result = await _engine.SyncAsync(audio, plain, progress, ct);
             for (var i = 0; i < sung.Count && i < result.Count; i++)
             {
@@ -213,8 +233,66 @@ public sealed partial class LyricsSyncViewModel : ObservableObject, IDisposable
         {
             IsSyncing = false;
             Progress = 0;
+            StepPercent = "";
+            Steps.Clear();
             UpdateSummary();
         }
+    }
+
+    private void ShowSteps(bool separates)
+    {
+        Steps.Clear();
+        string[] names = separates ? ["목소리 분리", "노래 듣기", "줄 맞추기"] : ["노래 듣기", "줄 맞추기"];
+        for (var i = 0; i < names.Length; i++) Steps.Add(new SyncStepViewModel(i + 1, names[i]));
+        SetStep(0);
+    }
+
+    /// <summary>Marks the steps before <paramref name="current"/> done and it active.</summary>
+    private void SetStep(int current)
+    {
+        for (var i = 0; i < Steps.Count; i++)
+            Steps[i].State = i < current ? SyncStepState.Done : i == current ? SyncStepState.Active : SyncStepState.Waiting;
+    }
+
+    private void Show(LyricsSyncEngine.SyncProgress p)
+    {
+        var separates = Steps.Count == 3;
+        var listening = separates ? 1 : 0;
+        switch (p.Stage)
+        {
+            case LyricsSyncEngine.Stage.Decoding:
+                // Reading the song comes before the first step proper.
+                SetStep(0);
+                (Status, Progress, StepPercent) = ("노래를 읽는 중…", 0, "");
+                break;
+            case LyricsSyncEngine.Stage.Separating:
+                SetStep(0);
+                (Status, Progress, StepPercent) = ("반주를 빼고 목소리만 남기는 중…", p.Value, Percent(p.Value));
+                break;
+            case LyricsSyncEngine.Stage.Listening:
+                SetStep(listening);
+                // Until whisper.cpp says which device it took, it's still loading the model (on
+                // the graphics card that can take several seconds the first time).
+                (Status, Progress, StepPercent) = LyricsSyncEngine.ListeningDevice is null
+                    ? ($"{PassName(p.PassIndex, p.Listen)} · 음성 인식 준비 중…", 0, "")
+                    : ($"{PassName(p.PassIndex, p.Listen)}{DeviceNote()}", p.Value, Percent(p.Value));
+                break;
+            default:
+                SetStep(Steps.Count - 1);
+                (Status, Progress, StepPercent) = ("들은 내용과 가사 줄을 맞추는 중…", 1, "");
+                break;
+        }
+    }
+
+    private static string Percent(double value) => $"{(int)(value * 100)}%";
+
+    /// <summary>"첫 번째 듣기 · 목소리만" and so on: a third listen only happens when the first two
+    /// disagree, so it's "한 번 더", not "세 번째" of a count that was never announced.</summary>
+    private static string PassName(int index, LyricsSyncEngine.Pass pass)
+    {
+        var which = index switch { 0 => "첫 번째 듣기", 1 => "두 번째 듣기", _ => "한 번 더 듣기" };
+        var what = pass.Source == LyricsSyncEngine.Source.Vocals ? "목소리만" : pass.Hinted ? "가사를 참고해서" : "원곡";
+        return $"{which} · {what}";
     }
 
     /// <summary>" · 그래픽 카드" or " · CPU" once the listening has started, for the status line.</summary>

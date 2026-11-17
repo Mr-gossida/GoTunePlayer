@@ -46,6 +46,14 @@ public sealed class LyricsSyncEngine : IDisposable
 
     public enum Stage { Decoding, Separating, Listening, Aligning }
 
+    /// <summary>Where a sync is: the stage and 0..1 within it. While listening, that's within the
+    /// current pass (<paramref name="PassIndex"/>, 0-based; <paramref name="Listen"/> is what it
+    /// listens to) - how many passes there will be is only known once the first two are compared.</summary>
+    public readonly record struct SyncProgress(Stage Stage, double Value, int PassIndex = 0, Pass Listen = default);
+
+    /// <summary>True when the singing is separated first (the vocal separation model is there).</summary>
+    public bool Separates => _vocalModelPath is not null;
+
     /// <summary>What a pass listens to.</summary>
     public enum Source { Song, Vocals }
 
@@ -58,40 +66,38 @@ public sealed class LyricsSyncEngine : IDisposable
         ? [new(Source.Vocals, false), new(Source.Song, false), new(Source.Song, true)]
         : [new(Source.Song, false), new(Source.Song, true)];
 
-    /// <param name="progress">Stage and 0..1 within it.</param>
     public async Task<List<AlignedLine>> SyncAsync(string audioPath, string plainLyrics,
-        IProgress<(Stage Stage, double Value)>? progress, CancellationToken ct)
+        IProgress<SyncProgress>? progress, CancellationToken ct)
     {
         var lines = LrcWriter.PlainLines(plainLyrics);
         if (lines.Count == 0) return [];
 
-        progress?.Report((Stage.Decoding, 0));
+        progress?.Report(new(Stage.Decoding, 0));
         var song = await Task.Run(() => AudioDecoder.ReadMono16k(audioPath, ct), ct);
         var duration = TimeSpan.FromSeconds(song.Length / (double)AudioDecoder.SampleRate);
 
         float[]? vocals = null;
         if (_vocalModelPath is not null)
         {
-            progress?.Report((Stage.Separating, 0));
+            progress?.Report(new(Stage.Separating, 0));
             vocals = await Task.Run(() => SeparateVocals(audioPath,
-                new Progress<double>(p => progress?.Report((Stage.Separating, p))), ct), ct);
+                new Progress<double>(p => progress?.Report(new(Stage.Separating, p))), ct), ct);
         }
         var (windows, voice) = UseVocals(vocals);
 
         WhisperTranscriber.ForgetDevice();
-        progress?.Report((Stage.Listening, 0));
         var language = LanguageOf(lines);
         var passes = Passes(vocals is not null);
         var done = 0;
         var aligned = await SyncAsync(lines, duration, voice, passes, pass =>
         {
-            var from = done++ / (double)passes.Count;
+            var index = done++;
+            progress?.Report(new(Stage.Listening, 0, index, pass));
             return Task.Run(() => _transcriber.TranscribeAsync(pass.Source == Source.Vocals ? vocals! : song, language,
                 pass.Hinted ? Prompt(lines) : null,
-                new Progress<int>(p => progress?.Report((Stage.Listening, from + p / 100.0 / passes.Count))), ct, windows), ct);
+                new Progress<int>(p => progress?.Report(new(Stage.Listening, p / 100.0, index, pass))), ct, windows), ct);
         });
-        // The last pass is skipped when the first ones already agree: finish the bar anyway.
-        progress?.Report((Stage.Aligning, 1));
+        progress?.Report(new(Stage.Aligning, 1));
         return aligned;
     }
 
