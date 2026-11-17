@@ -139,6 +139,11 @@ public sealed partial class LyricsSyncViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private string _stepPercent = "";
 
+    /// <summary>What the current step runs on, for the badge at the card's top right: "GPU",
+    /// "CPU", or empty while that isn't known yet.</summary>
+    [ObservableProperty]
+    private string _processingDevice = "";
+
     /// <summary>The automatic sync's steps while it runs (empty otherwise, e.g. while downloading
     /// a model). The bar and the percentage are the current step's, not the whole sync's: how long
     /// each step takes depends too much on the graphics card and the song to split one bar fairly.</summary>
@@ -234,6 +239,7 @@ public sealed partial class LyricsSyncViewModel : ObservableObject, IDisposable
             IsSyncing = false;
             Progress = 0;
             StepPercent = "";
+            ProcessingDevice = "";
             Steps.Clear();
             UpdateSummary();
         }
@@ -263,19 +269,23 @@ public sealed partial class LyricsSyncViewModel : ObservableObject, IDisposable
             case LyricsSyncEngine.Stage.Decoding:
                 // Reading the song comes before the first step proper.
                 SetStep(0);
+                ProcessingDevice = "";
                 (Status, Progress, StepPercent) = ("노래를 읽는 중…", 0, "");
                 break;
             case LyricsSyncEngine.Stage.Separating:
                 SetStep(0);
+                ProcessingDevice = _engine?.SeparatesOnGpu switch { true => "GPU", false => "CPU", null => "" };
                 (Status, Progress, StepPercent) = ("반주를 빼고 목소리만 남기는 중…", p.Value, Percent(p.Value));
                 break;
             case LyricsSyncEngine.Stage.Listening:
                 SetStep(listening);
                 // Until whisper.cpp says which device it took, it's still loading the model (on
                 // the graphics card that can take several seconds the first time).
-                (Status, Progress, StepPercent) = LyricsSyncEngine.ListeningDevice is null
+                var device = LyricsSyncEngine.ListeningDevice;
+                ProcessingDevice = device switch { null => "", "CPU" => "CPU", _ => "GPU" };
+                (Status, Progress, StepPercent) = device is null
                     ? ($"{PassName(p.PassIndex, p.Listen)} · 음성 인식 준비 중…", 0, "")
-                    : ($"{PassName(p.PassIndex, p.Listen)}{DeviceNote()}", p.Value, Percent(p.Value));
+                    : (PassName(p.PassIndex, p.Listen), p.Value, Percent(p.Value));
                 break;
             default:
                 SetStep(Steps.Count - 1);
@@ -294,14 +304,6 @@ public sealed partial class LyricsSyncViewModel : ObservableObject, IDisposable
         var what = pass.Source == LyricsSyncEngine.Source.Vocals ? "목소리만" : pass.Hinted ? "가사를 참고해서" : "원곡";
         return $"{which} · {what}";
     }
-
-    /// <summary>" · 그래픽 카드" or " · CPU" once the listening has started, for the status line.</summary>
-    private static string DeviceNote() => LyricsSyncEngine.ListeningDevice switch
-    {
-        null => "",
-        "CPU" => " · CPU",
-        _ => " · 그래픽 카드",
-    };
 
     private async Task<bool> DownloadModelAsync()
     {

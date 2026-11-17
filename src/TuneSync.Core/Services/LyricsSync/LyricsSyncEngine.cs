@@ -44,6 +44,10 @@ public sealed class LyricsSyncEngine : IDisposable
     /// or null until it has begun.</summary>
     public static string? ListeningDevice => WhisperTranscriber.Device;
 
+    /// <summary>Whether the vocal separation runs on the graphics card, or null until the model
+    /// has been opened (the first separation).</summary>
+    public bool? SeparatesOnGpu => _separator?.UsesGpu;
+
     public enum Stage { Decoding, Separating, Listening, Aligning }
 
     /// <summary>Where a sync is: the stage and 0..1 within it. While listening, that's within the

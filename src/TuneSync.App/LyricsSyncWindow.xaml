@@ -12,26 +12,35 @@
         <conv:EnumToVisibilityConverter x:Key="EnumToVisibilityConverter"/>
         <conv:PlayPauseIconConverter x:Key="PlayPauseIconConverter"/>
 
-        <!-- One lyric line: [time] [check mark] text. The line being sung gets an accent bar. -->
+        <!-- One lyric line: [time] [mark] text. Two states that must never be confused:
+             the line being sung (playing) - a tint of the player's accent, an accent bar on the
+             left, accent bold text and a speaker mark; and the selected line (where Space stamps
+             and the arrows edit) - a strong outline. A line can be both. -->
         <Style x:Key="LineItemStyle" TargetType="ListBoxItem">
             <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
             <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="ListBoxItem">
-                        <Border x:Name="Row" Background="Transparent" CornerRadius="6" Padding="4,3" Margin="0,1,10,1"
-                                BorderThickness="3,0,0,0" BorderBrush="Transparent">
-                            <ContentPresenter/>
-                        </Border>
+                        <Grid Margin="0,1,10,1">
+                            <Border x:Name="Hover" CornerRadius="6" Background="Transparent"/>
+                            <Border x:Name="Tint" CornerRadius="6" Background="{DynamicResource PlayerAccentBrush}" Opacity="0"/>
+                            <Border x:Name="Bar" Width="4" CornerRadius="2" Margin="0,4" HorizontalAlignment="Left"
+                                    Background="{DynamicResource PlayerAccentBrush}" Visibility="Collapsed"/>
+                            <Border x:Name="Outline" CornerRadius="6" BorderThickness="2" BorderBrush="Transparent"/>
+                            <ContentPresenter Margin="6,3,4,3"/>
+                        </Grid>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Row" Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}"/>
+                                <Setter TargetName="Hover" Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}"/>
                             </Trigger>
                             <Trigger Property="IsSelected" Value="True">
-                                <Setter TargetName="Row" Property="Background" Value="{DynamicResource SubtleFillColorTertiaryBrush}"/>
+                                <Setter TargetName="Hover" Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}"/>
+                                <Setter TargetName="Outline" Property="BorderBrush" Value="{DynamicResource TextFillColorPrimaryBrush}"/>
                             </Trigger>
                             <DataTrigger Binding="{Binding IsCurrent}" Value="True">
-                                <Setter TargetName="Row" Property="BorderBrush" Value="{DynamicResource AccentFillColorDefaultBrush}"/>
+                                <Setter TargetName="Tint" Property="Opacity" Value="0.16"/>
+                                <Setter TargetName="Bar" Property="Visibility" Value="Visible"/>
                             </DataTrigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -57,7 +66,15 @@
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
+            <!-- What the two line marks mean -->
+            <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Bottom" Margin="12,0,0,0">
+                <Border Width="14" Height="14" CornerRadius="3" Background="{DynamicResource PlayerAccentBrush}" Margin="0,0,5,0"/>
+                <TextBlock Text="재생 중인 줄" FontSize="12" VerticalAlignment="Center" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                <Border Width="14" Height="14" CornerRadius="3" BorderThickness="2" BorderBrush="{DynamicResource TextFillColorPrimaryBrush}" Margin="14,0,5,0"/>
+                <TextBlock Text="선택한 줄 (시간을 찍을 줄)" FontSize="12" VerticalAlignment="Center" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+            </StackPanel>
             <Grid Width="56" Height="56" Margin="0,0,14,0">
                 <Border CornerRadius="6" Background="{DynamicResource ControlFillColorSecondaryBrush}">
                     <ui:SymbolIcon Symbol="MusicNote224" FontSize="22" Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
@@ -76,8 +93,10 @@
             </StackPanel>
         </Grid>
 
-        <!-- Automatic sync -->
-        <Border Grid.Row="2" Margin="24,0,24,12" Padding="16,14" CornerRadius="8"
+        <!-- Automatic sync. Idle text and progress share one cell, the hidden one kept in the
+             layout (Visibility Hidden), so the card keeps its height when a sync starts and the
+             lines below don't move. -->
+        <Border Grid.Row="2" Margin="24,0,24,12" Padding="16,12" CornerRadius="8"
                 Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
                 BorderThickness="1" BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}">
             <Grid>
@@ -85,63 +104,108 @@
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
-                <StackPanel VerticalAlignment="Center" Margin="0,0,16,0">
-                    <TextBlock Text="자동으로 맞추기" FontWeight="SemiBold"/>
-                    <TextBlock FontSize="12" Margin="0,3,0,0" TextWrapping="Wrap" Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                               Text="음성 인식이 이 PC에서 노래를 듣고 각 줄의 시간을 찾습니다. 노래와 가사는 외부로 보내지 않습니다. 결과는 아래에서 들어보며 고칠 수 있습니다."
-                               Visibility="{Binding IsBusy, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=False}"/>
-                    <StackPanel Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisibility}}" Margin="0,6,0,0">
-                        <!-- The steps: done ones get a check, the current one the accent. -->
-                        <ItemsControl ItemsSource="{Binding Steps}" Margin="0,2,0,8" Focusable="False">
-                            <ItemsControl.ItemsPanel>
-                                <ItemsPanelTemplate>
-                                    <StackPanel Orientation="Horizontal"/>
-                                </ItemsPanelTemplate>
-                            </ItemsControl.ItemsPanel>
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate>
-                                    <StackPanel Orientation="Horizontal">
-                                        <ui:SymbolIcon Symbol="ChevronRight12" FontSize="12" Margin="6,0"
-                                                       Foreground="{DynamicResource TextFillColorTertiaryBrush}"
-                                                       Visibility="{Binding HasPrevious, Converter={StaticResource BoolToVisibility}}"/>
-                                        <Border x:Name="Chip" CornerRadius="11" Padding="4,2,10,2" Background="Transparent">
-                                            <StackPanel Orientation="Horizontal">
-                                                <Grid Width="18" Height="18" Margin="0,0,6,0">
-                                                    <Ellipse x:Name="Dot" Fill="{DynamicResource ControlFillColorSecondaryBrush}"
-                                                             Stroke="{DynamicResource ControlStrokeColorDefaultBrush}" StrokeThickness="1"/>
-                                                    <TextBlock x:Name="Number" Text="{Binding Number}" FontSize="11" FontWeight="SemiBold"
-                                                               HorizontalAlignment="Center" VerticalAlignment="Center"
-                                                               Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
-                                                    <ui:SymbolIcon x:Name="Check" Symbol="Checkmark12" FontSize="11" Visibility="Collapsed"
-                                                                   HorizontalAlignment="Center" VerticalAlignment="Center"
-                                                                   Foreground="{DynamicResource TextOnAccentFillColorPrimaryBrush}"/>
-                                                </Grid>
-                                                <TextBlock x:Name="Name" Text="{Binding Name}" FontSize="12" VerticalAlignment="Center"
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <!-- title, then (while syncing) the steps: done ones get a check, the current one the accent -->
+                <StackPanel Orientation="Horizontal" MinHeight="22">
+                    <TextBlock Text="자동으로 맞추기" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                    <ItemsControl ItemsSource="{Binding Steps}" Margin="14,0,0,0" VerticalAlignment="Center" Focusable="False">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <StackPanel Orientation="Horizontal"/>
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <StackPanel Orientation="Horizontal">
+                                    <ui:SymbolIcon Symbol="ChevronRight12" FontSize="12" Margin="6,0"
+                                                   Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                                   Visibility="{Binding HasPrevious, Converter={StaticResource BoolToVisibility}}"/>
+                                    <Border x:Name="Chip" CornerRadius="11" Padding="4,2,10,2" Background="Transparent">
+                                        <StackPanel Orientation="Horizontal">
+                                            <Grid Width="18" Height="18" Margin="0,0,6,0">
+                                                <Ellipse x:Name="Dot" Fill="{DynamicResource ControlFillColorSecondaryBrush}"
+                                                         Stroke="{DynamicResource ControlStrokeColorDefaultBrush}" StrokeThickness="1"/>
+                                                <TextBlock x:Name="Number" Text="{Binding Number}" FontSize="11" FontWeight="SemiBold"
+                                                           HorizontalAlignment="Center" VerticalAlignment="Center"
                                                            Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
-                                            </StackPanel>
-                                        </Border>
-                                    </StackPanel>
-                                    <DataTemplate.Triggers>
-                                        <DataTrigger Binding="{Binding IsActive}" Value="True">
-                                            <Setter TargetName="Chip" Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}"/>
-                                            <Setter TargetName="Dot" Property="Fill" Value="{DynamicResource AccentFillColorDefaultBrush}"/>
-                                            <Setter TargetName="Dot" Property="Stroke" Value="{x:Null}"/>
-                                            <Setter TargetName="Number" Property="Foreground" Value="{DynamicResource TextOnAccentFillColorPrimaryBrush}"/>
-                                            <Setter TargetName="Name" Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}"/>
-                                            <Setter TargetName="Name" Property="FontWeight" Value="SemiBold"/>
-                                        </DataTrigger>
-                                        <DataTrigger Binding="{Binding IsDone}" Value="True">
-                                            <Setter TargetName="Dot" Property="Fill" Value="{DynamicResource AccentFillColorDefaultBrush}"/>
-                                            <Setter TargetName="Dot" Property="Stroke" Value="{x:Null}"/>
-                                            <Setter TargetName="Number" Property="Visibility" Value="Collapsed"/>
-                                            <Setter TargetName="Check" Property="Visibility" Value="Visible"/>
-                                            <Setter TargetName="Name" Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}"/>
-                                        </DataTrigger>
-                                    </DataTemplate.Triggers>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-                        <!-- The current step: what it's doing, its own percentage and bar. -->
+                                                <ui:SymbolIcon x:Name="Check" Symbol="Checkmark12" FontSize="11" Visibility="Collapsed"
+                                                               HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                               Foreground="{DynamicResource TextOnAccentFillColorPrimaryBrush}"/>
+                                            </Grid>
+                                            <TextBlock x:Name="Name" Text="{Binding Name}" FontSize="12" VerticalAlignment="Center"
+                                                       Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
+                                        </StackPanel>
+                                    </Border>
+                                </StackPanel>
+                                <DataTemplate.Triggers>
+                                    <DataTrigger Binding="{Binding IsActive}" Value="True">
+                                        <Setter TargetName="Chip" Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}"/>
+                                        <Setter TargetName="Dot" Property="Fill" Value="{DynamicResource AccentFillColorDefaultBrush}"/>
+                                        <Setter TargetName="Dot" Property="Stroke" Value="{x:Null}"/>
+                                        <Setter TargetName="Number" Property="Foreground" Value="{DynamicResource TextOnAccentFillColorPrimaryBrush}"/>
+                                        <Setter TargetName="Name" Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}"/>
+                                        <Setter TargetName="Name" Property="FontWeight" Value="SemiBold"/>
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding IsDone}" Value="True">
+                                        <Setter TargetName="Dot" Property="Fill" Value="{DynamicResource AccentFillColorDefaultBrush}"/>
+                                        <Setter TargetName="Dot" Property="Stroke" Value="{x:Null}"/>
+                                        <Setter TargetName="Number" Property="Visibility" Value="Collapsed"/>
+                                        <Setter TargetName="Check" Property="Visibility" Value="Visible"/>
+                                        <Setter TargetName="Name" Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                    </DataTrigger>
+                                </DataTemplate.Triggers>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+
+                <!-- what it runs on: a filled badge like the song's Lossless / Hi-Res mark -->
+                <Border Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Center" CornerRadius="4" Padding="7,2"
+                        Background="{DynamicResource PlayerAccentBrush}" ToolTip="자동으로 맞추기가 지금 이 장치로 처리하고 있습니다. 설정 › 도구 › 가사 싱크에서 바꿀 수 있습니다.">
+                    <Border.Style>
+                        <Style TargetType="Border">
+                            <Setter Property="Visibility" Value="Visible"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding ProcessingDevice}" Value="">
+                                    <Setter Property="Visibility" Value="Hidden"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Border.Style>
+                    <TextBlock FontSize="10" FontWeight="Bold" Foreground="{DynamicResource PlayerOnAccentBrush}">
+                        <Run Text="Processing on"/> <Run Text="{Binding ProcessingDevice, Mode=OneWay}"/>
+                    </TextBlock>
+                </Border>
+
+                <Grid Grid.Row="1" Margin="0,6,16,0">
+                    <TextBlock FontSize="12" TextWrapping="Wrap" Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                               Text="음성 인식이 이 PC에서 노래를 듣고 각 줄의 시간을 찾습니다. 노래와 가사는 외부로 보내지 않습니다. 결과는 아래에서 들어보며 고칠 수 있습니다.">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsBusy}" Value="True">
+                                        <Setter Property="Visibility" Value="Hidden"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+                    <!-- the current step: what it's doing, its own percentage and bar -->
+                    <StackPanel VerticalAlignment="Center">
+                        <StackPanel.Style>
+                            <Style TargetType="StackPanel">
+                                <Setter Property="Visibility" Value="Hidden"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsBusy}" Value="True">
+                                        <Setter Property="Visibility" Value="Visible"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </StackPanel.Style>
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
@@ -154,13 +218,15 @@
                         </Grid>
                         <ProgressBar Value="{Binding Progress}" Maximum="1" Height="4" Margin="0,8,0,0"/>
                     </StackPanel>
-                </StackPanel>
-                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                </Grid>
+
+                <Grid Grid.Row="1" Grid.Column="1" VerticalAlignment="Center" Margin="0,6,0,0">
                     <ui:Button Content="자동으로 맞추기" Icon="{ui:SymbolIcon Sparkle24}" Appearance="Primary" Command="{Binding AutoSyncCommand}"
+                               HorizontalAlignment="Right"
                                Visibility="{Binding IsBusy, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=False}"/>
-                    <ui:Button Content="취소" Command="{Binding CancelWorkCommand}"
+                    <ui:Button Content="취소" Command="{Binding CancelWorkCommand}" HorizontalAlignment="Right"
                                Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisibility}}"/>
-                </StackPanel>
+                </Grid>
             </Grid>
         </Border>
 
@@ -184,6 +250,9 @@
                         <Ellipse x:Name="CheckDot" Grid.Column="1" Width="8" Height="8" HorizontalAlignment="Center" Visibility="Collapsed"
                                  Fill="{DynamicResource SystemFillColorCautionBrush}"
                                  ToolTip="자동으로 추정한 시간입니다. 들어보고 맞는지 확인하세요."/>
+                        <ui:SymbolIcon x:Name="PlayingMark" Grid.Column="1" Symbol="Speaker224" Filled="True" FontSize="14"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed"
+                                       Foreground="{DynamicResource PlayerAccentBrush}" ToolTip="지금 재생 중인 줄"/>
                         <TextBlock x:Name="LineText" Grid.Column="2" Text="{Binding Text}" FontSize="14" VerticalAlignment="Center"
                                    TextWrapping="Wrap" Margin="4,0,0,0"/>
                     </Grid>
@@ -197,6 +266,9 @@
                         </DataTrigger>
                         <DataTrigger Binding="{Binding IsCurrent}" Value="True">
                             <Setter TargetName="LineText" Property="FontWeight" Value="SemiBold"/>
+                            <Setter TargetName="LineText" Property="Foreground" Value="{DynamicResource PlayerAccentBrush}"/>
+                            <Setter TargetName="CheckDot" Property="Visibility" Value="Collapsed"/>
+                            <Setter TargetName="PlayingMark" Property="Visibility" Value="Visible"/>
                         </DataTrigger>
                         <!-- an instrumental break from the existing lyrics -->
                         <DataTrigger Binding="{Binding IsGap}" Value="True">
