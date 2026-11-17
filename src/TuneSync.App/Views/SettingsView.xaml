@@ -151,7 +151,7 @@
                 <!-- 일반 -->
                 <StackPanel Tag="General">
                     <ui:TextBlock Text="일반" Style="{StaticResource CategoryTitle}"/>
-                    <ui:TextBlock Text="모양과 GoTune Player를 열 때의 동작" Style="{StaticResource CategoryLead}"/>
+                    <ui:TextBlock Text="모양, 열 때의 동작, 창과 HUD" Style="{StaticResource CategoryLead}"/>
                     <ui:TextBlock Text="모양" Style="{StaticResource Group}"/>
                     <ui:CardControl Style="{StaticResource Card}" Icon="{ui:SymbolIcon DarkTheme24}" Tag="테마 밝게 어둡게 다크 라이트 모양">
                         <ui:CardControl.Header>
@@ -194,72 +194,6 @@
                         <ComboBox Width="200" ItemsSource="{Binding StartupResumeOptions}" DisplayMemberPath="Label"
                                   SelectedValuePath="Value" SelectedValue="{Binding StartupResume}"/>
                     </ui:CardControl>
-                </StackPanel>
-
-                <!-- 재생 -->
-                <StackPanel Tag="Playback">
-                    <ui:TextBlock Text="재생" Style="{StaticResource CategoryTitle}"/>
-                    <ui:TextBlock Text="재생 화면의 모양과 동작" Style="{StaticResource CategoryLead}"/>
-                    <ui:TextBlock Text="화면 효과" Style="{StaticResource Group}"/>
-                    <ui:CardControl Style="{StaticResource Card}" Icon="{ui:SymbolIcon Flash24}" Tag="재생바 효과 물결 불꽃 임의 시크바"
-                                    ToolTip="재생한 부분 위에서 음악에 맞춰 움직이는 효과입니다. 임의는 곡마다 물결과 불꽃 중 하나를 고릅니다.">
-                        <ui:CardControl.Header>
-                            <StackPanel>
-                                <ui:TextBlock Text="재생바 효과" FontTypography="Body"/>
-                                <ui:TextBlock Text="물결 · 불꽃 · 임의(곡마다)" Style="{StaticResource Desc}"/>
-                            </StackPanel>
-                        </ui:CardControl.Header>
-                        <ComboBox Width="200" ItemsSource="{Binding SeekBarStyleOptions}" DisplayMemberPath="Label"
-                                  SelectedValuePath="Value" SelectedValue="{Binding SeekBarStyle}"/>
-                    </ui:CardControl>
-                    <ui:CardControl Style="{StaticResource Card}" Icon="{ui:SymbolIcon DataBarVertical24}" Tag="스펙트럼 모양 LED 막대 물결 랜덤"
-                                    ToolTip="곡 정보 아래와 화면 보호기의 스펙트럼입니다. 곡 정보 아래 스펙트럼을 클릭해도 차례로 바뀝니다.">
-                        <ui:CardControl.Header>
-                            <StackPanel>
-                                <ui:TextBlock Text="스펙트럼 모양" FontTypography="Body"/>
-                                <ui:TextBlock Text="스펙트럼을 클릭해도 바꿀 수 있습니다" Style="{StaticResource Desc}"/>
-                            </StackPanel>
-                        </ui:CardControl.Header>
-                        <ComboBox Width="200" ItemsSource="{Binding SpectrumStyleOptions}" DisplayMemberPath="Label"
-                                  SelectedValuePath="Value" SelectedValue="{Binding SpectrumStyle}"/>
-                    </ui:CardControl>
-                    <ui:CardControl Style="{StaticResource Card}" Icon="{ui:SymbolIcon Timer24}" Tag="인트로 진행 게이지 전주"
-                                    ToolTip="싱크 가사가 시작되기 전 인트로 동안, 가사가 나오기까지 얼마나 남았는지 가는 막대로 보여 줍니다.">
-                        <ui:CardControl.Header>
-                            <StackPanel>
-                                <ui:TextBlock Text="인트로 진행 게이지" FontTypography="Body"/>
-                                <ui:TextBlock Text="가사가 나오기까지 남은 시간을 막대로" Style="{StaticResource Desc}"/>
-                            </StackPanel>
-                        </ui:CardControl.Header>
-                        <ui:ToggleSwitch IsChecked="{Binding ShowIntroGauge}" OnContent="표시" OffContent="숨김"/>
-                    </ui:CardControl>
-                    <ui:TextBlock Text="HUD" Style="{StaticResource Group}"/>
-                    <ui:CardControl Style="{StaticResource Card}" DataContext="{Binding Hud}" Icon="{ui:SymbolIcon Board24}"
-                                    Tag="HUD 항상 위 오버레이 가사 스펙트럼 재생 버튼 떠 있는 창"
-                                    ToolTip="어떤 프로그램을 쓰든 그 위에 작은 카드로 곡 정보, 가사, 스펙트럼과 재생 버튼을 띄웁니다. 끌어서 옮길 수 있고, 제목 표시줄의 HUD 버튼이나 단축키(HUD 전환)로도 켜고 끕니다.">
-                        <ui:CardControl.Header>
-                            <StackPanel>
-                                <ui:TextBlock Text="HUD" FontTypography="Body"/>
-                                <ui:TextBlock Text="다른 프로그램 위에 곡 정보 · 가사 · 스펙트럼 · 재생 버튼을 띄우기" Style="{StaticResource Desc}"/>
-                            </StackPanel>
-                        </ui:CardControl.Header>
-                        <ui:ToggleSwitch IsChecked="{Binding IsOpen}" OnContent="켬" OffContent="끔"/>
-                    </ui:CardControl>
-                    <ui:CardControl Style="{StaticResource Card}" DataContext="{Binding Hud}" Icon="{ui:SymbolIcon Blur24}" Tag="HUD 투명도 불투명도 반투명"
-                                    ToolTip="마우스를 올리면 잠시 선명해져 버튼을 누르기 쉽습니다. HUD의 메뉴(⚙)에서도 바꿀 수 있습니다.">
-                        <ui:CardControl.Header>
-                            <StackPanel>
-                                <ui:TextBlock Text="HUD 투명도" FontTypography="Body"/>
-                                <ui:TextBlock Text="낮출수록 뒤가 비쳐 보입니다" Style="{StaticResource Desc}"/>
-                            </StackPanel>
-                        </ui:CardControl.Header>
-                        <StackPanel Orientation="Horizontal">
-                            <Slider Width="180" Minimum="0.2" Maximum="1" SmallChange="0.05" LargeChange="0.1" Value="{Binding Opacity}"
-                                    IsMoveToPointEnabled="True" VerticalAlignment="Center" AutomationProperties.Name="HUD 투명도"/>
-                            <TextBlock Text="{Binding OpacityText}" Width="44" TextAlignment="Right" VerticalAlignment="Center" Margin="8,0,0,0"
-                                       Typography.NumeralAlignment="Tabular"/>
-                        </StackPanel>
-                    </ui:CardControl>
                     <ui:TextBlock Text="창과 전원" Style="{StaticResource Group}"/>
                     <ui:CardControl Style="{StaticResource Card}" Icon="{ui:SymbolIcon PictureInPictureEnter24}" Tag="최소화 미니 플레이어"
                                     ToolTip="최소화(─) 버튼을 누르면 작업 표시줄로 숨는 대신 미니 플레이어로 바뀝니다. 미니 플레이어를 더블클릭하면 돌아옵니다.">
@@ -292,6 +226,72 @@
                             </StackPanel>
                         </ui:CardControl.Header>
                         <ui:ToggleSwitch IsChecked="{Binding Playback.KeepScreenOn}" OnContent="켬" OffContent="끔"/>
+                    </ui:CardControl>
+                    <ui:TextBlock Text="HUD" Style="{StaticResource Group}"/>
+                    <ui:CardControl Style="{StaticResource Card}" DataContext="{Binding Hud}" Icon="{ui:SymbolIcon Board24}"
+                                    Tag="HUD 항상 위 오버레이 가사 스펙트럼 재생 버튼 떠 있는 창"
+                                    ToolTip="어떤 프로그램을 쓰든 그 위에 작은 카드로 곡 정보, 가사, 스펙트럼과 재생 버튼을 띄웁니다. 끌어서 옮길 수 있고, 제목 표시줄의 HUD 버튼이나 단축키(HUD 전환)로도 켜고 끕니다.">
+                        <ui:CardControl.Header>
+                            <StackPanel>
+                                <ui:TextBlock Text="HUD" FontTypography="Body"/>
+                                <ui:TextBlock Text="다른 프로그램 위에 곡 정보 · 가사 · 스펙트럼 · 재생 버튼을 띄우기" Style="{StaticResource Desc}"/>
+                            </StackPanel>
+                        </ui:CardControl.Header>
+                        <ui:ToggleSwitch IsChecked="{Binding IsOpen}" OnContent="켬" OffContent="끔"/>
+                    </ui:CardControl>
+                    <ui:CardControl Style="{StaticResource Card}" DataContext="{Binding Hud}" Icon="{ui:SymbolIcon Blur24}" Tag="HUD 투명도 불투명도 반투명"
+                                    ToolTip="마우스를 올리면 잠시 선명해져 버튼을 누르기 쉽습니다. HUD의 메뉴(⚙)에서도 바꿀 수 있습니다.">
+                        <ui:CardControl.Header>
+                            <StackPanel>
+                                <ui:TextBlock Text="HUD 투명도" FontTypography="Body"/>
+                                <ui:TextBlock Text="낮출수록 뒤가 비쳐 보입니다" Style="{StaticResource Desc}"/>
+                            </StackPanel>
+                        </ui:CardControl.Header>
+                        <StackPanel Orientation="Horizontal">
+                            <Slider Width="180" Minimum="0.2" Maximum="1" SmallChange="0.05" LargeChange="0.1" Value="{Binding Opacity}"
+                                    IsMoveToPointEnabled="True" VerticalAlignment="Center" AutomationProperties.Name="HUD 투명도"/>
+                            <TextBlock Text="{Binding OpacityText}" Width="44" TextAlignment="Right" VerticalAlignment="Center" Margin="8,0,0,0"
+                                       Typography.NumeralAlignment="Tabular"/>
+                        </StackPanel>
+                    </ui:CardControl>
+                </StackPanel>
+
+                <!-- 재생 -->
+                <StackPanel Tag="Playback">
+                    <ui:TextBlock Text="재생" Style="{StaticResource CategoryTitle}"/>
+                    <ui:TextBlock Text="재생 화면의 효과" Style="{StaticResource CategoryLead}"/>
+                    <ui:TextBlock Text="화면 효과" Style="{StaticResource Group}"/>
+                    <ui:CardControl Style="{StaticResource Card}" Icon="{ui:SymbolIcon Flash24}" Tag="재생바 효과 물결 불꽃 임의 시크바"
+                                    ToolTip="재생한 부분 위에서 음악에 맞춰 움직이는 효과입니다. 임의는 곡마다 물결과 불꽃 중 하나를 고릅니다.">
+                        <ui:CardControl.Header>
+                            <StackPanel>
+                                <ui:TextBlock Text="재생바 효과" FontTypography="Body"/>
+                                <ui:TextBlock Text="물결 · 불꽃 · 임의(곡마다)" Style="{StaticResource Desc}"/>
+                            </StackPanel>
+                        </ui:CardControl.Header>
+                        <ComboBox Width="200" ItemsSource="{Binding SeekBarStyleOptions}" DisplayMemberPath="Label"
+                                  SelectedValuePath="Value" SelectedValue="{Binding SeekBarStyle}"/>
+                    </ui:CardControl>
+                    <ui:CardControl Style="{StaticResource Card}" Icon="{ui:SymbolIcon DataBarVertical24}" Tag="스펙트럼 모양 LED 막대 물결 랜덤"
+                                    ToolTip="곡 정보 아래와 화면 보호기의 스펙트럼입니다. 곡 정보 아래 스펙트럼을 클릭해도 차례로 바뀝니다.">
+                        <ui:CardControl.Header>
+                            <StackPanel>
+                                <ui:TextBlock Text="스펙트럼 모양" FontTypography="Body"/>
+                                <ui:TextBlock Text="스펙트럼을 클릭해도 바꿀 수 있습니다" Style="{StaticResource Desc}"/>
+                            </StackPanel>
+                        </ui:CardControl.Header>
+                        <ComboBox Width="200" ItemsSource="{Binding SpectrumStyleOptions}" DisplayMemberPath="Label"
+                                  SelectedValuePath="Value" SelectedValue="{Binding SpectrumStyle}"/>
+                    </ui:CardControl>
+                    <ui:CardControl Style="{StaticResource Card}" Icon="{ui:SymbolIcon Timer24}" Tag="인트로 진행 게이지 전주"
+                                    ToolTip="싱크 가사가 시작되기 전 인트로 동안, 가사가 나오기까지 얼마나 남았는지 가는 막대로 보여 줍니다.">
+                        <ui:CardControl.Header>
+                            <StackPanel>
+                                <ui:TextBlock Text="인트로 진행 게이지" FontTypography="Body"/>
+                                <ui:TextBlock Text="가사가 나오기까지 남은 시간을 막대로" Style="{StaticResource Desc}"/>
+                            </StackPanel>
+                        </ui:CardControl.Header>
+                        <ui:ToggleSwitch IsChecked="{Binding ShowIntroGauge}" OnContent="표시" OffContent="숨김"/>
                     </ui:CardControl>
                 </StackPanel>
 

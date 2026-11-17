@@ -48,7 +48,7 @@ public sealed partial class SettingsViewModel : ObservableObject
     /// <summary>설정 › 음향 › 출력.</summary>
     public OutputViewModel Output { get; }
 
-    /// <summary>설정 › 재생 › HUD.</summary>
+    /// <summary>설정 › 일반 › HUD.</summary>
     public HudViewModel Hud { get; }
 
     // --- network ---
