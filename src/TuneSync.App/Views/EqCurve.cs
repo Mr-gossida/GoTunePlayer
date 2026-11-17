@@ -11,10 +11,19 @@ namespace TuneSync.App.Views;
 /// slider. Redrawn only when a setting changes.</summary>
 public sealed class EqCurve : FrameworkElement
 {
-    /// <summary>Half an octave below the first band to half an octave above the last: ten equal
-    /// columns, each centered on its band.</summary>
-    internal static readonly double LowHz = ToneCurve.BandFrequencies[0] / Math.Sqrt(2);
-    internal static readonly double HighHz = ToneCurve.BandFrequencies[^1] * Math.Sqrt(2);
+    /// <summary>The scale for a set of bands: half a band's width below the first to half a
+    /// band's width above the last - equal columns (ten or 31), each centered on its band, as
+    /// the sliders over the curve are laid out.</summary>
+    internal static (double Low, double High) Axis(int bandCount)
+    {
+        var centers = ToneCurve.Frequencies(bandCount);
+        var half = Math.Sqrt(centers[1] / centers[0]);
+        return (centers[0] / half, centers[^1] * half);
+    }
+
+    private double LowHz => Axis(BandCount).Low;
+    private double HighHz => Axis(BandCount).High;
+    private int BandCount => ToneCurve.BandCountOf(Settings?.BandsDb?.Length ?? 0);
 
     /// <summary>The top and bottom of the scale, in dB: 12 to run exactly along band sliders
     /// drawn over it (their ±12 dB ends), so each slider's handle sits on the curve.</summary>
@@ -63,13 +72,14 @@ public sealed class EqCurve : FrameworkElement
         double width = ActualWidth, height = ActualHeight;
         if (width < 8 || height < 8) return;
 
-        // Grid: a line per band, and at 0 and ±6/±12 dB.
+        // Grid: a line per octave (per band of the ten), and at 0 and ±6/±12 dB.
         var faint = new Pen(GridBrush, 1) { DashStyle = new DashStyle([2, 4], 0) };
         faint.Freeze();
         var zero = new Pen(GridBrush, 1.5);
         zero.Freeze();
         foreach (var frequency in ToneCurve.BandFrequencies)
         {
+            if (frequency < LowHz || frequency > HighHz) continue;
             var x = Math.Round(X(frequency)) + 0.5;
             dc.DrawLine(faint, new Point(x, 0), new Point(x, height));
         }
@@ -85,12 +95,12 @@ public sealed class EqCurve : FrameworkElement
 
         // The real response (bands, bass and treble together), a point every 3 pixels.
         var count = Math.Max(2, (int)(width / 3) + 1);
+        var frequencies = new double[count];
+        var levels = new double[count];
+        for (var i = 0; i < count; i++) frequencies[i] = LowHz * Math.Pow(HighHz / LowHz, (double)i / (count - 1));
+        ToneCurve.ResponseDb(settings, frequencies, levels);
         var response = new List<Point>(count);
-        for (var i = 0; i < count; i++)
-        {
-            var frequency = LowHz * Math.Pow(HighHz / LowHz, (double)i / (count - 1));
-            response.Add(new Point(width * i / (count - 1), Y(ToneCurve.ResponseDb(settings, frequency))));
-        }
+        for (var i = 0; i < count; i++) response.Add(new Point(width * i / (count - 1), Y(levels[i])));
 
         // Over band sliders, the main line runs smoothly through their handles (what the hand
         // set), and the real response - the tone bars and the bands' overlap included - is the
@@ -123,7 +133,8 @@ public sealed class EqCurve : FrameworkElement
     private List<Point> ThroughHandles(double[] gains, double width)
     {
         var handles = new List<Point> { new(0, Y(gains[0])) };
-        for (var i = 0; i < gains.Length; i++) handles.Add(new Point(X(ToneCurve.BandFrequencies[i]), Y(gains[i])));
+        var centers = ToneCurve.Frequencies(gains.Length);
+        for (var i = 0; i < gains.Length; i++) handles.Add(new Point(X(centers[i]), Y(gains[i])));
         handles.Add(new Point(width, Y(gains[^1])));
 
         var points = new List<Point>();

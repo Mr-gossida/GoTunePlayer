@@ -399,7 +399,7 @@
                         <ui:CardControl.Header>
                             <StackPanel>
                                 <ui:TextBlock Text="이퀄라이저" FontTypography="Body"/>
-                                <ui:TextBlock Text="10밴드 이퀄라이저와 저음·고음, 스테레오 폭 조절" Style="{StaticResource Desc}"/>
+                                <ui:TextBlock Text="10·31밴드 이퀄라이저와 저음·고음, 스테레오 폭 조절" Style="{StaticResource Desc}"/>
                             </StackPanel>
                         </ui:CardControl.Header>
                         <ui:ToggleSwitch IsChecked="{Binding Equalizer.IsEnabled}" OnContent="켬" OffContent="끔"/>

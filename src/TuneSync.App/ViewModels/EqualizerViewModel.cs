@@ -9,18 +9,28 @@ using TuneSync.Core.Services;
 namespace TuneSync.App.ViewModels;
 
 /// <summary>One slider of the equalizer.</summary>
-public sealed partial class EqBandViewModel(int index, string label, double gain, Action<EqBandViewModel> changed) : ObservableObject
+public sealed partial class EqBandViewModel(int index, string name, bool labeled, double gain, Action<EqBandViewModel> changed) : ObservableObject
 {
     public int Index { get; } = index;
 
-    /// <summary>"31", "1k", "16k".</summary>
-    public string Label { get; } = label;
+    /// <summary>"31", "1.25k", "16k".</summary>
+    public string Name { get; } = name;
+
+    /// <summary>The name under the slider: every band's of the ten; of the 31, only the ones an
+    /// octave apart (31, 63, 125 ... 16k), as on a hardware 31-band equalizer - the others are
+    /// read off while the pointer is on them.</summary>
+    public string Label { get; } = labeled ? name : "";
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(GainText))]
+    [NotifyPropertyChangedFor(nameof(GainText), nameof(HotText), nameof(ToolTip))]
     private double _gain = gain;
 
     public string GainText => EqualizerViewModel.FormatDb(Gain);
+
+    /// <summary>"1.25k Hz  +3.0", over the 31 bands while the pointer is on one or it is being set.</summary>
+    public string HotText => $"{Name}Hz  {GainText}";
+
+    public string ToolTip => $"{Name}Hz · {GainText} dB (끌기 · 휠 · 더블클릭하면 0)";
 
     partial void OnGainChanged(double value) => changed(this);
 }
@@ -44,12 +54,8 @@ public sealed partial class EqualizerViewModel : ObservableObject
         _tone.Normalize();
         Config = ToneConfig.From(_tone);
 
-        for (var i = 0; i < ToneSettings.BandCount; i++)
-        {
-            var frequency = ToneCurve.BandFrequencies[i];
-            var label = frequency >= 1000 ? $"{frequency / 1000:0.#}k" : $"{Math.Round(frequency):0}";
-            Bands.Add(new EqBandViewModel(i, label, _tone.BandsDb[i], OnBandChanged));
-        }
+        _isThirdOctave = _tone.BandCount == ToneSettings.ThirdOctaveBands;
+        BuildBands();
         _isEnabled = _tone.Enabled;
         _preamp = _tone.PreampDb;
         _bass = _tone.BassDb;
@@ -84,6 +90,24 @@ public sealed partial class EqualizerViewModel : ObservableObject
     public ToneSettings Settings => _tone;
 
     public ObservableCollection<EqBandViewModel> Bands { get; } = [];
+
+    /// <summary>31 bands a third of an octave apart instead of ten an octave apart (the switch
+    /// in the panel's title row). The curve is kept across a switch.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(BandCount), nameof(IsOctave))]
+    private bool _isThirdOctave;
+
+    public bool IsOctave => !IsThirdOctave;
+
+    public int BandCount => IsThirdOctave ? ToneSettings.ThirdOctaveBands : ToneSettings.OctaveBands;
+
+    [RelayCommand]
+    private void SetBandCount(string count) => IsThirdOctave = count == "31";
+
+    // The last switch: from what, and what it made. Going straight back, with nothing moved in
+    // between, restores the bands as they were instead of reading them off the coarser curve
+    // (31 -> 10 -> 31 would otherwise lose the detail between the ten).
+    private (int Count, double[] Before, double[] After)? _lastSwitch;
     public ObservableCollection<EqPresetChoice> Presets { get; } = [];
 
     [ObservableProperty]
@@ -213,6 +237,41 @@ public sealed partial class EqualizerViewModel : ObservableObject
         if (!Reverb) Reverb = true; // publishes
         else Publish();
     }
+
+    partial void OnIsThirdOctaveChanged(bool value)
+    {
+        var count = BandCount;
+        if (_tone.BandCount == count) return;
+        var before = (Count: _tone.BandCount, Bands: _tone.BandsDb.ToArray());
+        if (_lastSwitch is { } last && last.Count == count && last.After.AsSpan().SequenceEqual(_tone.BandsDb))
+        {
+            _tone.BandCount = count;
+            _tone.BandsDb = [.. last.Before];
+        }
+        else
+        {
+            _tone.ChangeBandCount(count);
+        }
+        _lastSwitch = (before.Count, before.Bands, _tone.BandsDb.ToArray());
+        BuildBands();
+        // the preset (if one is chosen) stays: the bands are still its curve
+        Publish();
+    }
+
+    /// <summary>A slider per band of the current set.</summary>
+    private void BuildBands()
+    {
+        var third = _tone.BandCount == ToneSettings.ThirdOctaveBands;
+        Bands.Clear();
+        for (var i = 0; i < _tone.BandsDb.Length; i++)
+        {
+            var name = third ? ToneCurve.ThirdOctaveNames[i] : OctaveName(ToneCurve.BandFrequencies[i]);
+            Bands.Add(new EqBandViewModel(i, name, labeled: !third || i % 3 == 2, _tone.BandsDb[i], OnBandChanged));
+        }
+    }
+
+    private static string OctaveName(double frequency) =>
+        frequency >= 1000 ? $"{frequency / 1000:0.#}k" : $"{Math.Round(frequency):0}";
 
     partial void OnSelectedPresetChanged(EqPresetChoice? value)
     {

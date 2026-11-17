@@ -131,7 +131,7 @@ public class ToneTests
     {
         // The filters are worked out for 48 kHz; at 44.1 kHz the top band must still land on its slider.
         var settings = Settings(s => EqPresets.Apply(s, "treble"));
-        for (var i = 0; i < ToneSettings.BandCount; i++)
+        for (var i = 0; i < ToneSettings.OctaveBands; i++)
             Assert.Equal(settings.BandsDb[i], ToneCurve.ResponseDb(settings, ToneCurve.BandFrequencies[i], 44100), 0.5);
         Assert.Equal(settings.BandsDb[5], MeasuredGainDb(settings, 1000, 44100), 0.2);
         Assert.Equal(settings.BandsDb[9], MeasuredGainDb(settings, 16000, 44100), 0.5);
@@ -378,7 +378,7 @@ public class ToneTests
         Assert.Equal(EqPresets.BuiltIn.Count, EqPresets.BuiltIn.Select(p => p.Name).Distinct().Count());
         Assert.All(EqPresets.BuiltIn, p =>
         {
-            Assert.Equal(ToneSettings.BandCount, p.BandsDb.Length);
+            Assert.Equal(ToneSettings.OctaveBands, p.BandsDb.Length);
             Assert.All(p.BandsDb, g => Assert.InRange(g, -ToneSettings.MaxGainDb, ToneSettings.MaxGainDb));
         });
         Assert.All(EqPresets.BuiltIn[0].BandsDb, g => Assert.Equal(0, g));
@@ -458,7 +458,7 @@ public class ToneTests
             // One from when the headroom was on by default: that default doesn't carry over.
             File.WriteAllText(path, "{\"Tone\":{\"Enabled\":true,\"AutoHeadroom\":true}}");
             Assert.False(AppSettingsStore.Load(path).Tone.AutoHeadroom);
-            Assert.Equal(ToneSettings.BandCount, old.Tone.BandsDb.Length);
+            Assert.Equal(ToneSettings.OctaveBands, old.Tone.BandsDb.Length);
 
             // Hand-edited nonsense.
             File.WriteAllText(path, "{\"Tone\":{\"Enabled\":true,\"BandsDb\":[99,-99,1],\"Width\":7,\"Balance\":-3,\"PreampDb\":40,\"UserPresets\":[{\"Name\":\"\",\"BandsDb\":[]},{\"Name\":\"a\",\"BandsDb\":[50]}]}}");
@@ -468,7 +468,7 @@ public class ToneTests
             Assert.Equal(-1, odd.Balance);
             Assert.Equal(12, odd.PreampDb);
             Assert.Equal(12, Assert.Single(odd.UserPresets).BandsDb[0]);
-            Assert.Equal(ToneSettings.BandCount, odd.UserPresets[0].BandsDb.Length);
+            Assert.Equal(ToneSettings.OctaveBands, odd.UserPresets[0].BandsDb.Length);
         }
         finally
         {

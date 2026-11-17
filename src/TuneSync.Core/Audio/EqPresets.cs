@@ -39,18 +39,19 @@ public static class EqPresets
 
     public static BuiltInPreset? Find(string? id) => BuiltIn.FirstOrDefault(p => p.Id == id);
 
-    /// <summary>Sets the bands (and preamp) from a built-in or saved preset. False when there is
-    /// no preset of that id/name.</summary>
+    /// <summary>Sets the bands (and preamp) from a built-in or saved preset - on the equalizer's
+    /// current set of bands, whichever set the preset was made on (the curve is carried over).
+    /// False when there is no preset of that id/name.</summary>
     public static bool Apply(ToneSettings settings, string preset)
     {
         if (Find(preset) is { } builtIn)
         {
-            settings.BandsDb = [.. builtIn.BandsDb];
+            settings.BandsDb = ToneSettings.FitBands(builtIn.BandsDb, settings.BandCount);
             settings.PreampDb = 0;
         }
         else if (settings.UserPresets.FirstOrDefault(p => p.Name == preset) is { } saved)
         {
-            settings.BandsDb = [.. saved.BandsDb];
+            settings.BandsDb = ToneSettings.FitBands(saved.BandsDb, settings.BandCount);
             settings.PreampDb = saved.PreampDb;
         }
         else

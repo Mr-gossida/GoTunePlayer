@@ -13,7 +13,7 @@ public sealed class ToneConfig
 
     private ToneConfig() { }
 
-    /// <summary>Level of each filter in running order (bass shelf, ten bands, treble shelf).</summary>
+    /// <summary>Level of each filter in running order (see <see cref="ToneCurve.FilterCount"/>).</summary>
     public ReadOnlySpan<double> FilterGainsDb => _gains;
 
     /// <summary>Preamp minus the automatic headroom.</summary>
@@ -58,7 +58,7 @@ public sealed class ToneConfig
 }
 
 /// <summary>The player's sound chain, run on stereo frames as they go to the speakers:
-/// preamp, bass shelf, ten equalizer bands, treble shelf, stereo width and balance, a reverb
+/// preamp, bass shelf, the equalizer bands (ten or 31), treble shelf, stereo width and balance, a reverb
 /// (<see cref="Audio.Reverb"/>), a limiter that keeps boosts from clipping, and the volume (with a copy of the sound before the volume
 /// kept for the live displays, <see cref="Scope"/>). Every level glides to a new setting over a
 /// few hundredths of a second, so moving a slider while music plays never clicks or "zips".

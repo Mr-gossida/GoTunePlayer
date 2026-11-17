@@ -4,7 +4,9 @@ namespace TuneSync.Core.Models;
 /// All levels are in decibels; 0 everywhere is the untouched sound.</summary>
 public sealed class ToneSettings
 {
-    public const int BandCount = 10;
+    /// <summary>The two sets of bands to choose from: ten an octave apart, or 31 a third of an
+    /// octave apart (see <see cref="Audio.ToneCurve"/>).</summary>
+    public const int OctaveBands = 10, ThirdOctaveBands = 31;
     public const double MaxGainDb = 12;
 
     /// <summary>The whole chain's on/off switch. Off, the music plays exactly as it is in the file.</summary>
@@ -13,8 +15,12 @@ public sealed class ToneSettings
     /// <summary>Overall level before the filters.</summary>
     public double PreampDb { get; set; }
 
-    /// <summary>The ten bands, 31 Hz to 16 kHz.</summary>
-    public double[] BandsDb { get; set; } = new double[BandCount];
+    /// <summary>How many bands the equalizer has: <see cref="OctaveBands"/> or
+    /// <see cref="ThirdOctaveBands"/>. Settings from before there was a choice have ten.</summary>
+    public int BandCount { get; set; } = OctaveBands;
+
+    /// <summary>The bands' levels, low to high: as many as <see cref="BandCount"/>.</summary>
+    public double[] BandsDb { get; set; } = new double[OctaveBands];
 
     public double BassDb { get; set; }
     public double TrebleDb { get; set; }
@@ -61,9 +67,8 @@ public sealed class ToneSettings
     /// <summary>The values in the ranges the controls allow, whatever a hand-edited settings file says.</summary>
     public void Normalize()
     {
-        var bands = new double[BandCount];
-        for (var i = 0; i < BandCount && i < (BandsDb?.Length ?? 0); i++) bands[i] = ClampGain(BandsDb![i]);
-        BandsDb = bands;
+        BandCount = BandCount == ThirdOctaveBands ? ThirdOctaveBands : OctaveBands;
+        BandsDb = FitBands(BandsDb, BandCount);
         PreampDb = ClampGain(PreampDb);
         BassDb = ClampGain(BassDb);
         TrebleDb = ClampGain(TrebleDb);
@@ -77,22 +82,44 @@ public sealed class ToneSettings
         foreach (var preset in UserPresets) preset.Normalize();
     }
 
+    /// <summary>Switches between the ten and the 31 bands, keeping the curve: the new sliders are
+    /// set to what the old ones did at their frequencies (<see cref="Audio.ToneCurve.Resample"/>).</summary>
+    public void ChangeBandCount(int bandCount)
+    {
+        bandCount = bandCount == ThirdOctaveBands ? ThirdOctaveBands : OctaveBands;
+        if (bandCount == BandCount && BandsDb?.Length == bandCount) return;
+        BandCount = bandCount;
+        BandsDb = FitBands(BandsDb, bandCount);
+    }
+
+    /// <summary>Levels for <paramref name="bandCount"/> bands from whatever was saved: a whole
+    /// set made for the other bands is carried over by its curve; anything else (a hand-edited
+    /// file) is cut or padded with zeros. Always a new array, every level within range.</summary>
+    internal static double[] FitBands(double[]? bands, int bandCount)
+    {
+        bands ??= [];
+        if (bands.Length != bandCount && bands.Length is OctaveBands or ThirdOctaveBands)
+            return Audio.ToneCurve.Resample([.. bands.Select(ClampGain)], bandCount);
+        var fitted = new double[bandCount];
+        for (var i = 0; i < bandCount && i < bands.Length; i++) fitted[i] = ClampGain(bands[i]);
+        return fitted;
+    }
+
     internal static double ClampGain(double value) =>
         double.IsFinite(value) ? Math.Clamp(value, -MaxGainDb, MaxGainDb) : 0;
 }
 
-/// <summary>A named set of band levels.</summary>
+/// <summary>A named set of band levels: ten or 31, as many as the equalizer had when it was
+/// saved. It applies to either: <see cref="Audio.EqPresets.Apply"/> carries the curve over.</summary>
 public sealed class EqPreset
 {
     public string Name { get; set; } = "";
     public double PreampDb { get; set; }
-    public double[] BandsDb { get; set; } = new double[ToneSettings.BandCount];
+    public double[] BandsDb { get; set; } = new double[ToneSettings.OctaveBands];
 
     public void Normalize()
     {
-        var bands = new double[ToneSettings.BandCount];
-        for (var i = 0; i < bands.Length && i < (BandsDb?.Length ?? 0); i++) bands[i] = ToneSettings.ClampGain(BandsDb![i]);
-        BandsDb = bands;
+        BandsDb = ToneSettings.FitBands(BandsDb, Audio.ToneCurve.BandCountOf(BandsDb?.Length ?? 0));
         PreampDb = ToneSettings.ClampGain(PreampDb);
     }
 }

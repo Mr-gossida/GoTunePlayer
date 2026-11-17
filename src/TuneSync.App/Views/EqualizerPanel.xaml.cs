@@ -68,6 +68,7 @@ public partial class EqualizerPanel : UserControl
         _viewModel.PropertyChanged += ViewModel_PropertyChanged;
         ShowBypass();
         ShowCustomChip();
+        ShowHotBand();
         ApplyLayout();
         _limiterTimer.Start();
         CompositionTarget.Rendering -= OnRendering;
@@ -107,8 +108,23 @@ public partial class EqualizerPanel : UserControl
     /// (bars stacked, the level meter, a dB reading over each band), else more compact ones
     /// (bars side by side, no meter, no readings). Only when even the last is too tall does the
     /// body scroll (the bands at the top).</summary>
+    /// <summary>Below this width the title row's band switch reads "10 | 31" and 닫기 is its icon alone.</summary>
+    private const double FullTitleRowFrom = 500;
+
+    /// <summary>Title, on/off switch, band switch and 닫기 in one row, whatever the width.</summary>
+    private void FitTitleRow()
+    {
+        var full = ActualWidth >= FullTitleRowFrom;
+        TenBands.Content = full ? "10밴드" : "10";
+        ThirtyOneBands.Content = full ? "31밴드" : "31";
+        TenBands.Padding = ThirtyOneBands.Padding = full ? new Thickness(12, 0, 12, 0) : new Thickness(10, 0, 10, 0);
+        CloseButton.Content = full ? "닫기" : null;
+        CloseButton.Padding = full ? new Thickness(12, 5, 12, 5) : new Thickness(7, 5, 7, 5);
+    }
+
     private void ApplyLayout()
     {
+        FitTitleRow();
         double width = BodyScroller.ActualWidth, height = BodyScroller.ActualHeight;
         if (width <= 0 || height <= 0) return;
         var wide = ActualWidth >= WideFrom;
@@ -140,7 +156,7 @@ public partial class EqualizerPanel : UserControl
                 bar.Margin = columns == 1 ? new Thickness(0, 10, 0, 10) : new Thickness(4, 2, 4, 2);
             MeterBlock.Visibility = meter ? Visibility.Visible : Visibility.Collapsed;
             // a reading over each band also needs the width for it
-            BandReadings.Visibility = showReadings && readings ? Visibility.Visible : Visibility.Collapsed;
+            BandReadings.Visibility = showReadings && readings && !_viewModel.IsThirdOctave ? Visibility.Visible : Visibility.Collapsed;
             PreampReading.Visibility = showReadings ? Visibility.Visible : Visibility.Collapsed;
             // what this arrangement takes, measured with no limit on height (a parent keeps its
             // last size until told its children changed)
@@ -240,8 +256,59 @@ public partial class EqualizerPanel : UserControl
         if (e.PropertyName is nameof(PlaybackViewModel.IsToneBypassed) or nameof(PlaybackViewModel.CurrentFile) or nameof(PlaybackViewModel.IsBitPerfect)) ShowBypass();
     }
 
+    // --- the 31 bands: the reading of the one under the pointer (or being set) ---
+
+    private EqSlider? _hotSlider;
+    private EqBandViewModel? _hotBand;
+
+    private void BandSlider_ActiveChanged(object? sender, EventArgs e)
+    {
+        if (sender is not EqSlider slider) return;
+        if (slider.IsActive) _hotSlider = slider;
+        else if (_hotSlider == slider) _hotSlider = null;
+        ShowHotBand();
+    }
+
+    private void HotBand_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(EqBandViewModel.HotText)) ShowHotBand();
+    }
+
+    /// <summary>Over the 31 bands, the active one's name and level, centered over its slider
+    /// (kept inside the row at the ends). The ten have a reading each instead.</summary>
+    private void ShowHotBand()
+    {
+        var band = _viewModel.IsThirdOctave ? _hotSlider?.DataContext as EqBandViewModel : null;
+        if (!ReferenceEquals(band, _hotBand))
+        {
+            if (_hotBand is not null) _hotBand.PropertyChanged -= HotBand_PropertyChanged;
+            _hotBand = band;
+            if (band is not null) band.PropertyChanged += HotBand_PropertyChanged;
+        }
+        if (band is null || _hotSlider is null || !_hotSlider.IsVisible)
+        {
+            HotReading.Visibility = Visibility.Collapsed;
+            BandLabelRow.Visibility = Visibility.Visible;
+            return;
+        }
+        HotReading.Text = band.HotText;
+        HotReading.Visibility = Visibility.Visible;
+        BandLabelRow.Visibility = Visibility.Hidden; // keeps the row's height
+        HotReading.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        var center = _hotSlider.TranslatePoint(new Point(_hotSlider.ActualWidth / 2, 0), HotLayer).X;
+        var width = HotReading.DesiredSize.Width;
+        Canvas.SetLeft(HotReading, Math.Clamp(center - width / 2, 0, Math.Max(0, HotLayer.ActualWidth - width)));
+    }
+
     private void ViewModel_PropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
+        if (e.PropertyName == nameof(EqualizerViewModel.IsThirdOctave))
+        {
+            _hotSlider = null;
+            ShowHotBand();
+            ApplyLayout(); // the readings row is the ten's only
+            return;
+        }
         if (e.PropertyName != nameof(EqualizerViewModel.SelectedPreset)) return;
         ShowCustomChip();
         Dispatcher.BeginInvoke(BringChosenChipIntoView, DispatcherPriority.Loaded);
@@ -254,7 +321,7 @@ public partial class EqualizerPanel : UserControl
     {
         var bitPerfect = _playback.IsBitPerfect;
         BitPerfectBanner.Visibility = bitPerfect ? Visibility.Visible : Visibility.Collapsed;
-        foreach (var part in new UIElement[] { PresetRow, BodyScroller, EnableSwitch })
+        foreach (var part in new UIElement[] { PresetRow, BodyScroller, EnableSwitch, BandSwitch })
         {
             part.IsEnabled = !bitPerfect;
             part.Opacity = bitPerfect ? 0.4 : 1;
@@ -291,7 +358,8 @@ public partial class EqualizerPanel : UserControl
         var seconds = now - _lastFrame;
         if (_lastFrame > 0 && seconds < 0.014) return;
         _lastFrame = now;
-        _analyzer.Update(_playback.OutputScope, Spectrum.Columns, EqCurve.LowHz, EqCurve.HighHz, seconds);
+        var (low, high) = EqCurve.Axis(_viewModel.BandCount); // the spectrum on the curve's scale
+        _analyzer.Update(_playback.OutputScope, Spectrum.Columns, low, high, seconds);
         if (_analyzer.IsQuiet && _drawnQuiet) return;
         _drawnQuiet = _analyzer.IsQuiet;
         Spectrum.Show(_analyzer);

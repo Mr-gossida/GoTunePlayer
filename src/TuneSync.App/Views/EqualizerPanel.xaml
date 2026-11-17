@@ -122,6 +122,40 @@
             <Setter Property="Margin" Value="2,0,0,0"/>
             <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}"/>
         </Style>
+        <!-- one side of a two-way switch (10밴드 | 31밴드): plain text, a filled pill while chosen (Tag True) -->
+        <Style x:Key="Segment" TargetType="Button">
+            <Setter Property="Height" Value="26"/>
+            <Setter Property="Padding" Value="12,0"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd" CornerRadius="13" Background="Transparent" BorderThickness="1" BorderBrush="Transparent"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}"/>
+                            </Trigger>
+                            <Trigger Property="Tag">
+                                <Trigger.Value><sys:Boolean>True</sys:Boolean></Trigger.Value>
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource PlayerAccentBrush}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource PlayerOnAccentBrush}"/>
+                                <Setter Property="FontWeight" Value="SemiBold"/>
+                                <Setter Property="Cursor" Value="Arrow"/>
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource PlayerAccentBrush}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
 
         <!-- a preset chip: a rounded label, filled with the accent while chosen -->
         <Style x:Key="ChipItem" TargetType="ListBoxItem">
@@ -175,7 +209,21 @@
             <ui:ToggleSwitch x:Name="EnableSwitch" Grid.Column="1" IsChecked="{Binding IsEnabled}" OnContent="켜짐" OffContent="꺼짐" Margin="18,0,0,0"
                              VerticalAlignment="Center" ToolTip="끄면 파일에 담긴 소리 그대로 재생합니다"/>
 
-            <ui:Button Grid.Column="3" Content="닫기" Icon="{ui:SymbolIcon Dismiss24}" Margin="12,0,0,0" Padding="12,5" CornerRadius="16"
+            <!-- how many bands: ten (an octave apart) or 31 (a third of an octave), the curve kept across.
+                 Where the row is short of room, "10 | 31" and an icon-only 닫기 (EqualizerPanel.FitTitleRow). -->
+            <Border x:Name="BandSwitch" Grid.Column="2" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="12,0,0,0"
+                    CornerRadius="16" Padding="2" Background="{DynamicResource PlayerHoverBrush}">
+                <StackPanel Orientation="Horizontal">
+                    <Button x:Name="TenBands" Style="{StaticResource Segment}" Content="10밴드" Command="{Binding SetBandCountCommand}" CommandParameter="10"
+                            Tag="{Binding IsOctave}"
+                            ToolTip="10밴드: 한 옥타브 간격 (31Hz~16kHz)" AutomationProperties.Name="10밴드 이퀄라이저"/>
+                    <Button x:Name="ThirtyOneBands" Style="{StaticResource Segment}" Content="31밴드" Command="{Binding SetBandCountCommand}" CommandParameter="31"
+                            Tag="{Binding IsThirdOctave}"
+                            ToolTip="31밴드: 1/3 옥타브 간격 (20Hz~20kHz) · 바꿔도 지금 곡선은 그대로 옮겨집니다" AutomationProperties.Name="31밴드 이퀄라이저"/>
+                </StackPanel>
+            </Border>
+
+            <ui:Button x:Name="CloseButton" Grid.Column="3" Content="닫기" Icon="{ui:SymbolIcon Dismiss24}" Margin="12,0,0,0" Padding="12,5" CornerRadius="16"
                        BorderThickness="0" Background="{DynamicResource PlayerHoverBrush}" MouseOverBackground="{DynamicResource PlayerTrackBrush}"
                        Command="{Binding ClosePanelCommand}" ToolTip="이퀄라이저 닫기 (Esc)" AutomationProperties.Name="이퀄라이저 닫기"/>
         </Grid>
@@ -411,7 +459,7 @@
                     <TextBlock Grid.Row="2" Grid.Column="0" Text="프리앰프" Style="{StaticResource Caption}" Margin="0,6,0,0"/>
                     <Rectangle Grid.Row="0" Grid.RowSpan="3" Grid.Column="1" Width="1" Margin="4,4,10,4" Fill="{DynamicResource PlayerTrackBrush}"/>
 
-                    <!-- readings over the bands -->
+                    <!-- readings over the bands (the ten only: the 31 are too close together - see the names row) -->
                     <ItemsControl x:Name="BandReadings" Grid.Row="0" Grid.Column="2" ItemsSource="{Binding Bands}" Focusable="False" Margin="0,0,0,4">
                         <ItemsControl.ItemsPanel>
                             <ItemsPanelTemplate><UniformGrid Rows="1"/></ItemsPanelTemplate>
@@ -440,19 +488,30 @@
                         </ItemsControl.ItemsPanel>
                         <ItemsControl.ItemTemplate>
                             <DataTemplate DataType="{x:Type vm:EqBandViewModel}">
-                                <views:EqSlider Value="{Binding Gain}" HorizontalAlignment="Center"
-                                                ToolTip="끌거나 마우스 휠로 조절 · 더블클릭하면 0"/>
+                                <views:EqSlider Value="{Binding Gain}" HorizontalAlignment="Center" ToolTip="{Binding ToolTip}"
+                                                IsCompact="{Binding DataContext.IsThirdOctave, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                AutomationProperties.Name="{Binding Name, StringFormat={}{0}Hz}"
+                                                ActiveChanged="BandSlider_ActiveChanged"/>
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
 
-                    <ItemsControl Grid.Row="2" Grid.Column="2" ItemsSource="{Binding Bands}" Focusable="False" Margin="0,6,0,0">
+                    <!-- the names under the bands; over the 31, while one is under the pointer (or
+                         being set), its name and level in their place (EqualizerPanel.ShowHotBand) -->
+                    <Canvas x:Name="HotLayer" Grid.Row="2" Grid.Column="2" Margin="0,6,0,0" ClipToBounds="False" IsHitTestVisible="False">
+                        <TextBlock x:Name="HotReading" Style="{StaticResource Reading}" Visibility="Collapsed"
+                                   Typography.NumeralAlignment="Tabular" Foreground="{DynamicResource PlayerAccentBrush}"/>
+                    </Canvas>
+                    <ItemsControl x:Name="BandLabelRow" Grid.Row="2" Grid.Column="2" ItemsSource="{Binding Bands}" Focusable="False" Margin="0,6,0,0">
                         <ItemsControl.ItemsPanel>
                             <ItemsPanelTemplate><UniformGrid Rows="1"/></ItemsPanelTemplate>
                         </ItemsControl.ItemsPanel>
                         <ItemsControl.ItemTemplate>
                             <DataTemplate DataType="{x:Type vm:EqBandViewModel}">
-                                <TextBlock Text="{Binding Label}" Style="{StaticResource Caption}"/>
+                                <!-- wider than its column if need be (the 31 bands' columns are narrow,
+                                     but only every third is named): the negative margin keeps it from being cut -->
+                                <TextBlock Text="{Binding Label}" Style="{StaticResource Caption}" Margin="-16,0"
+                                           TextAlignment="Center"/>
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
