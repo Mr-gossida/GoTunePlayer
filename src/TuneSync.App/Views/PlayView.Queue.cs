@@ -165,6 +165,8 @@ public partial class PlayView
 
     private void PlaylistBox_MouseDoubleClick(object sender, MouseButtonEventArgs e)
     {
+        // A double click on a group's heading folds it twice; it mustn't also play a song.
+        if (IsInGroupHeading(e.OriginalSource as System.Windows.DependencyObject)) return;
         if (PlaylistBox.SelectedItem is LibraryFileViewModel file)
             _viewModel.Playback.PlayFile(file);
     }
@@ -195,6 +197,7 @@ public partial class PlayView
         var mode = _viewModel.Playback.QueueViewMode;
         var keep = PlaylistBox.SelectedItem;
         _tilePanel = null;
+        _viewModel.Library.FoldingAllowed = mode != QueueViewMode.Grid; // the grid has no headings to unfold with
         // Rows leave room for the overlay scrollbar themselves; tiles need it here.
         PlaylistBox.Padding = mode == QueueViewMode.Grid ? new Thickness(0, 0, 12, 0) : new Thickness(0);
         switch (mode)
@@ -329,6 +332,9 @@ public partial class PlayView
         if (PlaylistBox.Items.Contains(current)) return current;
         foreach (var item in PlaylistBox.Items)
             if (item is LibraryFileViewModel row && string.Equals(row.Path, current.Path, StringComparison.OrdinalIgnoreCase)) return row;
+        // In a folded group: still the queue's, out of sight ("지금 재생 중" unfolds it).
+        foreach (var row in _viewModel.Library.Files)
+            if (row.IsFoldedAway && (ReferenceEquals(row, current) || string.Equals(row.Path, current.Path, StringComparison.OrdinalIgnoreCase))) return row;
         return null;
     }
 
@@ -353,6 +359,12 @@ public partial class PlayView
     private void BackToCurrent_Click(object sender, System.Windows.RoutedEventArgs e)
     {
         if (CurrentRow() is not { } current) return;
+        if (_viewModel.Library.UnfoldGroupOf(current))
+        {
+            // the list was just rebuilt: scroll once it has been laid out again
+            Dispatcher.BeginInvoke(() => BackToCurrent_Click(sender, e), System.Windows.Threading.DispatcherPriority.Loaded);
+            return;
+        }
         PlaylistBox.SelectedItem = current;
         PlaylistBox.ScrollIntoView(current);
     }
@@ -369,6 +381,7 @@ public partial class PlayView
             if (SearchBox.Text.Length > 0) SearchBox.Text = "";
         }
         if (!playback.IsQueueVisible) return;
+        if (CurrentRow() is { } folded) _viewModel.Library.UnfoldGroupOf(folded);
         Dispatcher.BeginInvoke(() =>
         {
             if (CurrentRow() is not { } current) return;
@@ -408,6 +421,13 @@ public partial class PlayView
         if (_viewModel.Playback.CurrentFile is not { } current) return;
         // Several rows picked by hand (to remove or queue them): a song change mustn't undo that.
         if (PlaylistBox.SelectedItems.Count > 1) return;
+        // In a folded group the user put away: leave it folded (and the list where it is);
+        // "지금 재생 중" offers the way to it.
+        if (current.IsFoldedAway)
+        {
+            UpdateBackToCurrent();
+            return;
+        }
         PlaylistBox.SelectedItem = current;
         // After layout: right after a sort/rescan or at startup the list may not be measured yet.
         if (IsLoaded)

@@ -23,6 +23,8 @@ public partial class PlayView
 
     private void PlaylistBox_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
+        // a group's heading: its own handler folds the group (GroupHeading_PreviewMouseLeftButtonDown)
+        if (IsInGroupHeading(e.OriginalSource as System.Windows.DependencyObject)) return;
         _dragStart = e.GetPosition(PlaylistBox);
         _dragSong = SongAt(e.OriginalSource);
         _clickToSelect = null;

@@ -42,11 +42,15 @@
                     <ControlTemplate TargetType="ListBoxItem">
                         <StackPanel>
                             <!-- Group heading above a group's first song (LibraryViewModel.UpdateGroupHeaders).
-                                 Not WPF grouping, which built every row up front. Not clickable. -->
-                            <Grid x:Name="GroupHeading" Margin="6,14,18,4" IsHitTestVisible="False">
+                                 Not WPF grouping, which built every row up front. A click folds or
+                                 unfolds the group (PlayView.QueueStickyGroup.cs). -->
+                            <Grid x:Name="GroupHeading" Margin="6,14,18,4" Background="Transparent" Cursor="Hand"
+                                  ToolTip="클릭하면 이 그룹을 접거나 펼칩니다"
+                                  PreviewMouseLeftButtonDown="GroupHeading_PreviewMouseLeftButtonDown">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="Auto"/>
                                     <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
                                     <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
                                 <ui:SymbolIcon Grid.Column="0" Margin="0,0,6,0" FontSize="14"
@@ -58,9 +62,11 @@
                                 <TextBlock Grid.Column="2" Margin="8,0,0,0" FontSize="12" Foreground="{DynamicResource TextFillColorTertiaryBrush}">
                                     <Run Text="{Binding GroupCount, Mode=OneWay}"/><Run Text="곡"/>
                                 </TextBlock>
+                                <ui:SymbolIcon x:Name="FoldChevron" Grid.Column="3" Symbol="ChevronDown24" FontSize="12" Margin="6,0,0,0"
+                                               RenderTransformOrigin="0.5,0.5" Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
                             </Grid>
                             <!-- Right margin: room for the overlay scrollbar, so it never covers the durations. -->
-                            <Grid Margin="0,1,12,1">
+                            <Grid x:Name="RowArea" Margin="0,1,12,1">
                                 <!-- the search's current hit: tinted in the accent color with a bar at the left -->
                                 <Border x:Name="HitFill" CornerRadius="6" Background="{DynamicResource PlayerAccentBrush}" Opacity="0" IsHitTestVisible="False"/>
                                 <Border x:Name="Bd" Background="Transparent" CornerRadius="6" Padding="{TemplateBinding Padding}">
@@ -74,6 +80,16 @@
                             <DataTrigger Binding="{Binding GroupHeader}" Value="{x:Null}">
                                 <Setter TargetName="GroupHeading" Property="Visibility" Value="Collapsed"/>
                             </DataTrigger>
+                            <!-- Folded: the heading alone, its chevron pointing right. -->
+                            <DataTrigger Binding="{Binding IsGroupFolded}" Value="True">
+                                <Setter TargetName="RowArea" Property="Visibility" Value="Collapsed"/>
+                                <Setter TargetName="FoldChevron" Property="RenderTransform">
+                                    <Setter.Value><RotateTransform Angle="-90"/></Setter.Value>
+                                </Setter>
+                            </DataTrigger>
+                            <Trigger SourceName="GroupHeading" Property="IsMouseOver" Value="True">
+                                <Setter TargetName="FoldChevron" Property="Foreground" Value="{DynamicResource PlayerAccentBrush}"/>
+                            </Trigger>
                             <Trigger SourceName="Bd" Property="IsMouseOver" Value="True">
                                 <Setter TargetName="Bd" Property="Background" Value="{DynamicResource PlayerHoverBrush}"/>
                             </Trigger>
@@ -474,7 +490,10 @@
                         </Border>
                     </Grid>                </StackPanel>
 
-                <ScrollViewer x:Name="LyricsScrollViewer"
+                <!-- Focusable False: a click on a line focused the viewer, and the next key press
+                     drew the theme's focus rectangle around the whole lyrics area. Wheel scrolling
+                     doesn't need focus, and the keys belong to the player (Space, arrows). -->
+                <ScrollViewer x:Name="LyricsScrollViewer" Focusable="False" FocusVisualStyle="{x:Null}"
                               VerticalScrollBarVisibility="Hidden" HorizontalScrollBarVisibility="Disabled" CanContentScroll="False"
                               PreviewMouseWheel="LyricsScrollViewer_PreviewMouseWheel"
                               SizeChanged="LyricsScrollViewer_SizeChanged"
@@ -570,7 +589,7 @@
                 </ScrollViewer>
 
                 <!-- Top margin: room for the "싱크 가사 만들기" button above the text. -->
-                <ScrollViewer x:Name="PlainLyricsScrollViewer" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                <ScrollViewer x:Name="PlainLyricsScrollViewer" Focusable="False" FocusVisualStyle="{x:Null}" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
                               Margin="0,52,0,0"
                               Visibility="{Binding HasPlainLyricsOnly, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}">
                     <!-- Unsynced lyrics pour in from the top, line after line (PlainLine_Loaded). -->
@@ -940,8 +959,10 @@
                 </ListBox>
 
                 <!-- The group being scrolled through stays pinned at the top (PlayView.UpdateStickyGroup);
-                     the list fades out under it, so no background is needed over the see-through panel. -->
-                <Grid x:Name="StickyGroup" Grid.Row="2" VerticalAlignment="Top" Margin="6,6,30,0" IsHitTestVisible="False"
+                     the list fades out under it, so no background is needed over the see-through panel.
+                     A click folds that group (it used to fall through to the song underneath). -->
+                <Grid x:Name="StickyGroup" Grid.Row="2" VerticalAlignment="Top" Margin="6,6,30,0" Background="Transparent" Cursor="Hand"
+                      ToolTip="클릭하면 이 그룹을 접습니다" MouseLeftButtonDown="StickyGroup_MouseLeftButtonDown"
                       Visibility="Collapsed">
                     <Grid.RenderTransform>
                         <TranslateTransform x:Name="StickyShift"/>
@@ -949,6 +970,7 @@
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
                     <ui:SymbolIcon Grid.Column="0" Margin="0,0,6,0" FontSize="14"
@@ -958,6 +980,18 @@
                                Foreground="{DynamicResource PlayerAccentBrush}"/>
                     <TextBlock x:Name="StickyGroupCount" Grid.Column="2" Margin="8,0,0,0" FontSize="12"
                                Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
+                    <ui:SymbolIcon Grid.Column="3" Symbol="ChevronDown24" FontSize="12" Margin="6,0,0,0">
+                        <ui:SymbolIcon.Style>
+                            <Style TargetType="ui:SymbolIcon">
+                                <Setter Property="Foreground" Value="{DynamicResource TextFillColorTertiaryBrush}"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsMouseOver, ElementName=StickyGroup}" Value="True">
+                                        <Setter Property="Foreground" Value="{DynamicResource PlayerAccentBrush}"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </ui:SymbolIcon.Style>
+                    </ui:SymbolIcon>
                 </Grid>
 
                 <!-- Where dragged songs will land. -->

@@ -407,7 +407,7 @@ public sealed partial class PlaybackViewModel : ObservableObject, IDisposable
         if (CurrentFile is null)
         {
             // Nothing loaded yet - start from the top of the current list, like a media player.
-            if (_library.PlaylistView.Cast<LibraryFileViewModel>().FirstOrDefault() is { } first)
+            if (_library.QueueOrder().FirstOrDefault() is { } first)
                 PlayFile(first);
             return;
         }

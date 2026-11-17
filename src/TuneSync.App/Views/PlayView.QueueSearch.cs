@@ -53,7 +53,7 @@ public partial class PlayView
 
     /// <summary>The songs the search finds, best first (see <see cref="TuneSync.Core.Services.SongSearch"/>).</summary>
     private void FindMatches() =>
-        _matches = TuneSync.Core.Services.SongSearch.Find(_viewModel.Library.PlaylistView.Cast<LibraryFileViewModel>(), SearchBox.Text,
+        _matches = TuneSync.Core.Services.SongSearch.Find(_viewModel.Library.QueueOrder(), SearchBox.Text,
             file => new(file.DisplayTitle, file.Artist, file.Album, file.FileName));
 
     private LibraryFileViewModel? _searchHit;
@@ -74,6 +74,7 @@ public partial class PlayView
             return;
         }
 
+        _viewModel.Library.UnfoldGroupOf(match); // a hit in a folded group opens it
         PlaylistBox.SelectedItem = match;
         PlaylistBox.ScrollIntoView(match);
         Dispatcher.BeginInvoke(() => CenterInList(match), System.Windows.Threading.DispatcherPriority.Loaded);

@@ -158,8 +158,9 @@ public sealed partial class PlaybackViewModel
         _ => "반복: 끔",
     };
 
-    /// <summary>The playlist exactly as shown in the 플레이 screen (its sort and grouping).</summary>
-    private List<LibraryFileViewModel> CurrentList() => [.. _library.PlaylistView.Cast<LibraryFileViewModel>()];
+    /// <summary>The playlist in the 플레이 screen's order (its sort and grouping), including songs
+    /// of groups folded out of sight.</summary>
+    private List<LibraryFileViewModel> CurrentList() => _library.QueueOrder();
 
     /// <summary>Where the playing song stood when it was taken out of the list: next/previous
     /// carry on from there instead of jumping back to the top.</summary>

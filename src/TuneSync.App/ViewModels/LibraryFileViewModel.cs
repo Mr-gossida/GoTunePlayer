@@ -68,6 +68,16 @@ public sealed partial class LibraryFileViewModel : ObservableObject
     [ObservableProperty]
     private int _groupCount;
 
+    /// <summary>The group this row belongs to is folded in the queue (its heading shows a closed
+    /// chevron and only the heading is left of it).</summary>
+    [ObservableProperty]
+    private bool _isGroupFolded;
+
+    /// <summary>Left out of the queue because its group is folded: every row of a folded group
+    /// but the first, which carries the heading. Folding only hides; playback still goes
+    /// through these songs (<see cref="LibraryViewModel.QueueOrder"/>).</summary>
+    public bool IsFoldedAway { get; set; }
+
     public string FileName => Model.FileName;
     public string Path => Model.Path;
     public string Title => Model.Tags.Title;

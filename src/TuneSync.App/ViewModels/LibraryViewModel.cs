@@ -82,7 +82,7 @@ public sealed partial class LibraryViewModel : ObservableObject
         FilesView.SortDescriptions.Add(new SortDescription(nameof(LibraryFileViewModel.FileName), ListSortDirection.Ascending));
         Filter.FilterChanged += (_, _) => FilesView.Refresh();
 
-        PlaylistView = new ListCollectionView(Files);
+        PlaylistView = new ListCollectionView(Files) { Filter = o => o is not LibraryFileViewModel { IsFoldedAway: true } };
         ((System.Collections.Specialized.INotifyCollectionChanged)PlaylistView).CollectionChanged += (_, _) => ScheduleGroupHeaders();
         _playlistSort = settings.PlaylistSort;
         _playlistSortDescending = settings.PlaylistSortDescending;
@@ -304,7 +304,11 @@ public sealed partial class LibraryViewModel : ObservableObject
 
     partial void OnPlaylistSortChanged(PlaylistSortKey value) => SavePlaylistOrder();
     partial void OnPlaylistSortDescendingChanged(bool value) => SavePlaylistOrder();
-    partial void OnPlaylistGroupChanged(PlaylistGroupKey value) => SavePlaylistOrder();
+    partial void OnPlaylistGroupChanged(PlaylistGroupKey value)
+    {
+        _foldedGroups.Clear(); // folds name groups of the old kind (a folder, an artist...)
+        SavePlaylistOrder();
+    }
 
     private bool _holdOrder;
     private Dictionary<string, int> _customRank = new(StringComparer.OrdinalIgnoreCase);
@@ -315,7 +319,7 @@ public sealed partial class LibraryViewModel : ObservableObject
     public void MoveInQueue(IReadOnlyList<LibraryFileViewModel> moving, LibraryFileViewModel? before)
     {
         if (moving.Count == 0) return;
-        var order = PlaylistView.Cast<LibraryFileViewModel>().ToList();
+        var order = QueueOrder();
         var leaving = moving.ToHashSet();
         var rest = order.Where(f => !leaving.Contains(f)).ToList();
         var at = before is null ? rest.Count : rest.IndexOf(before);
@@ -413,14 +417,20 @@ public sealed partial class LibraryViewModel : ObservableObject
     private void UpdateGroupHeaders()
     {
         _groupHeadersPending = false;
-        var rows = PlaylistView.Cast<LibraryFileViewModel>().ToList();
+        var rows = QueueOrder();
+        var foldsChanged = false;
         if (_groupKey is not { } key)
         {
             foreach (var row in rows)
             {
                 row.GroupHeader = null;
                 row.GroupName = null;
+                row.IsGroupFolded = false;
+                foldsChanged |= row.IsFoldedAway;
+                row.IsFoldedAway = false;
             }
+            _foldedAwayCount = 0;
+            if (foldsChanged) PlaylistView.Refresh();
             return;
         }
         var names = StringComparer.CurrentCultureIgnoreCase;
@@ -431,6 +441,7 @@ public sealed partial class LibraryViewModel : ObservableObject
             counts[name] = counts.TryGetValue(name, out var n) ? n + 1 : 1;
         }
         string? previous = null;
+        _foldedAwayCount = 0;
         foreach (var row in rows)
         {
             var name = key(row);
@@ -438,8 +449,62 @@ public sealed partial class LibraryViewModel : ObservableObject
             row.GroupHeader = starts ? name : null;
             row.GroupName = name;
             row.GroupCount = counts[name];
+            var folded = _foldingAllowed && _foldedGroups.Contains(name);
+            row.IsGroupFolded = folded;
+            var away = folded && !starts;
+            foldsChanged |= row.IsFoldedAway != away;
+            row.IsFoldedAway = away;
+            if (away) _foldedAwayCount++;
             previous = name;
         }
+        // The filter reads IsFoldedAway; re-run it only when that changed (the refresh comes back
+        // here once, finds nothing new, and stops).
+        if (foldsChanged) PlaylistView.Refresh();
+    }
+
+    // ---- folding groups in the queue (click a group's heading) ----
+
+    private readonly HashSet<string> _foldedGroups = new(StringComparer.CurrentCultureIgnoreCase);
+    private bool _foldingAllowed = true;
+    private int _foldedAwayCount; // rows the filter leaves out right now (they aren't in the view to count)
+
+    /// <summary>Off in the cover grid: it draws no headings, so a folded group couldn't be
+    /// opened again there. The folds come back when the list returns.</summary>
+    public bool FoldingAllowed
+    {
+        get => _foldingAllowed;
+        set
+        {
+            if (_foldingAllowed == value) return;
+            _foldingAllowed = value;
+            if (_foldedGroups.Count > 0) UpdateGroupHeaders();
+        }
+    }
+
+    /// <summary>Folds or unfolds a group of the queue: a folded group shows only its heading.</summary>
+    public void ToggleGroupFold(string group)
+    {
+        if (!_foldedGroups.Remove(group)) _foldedGroups.Add(group);
+        UpdateGroupHeaders();
+    }
+
+    /// <summary>Unfolds the group a song is in, so it can be shown (search hit, 지금 재생 중).
+    /// True when something was unfolded.</summary>
+    public bool UnfoldGroupOf(LibraryFileViewModel song)
+    {
+        if (!song.IsFoldedAway || song.GroupName is not { } group || !_foldedGroups.Remove(group)) return false;
+        UpdateGroupHeaders();
+        return true;
+    }
+
+    /// <summary>Every song of the queue in its order, folded groups included: what playback,
+    /// search and drag-and-drop go by (<see cref="PlaylistView"/> leaves folded songs out).</summary>
+    public List<LibraryFileViewModel> QueueOrder()
+    {
+        if (_foldedAwayCount == 0) return [.. PlaylistView.Cast<LibraryFileViewModel>()];
+        var all = Files.ToList();
+        if (PlaylistView.CustomSort is { } order) all.Sort(order.Compare);
+        return all;
     }
 
     /// <summary>The queue order: by group (ascending - the order groups are listed in), then the
