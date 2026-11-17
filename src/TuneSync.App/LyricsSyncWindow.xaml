@@ -68,12 +68,23 @@
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
-            <!-- What the two line marks mean -->
-            <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Bottom" Margin="12,0,0,0">
-                <Border Width="14" Height="14" CornerRadius="3" Background="{DynamicResource PlayerAccentBrush}" Margin="0,0,5,0"/>
-                <TextBlock Text="재생 중인 줄" FontSize="12" VerticalAlignment="Center" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-                <Border Width="14" Height="14" CornerRadius="3" BorderThickness="2" BorderBrush="{DynamicResource TextFillColorPrimaryBrush}" Margin="14,0,5,0"/>
-                <TextBlock Text="선택한 줄 (시간을 찍을 줄)" FontSize="12" VerticalAlignment="Center" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+            <!-- What the line marks mean, one per row so it stays narrow -->
+            <StackPanel Grid.Column="2" VerticalAlignment="Center" Margin="12,0,0,0" TextElement.FontSize="12">
+                <StackPanel Orientation="Horizontal">
+                    <Border Width="14" Height="14" CornerRadius="3" Background="{DynamicResource PlayerAccentBrush}" Margin="0,0,6,0"/>
+                    <TextBlock Text="재생 중인 줄" VerticalAlignment="Center" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                    <Border Width="14" Height="14" CornerRadius="3" BorderThickness="2" BorderBrush="{DynamicResource TextFillColorPrimaryBrush}" Margin="0,0,6,0"/>
+                    <TextBlock Text="선택한 줄 (시간을 찍을 줄)" VerticalAlignment="Center" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" Margin="0,4,0,0"
+                            ToolTip="음성 인식이 또렷이 듣지 못해 앞뒤 줄로 추정한 시간입니다. 들어보고 맞으면 그대로 두고, 틀리면 시간을 다시 찍으세요.">
+                    <Grid Width="14" Margin="0,0,6,0">
+                        <Ellipse Width="8" Height="8" Fill="{DynamicResource SystemFillColorCautionBrush}"/>
+                    </Grid>
+                    <TextBlock VerticalAlignment="Center" Foreground="{DynamicResource TextFillColorSecondaryBrush}"><Run Text="노란 시간" Foreground="{DynamicResource SystemFillColorCautionBrush}"/><Run Text=" 추정한 시간 (확인 필요)"/></TextBlock>
+                </StackPanel>
             </StackPanel>
             <Grid Width="56" Height="56" Margin="0,0,14,0">
                 <Border CornerRadius="6" Background="{DynamicResource ControlFillColorSecondaryBrush}">
