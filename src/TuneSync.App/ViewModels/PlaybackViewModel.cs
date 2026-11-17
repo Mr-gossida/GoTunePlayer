@@ -90,9 +90,11 @@ public sealed partial class PlaybackViewModel : ObservableObject, IDisposable
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(VolumePercent))]
+    [NotifyPropertyChangedFor(nameof(MuteToolTip))]
     private double _volume;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(MuteToolTip))]
     private bool _isMuted;
 
     [ObservableProperty]
@@ -423,6 +425,12 @@ public sealed partial class PlaybackViewModel : ObservableObject, IDisposable
     }
 
     public int VolumePercent => (int)Math.Round(Volume * 100);
+
+    /// <summary>The speaker button's tooltip: what a click does now, the volume (the slider is
+    /// narrow or missing in small layouts) and that the mouse wheel over the button changes it.</summary>
+    public string MuteToolTip => IsMuted
+        ? $"음소거 해제 · 볼륨 {VolumePercent}% (마우스 휠로 조절)"
+        : $"음소거 · 볼륨 {VolumePercent}% (마우스 휠로 조절)";
 
     public void BeginSeek() => _isSeeking = true;
 

@@ -71,14 +71,11 @@ public partial class ShellWindow : FluentWindow
             BackdropImage.BeginAnimation(OpacityProperty, new System.Windows.Media.Animation.DoubleAnimation(0, 0.55, duration));
         };
 
-        // Narrow window: drop the volume slider (the mute button stays) so the view toggles and
-        // the mini-player button always fit in the transport bar.
+        // Narrow window: drop only the percentage (it's in the mute button's tooltip). The slider
+        // stays - it used to go too, leaving mouse users nothing but the mute button - and still
+        // fits beside the view toggles at the minimum window width (900).
         SizeChanged += (_, _) =>
-        {
-            var roomy = ActualWidth >= 1100;
-            VolumeSlider.Visibility = roomy ? Visibility.Visible : Visibility.Collapsed;
-            VolumeText.Visibility = roomy ? Visibility.Visible : Visibility.Collapsed;
-        };
+            VolumeText.Visibility = ActualWidth >= 1100 ? Visibility.Visible : Visibility.Collapsed;
     }
 
     protected override void OnPreviewKeyDown(System.Windows.Input.KeyEventArgs e)

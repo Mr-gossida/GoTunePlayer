@@ -296,7 +296,8 @@
                     <ui:Button Style="{StaticResource PlayerToggleButtonStyle}" Margin="2,0,0,0" Icon="{ui:SymbolIcon TextBulletListLtr24}"
                                Tag="{Binding IsQueueVisible}" Command="{Binding ToggleQueueCommand}" ToolTip="재생 대기열"/>
                     <Border Width="8"/>
-                    <ui:Button Command="{Binding ToggleMuteCommand}" ToolTip="음소거">
+                    <ui:Button Command="{Binding ToggleMuteCommand}" ToolTip="{Binding MuteToolTip}" AutomationProperties.Name="음소거"
+                               PreviewMouseWheel="Volume_PreviewMouseWheel">
                         <ui:Button.Style>
                             <Style TargetType="ui:Button" BasedOn="{StaticResource PlayerIconButtonStyle}">
                                 <Setter Property="Icon" Value="{ui:SymbolIcon Speaker224}"/>
@@ -337,7 +338,8 @@
                                    Command="{Binding TogglePlayPauseCommand}" ToolTip="재생 / 일시정지 (Space)"/>
                         <ui:Button Style="{StaticResource PlayerIconButtonStyle}" Foreground="White" Margin="8,0,14,0"
                                    Icon="{ui:SymbolIcon Next24, Filled=True}" Command="{Binding PlayNextCommand}" ToolTip="다음 곡 (Ctrl+→)"/>
-                        <ui:Button Command="{Binding ToggleMuteCommand}" ToolTip="음소거" Foreground="White">
+                        <ui:Button Command="{Binding ToggleMuteCommand}" ToolTip="{Binding MuteToolTip}" AutomationProperties.Name="음소거" Foreground="White"
+                                   PreviewMouseWheel="Volume_PreviewMouseWheel">
                             <ui:Button.Style>
                                 <Style TargetType="ui:Button" BasedOn="{StaticResource PlayerIconButtonStyle}">
                                     <Setter Property="Icon" Value="{ui:SymbolIcon Speaker224}"/>

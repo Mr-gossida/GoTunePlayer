@@ -626,8 +626,9 @@
                            MouseOverBackground="{DynamicResource PlayerAccentBrush}" PressedBackground="{DynamicResource PlayerAccentBrush}"
                            PressedForeground="{DynamicResource PlayerOnAccentBrush}" Click="BackToLyric_Click"/>
 
-                <!-- No lyrics: hovering reveals "가사 찾기", which searches online for this song and
-                     offers the result to save right here (PlayPageViewModel). -->
+                <!-- No lyrics: "가사 찾기" searches online for this song and offers the result to save
+                     right here (PlayPageViewModel). Always shown: it used to appear only on hover,
+                     so nothing on screen said there was a way to get the lyrics. -->
                 <Border x:Name="NoLyricsCard" HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="460"
                         Padding="32,24" CornerRadius="14"
                         DataContext="{Binding DataContext, RelativeSource={RelativeSource AncestorType=Page}}"
@@ -656,33 +657,7 @@
                                        Background="{DynamicResource PlayerAccentBrush}" Foreground="{DynamicResource PlayerOnAccentBrush}"
                                        MouseOverBackground="{DynamicResource PlayerAccentBrush}" PressedBackground="{DynamicResource PlayerAccentBrush}"
                                        PressedForeground="{DynamicResource PlayerOnAccentBrush}"
-                                       Command="{Binding FindLyricsCommand}">
-                                <ui:Button.Style>
-                                    <Style TargetType="ui:Button" BasedOn="{StaticResource {x:Type ui:Button}}">
-                                        <Setter Property="Opacity" Value="0"/>
-                                        <Setter Property="IsHitTestVisible" Value="False"/>
-                                        <Style.Triggers>
-                                            <DataTrigger Binding="{Binding IsMouseOver, ElementName=NoLyricsCard}" Value="True">
-                                                <Setter Property="IsHitTestVisible" Value="True"/>
-                                                <DataTrigger.EnterActions>
-                                                    <BeginStoryboard>
-                                                        <Storyboard>
-                                                            <DoubleAnimation Storyboard.TargetProperty="Opacity" To="1" Duration="0:0:0.2"/>
-                                                        </Storyboard>
-                                                    </BeginStoryboard>
-                                                </DataTrigger.EnterActions>
-                                                <DataTrigger.ExitActions>
-                                                    <BeginStoryboard>
-                                                        <Storyboard>
-                                                            <DoubleAnimation Storyboard.TargetProperty="Opacity" To="0" Duration="0:0:0.25"/>
-                                                        </Storyboard>
-                                                    </BeginStoryboard>
-                                                </DataTrigger.ExitActions>
-                                            </DataTrigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </ui:Button.Style>
-                            </ui:Button>
+                                       Command="{Binding FindLyricsCommand}"/>
                         </StackPanel>
 
                         <!-- Searching -->

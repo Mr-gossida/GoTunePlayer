@@ -265,6 +265,33 @@ public partial class MiniPlayerWindow : FluentWindow
     /// 누르면): quit, or hide to the system tray.</summary>
     private void Close_Click(object sender, RoutedEventArgs e) => _shell.Close();
 
+    /// <summary>The wheel changes the volume (5% a notch), since the mini player has no slider.
+    /// Bubbling, so the fold-out queue still scrolls under the pointer; the new level shows
+    /// briefly in the middle of the window.</summary>
+    protected override void OnMouseWheel(MouseWheelEventArgs e)
+    {
+        base.OnMouseWheel(e);
+        if (e.Handled) return;
+        _playback.ChangeVolume(e.Delta > 0 ? 0.05 : -0.05);
+        e.Handled = true;
+
+        var silent = _playback.IsMuted || _playback.VolumePercent == 0;
+        VolumeFlashIcon.Symbol = silent ? SymbolRegular.SpeakerMute24 : SymbolRegular.Speaker224;
+        VolumeFlashText.Text = $"볼륨 {_playback.VolumePercent}%";
+        var fade = new System.Windows.Media.Animation.DoubleAnimationUsingKeyFrames();
+        fade.KeyFrames.Add(new System.Windows.Media.Animation.LinearDoubleKeyFrame(1, TimeSpan.FromMilliseconds(80)));
+        fade.KeyFrames.Add(new System.Windows.Media.Animation.LinearDoubleKeyFrame(1, TimeSpan.FromMilliseconds(900)));
+        fade.KeyFrames.Add(new System.Windows.Media.Animation.LinearDoubleKeyFrame(0, TimeSpan.FromMilliseconds(1200)));
+        VolumeFlash.BeginAnimation(OpacityProperty, fade);
+    }
+
+    /// <summary>The ✕ button does what the main window's ✕ does (설정 › 닫기 버튼을 누르면), so
+    /// its tooltip says which: quitting stops the music, hiding to the tray doesn't.</summary>
+    private void CloseButton_ToolTipOpening(object sender, System.Windows.Controls.ToolTipEventArgs e) =>
+        ((FrameworkElement)sender).ToolTip = _settings.CloseAction == CloseAction.Tray
+            ? "닫기 (트레이로 숨기고 계속 재생)"
+            : "GoTune 종료";
+
     protected override void OnClosing(CancelEventArgs e)
     {
         // Closed by Windows (Alt+F4, taskbar): the whole app quits (or hides to the tray), never

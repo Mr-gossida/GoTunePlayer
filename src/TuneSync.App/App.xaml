@@ -33,6 +33,19 @@
                 <Setter Property="VerticalContentAlignment" Value="Center"/>
             </Style>
 
+            <!-- Keyboard focus on the round player buttons: an accent ring just outside the button.
+                 WPF draws a FocusVisualStyle only after keyboard navigation (Tab/arrows), never on a
+                 mouse click. The buttons had none, so with Tab you couldn't see where you were. -->
+            <Style x:Key="PlayerFocusVisual">
+                <Setter Property="Control.Template">
+                    <Setter.Value>
+                        <ControlTemplate>
+                            <Border Margin="-4" CornerRadius="100" BorderThickness="2" BorderBrush="{DynamicResource PlayerAccentBrush}" SnapsToDevicePixels="True"/>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
             <!-- Player chrome: flat icon buttons over the cover-tinted background (PlayerPalette). -->
             <Style x:Key="PlayerIconButtonStyle" TargetType="ui:Button" BasedOn="{StaticResource IconButtonStyle}">
                 <Setter Property="Width" Value="36"/>
@@ -45,7 +58,9 @@
                 <Setter Property="MouseOverBackground" Value="{DynamicResource PlayerHoverBrush}"/>
                 <Setter Property="PressedBackground" Value="{DynamicResource PlayerHoverBrush}"/>
                 <Setter Property="PressedForeground" Value="{DynamicResource TextFillColorSecondaryBrush}"/>
-                <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+                <Setter Property="FocusVisualStyle" Value="{StaticResource PlayerFocusVisual}"/>
+                <!-- Icon-only: screen readers get the tooltip as the button's name (a button may set its own). -->
+                <Setter Property="AutomationProperties.Name" Value="{Binding ToolTip, RelativeSource={RelativeSource Self}}"/>
             </Style>
 
             <!-- Same, but lit in the accent color while Tag is True (shuffle, queue, lyrics...). -->
@@ -71,7 +86,7 @@
                 <Setter Property="MouseOverBackground" Value="{DynamicResource PlayerAccentBrush}"/>
                 <Setter Property="PressedBackground" Value="{DynamicResource PlayerAccentBrush}"/>
                 <Setter Property="PressedForeground" Value="{DynamicResource PlayerOnAccentBrush}"/>
-                <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+                <Setter Property="FocusVisualStyle" Value="{StaticResource PlayerFocusVisual}"/>
                 <Setter Property="RenderTransformOrigin" Value="0.5,0.5"/>
                 <Setter Property="RenderTransform"><Setter.Value><ScaleTransform/></Setter.Value></Setter>
                 <Style.Triggers>
