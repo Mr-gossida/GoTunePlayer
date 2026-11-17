@@ -548,7 +548,7 @@
                                     <!-- PastDim: lines already sung fade to under half of the lines to come
                                          (its own opacity, so it never fights the current-line animation). -->
                                     <Grid x:Name="PastDim">
-                                    <TextBlock x:Name="LineText" Text="{Binding Text}" TextWrapping="Wrap"
+                                    <TextBlock x:Name="LineText" Text="{Binding Text}" TextWrapping="Wrap" FontFamily="{DynamicResource LyricsFontFamily}"
                                                FontSize="28" FontWeight="Bold" Opacity="0.32" RenderTransformOrigin="0,0.5"
                                                Foreground="{DynamicResource TextFillColorPrimaryBrush}">
                                         <TextBlock.RenderTransform>
@@ -616,7 +616,7 @@
                     <ItemsControl x:Name="PlainLyricsItems" ItemsSource="{Binding PlainLyricsLines}" Margin="14,24">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
-                                <TextBlock Text="{Binding}" TextWrapping="Wrap" FontSize="17" LineHeight="32" Opacity="0"
+                                <TextBlock Text="{Binding}" TextWrapping="Wrap" FontFamily="{DynamicResource LyricsFontFamily}" FontSize="17" LineHeight="32" Opacity="0"
                                            Foreground="{DynamicResource TextFillColorSecondaryBrush}" Loaded="PlainLine_Loaded"/>
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>

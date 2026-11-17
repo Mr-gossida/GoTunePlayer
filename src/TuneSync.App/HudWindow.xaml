@@ -95,7 +95,7 @@
                     <!-- the lyrics: the line being sung and the next one -->
                     <StackPanel Grid.Row="1" Margin="0,10,0,0"
                                 Visibility="{Binding HasSyncedLyrics, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}">
-                        <TextBlock Text="{Binding CurrentLyricText, NotifyOnTargetUpdated=True}" FontSize="16" FontWeight="SemiBold"
+                        <TextBlock Text="{Binding CurrentLyricText, NotifyOnTargetUpdated=True}" FontFamily="{DynamicResource LyricsFontFamily}" FontSize="16" FontWeight="SemiBold"
                                    TextTrimming="CharacterEllipsis" Foreground="{DynamicResource PlayerAccentBrush}">
                             <TextBlock.Triggers>
                                 <EventTrigger RoutedEvent="Binding.TargetUpdated">
@@ -103,7 +103,7 @@
                                 </EventTrigger>
                             </TextBlock.Triggers>
                         </TextBlock>
-                        <TextBlock Text="{Binding NextLyricText}" FontSize="12" Margin="0,3,0,0" TextTrimming="CharacterEllipsis"
+                        <TextBlock Text="{Binding NextLyricText}" FontFamily="{DynamicResource LyricsFontFamily}" FontSize="12" Margin="0,3,0,0" TextTrimming="CharacterEllipsis"
                                    Foreground="{DynamicResource TextFillColorTertiaryBrush}"
                                    Visibility="{Binding HasSyncedLyrics, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}"/>
                     </StackPanel>

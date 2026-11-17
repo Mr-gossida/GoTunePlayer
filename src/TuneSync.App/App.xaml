@@ -11,6 +11,10 @@
                 <ui:ControlsDictionary />
             </ResourceDictionary.MergedDictionaries>
 
+            <!-- 앱 글꼴 / 가사 글꼴 (AppFonts): replaced with the saved choices at startup. -->
+            <FontFamily x:Key="AppFontFamily">Segoe UI</FontFamily>
+            <FontFamily x:Key="LyricsFontFamily">Segoe UI</FontFamily>
+
             <!-- Data grids: whole-row selection highlight only (no focus box around the clicked
                  cell), and long text ends in "…" instead of being cut off mid-character. Both
                  build on WPF-UI's own styles rather than replacing them. -->

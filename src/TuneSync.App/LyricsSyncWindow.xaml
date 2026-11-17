@@ -3,6 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
         xmlns:conv="clr-namespace:TuneSync.App.Converters"
+        xmlns:local="clr-namespace:TuneSync.App"
         Title="{Binding WindowTitle}" Width="760" Height="820" MinWidth="620" MinHeight="560"
         WindowStartupLocation="CenterOwner" ExtendsContentIntoTitleBar="True"
         WindowBackdropType="Mica" WindowCornerPreference="Round" ShowInTaskbar="False"
@@ -303,9 +304,17 @@
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
                 <StackPanel Orientation="Horizontal">
+                    <ui:Button Width="32" Height="32" CornerRadius="16" Padding="0" Margin="0,0,4,0" Appearance="Transparent"
+                               Icon="{ui:SymbolIcon Rewind24}" Command="{Binding SeekBackCommand}" ToolTip="5초 뒤로 (Ctrl+←)"/>
                     <ui:Button Width="40" Height="40" CornerRadius="20" Padding="0" Appearance="Primary" Command="{Binding TogglePlayCommand}"
                                Icon="{Binding Playback.IsPlaying, Converter={StaticResource PlayPauseIconConverter}}" ToolTip="재생 / 일시정지"/>
+                    <ui:Button Width="32" Height="32" CornerRadius="16" Padding="0" Margin="4,0,0,0" Appearance="Transparent"
+                               Icon="{ui:SymbolIcon FastForward24}" Command="{Binding SeekForwardCommand}" ToolTip="5초 앞으로 (Ctrl+→)"/>
                     <StackPanel VerticalAlignment="Center" Margin="12,0,0,0">
                         <TextBlock x:Name="PositionText" FontFamily="Consolas" FontSize="15" Text="00:00.00"/>
                         <TextBlock Text="{Binding Playback.DurationText}" FontSize="11" Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
@@ -317,6 +326,14 @@
                     <ui:Button Content="지금 시간 찍기" Icon="{ui:SymbolIcon Flag24}" Appearance="Primary" Command="{Binding StampCommand}"
                                ToolTip="선택한 줄을 지금 재생 위치로 정하고 다음 줄로 (Space)"/>
                 </StackPanel>
+                <!-- Where the song is, with its waveform (the player's seek bar): click or drag to
+                     listen from anywhere. Driven from code each tick (LyricsSyncWindow): it shows
+                     this song only, not whatever else the player has loaded. -->
+                <local:WaveSeekBar x:Name="SeekBar" Grid.Row="1" Grid.ColumnSpan="3" Height="30" Margin="0,8,0,0"
+                                   Maximum="1" Value="0" Look="{Binding Playback.SeekLook}"
+                                   WaveBrush="{DynamicResource AccentFillColorDefaultBrush}"
+                                   TrackBrush="{DynamicResource ControlStrongFillColorDisabledBrush}"
+                                   SeekStarted="SeekBar_SeekStarted" SeekCompleted="SeekBar_SeekCompleted"/>
             </Grid>
         </Border>
 
@@ -327,7 +344,7 @@
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
             <TextBlock FontSize="11" VerticalAlignment="Center" TextWrapping="Wrap" Foreground="{DynamicResource TextFillColorTertiaryBrush}"
-                       Text="Space 시간 찍기 · Enter 이 줄부터 듣기 · ↑↓ 줄 이동 · ←→ 0.1초 조정 · Delete 시간 지우기 · Ctrl+S 저장"/>
+                       Text="Space 시간 찍기 · Enter 이 줄부터 듣기 · ↑↓ 줄 이동 · ←→ 0.1초 조정 · Ctrl+←→ 5초 이동 · Delete 시간 지우기 · Ctrl+S 저장"/>
             <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="16,0,0,0">
                 <ui:Button Content="취소" Click="Cancel_Click" Margin="0,0,8,0"/>
                 <ui:Button Content="저장" Icon="{ui:SymbolIcon Save24}" Appearance="Primary" Command="{Binding SaveCommand}"/>

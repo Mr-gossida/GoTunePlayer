@@ -88,6 +88,12 @@ public sealed class AppSettings
     /// <summary>The small bar showing how far a song's intro has played before the lyrics start.</summary>
     public bool ShowIntroGauge { get; set; } = true;
 
+    /// <summary>The app's font family name (설정 › 일반 › 앱 글꼴); empty = Windows' UI font.</summary>
+    public string AppFontFamily { get; set; } = "";
+
+    /// <summary>The lyrics' font family name (설정 › 재생 › 가사 글꼴); empty = the app font.</summary>
+    public string LyricsFontFamily { get; set; } = "";
+
     /// <summary>Mini player stays above other windows.</summary>
     public bool MiniTopmost { get; set; } = true;
 

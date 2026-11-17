@@ -163,6 +163,41 @@
                         <ComboBox Width="200" ItemsSource="{Binding ThemeOptions}" DisplayMemberPath="Label"
                                   SelectedValuePath="Value" SelectedValue="{Binding Theme}"/>
                     </ui:CardControl>
+                    <ui:CardControl Style="{StaticResource Card}" Icon="{ui:SymbolIcon TextFont24}" Tag="앱 글꼴 폰트 서체 글씨체 모양"
+                                    ToolTip="메뉴, 목록, 창 제목 등 앱 전체의 글꼴입니다. 고르면 바로 바뀝니다.">
+                        <ui:CardControl.Header>
+                            <StackPanel>
+                                <ui:TextBlock Text="앱 글꼴" FontTypography="Body"/>
+                                <ui:TextBlock Text="메뉴 · 목록 · 창의 글씨" Style="{StaticResource Desc}"/>
+                            </StackPanel>
+                        </ui:CardControl.Header>
+                        <ComboBox Width="260" SelectedValuePath="Value" IsTextSearchEnabled="True" TextSearch.TextPath="Label"
+                                  VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling" MaxDropDownHeight="420"
+                                  ItemsSource="{Binding AppFontOptions}" SelectedValue="{Binding AppFontFamily}">
+                            <ComboBox.ItemsPanel>
+                                <ItemsPanelTemplate><VirtualizingStackPanel/></ItemsPanelTemplate>
+                            </ComboBox.ItemsPanel>
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate>
+                                    <!-- each name in its own font -->
+                                    <TextBlock Text="{Binding Label}" FontFamily="{Binding Family}" FontSize="14" TextTrimming="CharacterEllipsis"/>
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+                    </ui:CardControl>
+                    <!-- Preview: the app's own text in the chosen font (the whole window changes too). -->
+                    <Border Tag="앱 글꼴 폰트 서체 글씨체 모양 미리보기" Margin="0,0,0,4" Padding="20,14" CornerRadius="6"
+                            Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+                            BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}" BorderThickness="1"
+                            TextElement.FontFamily="{DynamicResource AppFontFamily}">
+                        <StackPanel>
+                            <TextBlock Text="미리보기" FontSize="11" Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
+                            <TextBlock Text="GoTune Player · 재생 대기열" FontSize="20" FontWeight="SemiBold" Margin="0,4,0,0"
+                                       Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                            <TextBlock Text="가나다라마바사 아자차카타파하 · ABCDEFG abcdefg · 0123456789" FontSize="14" Margin="0,4,0,0"
+                                       TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                        </StackPanel>
+                    </Border>
                     <ui:TextBlock Text="시작" Style="{StaticResource Group}"/>
                     <ui:CardControl Style="{StaticResource Card}" Icon="{ui:SymbolIcon Power24}" Tag="Windows 시작 자동 실행 로그인 부팅"
                                     ToolTip="Windows에 로그인하면 작업 표시줄에 최소화된 상태로 시작합니다. 작업 관리자 › 시작 앱에서도 끌 수 있습니다.">
@@ -284,6 +319,55 @@
                         </ui:CardControl.Header>
                         <ui:ToggleSwitch IsChecked="{Binding ShowIntroGauge}" OnContent="표시" OffContent="숨김"/>
                     </ui:CardControl>
+                    <ui:TextBlock Text="가사" Style="{StaticResource Group}"/>
+                    <ui:CardControl Style="{StaticResource Card}" Icon="{ui:SymbolIcon SlideText24}" Tag="가사 글꼴 폰트 서체 글씨체 싱크"
+                                    ToolTip="플레이어, 음악 집중 모드, 화면 보호기, HUD, 미니 플레이어의 가사 글꼴입니다.">
+                        <ui:CardControl.Header>
+                            <StackPanel>
+                                <ui:TextBlock Text="가사 글꼴" FontTypography="Body"/>
+                                <ui:TextBlock Text="플레이어 · 집중 모드 · HUD 등 모든 가사" Style="{StaticResource Desc}"/>
+                            </StackPanel>
+                        </ui:CardControl.Header>
+                        <ComboBox Width="260" SelectedValuePath="Value" IsTextSearchEnabled="True" TextSearch.TextPath="Label"
+                                  VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling" MaxDropDownHeight="420"
+                                  ItemsSource="{Binding LyricsFontOptions}" SelectedValue="{Binding LyricsFontFamily}">
+                            <ComboBox.ItemsPanel>
+                                <ItemsPanelTemplate><VirtualizingStackPanel/></ItemsPanelTemplate>
+                            </ComboBox.ItemsPanel>
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate>
+                                    <!-- each name in its own font -->
+                                    <TextBlock Text="{Binding Label}" FontFamily="{Binding Family}" FontSize="14" TextTrimming="CharacterEllipsis"/>
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+                    </ui:CardControl>
+                    <!-- Preview: lines drawn the way the player draws synced lyrics (sung / current / coming). -->
+                    <Border Tag="가사 글꼴 폰트 서체 글씨체 싱크 미리보기" Margin="0,0,0,4" Padding="24,18" CornerRadius="6"
+                            Background="{DynamicResource PlayerTintBrush}"
+                            BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}" BorderThickness="1">
+                        <StackPanel TextElement.FontFamily="{DynamicResource LyricsFontFamily}">
+                            <StackPanel.Resources>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="FontSize" Value="28"/>
+                                    <Setter Property="FontWeight" Value="Bold"/>
+                                    <Setter Property="Margin" Value="0,3"/>
+                                    <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+                                    <Setter Property="RenderTransformOrigin" Value="0,0.5"/>
+                                    <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}"/>
+                                    <Setter Property="LayoutTransform">
+                                        <Setter.Value><ScaleTransform ScaleX="0.72" ScaleY="0.72"/></Setter.Value>
+                                    </Setter>
+                                </Style>
+                            </StackPanel.Resources>
+                            <TextBlock Text="지나간 줄은 이렇게 흐려지고" Opacity="0.14"/>
+                            <TextBlock Text="지금 부르는 줄은 크고 선명하게" Opacity="1">
+                                <TextBlock.LayoutTransform><ScaleTransform ScaleX="1" ScaleY="1"/></TextBlock.LayoutTransform>
+                            </TextBlock>
+                            <TextBlock Text="다음 가사가 이어집니다" Opacity="0.32"/>
+                            <TextBlock Text="Every line in the font you choose" Opacity="0.32"/>
+                        </StackPanel>
+                    </Border>
                 </StackPanel>
 
                 <!-- 음향: the equalizer's switch and preset; the sliders are in its own window -->

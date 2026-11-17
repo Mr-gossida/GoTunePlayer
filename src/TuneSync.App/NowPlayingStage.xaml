@@ -137,7 +137,7 @@
                                     <Grid.RenderTransform>
                                         <ScaleTransform ScaleX="0.62" ScaleY="0.62"/>
                                     </Grid.RenderTransform>
-                                    <TextBlock Text="{Binding Text}" FontSize="30" FontWeight="SemiBold" Foreground="White"
+                                    <TextBlock Text="{Binding Text}" FontFamily="{DynamicResource LyricsFontFamily}" FontSize="30" FontWeight="SemiBold" Foreground="White"
                                                TextAlignment="Center" TextWrapping="Wrap"/>
                                 </Grid>
                                 <DataTemplate.Triggers>

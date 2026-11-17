@@ -425,6 +425,33 @@ public sealed partial class LyricsSyncViewModel : ObservableObject, IDisposable
         _playback.SeekTo(from);
     }
 
+    /// <summary>The seek bar: this song from <paramref name="at"/>, loading it first when the
+    /// player has another one.</summary>
+    public void ListenFrom(TimeSpan at)
+    {
+        if (at < TimeSpan.Zero) at = TimeSpan.Zero;
+        if (!IsThisSongLoaded)
+        {
+            _playback.PlayFile(File);
+            _ = SeekWhenLoadedAsync(at);
+            return;
+        }
+        _playback.SeekTo(at);
+    }
+
+    /// <summary>5 seconds back or ahead (the buttons beside play/pause, Ctrl+←/→).</summary>
+    [RelayCommand]
+    private void SeekBack() => SeekBy(-5);
+
+    [RelayCommand]
+    private void SeekForward() => SeekBy(5);
+
+    private void SeekBy(double seconds)
+    {
+        if (!IsThisSongLoaded) { ListenFrom(TimeSpan.FromSeconds(Math.Max(0, seconds))); return; }
+        _playback.SeekBy(seconds);
+    }
+
     private async Task SeekWhenLoadedAsync(TimeSpan to)
     {
         for (var i = 0; i < 40 && _playback.DurationSeconds <= 1; i++) await Task.Delay(50);

@@ -45,6 +45,46 @@ public sealed partial class SettingsViewModel : ObservableObject
     /// <summary>설정 › 단축키.</summary>
     public HotkeysViewModel Hotkeys { get; }
 
+    // --- fonts: 설정 › 일반 › 앱 글꼴, 설정 › 재생 › 가사 글꼴 (AppFonts) ---
+
+    private IReadOnlyList<AppFonts.Option>? _appFontOptions, _lyricsFontOptions;
+
+    /// <summary>Windows' UI font first, then every installed font (each shown in itself).</summary>
+    public IReadOnlyList<AppFonts.Option> AppFontOptions => _appFontOptions ??=
+        [new("", $"Windows 기본 ({SystemFonts.MessageFontFamily.Source})", SystemFonts.MessageFontFamily), .. AppFonts.InstalledFonts()];
+
+    /// <summary>"앱 글꼴과 같게" first, then every installed font.</summary>
+    public IReadOnlyList<AppFonts.Option> LyricsFontOptions => _lyricsFontOptions ??=
+        [new("", "앱 글꼴과 같게", SystemFonts.MessageFontFamily), .. AppFonts.InstalledFonts()];
+
+    public string AppFontFamily
+    {
+        get => _settings.AppFontFamily;
+        set
+        {
+            value ??= "";
+            if (_settings.AppFontFamily == value) return;
+            _settings.AppFontFamily = value;
+            AppSettingsStore.Save(_settings);
+            AppFonts.Apply(_settings); // the whole app changes at once: that's the preview too
+            OnPropertyChanged();
+        }
+    }
+
+    public string LyricsFontFamily
+    {
+        get => _settings.LyricsFontFamily;
+        set
+        {
+            value ??= "";
+            if (_settings.LyricsFontFamily == value) return;
+            _settings.LyricsFontFamily = value;
+            AppSettingsStore.Save(_settings);
+            AppFonts.Apply(_settings);
+            OnPropertyChanged();
+        }
+    }
+
     /// <summary>설정 › 음향 › 출력.</summary>
     public OutputViewModel Output { get; }
 

@@ -94,7 +94,7 @@
                         <Run Text="{Binding PositionText, Mode=OneWay}"/><Run Text=" / "/><Run Text="{Binding DurationText, Mode=OneWay}"/>
                     </TextBlock>
                 </Grid>
-                <TextBlock Text="{Binding CurrentLyricText, NotifyOnTargetUpdated=True}" FontSize="12" Margin="0,3,0,0"
+                <TextBlock Text="{Binding CurrentLyricText, NotifyOnTargetUpdated=True}" FontFamily="{DynamicResource LyricsFontFamily}" FontSize="12" Margin="0,3,0,0"
                            TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextFillColorSecondaryBrush}">
                     <TextBlock.Triggers>
                         <EventTrigger RoutedEvent="Binding.TargetUpdated">
@@ -180,7 +180,7 @@
             <!-- Only for synced lyrics; otherwise this would just repeat the artist. -->
             <StackPanel Grid.Row="3" Margin="0,14,0,0" Height="68"
                         Visibility="{Binding HasSyncedLyrics, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}">
-                <TextBlock Text="{Binding CurrentLyricText, NotifyOnTargetUpdated=True}" FontSize="15" FontWeight="SemiBold"
+                <TextBlock Text="{Binding CurrentLyricText, NotifyOnTargetUpdated=True}" FontFamily="{DynamicResource LyricsFontFamily}" FontSize="15" FontWeight="SemiBold"
                            TextWrapping="Wrap" MaxHeight="44" Foreground="{DynamicResource TextFillColorPrimaryBrush}">
                     <TextBlock.Triggers>
                         <EventTrigger RoutedEvent="Binding.TargetUpdated">
@@ -188,7 +188,7 @@
                         </EventTrigger>
                     </TextBlock.Triggers>
                 </TextBlock>
-                <TextBlock Text="{Binding NextLyricText}" FontSize="12" Margin="0,4,0,0" TextTrimming="CharacterEllipsis"
+                <TextBlock Text="{Binding NextLyricText}" FontFamily="{DynamicResource LyricsFontFamily}" FontSize="12" Margin="0,4,0,0" TextTrimming="CharacterEllipsis"
                            Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
             </StackPanel>
 

@@ -29,8 +29,15 @@ public partial class LyricsSyncWindow : Wpf.Ui.Controls.FluentWindow
         _tick.Tick += (_, _) =>
         {
             viewModel.Tick();
-            var pos = viewModel.IsThisSongLoaded ? viewModel.Playback.CurrentPosition : TimeSpan.Zero;
+            var loaded = viewModel.IsThisSongLoaded;
+            var pos = loaded ? viewModel.Playback.CurrentPosition : TimeSpan.Zero;
             PositionText.Text = $"{(int)pos.TotalMinutes:00}:{pos.Seconds:00}.{pos.Milliseconds / 10:00}";
+            // The seek bar shows this song only (the player may still have another one loaded).
+            SeekBar.Maximum = loaded ? Math.Max(1, viewModel.Playback.DurationSeconds) : 1;
+            SeekBar.Value = pos.TotalSeconds;
+            SeekBar.IsPlaying = loaded && viewModel.Playback.IsPlaying;
+            var wave = loaded ? viewModel.Playback.Waveform : null;
+            if (!ReferenceEquals(SeekBar.Waveform, wave)) SeekBar.Waveform = wave;
         };
         Loaded += (_, _) => _tick.Start();
         Closed += (_, _) =>
@@ -63,6 +70,17 @@ public partial class LyricsSyncWindow : Wpf.Ui.Controls.FluentWindow
 
     internal LyricsSyncViewModel ViewModel => _viewModel;
 
+    private void SeekBar_SeekStarted(object? sender, EventArgs e)
+    {
+        if (_viewModel.IsThisSongLoaded) _viewModel.Playback.BeginSeek();
+    }
+
+    private void SeekBar_SeekCompleted(object? sender, double seconds)
+    {
+        if (_viewModel.IsThisSongLoaded) _viewModel.Playback.EndSeek(seconds);
+        else _viewModel.ListenFrom(TimeSpan.FromSeconds(seconds)); // loads this song first
+    }
+
     private void TimeButton_Click(object sender, RoutedEventArgs e)
     {
         if (sender is FrameworkElement { DataContext: SyncLineViewModel line }) _viewModel.PlayFromCommand.Execute(line);
@@ -72,8 +90,15 @@ public partial class LyricsSyncWindow : Wpf.Ui.Controls.FluentWindow
     private void Window_PreviewKeyDown(object sender, KeyEventArgs e)
     {
         var shift = Keyboard.Modifiers.HasFlag(ModifierKeys.Shift);
+        var ctrl = Keyboard.Modifiers == ModifierKeys.Control;
         switch (e.Key)
         {
+            case Key.Left when ctrl:
+                _viewModel.SeekBackCommand.Execute(null);
+                break;
+            case Key.Right when ctrl:
+                _viewModel.SeekForwardCommand.Execute(null);
+                break;
             case Key.Space:
                 _viewModel.StampCommand.Execute(null);
                 break;

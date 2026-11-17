@@ -22,6 +22,7 @@ public partial class ShellWindow : FluentWindow
 
     public ShellWindow(IServiceProvider services, PlaybackViewModel playback, AppSettings settings)
     {
+        AppFonts.Install(settings); // before any window loads: they all follow the app font
         InitializeComponent();
         _services = services;
         _playback = playback;
