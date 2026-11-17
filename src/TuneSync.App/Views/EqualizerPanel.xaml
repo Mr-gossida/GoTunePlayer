@@ -342,7 +342,7 @@
                     <UniformGrid x:Name="Switches" Columns="1">
                         <DockPanel Margin="0,3">
                             <ToggleButton x:Name="LimiterPill" Style="{StaticResource OnOff}" IsChecked="{Binding Limiter}" VerticalAlignment="Center"
-                                          ToolTip="켜면 소리가 최대 크기를 넘으려 할 때 부드럽게 눌러 찌그러짐을 막습니다. 불이 켜져 있는 동안 옆의 수치만큼 음량을 낮추고 있습니다. 끄면 넘친 부분이 그대로 나가 찌그러질 수 있습니다.">
+                                          ToolTip="켜면 소리가 최대 크기를 넘지 않도록 부드럽게 눌러 왜곡을 막습니다. 불이 켜져 있는 동안 옆의 수치만큼 음량을 낮추고 있습니다. 끄면 넘친 부분이 잘린 채로 나가 왜곡될 수 있습니다.">
                                 <StackPanel Orientation="Horizontal">
                                     <Ellipse x:Name="LimiterLamp" Style="{StaticResource Lamp}"/>
                                     <TextBlock Text="리미터" VerticalAlignment="Center"/>
