@@ -7,6 +7,7 @@ using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Shell;
+using Microsoft.Win32;
 using TuneSync.App.ViewModels;
 
 namespace TuneSync.App;
@@ -24,27 +25,36 @@ public static class TaskbarControls
 
     public static void Attach(Window window, PlaybackViewModel playback, SwitchButton? switchButton = null)
     {
-        var previous = new ThumbButtonInfo { Description = "이전 곡", Command = playback.PlayPreviousCommand, ImageSource = Icons.Previous };
+        var previous = new ThumbButtonInfo { Description = "이전 곡", Command = playback.PlayPreviousCommand };
         var playPause = new ThumbButtonInfo { Command = playback.TogglePlayPauseCommand };
-        var next = new ThumbButtonInfo { Description = "다음 곡", Command = playback.PlayNextCommand, ImageSource = Icons.Next };
+        var next = new ThumbButtonInfo { Description = "다음 곡", Command = playback.PlayNextCommand };
         window.TaskbarItemInfo = new TaskbarItemInfo { ThumbButtonInfos = [previous, playPause, next] };
+        ThumbButtonInfo? toggle = null;
         if (switchButton is not null)
         {
-            var toggle = new ThumbButtonInfo
-            {
-                Description = switchButton.Description,
-                ImageSource = switchButton.Icon == SwitchIcon.ToMini ? Icons.ToMini : Icons.ToFull,
-            };
+            toggle = new ThumbButtonInfo { Description = switchButton.Description };
             toggle.Click += (_, _) => switchButton.Click();
             window.TaskbarItemInfo.ThumbButtonInfos.Add(toggle);
         }
 
+        // the icons in the taskbar's own colour: dark on a light taskbar, white on a dark one
         void Refresh()
         {
-            playPause.ImageSource = playback.IsPlaying ? Icons.Pause : Icons.Play;
+            var icons = Icons.For(Icons.TaskbarIsLight());
+            previous.ImageSource = icons.Previous;
+            next.ImageSource = icons.Next;
+            playPause.ImageSource = playback.IsPlaying ? icons.Pause : icons.Play;
             playPause.Description = playback.IsPlaying ? "일시정지" : "재생";
+            if (toggle is not null) toggle.ImageSource = switchButton!.Icon == SwitchIcon.ToMini ? icons.ToMini : icons.ToFull;
         }
         Refresh();
+        // Windows switched between light and dark (설정 › 개인 설정 › 색)
+        UserPreferenceChangedEventHandler themeChanged = (_, e) =>
+        {
+            if (e.Category == UserPreferenceCategory.General) window.Dispatcher.BeginInvoke(Refresh);
+        };
+        SystemEvents.UserPreferenceChanged += themeChanged;
+        window.Closed += (_, _) => SystemEvents.UserPreferenceChanged -= themeChanged;
 
         window.SetBinding(Window.TitleProperty, new Binding(nameof(PlaybackViewModel.CurrentFile))
         {
@@ -64,26 +74,67 @@ public static class TaskbarControls
 
     /// <summary>The thumbnail toolbar's icons, drawn as filled shapes on a 16-unit grid (the font
     /// icons they replace were thin outlines that read as hollow boxes at this size). Each sits
-    /// centered in the same square, so the row looks even.</summary>
-    internal static class Icons
+    /// centered in the same square, so the row looks even. Two sets: white for a dark taskbar,
+    /// near-black for a light one (white on a light taskbar leaves only the buttons' frames).</summary>
+    internal sealed class Icons
     {
-        public static readonly ImageSource Play = Make(Filled("M 5,2.6 L 13.4,8 L 5,13.4 Z"));
-        public static readonly ImageSource Pause = Make(Filled("M 4,2.5 h 2.8 v 11 h -2.8 Z M 9.2,2.5 h 2.8 v 11 h -2.8 Z"));
-        public static readonly ImageSource Previous = Make(Filled("M 2.8,3 h 2 v 10 h -2 Z M 13.2,3 L 5.6,8 L 13.2,13 Z"));
-        public static readonly ImageSource Next = Make(Filled("M 11.2,3 h 2 v 10 h -2 Z M 2.8,3 L 10.4,8 L 2.8,13 Z"));
-        // a window with the small player in its corner / a small window opening out to full size
-        public static readonly ImageSource ToMini = Make(
-            Outline("M 2,3.5 h 12 v 9 h -12 Z"),
-            Filled("M 8,8.2 h 4.4 v 2.9 h -4.4 Z"));
-        public static readonly ImageSource ToFull = Make(
-            Outline("M 2,3.5 h 12 v 9 h -12 Z"),
-            Outline("M 6.5,9.5 L 10.5,5.5 M 7.6,5.5 H 10.5 V 8.4"));
+        private static readonly Icons Dark = new(Brushes.White);
+        private static readonly Icons Light = new(Frozen(Color.FromRgb(0x1C, 0x1C, 0x1C)));
 
-        private static GeometryDrawing Filled(string path) =>
-            new(Brushes.White, new Pen(Brushes.White, 0.6) { LineJoin = PenLineJoin.Round }, Geometry.Parse(path));
+        public static Icons For(bool lightTaskbar) => lightTaskbar ? Light : Dark;
 
-        private static GeometryDrawing Outline(string path) =>
-            new(null, new Pen(Brushes.White, 1.4) { LineJoin = PenLineJoin.Round, StartLineCap = PenLineCap.Round, EndLineCap = PenLineCap.Round },
+        /// <summary>Whether the taskbar is light: it follows Windows' own mode (설정 › 개인 설정 ›
+        /// 색 › 기본 Windows 모드), not the apps' one.</summary>
+        public static bool TaskbarIsLight()
+        {
+            try
+            {
+                using var key = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize");
+                return key?.GetValue("SystemUsesLightTheme") is int value && value != 0;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        public ImageSource Play { get; }
+        public ImageSource Pause { get; }
+        public ImageSource Previous { get; }
+        public ImageSource Next { get; }
+        public ImageSource ToMini { get; }
+        public ImageSource ToFull { get; }
+
+        private readonly Brush _brush;
+
+        private Icons(Brush brush)
+        {
+            _brush = brush;
+            Play = Make(Filled("M 5,2.6 L 13.4,8 L 5,13.4 Z"));
+            Pause = Make(Filled("M 4,2.5 h 2.8 v 11 h -2.8 Z M 9.2,2.5 h 2.8 v 11 h -2.8 Z"));
+            Previous = Make(Filled("M 2.8,3 h 2 v 10 h -2 Z M 13.2,3 L 5.6,8 L 13.2,13 Z"));
+            Next = Make(Filled("M 11.2,3 h 2 v 10 h -2 Z M 2.8,3 L 10.4,8 L 2.8,13 Z"));
+            // a window with the small player in its corner / a small window opening out to full size
+            ToMini = Make(
+                Outline("M 2,3.5 h 12 v 9 h -12 Z"),
+                Filled("M 8,8.2 h 4.4 v 2.9 h -4.4 Z"));
+            ToFull = Make(
+                Outline("M 2,3.5 h 12 v 9 h -12 Z"),
+                Outline("M 6.5,9.5 L 10.5,5.5 M 7.6,5.5 H 10.5 V 8.4"));
+        }
+
+        private static Brush Frozen(Color color)
+        {
+            var brush = new SolidColorBrush(color);
+            brush.Freeze();
+            return brush;
+        }
+
+        private GeometryDrawing Filled(string path) =>
+            new(_brush, new Pen(_brush, 0.6) { LineJoin = PenLineJoin.Round }, Geometry.Parse(path));
+
+        private GeometryDrawing Outline(string path) =>
+            new(null, new Pen(_brush, 1.4) { LineJoin = PenLineJoin.Round, StartLineCap = PenLineCap.Round, EndLineCap = PenLineCap.Round },
                 Geometry.Parse(path));
 
         private static ImageSource Make(params GeometryDrawing[] parts)
