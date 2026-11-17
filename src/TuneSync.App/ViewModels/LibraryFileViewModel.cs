@@ -13,19 +13,36 @@ public sealed partial class LibraryFileViewModel : ObservableObject
     public LibraryFileViewModel(LibraryFile model)
     {
         Model = model;
-        // ThumbnailBytes was already resized/re-encoded small during the background scan
-        // (MediaLibraryScanner), so this is a cheap decode of an already-tiny image rather than
-        // the full embedded cover - keeps this constructor (run on the UI thread as files stream
-        // in) from blocking on GDI+ work per file.
-        _coverThumbnail = ImageHelper.ToBitmapImage(model.ThumbnailBytes);
     }
 
     /// <summary>Mirrors the list's selection, so "선택한 파일" actions (auto-fill) see it.</summary>
     [ObservableProperty]
     private bool _isSelected;
 
-    [ObservableProperty]
     private BitmapImage? _coverThumbnail;
+    private bool _coverThumbnailDecoded;
+
+    /// <summary>The small cover, decoded the first time something shows it. ThumbnailBytes is
+    /// already a tiny JPEG (MediaLibraryScanner), so the decode is cheap; but decoding every
+    /// song's up front kept ~100 KB of pixels per song alive (over 100 MB for a 1,000-song
+    /// library) while the virtualized lists only ever show a screenful.</summary>
+    public BitmapImage? CoverThumbnail
+    {
+        get
+        {
+            if (!_coverThumbnailDecoded)
+            {
+                _coverThumbnailDecoded = true;
+                _coverThumbnail = ImageHelper.ToBitmapImage(Model.ThumbnailBytes);
+            }
+            return _coverThumbnail;
+        }
+        set
+        {
+            _coverThumbnailDecoded = true;
+            SetProperty(ref _coverThumbnail, value);
+        }
+    }
 
     /// <summary>This is the track the player has loaded (the queue marks it).</summary>
     [ObservableProperty]

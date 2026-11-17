@@ -13,25 +13,27 @@
     </UserControl.Resources>
 
     <Grid ClipToBounds="True">
-        <!-- Same cover-colored backdrop as the player, a little darker. -->
-        <Rectangle Fill="{DynamicResource PlayerTintBrush}"/>
-        <Image Source="{Binding BackdropCover}" Stretch="UniformToFill" Opacity="0.6" RenderOptions.BitmapScalingMode="Linear"/>
-        <Rectangle Fill="{DynamicResource PlayerScrimBrush}"/>
-        <Rectangle Fill="#73000000"/>
-
-        <!-- Aurora-lamp light flowing over the backdrop in the cover's colors (Effects/Aurora.hlsl,
-             on the GPU). The near-transparent fill only gives the effect an area to draw on. -->
-        <Rectangle x:Name="AuroraLayer" Fill="#01000000" IsHitTestVisible="False" SizeChanged="AuroraLayer_SizeChanged">
-            <Rectangle.Effect>
+        <!-- Same cover-colored backdrop as the player, a little darker, with aurora-lamp light
+             flowing over it in the cover's colors (Effects/Aurora.hlsl, on the GPU). The light is
+             mixed over the backdrop inside the shader: as a separate layer, every step of the
+             light (15 a second) also redrew these four full-screen layers under it, which was
+             most of focus mode's and the screen saver's GPU use. -->
+        <Grid x:Name="AuroraLayer" IsHitTestVisible="False" SizeChanged="AuroraLayer_SizeChanged">
+            <Rectangle Fill="{DynamicResource PlayerTintBrush}"/>
+            <Image Source="{Binding BackdropCover}" Stretch="UniformToFill" Opacity="0.6" RenderOptions.BitmapScalingMode="Linear"/>
+            <Rectangle Fill="{DynamicResource PlayerScrimBrush}"/>
+            <Rectangle Fill="#73000000"/>
+            <Grid.Effect>
                 <effects:AuroraEffect x:Name="AuroraLight" Intensity="0.7"/>
-            </Rectangle.Effect>
-            <!-- The light is soft: worked out at a third of the resolution (a ninth of the pixels)
-                 and stretched, it looks the same. Full-size, every frame of it kept the GPU of a
-                 4K screen busy (40-50% of an RTX 5080, at full clock). -->
-            <Rectangle.CacheMode>
+            </Grid.Effect>
+            <!-- Light and backdrop are both soft (the cover is pre-blurred): worked out at a third
+                 of the resolution (a ninth of the pixels) and stretched, they look the same.
+                 Full-size, every frame of the light kept the GPU of a 4K screen busy (40-50% of an
+                 RTX 5080, at full clock). -->
+            <Grid.CacheMode>
                 <BitmapCache RenderAtScale="0.33"/>
-            </Rectangle.CacheMode>
-        </Rectangle>
+            </Grid.CacheMode>
+        </Grid>
 
         <!-- The clock stays put in its corner (drifting, it could slide off the screen); its
              digits change every minute anyway. -->

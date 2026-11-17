@@ -1,6 +1,7 @@
 // Aurora projector light for the screen saver: slow, flowing bands of light like an aurora
 // lamp throwing its colors onto a ceiling. Domain-warped sine ridges; brightest at the top,
-// fading toward the bottom so the cover and lyrics stay readable.
+// fading toward the bottom so the cover and lyrics stay readable. Drawn over its input (the
+// player's backdrop) in the same pass.
 //
 // Compiled to Aurora.ps (ps_3_0), which the app embeds. After editing, recompile:
 //   dotnet run --project tools/ShaderCompiler -- src/TuneSync.App/Effects/Aurora.hlsl src/TuneSync.App/Effects/Aurora.ps
@@ -54,5 +55,8 @@ float4 main(float2 uv : TEXCOORD) : COLOR
     float level = max(max(light.r, light.g), light.b);
     float alpha = saturate(level) * intensity * fall;
     float3 hue = light / max(level, 0.001);
-    return float4(hue * alpha, alpha); // premultiplied
+    // Laid over the backdrop (the effect's input, premultiplied): the light and the backdrop are
+    // one layer, so a step of the light redraws one picture instead of five stacked ones.
+    float4 back = tex2D(input, uv);
+    return float4(hue * alpha + back.rgb * (1.0 - alpha), alpha + back.a * (1.0 - alpha));
 }

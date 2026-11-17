@@ -63,8 +63,13 @@ public partial class NowPlayingStage : UserControl
         }
 
         // The aurora needs pixel shader 3.0 (any GPU from the last ~15 years); without it the
-        // backdrop is shown as before.
-        if (!RenderCapability.IsPixelShaderVersionSupported(3, 0)) AuroraLayer.Visibility = Visibility.Collapsed;
+        // plain backdrop is shown, full size (with no light changing it, it is only redrawn where
+        // something over it changes).
+        if (!RenderCapability.IsPixelShaderVersionSupported(3, 0))
+        {
+            AuroraLayer.Effect = null;
+            AuroraLayer.CacheMode = null;
+        }
 
         // The column changes height too, not just the window: the lyrics appear or go with the
         // song (no synced lyrics -> none), and a long title wraps. Fit again after each change.
@@ -302,7 +307,16 @@ public partial class NowPlayingStage : UserControl
         if (!AuroraClock.IsRunning) NewAuroraSession();
         AdvanceAurora(null, EventArgs.Empty);
         FrameTicker.Add(AdvanceAurora);
-        AuroraLayer.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromSeconds(2.5)));
+        // The light fades in over the backdrop (the light, not the layer: the backdrop is in it).
+        AuroraLight.BeginAnimation(Effects.AuroraEffect.IntensityProperty, AuroraTimeline(new DoubleAnimation(0, 0.7, TimeSpan.FromSeconds(2.5))));
+    }
+
+    /// <summary>Every change of the light redraws the whole screen: no more often than the light
+    /// itself moves (WPF would otherwise animate it at the monitor's full refresh rate).</summary>
+    private static T AuroraTimeline<T>(T timeline) where T : Timeline
+    {
+        Timeline.SetDesiredFrameRate(timeline, 15);
+        return timeline;
     }
 
     private int _auroraTick;
@@ -320,8 +334,8 @@ public partial class NowPlayingStage : UserControl
     {
         var (main, second) = PlayerPalette.AuroraColors();
         var duration = TimeSpan.FromSeconds(2);
-        AuroraLight.BeginAnimation(Effects.AuroraEffect.Color1Property, new ColorAnimation(main, duration));
-        AuroraLight.BeginAnimation(Effects.AuroraEffect.Color2Property, new ColorAnimation(second, duration));
+        AuroraLight.BeginAnimation(Effects.AuroraEffect.Color1Property, AuroraTimeline(new ColorAnimation(main, duration)));
+        AuroraLight.BeginAnimation(Effects.AuroraEffect.Color2Property, AuroraTimeline(new ColorAnimation(second, duration)));
     }
 
     private void AuroraLayer_SizeChanged(object sender, SizeChangedEventArgs e)
