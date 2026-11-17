@@ -49,6 +49,13 @@ public partial class ShellWindow
         _services.GetRequiredService<LibraryView>().ShowFile(file);
     }
 
+    /// <summary>The queue's "태그 편집": the tag manager on just these songs, ready to edit.</summary>
+    public void EditTags(IReadOnlyList<LibraryFileViewModel> files)
+    {
+        OpenTool<LibraryView>("태그 관리", 1360, 820);
+        _services.GetRequiredService<LibraryView>().ShowFiles(files);
+    }
+
     /// <summary>Opens a tool in its own window, or brings it to the front if it's already open.</summary>
     private void OpenTool<TPage>(string title, double width, double height, bool playerColors = false) where TPage : Page
     {

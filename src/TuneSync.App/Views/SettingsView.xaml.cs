@@ -106,4 +106,30 @@ public partial class SettingsView : Page
         Wpf.Ui.Controls.CardExpander { Header: Panel p } => p.Children.OfType<Wpf.Ui.Controls.TextBlock>().FirstOrDefault()?.Text ?? "",
         _ => "",
     };
+
+    /// <summary>The font lists (a few hundred names): WPF-UI's drop-down hides its scrollbar and
+    /// scrolls by pixel, which also built every row at once. Show the bar, scroll by item, so the
+    /// list virtualizes.</summary>
+    private void FontList_DropDownOpened(object? sender, EventArgs e)
+    {
+        if (sender is not ComboBox combo) return;
+        Dispatcher.BeginInvoke(() =>
+        {
+            if (FindChild<System.Windows.Controls.Primitives.Popup>(combo) is not { Child: { } content }
+                || FindChild<ScrollViewer>(content) is not { } scroller) return;
+            scroller.VerticalScrollBarVisibility = ScrollBarVisibility.Auto;
+            scroller.CanContentScroll = true;
+        }, System.Windows.Threading.DispatcherPriority.Loaded);
+    }
+
+    private static T? FindChild<T>(DependencyObject parent) where T : DependencyObject
+    {
+        for (var i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)
+        {
+            var child = VisualTreeHelper.GetChild(parent, i);
+            if (child is T found) return found;
+            if (FindChild<T>(child) is { } deeper) return deeper;
+        }
+        return null;
+    }
 }

@@ -48,19 +48,32 @@ public partial class LibraryView : Page
     /// in the list, clearing the missing-only filters if they would hide it.</summary>
     public void ShowFile(LibraryFileViewModel file)
     {
-        var filter = _viewModel.Library.Filter;
-        if (!filter.Matches(file))
-        {
-            filter.ShowMissingCoverOnly = false;
-            filter.ShowMissingTagsOnly = false;
-            filter.ShowMissingLyricsOnly = false;
-        }
+        var library = _viewModel.Library;
+        library.ClearScopeCommand.Execute(null);
+        if (!library.Filter.Matches(file)) library.Filter.Clear();
         _viewModel.Library.ViewMode = LibraryViewMode.List;
         Dispatcher.BeginInvoke(() =>
         {
             FileListGrid.SelectedItems.Clear();
             FileListGrid.SelectedItem = file;
             FileListGrid.ScrollIntoView(file);
+        }, System.Windows.Threading.DispatcherPriority.Loaded);
+    }
+
+    /// <summary>Opened from the queue with songs picked ("태그 편집"): the list shows just those
+    /// songs, all selected - one song opens its own editor, several the batch editor. The bar
+    /// above the list says so and leads back to the whole library.</summary>
+    public void ShowFiles(IReadOnlyList<LibraryFileViewModel> files)
+    {
+        if (files.Count == 0) return;
+        var library = _viewModel.Library;
+        library.Filter.Clear();
+        library.SetScope(files, files.Count == 1 ? "재생 대기열에서 고른 곡" : $"재생 대기열에서 고른 {files.Count}곡");
+        library.ViewMode = LibraryViewMode.List;
+        Dispatcher.BeginInvoke(() =>
+        {
+            FileListGrid.SelectAll();
+            if (FileListGrid.Items.Count > 0) FileListGrid.ScrollIntoView(FileListGrid.Items[0]);
         }, System.Windows.Threading.DispatcherPriority.Loaded);
     }
 
@@ -123,6 +136,49 @@ public partial class LibraryView : Page
     }
 
     /// <summary>Esc in a tag field puts it back the way it was (when it was changed).</summary>
+    /// <summary>A field's box: takes the caret when its field asks (ticking 적용 on a field whose
+    /// songs differ, with no value typed yet).</summary>
+    private void FieldBox_Loaded(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement { DataContext: TagFieldViewModel field } box || box.Tag is "hooked") return;
+        box.Tag = "hooked";
+        field.FocusRequested += () =>
+        {
+            if (!box.IsVisible) return;
+            box.Focus();
+            Keyboard.Focus(box is Wpf.Ui.Controls.AutoSuggestBox suggest ? FindChild<TextBox>(suggest) ?? (IInputElement)box : box);
+        };
+    }
+
+    private static T? FindChild<T>(DependencyObject parent) where T : DependencyObject
+    {
+        for (var i = 0; i < System.Windows.Media.VisualTreeHelper.GetChildrenCount(parent); i++)
+        {
+            var child = System.Windows.Media.VisualTreeHelper.GetChild(parent, i);
+            if (child is T found) return found;
+            if (FindChild<T>(child) is { } deeper) return deeper;
+        }
+        return null;
+    }
+
+    /// <summary>A song's lyrics comparison in its own, larger window (the review panel is narrow).</summary>
+    private void CompareWide_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement { DataContext: ReviewFileViewModel item }) return;
+        var page = new Page();
+        page.Resources["CompareScroll"] = new Style(typeof(ScrollViewer));         // no height cap: the window decides
+        page.Resources["CompareWideVisibility"] = Visibility.Collapsed;             // already wide
+        page.SetResourceReference(System.Windows.Documents.TextElement.ForegroundProperty, "TextFillColorPrimaryBrush");
+        page.Content = new ContentControl
+        {
+            Content = item,
+            ContentTemplate = (DataTemplate)FindResource("LyricsCompareTemplate"),
+            Margin = new Thickness(20, 4, 20, 20),
+            Focusable = false,
+        };
+        new ToolWindow(page, item.CompareTitle, 960, 780) { Owner = Window.GetWindow(this) }.Show();
+    }
+
     private void Field_PreviewKeyDown(object sender, KeyEventArgs e)
     {
         if (e.Key != Key.Escape || sender is not FrameworkElement { DataContext: TagFieldViewModel field }) return;

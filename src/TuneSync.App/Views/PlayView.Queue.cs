@@ -51,6 +51,9 @@ public partial class PlayView
                     playback.PlayLater(song);
             }));
             menu.Items.Add(new Separator());
+            menu.Items.Add(MenuItem($"선택한 {selected.Count}곡 태그 편집", Wpf.Ui.Controls.SymbolRegular.Tag24,
+                () => Shell()?.EditTags([.. selected.OrderBy(s => PlaylistBox.Items.IndexOf(s))])));
+            menu.Items.Add(new Separator());
             menu.Items.Add(MenuItem($"목록에서 빼기 ({selected.Count}곡)", Wpf.Ui.Controls.SymbolRegular.Delete24,
                 () => _ = RemoveSelectedFromListAsync(), "Delete"));
             return;
@@ -69,14 +72,15 @@ public partial class PlayView
             menu.Items.Add(MenuItem("다음에 재생 목록 비우기", Wpf.Ui.Controls.SymbolRegular.Delete24, playback.ClearUpNext));
 
         menu.Items.Add(new Separator());
-        menu.Items.Add(MenuItem("태그 관리에서 보기", Wpf.Ui.Controls.SymbolRegular.Tag24, () =>
-            (System.Windows.Window.GetWindow(this) as ShellWindow
-             ?? System.Windows.Application.Current.MainWindow as ShellWindow)?.ShowInTagManager(file)));
+        menu.Items.Add(MenuItem("태그 편집", Wpf.Ui.Controls.SymbolRegular.Tag24, () => Shell()?.EditTags([file])));
         menu.Items.Add(MenuItem("파일 위치 열기", Wpf.Ui.Controls.SymbolRegular.FolderOpen24, () => RevealInExplorer(file.Path)));
         menu.Items.Add(MenuItem("파일 경로 복사", Wpf.Ui.Controls.SymbolRegular.Copy24, () => CopyPath(file.Path)));
         menu.Items.Add(new Separator());
         menu.Items.Add(MenuItem("목록에서 빼기", Wpf.Ui.Controls.SymbolRegular.Delete24, () => _ = RemoveSelectedFromListAsync(), "Delete"));
     }
+
+    private ShellWindow? Shell() =>
+        System.Windows.Window.GetWindow(this) as ShellWindow ?? System.Windows.Application.Current.MainWindow as ShellWindow;
 
     private static MenuItem MenuItem(string header, Wpf.Ui.Controls.SymbolRegular icon, Action action, string? gesture = null)
     {

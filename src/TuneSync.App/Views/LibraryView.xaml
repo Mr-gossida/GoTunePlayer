@@ -97,6 +97,89 @@
             </Setter>
         </Style>
 
+        <!-- 저장 전 검토's lyrics comparison: the file's lyrics now and after saving, side by side,
+             with the lines that differ tinted (LyricsDiff ignores LRC times). Used in the review
+             list and, larger, in its own window (CompareScroll / CompareWideVisibility differ there). -->
+        <Style x:Key="CompareScroll" TargetType="ScrollViewer">
+            <Setter Property="MaxHeight" Value="260"/>
+        </Style>
+        <Visibility x:Key="CompareWideVisibility">Visible</Visibility>
+        <DataTemplate x:Key="LyricsCompareTemplate" DataType="{x:Type vm:ReviewFileViewModel}">
+            <Grid Margin="0,8,0,0">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+                <DockPanel>
+                    <ui:Button DockPanel.Dock="Right" Content="넓게 보기" Icon="{ui:SymbolIcon ArrowExpand24}" Appearance="Transparent"
+                               Padding="8,2" FontSize="12" Click="CompareWide_Click" Visibility="{DynamicResource CompareWideVisibility}"/>
+                    <ui:ProgressRing IsIndeterminate="True" Width="12" Height="12" Margin="0,0,6,0"
+                                     Visibility="{Binding IsCompareLoading, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}"/>
+                    <TextBlock Text="{Binding CompareSummary}" FontSize="11" TextWrapping="Wrap" VerticalAlignment="Center"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                </DockPanel>
+                <Grid Grid.Row="1" Margin="0,6,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="6"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <Border CornerRadius="6" Padding="4,6" BorderThickness="1" BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}">
+                        <DockPanel>
+                            <TextBlock DockPanel.Dock="Top" Text="교체 전" FontSize="11" Margin="6,0,0,4" Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
+                            <ScrollViewer Style="{DynamicResource CompareScroll}" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                                <ItemsControl ItemsSource="{Binding BeforeLines}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border Padding="6,1" CornerRadius="3">
+                                                <Border.Style>
+                                                    <Style TargetType="Border">
+                                                        <Setter Property="Background" Value="Transparent"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding Changed}" Value="True">
+                                                                <Setter Property="Background" Value="{DynamicResource SystemFillColorCriticalBackgroundBrush}"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Border.Style>
+                                                <TextBlock Text="{Binding Text}" FontSize="12" TextWrapping="Wrap"/>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </ScrollViewer>
+                        </DockPanel>
+                    </Border>
+                    <Border Grid.Column="2" CornerRadius="6" Padding="4,6" BorderThickness="1" BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}">
+                        <DockPanel>
+                            <TextBlock DockPanel.Dock="Top" Text="교체 후" FontSize="11" Margin="6,0,0,4" Foreground="{DynamicResource TagChangeBrush}"/>
+                            <ScrollViewer Style="{DynamicResource CompareScroll}" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                                <ItemsControl ItemsSource="{Binding AfterLines}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border Padding="6,1" CornerRadius="3">
+                                                <Border.Style>
+                                                    <Style TargetType="Border">
+                                                        <Setter Property="Background" Value="Transparent"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding Changed}" Value="True">
+                                                                <Setter Property="Background" Value="{DynamicResource SystemFillColorSuccessBackgroundBrush}"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Border.Style>
+                                                <TextBlock Text="{Binding Text}" FontSize="12" TextWrapping="Wrap"/>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </ScrollViewer>
+                        </DockPanel>
+                    </Border>
+                </Grid>
+            </Grid>
+        </DataTemplate>
+
         <!-- One tag field: label (+ value spread / revert), the box, then "이전" or an error.
              An edited field gets an accent bar on the left and a tinted background. -->
         <DataTemplate x:Key="TagFieldTemplate" DataType="{x:Type vm:TagFieldViewModel}">
@@ -106,22 +189,26 @@
                     <Grid MinHeight="20">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <TextBlock x:Name="FieldLabel" Text="{Binding Label}" FontSize="12" VerticalAlignment="Center"
+                        <!-- 일괄 편집: whether this field changes every selected song -->
+                        <CheckBox x:Name="ApplyCheck" MinWidth="0" Margin="0,0,2,0" Padding="4,0,0,0" VerticalAlignment="Center" Visibility="Collapsed"
+                                  IsChecked="{Binding IsApplied}" ToolTip="체크하면 이 칸의 값을 선택한 모든 곡에 넣고, 끄면 곡마다 원래 값을 둡니다"/>
+                        <TextBlock x:Name="FieldLabel" Grid.Column="1" Text="{Binding Label}" FontSize="12" VerticalAlignment="Center"
                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-                        <TextBlock Grid.Column="1" Text="{Binding Distribution}" ToolTip="{Binding Distribution}" FontSize="11" Margin="8,0,4,0"
-                                   VerticalAlignment="Center" HorizontalAlignment="Right" TextTrimming="CharacterEllipsis"
+                        <TextBlock x:Name="BatchStatusText" Grid.Column="2" Text="{Binding BatchStatus}" FontSize="11" Margin="8,0,4,0"
+                                   VerticalAlignment="Center" HorizontalAlignment="Right" TextTrimming="CharacterEllipsis" Visibility="Collapsed"
                                    Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
-                        <ui:Button x:Name="RevertButton" Grid.Column="2" Icon="{ui:SymbolIcon ArrowUndo16}" Appearance="Transparent"
+                        <ui:Button x:Name="RevertButton" Grid.Column="3" Icon="{ui:SymbolIcon ArrowUndo16}" Appearance="Transparent"
                                    Padding="4,2" MinWidth="0" BorderThickness="0" Command="{Binding RevertCommand}"
                                    ToolTip="이 칸 되돌리기 (Esc)" Visibility="Collapsed"/>
                     </Grid>
                     <Grid Margin="0,4,0,0">
                         <ui:TextBox x:Name="Box" Text="{Binding Text, UpdateSourceTrigger=PropertyChanged}" PlaceholderText="{Binding Placeholder}"
-                                    ClearButtonEnabled="False"/>
-                        <ui:AutoSuggestBox x:Name="SuggestBox" Visibility="Collapsed"
+                                    ClearButtonEnabled="False" Loaded="FieldBox_Loaded"/>
+                        <ui:AutoSuggestBox x:Name="SuggestBox" Visibility="Collapsed" Loaded="FieldBox_Loaded"
                                            Text="{Binding Text, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                            OriginalItemsSource="{Binding Suggestions}" PlaceholderText="{Binding Placeholder}"
                                            ClearButtonEnabled="False" MaxSuggestionListHeight="240" Icon="{x:Null}"/>
@@ -132,6 +219,9 @@
                     </TextBlock>
                     <TextBlock x:Name="ErrorText" Margin="2,4,0,0" FontSize="11" TextWrapping="Wrap" Visibility="Collapsed"
                                Text="{Binding Error}" Foreground="{DynamicResource SystemFillColorCriticalBrush}"/>
+                    <!-- 일괄 편집, songs differing and left alone: what they have now -->
+                    <TextBlock x:Name="SpreadText" Margin="2,4,0,0" FontSize="11" TextTrimming="CharacterEllipsis" Visibility="Collapsed"
+                               Text="{Binding Distribution}" ToolTip="{Binding Distribution}" Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
                 </StackPanel>
             </Border>
             <DataTemplate.Triggers>
@@ -139,10 +229,23 @@
                     <Setter TargetName="Box" Property="Visibility" Value="Collapsed"/>
                     <Setter TargetName="SuggestBox" Property="Visibility" Value="Visible"/>
                 </DataTrigger>
+                <DataTrigger Binding="{Binding DataContext.Editor.IsMulti, ElementName=PageRoot}" Value="True">
+                    <Setter TargetName="ApplyCheck" Property="Visibility" Value="Visible"/>
+                    <Setter TargetName="BatchStatusText" Property="Visibility" Value="Visible"/>
+                </DataTrigger>
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding DataContext.Editor.IsMulti, ElementName=PageRoot}" Value="True"/>
+                        <Condition Binding="{Binding IsMixed}" Value="True"/>
+                        <Condition Binding="{Binding IsChanged}" Value="False"/>
+                    </MultiDataTrigger.Conditions>
+                    <Setter TargetName="SpreadText" Property="Visibility" Value="Visible"/>
+                </MultiDataTrigger>
                 <DataTrigger Binding="{Binding IsChanged}" Value="True">
                     <Setter TargetName="Row" Property="BorderBrush" Value="{DynamicResource TagChangeBrush}"/>
                     <Setter TargetName="Row" Property="Background" Value="{DynamicResource TagChangeBackgroundBrush}"/>
                     <Setter TargetName="FieldLabel" Property="Foreground" Value="{DynamicResource TagChangeBrush}"/>
+                    <Setter TargetName="BatchStatusText" Property="Foreground" Value="{DynamicResource TagChangeBrush}"/>
                     <Setter TargetName="RevertButton" Property="Visibility" Value="Visible"/>
                     <Setter TargetName="Previous" Property="Visibility" Value="Visible"/>
                 </DataTrigger>
@@ -194,14 +297,40 @@
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
 
-            <StackPanel Grid.Column="0" Orientation="Horizontal" DataContext="{Binding Filter}">
+            <WrapPanel Grid.Column="0" Orientation="Horizontal" DataContext="{Binding Filter}">
                 <ui:TextBlock Text="누락만 보기:" VerticalAlignment="Center" Margin="0,0,8,0"
                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
                 <ToggleButton Content="커버 없음" IsChecked="{Binding ShowMissingCoverOnly}" Margin="0,0,6,0"/>
                 <ToggleButton Content="태그 없음" IsChecked="{Binding ShowMissingTagsOnly}" Margin="0,0,6,0"/>
                 <ToggleButton Content="가사 없음" IsChecked="{Binding ShowMissingLyricsOnly}"/>
-            </StackPanel>
+                <Rectangle Width="1" Height="20" Margin="14,0" VerticalAlignment="Center" Fill="{DynamicResource DividerStrokeColorDefaultBrush}"/>
+                <ui:TextBlock Text="가사 종류:" VerticalAlignment="Center" Margin="0,0,8,0"
+                              Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                <ToggleButton Content="일반 가사" IsChecked="{Binding ShowPlainLyricsOnly}" Margin="0,0,6,0"
+                              ToolTip="시간이 없는 가사가 있는 곡만"/>
+                <ToggleButton Content="싱크 가사" IsChecked="{Binding ShowSyncedLyricsOnly}"
+                              ToolTip="줄마다 시간이 있는 가사(LRC)가 있는 곡만"/>
+            </WrapPanel>
+
+            <!-- Opened from the queue's "태그 편집": only those songs, until "전체 보기". -->
+            <Border Grid.Row="1" Grid.ColumnSpan="2" Margin="0,10,0,0" Padding="12,6,6,6" CornerRadius="6"
+                    Background="{DynamicResource TagChangeBackgroundBrush}" BorderThickness="1" BorderBrush="{DynamicResource TagChangeBrush}"
+                    Visibility="{Binding HasScope, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}">
+                <DockPanel>
+                    <ui:Button DockPanel.Dock="Right" Content="전체 라이브러리 보기" Icon="{ui:SymbolIcon Dismiss16}" Appearance="Transparent"
+                               Padding="10,4" Command="{Binding ClearScopeCommand}"/>
+                    <ui:SymbolIcon Symbol="Filter24" FontSize="16" Margin="0,0,8,0" VerticalAlignment="Center" Foreground="{DynamicResource TagChangeBrush}"/>
+                    <TextBlock VerticalAlignment="Center" FontWeight="SemiBold">
+                        <Run Text="{Binding ScopeLabel, Mode=OneWay}"/><Run Text="만 보는 중" FontWeight="Normal"
+                             Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                    </TextBlock>
+                </DockPanel>
+            </Border>
 
             <StackPanel Grid.Column="1" Orientation="Horizontal">
                 <RadioButton GroupName="ViewModeGroup" Content="목록" Margin="0,0,16,0" MinWidth="0" VerticalAlignment="Center"
@@ -365,15 +494,30 @@
                     <RowDefinition Height="Auto"/>
                 </Grid.RowDefinitions>
 
-                <!-- Header -->
-                <Grid Grid.Row="0" Margin="0,0,0,14" MinHeight="60">
+                <!-- Header. One song: its cover, title, artist · album, format. Several: the 일괄 편집
+                     banner (tinted), and the songs it changes behind "곡 목록". -->
+                <Border Grid.Row="0" Margin="0,0,0,14" CornerRadius="8" BorderThickness="0">
+                <Border.Style>
+                    <Style TargetType="Border">
+                        <Setter Property="Padding" Value="0"/>
+                        <Setter Property="Background" Value="Transparent"/>
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsMulti}" Value="True">
+                                <Setter Property="Padding" Value="12,10"/>
+                                <Setter Property="Background" Value="{DynamicResource TagChangeBackgroundBrush}"/>
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Border.Style>
+                <StackPanel>
+                <Grid MinHeight="60">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="*"/>
                     </Grid.ColumnDefinitions>
 
                     <!-- One song: its cover -->
-                    <Grid Width="60" Height="60" Margin="0,0,12,0"
+                    <Grid Width="76" Height="76" Margin="0,0,14,0"
                           Visibility="{Binding IsSingle, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}">
                         <Border CornerRadius="6" Background="{DynamicResource ControlFillColorSecondaryBrush}">
                             <ui:SymbolIcon Symbol="MusicNote224" FontSize="24" Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
@@ -409,8 +553,11 @@
                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
                         <TextBlock FontSize="15" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" Text="{Binding HeaderTitle}" ToolTip="{Binding HeaderTitle}"
                                    Visibility="{Binding HasSelection, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}"/>
-                        <TextBlock FontSize="12" Margin="0,3,0,0" TextTrimming="CharacterEllipsis" Text="{Binding HeaderSubtitle}" ToolTip="{Binding HeaderSubtitle}"
+                        <TextBlock FontSize="13" Margin="0,3,0,0" TextTrimming="CharacterEllipsis" Text="{Binding HeaderDetail}" ToolTip="{Binding HeaderDetail}"
                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                   Visibility="{Binding IsSingle, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}"/>
+                        <TextBlock FontSize="12" Margin="0,3,0,0" TextTrimming="CharacterEllipsis" Text="{Binding HeaderSubtitle}" ToolTip="{Binding HeaderSubtitle}"
+                                   Foreground="{DynamicResource TextFillColorTertiaryBrush}"
                                    Visibility="{Binding HasSelection, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}"/>
                         <TextBlock FontSize="15" FontWeight="SemiBold" Text="곡을 선택하세요"
                                    Visibility="{Binding IsEmpty, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}"/>
@@ -419,6 +566,32 @@
                                    Visibility="{Binding IsEmpty, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}"/>
                     </StackPanel>
                 </Grid>
+                <!-- 일괄 편집: which songs it changes -->
+                <Expander Margin="0,8,0,0" Padding="0,4,0,0" Background="Transparent" BorderThickness="0"
+                          Visibility="{Binding IsMulti, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}">
+                    <Expander.Header>
+                        <TextBlock FontSize="12" Foreground="{DynamicResource TextFillColorSecondaryBrush}">
+                            <Run Text="곡 목록"/><Run Text=" ("/><Run Text="{Binding Count, Mode=OneWay}"/><Run Text="곡)"/>
+                        </TextBlock>
+                    </Expander.Header>
+                    <ScrollViewer MaxHeight="180" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                        <ItemsControl ItemsSource="{Binding Selection}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate><VirtualizingStackPanel/></ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <TextBlock FontSize="12" Margin="0,2" TextTrimming="CharacterEllipsis" ToolTip="{Binding FileName}">
+                                        <Run Text="{Binding DisplayTitle, Mode=OneWay}"/><Run Text="  "/><Run Text="{Binding Artist, Mode=OneWay}"
+                                             Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
+                                    </TextBlock>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </Expander>
+                </StackPanel>
+                </Border>
 
                 <!-- Tabs -->
                 <Border Grid.Row="1" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}" Margin="0,0,0,12">
@@ -967,7 +1140,13 @@
                                                                     <Grid.ColumnDefinitions>
                                                                         <ColumnDefinition Width="84"/>
                                                                         <ColumnDefinition Width="*"/>
+                                                                        <ColumnDefinition Width="Auto"/>
                                                                     </Grid.ColumnDefinitions>
+                                                                    <ui:Button Grid.Column="2" Content="비교" Icon="{ui:SymbolIcon TextQuote24}" Appearance="Transparent"
+                                                                               Padding="8,1" FontSize="12" Margin="6,-2,0,-2" VerticalAlignment="Center"
+                                                                               ToolTip="교체 전 가사와 교체 후 가사를 나란히 봅니다"
+                                                                               Command="{Binding DataContext.ToggleCompareCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                                               Visibility="{Binding IsLyrics, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}"/>
                                                                     <TextBlock Text="{Binding Label}" FontSize="12" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
                                                                     <WrapPanel Grid.Column="1">
                                                                         <TextBlock Text="{Binding Before}" FontSize="12" TextDecorations="Strikethrough"
@@ -991,6 +1170,8 @@
                                                             </DataTemplate>
                                                         </ItemsControl.ItemTemplate>
                                                     </ItemsControl>
+                                                    <ContentControl Content="{Binding}" ContentTemplate="{StaticResource LyricsCompareTemplate}" Focusable="False"
+                                                                    Visibility="{Binding IsCompareOpen, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}"/>
                                                 </StackPanel>
                                             </Border>
                                         </DataTemplate>

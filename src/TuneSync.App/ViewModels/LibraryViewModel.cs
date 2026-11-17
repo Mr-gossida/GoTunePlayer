@@ -76,7 +76,7 @@ public sealed partial class LibraryViewModel : ObservableObject
         _settings = settings;
         _network = network;
         FilesView = CollectionViewSource.GetDefaultView(Files);
-        FilesView.Filter = o => o is LibraryFileViewModel vm && Filter.Matches(vm);
+        FilesView.Filter = o => o is LibraryFileViewModel vm && InScope(vm) && Filter.Matches(vm);
         // Files stream in from parallel readers in no particular order; keep the list (and so
         // the playlist and next/previous order) stable and predictable.
         FilesView.SortDescriptions.Add(new SortDescription(nameof(LibraryFileViewModel.FileName), ListSortDirection.Ascending));
@@ -300,6 +300,38 @@ public sealed partial class LibraryViewModel : ObservableObject
         {
             return false;
         }
+    }
+
+    // ---- 태그 관리 scope: only the songs picked in the player's queue ----
+
+    private HashSet<string>? _scope; // by path: a rescan rebuilds the rows
+
+    /// <summary>"재생 대기열에서 고른 14곡" while the tag manager shows only those songs; null for
+    /// the whole library.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasScope))]
+    private string? _scopeLabel;
+
+    public bool HasScope => ScopeLabel is not null;
+
+    private bool InScope(LibraryFileViewModel file) => _scope is null || _scope.Contains(file.Path);
+
+    /// <summary>Shows only <paramref name="files"/> in the tag manager's list.</summary>
+    public void SetScope(IReadOnlyCollection<LibraryFileViewModel> files, string label)
+    {
+        _scope = new HashSet<string>(files.Select(f => f.Path), StringComparer.OrdinalIgnoreCase);
+        ScopeLabel = label;
+        FilesView.Refresh();
+    }
+
+    /// <summary>Back to the whole library (the scope bar's "전체 보기").</summary>
+    [RelayCommand]
+    private void ClearScope()
+    {
+        if (_scope is null) return;
+        _scope = null;
+        ScopeLabel = null;
+        FilesView.Refresh();
     }
 
     partial void OnPlaylistSortChanged(PlaylistSortKey value) => SavePlaylistOrder();

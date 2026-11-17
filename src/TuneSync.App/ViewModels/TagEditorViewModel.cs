@@ -106,6 +106,10 @@ public sealed partial class TagEditorViewModel : ObservableObject
     [ObservableProperty]
     private string _headerSubtitle = "";
 
+    /// <summary>One song: "아티스트 · 앨범" between its title and its format line.</summary>
+    [ObservableProperty]
+    private string _headerDetail = "";
+
     [ObservableProperty]
     private BitmapImage? _headerCover;
 
@@ -125,11 +129,14 @@ public sealed partial class TagEditorViewModel : ObservableObject
     [ObservableProperty]
     private string _filePath = "";
 
+    private bool _headerDirty;
+
     public void SetSelection(IReadOnlyList<LibraryFileViewModel> selection)
     {
         _selection = selection;
         _selectionVersion++;
         Count = selection.Count;
+        OnPropertyChanged(nameof(Selection));
         IsReviewing = false;
         if (!IsSearching) SearchStatus = "";
         Reload();
@@ -167,6 +174,8 @@ public sealed partial class TagEditorViewModel : ObservableObject
     private void RefreshFieldState(TagFieldViewModel field)
     {
         var changed = _selection.Where(f => f.PendingTags.ContainsKey(field.Field)).ToList();
+        field.SelectionCount = _selection.Count;
+        field.ChangedCount = changed.Count;
         field.IsChanged = changed.Count > 0;
         field.PreviousText = changed.Count == 0 ? "" : Describe(changed.Select(f => f.Original(field.Field)));
         field.Distribution = _selection.Count > 1 ? Describe(_selection.Select(f => f.Effective(field.Field))) : "";
@@ -189,13 +198,14 @@ public sealed partial class TagEditorViewModel : ObservableObject
         {
             var file = _selection[0];
             HeaderTitle = string.IsNullOrWhiteSpace(file.ShownTitle) ? file.FileName : file.ShownTitle;
+            HeaderDetail = string.Join(" · ", new[] { file.Effective(TagField.Artist), file.Effective(TagField.Album) }.Where(s => s.Length > 0));
             HeaderSubtitle = file.DurationText;
             HeaderCover = PendingCoverImage(file) ?? file.CoverThumbnail;
         }
         else if (_selection.Count > 1)
         {
-            HeaderTitle = $"{_selection.Count}곡 선택됨";
-            HeaderSubtitle = "같은 값은 그대로, 다른 값은 ‘여러 값’으로 보입니다";
+            HeaderTitle = $"일괄 편집 · {_selection.Count}곡";
+            HeaderSubtitle = "체크한 칸만 선택한 모든 곡에 적용됩니다";
             HeaderCover = null;
             foreach (var cover in DistinctCovers(3)) HeaderCovers.Add(cover);
         }
@@ -242,6 +252,7 @@ public sealed partial class TagEditorViewModel : ObservableObject
 
     public void OnFieldEdited(TagFieldViewModel field)
     {
+        if (field.Field is TagField.Artist or TagField.Album && _selection.Count == 1) _headerDirty = true;
         if (_selection.Count == 0) return;
 
         // A mixed field left (or made) empty means "keep each song's own value".
@@ -262,7 +273,27 @@ public sealed partial class TagEditorViewModel : ObservableObject
         field.IsMixed = false;
         foreach (var file in _selection) file.SetPending(field.Field, value);
         RefreshFieldState(field);
-        if (field.Field == TagField.Title && _selection.Count == 1) LoadHeader();
+        if ((field.Field == TagField.Title || _headerDirty) && _selection.Count == 1) LoadHeader();
+        _headerDirty = false;
+    }
+
+    /// <summary>The batch editor's "적용" check on a field. On: what the box shows goes to every
+    /// selected song - unless the songs differ and nothing is typed yet, then the caret goes to
+    /// the box for a value. Off: each song keeps its own value.</summary>
+    public void SetFieldApplied(TagFieldViewModel field, bool apply)
+    {
+        if (!apply)
+        {
+            RevertField(field);
+            return;
+        }
+        if (field.IsMixed && field.Text.Length == 0)
+        {
+            field.RequestFocus();
+            return;
+        }
+        field.IsMixed = false;
+        OnFieldEdited(field);
     }
 
     public void RevertField(TagFieldViewModel field)
@@ -951,11 +982,15 @@ public sealed partial class TagEditorViewModel : ObservableObject
     }
 }
 
-/// <summary>One song in the save review: each change as before → after.</summary>
-public sealed class ReviewFileViewModel
+/// <summary>One song in the save review: each change as before → after. A lyrics change opens
+/// into the lyrics themselves, before and after side by side (<see cref="ToggleCompareCommand"/>).</summary>
+public sealed partial class ReviewFileViewModel : ObservableObject
 {
+    private readonly LibraryFileViewModel _file;
+
     public ReviewFileViewModel(LibraryFileViewModel file)
     {
+        _file = file;
         Title = string.IsNullOrWhiteSpace(file.Title) ? file.FileName : file.Title;
         Subtitle = file.Artist;
         foreach (var (field, value) in file.PendingTags.OrderBy(p => p.Key))
@@ -963,8 +998,68 @@ public sealed class ReviewFileViewModel
         if (file.PendingCover is { } cover)
             Changes.Add(new ReviewChange("커버", file.HasCover ? "있음" : "없음", cover.Length > 0 ? "새 이미지" : "지움", cover.Length == 0));
         if (file.PendingLyrics is { } lyrics)
-            Changes.Add(new ReviewChange("가사", file.Model.HasLyrics ? (file.Model.IsLyricsSynced ? "싱크 가사" : "일반 가사") : "없음",
-                lyrics.Length > 0 ? "수정한 가사" : "지움", lyrics.Length == 0));
+        {
+            var before = file.Model.HasLyrics ? (file.Model.IsLyricsSynced ? "싱크 가사" : "일반 가사") : "없음";
+            var after = lyrics.Length == 0 ? "지움" : LrcParser.Parse(lyrics).Count > 0 ? "싱크 가사" : "일반 가사";
+            if (after == before) after = "내용 수정"; // same kind: say what happens to it
+            Changes.Add(new ReviewChange("가사", before, after, lyrics.Length == 0) { IsLyrics = true });
+        }
+    }
+
+    // ---- 가사 비교: 교체 전 / 교체 후 ----
+
+    [ObservableProperty]
+    private bool _isCompareOpen;
+
+    [ObservableProperty]
+    private bool _isCompareLoading;
+
+    [ObservableProperty]
+    private IReadOnlyList<LyricsDiffLine> _beforeLines = [];
+
+    [ObservableProperty]
+    private IReadOnlyList<LyricsDiffLine> _afterLines = [];
+
+    [ObservableProperty]
+    private string _compareSummary = "";
+
+    public string CompareTitle => $"{Title} · 가사 비교";
+
+    private bool _compareLoaded;
+
+    [RelayCommand]
+    private async Task ToggleCompareAsync()
+    {
+        IsCompareOpen = !IsCompareOpen;
+        if (IsCompareOpen) await LoadCompareAsync();
+    }
+
+    /// <summary>Reads the lyrics now in the file (off the UI thread: it may be on a NAS) and lines
+    /// them up with the edited ones.</summary>
+    public async Task LoadCompareAsync()
+    {
+        if (_compareLoaded || IsCompareLoading) return;
+        IsCompareLoading = true;
+        var after = _file.PendingLyrics ?? "";
+        var path = _file.Path;
+        var (before, diff) = await Task.Run(() =>
+        {
+            string? current;
+            try { current = TagService.ReadLyrics(path); }
+            catch { current = null; }
+            return (current ?? "", LyricsDiff.Compare(current, after));
+        });
+        BeforeLines = diff.Before;
+        AfterLines = diff.After;
+        CompareSummary = after.Length == 0 ? "가사를 지웁니다"
+            : before.Trim().Length == 0 ? $"가사가 없던 곡에 {diff.After.Count}줄을 넣습니다"
+            : diff.Removed == 0 && diff.Added == 0
+                ? (LrcParser.Parse(after).Count > 0 && LrcParser.Parse(before).Count == 0
+                    ? "가사 내용은 같고, 줄마다 시간(싱크)이 붙습니다"
+                    : "가사 내용은 같고, 시간이나 줄 간격만 달라집니다")
+            : $"달라지는 줄: 빠지는 줄 {diff.Removed} · 새 줄 {diff.Added}";
+        IsCompareLoading = false;
+        _compareLoaded = true;
     }
 
     private static string Show(string value) => value.Length == 0 ? "(비어 있음)" : value;
@@ -974,4 +1069,8 @@ public sealed class ReviewFileViewModel
     public List<ReviewChange> Changes { get; } = [];
 }
 
-public sealed record ReviewChange(string Label, string Before, string After, bool IsRemoval);
+public sealed record ReviewChange(string Label, string Before, string After, bool IsRemoval)
+{
+    /// <summary>The lyrics row: it opens the before/after comparison.</summary>
+    public bool IsLyrics { get; init; }
+}

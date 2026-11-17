@@ -4,6 +4,7 @@
       xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
       xmlns:vm="clr-namespace:TuneSync.App.ViewModels"
       xmlns:views="clr-namespace:TuneSync.App.Views"
+      xmlns:app="clr-namespace:TuneSync.App"
       xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
       xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
       mc:Ignorable="d"
@@ -17,6 +18,8 @@
         <Style x:Key="Desc" TargetType="ui:TextBlock">
             <Setter Property="FontSize" Value="12"/>
             <Setter Property="TextWrapping" Value="Wrap"/>
+            <!-- wrap between words (어절), never inside one -->
+            <Setter Property="app:KeepWords.IsEnabled" Value="True"/>
             <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}"/>
         </Style>
         <Style x:Key="CategoryTitle" TargetType="ui:TextBlock">
@@ -173,6 +176,7 @@
                         </ui:CardControl.Header>
                         <ComboBox Width="260" SelectedValuePath="Value" IsTextSearchEnabled="True" TextSearch.TextPath="Label"
                                   VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling" MaxDropDownHeight="420"
+                                  DropDownOpened="FontList_DropDownOpened"
                                   ItemsSource="{Binding AppFontOptions}" SelectedValue="{Binding AppFontFamily}">
                             <ComboBox.ItemsPanel>
                                 <ItemsPanelTemplate><VirtualizingStackPanel/></ItemsPanelTemplate>
@@ -330,6 +334,7 @@
                         </ui:CardControl.Header>
                         <ComboBox Width="260" SelectedValuePath="Value" IsTextSearchEnabled="True" TextSearch.TextPath="Label"
                                   VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling" MaxDropDownHeight="420"
+                                  DropDownOpened="FontList_DropDownOpened"
                                   ItemsSource="{Binding LyricsFontOptions}" SelectedValue="{Binding LyricsFontFamily}">
                             <ComboBox.ItemsPanel>
                                 <ItemsPanelTemplate><VirtualizingStackPanel/></ItemsPanelTemplate>
@@ -386,7 +391,7 @@
                                        Command="{Binding OpenWindowsSoundCommand}" ToolTip="공유 모드의 샘플 속도·비트(장치 속성 › 고급)는 Windows 소리 설정에서 바꿉니다"/>
                             <StackPanel VerticalAlignment="Center">
                                 <ui:TextBlock Text="지금 재생" FontTypography="Caption" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-                                <ui:TextBlock Text="{Binding Now}" FontTypography="BodyStrong" TextWrapping="Wrap"/>
+                                <ui:TextBlock Text="{Binding Now}" FontTypography="BodyStrong" TextWrapping="Wrap" app:KeepWords.IsEnabled="True"/>
                                 <ui:TextBlock Text="{Binding WindowsFormat}" Style="{StaticResource Desc}"/>
                             </StackPanel>
                         </DockPanel>
@@ -596,7 +601,7 @@
                                 <DockPanel>
                                     <ui:SymbolIcon Symbol="Warning20" FontSize="16" Margin="0,0,8,0" VerticalAlignment="Top"
                                                    Foreground="{DynamicResource SystemFillColorCautionBrush}"/>
-                                    <ui:TextBlock TextWrapping="Wrap" FontSize="12"
+                                    <ui:TextBlock TextWrapping="Wrap" FontSize="12" app:KeepWords.IsEnabled="True"
                                                   Text="표시된 키는 작동하지 않습니다. 다른 프로그램(다른 음악 플레이어 등)이 먼저 쓰고 있거나 다른 단축키와 겹칩니다. 키를 바꾸거나 그 프로그램의 단축키를 끄세요. 아이콘에 마우스를 올리면 이유가 보입니다."/>
                                 </DockPanel>
                             </Border>

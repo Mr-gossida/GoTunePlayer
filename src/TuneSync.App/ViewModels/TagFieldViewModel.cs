@@ -33,14 +33,52 @@ public sealed partial class TagFieldViewModel : ObservableObject
     /// <summary>The selected songs have different values; the box is empty and keeps each one
     /// unless something is typed.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(Placeholder))]
+    [NotifyPropertyChangedFor(nameof(Placeholder), nameof(BatchStatus))]
     private bool _isMixed;
 
     public string Placeholder => IsMixed ? "여러 값" : "";
 
     /// <summary>The selection has an unsaved edit in this field.</summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsApplied), nameof(BatchStatus))]
     private bool _isChanged;
+
+    // ---- 일괄 편집 (several songs): each field says whether it changes them all ----
+
+    /// <summary>Several songs are selected: the field shows its "적용" check and status line.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(BatchStatus))]
+    private int _selectionCount;
+
+    /// <summary>How many of the selected songs this field changes.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(BatchStatus))]
+    private int _changedCount;
+
+    /// <summary>The "적용" check: on when the field changes the songs. Ticking it applies what the
+    /// box shows to every selected song; clearing it leaves each song's own value.</summary>
+    public bool IsApplied
+    {
+        get => IsChanged;
+        set
+        {
+            if (value != IsChanged) _editor.SetFieldApplied(this, value);
+            OnPropertyChanged(); // snaps back when nothing could be applied
+        }
+    }
+
+    /// <summary>"14곡 모두 바뀜" / "14곡 중 3곡 바뀜" / "곡마다 다름 · 그대로 둠" / "14곡 모두 같음".</summary>
+    public string BatchStatus =>
+        ChangedCount > 0 && ChangedCount >= SelectionCount ? $"{SelectionCount}곡 모두 바뀜"
+        : ChangedCount > 0 ? $"{SelectionCount}곡 중 {ChangedCount}곡 바뀜"
+        : IsMixed ? "곡마다 다름 · 그대로 둠"
+        : $"{SelectionCount}곡 모두 같음";
+
+    /// <summary>Asks the view to put the caret in this field (ticking a mixed, empty field: there
+    /// is nothing to apply until a value is typed).</summary>
+    public event Action? FocusRequested;
+
+    public void RequestFocus() => FocusRequested?.Invoke();
 
     /// <summary>What it was before the edit ("이전" line under a changed field).</summary>
     [ObservableProperty]
