@@ -683,15 +683,16 @@
                     </ui:CardControl>
                     <ui:TextBlock Text="가사 싱크" Style="{StaticResource Group}"/>
                     <ui:CardControl Style="{StaticResource Card}" Icon="{ui:SymbolIcon DeveloperBoard24}"
-                                    Tag="가사 싱크 싱크 가사 만들기 자동 맞추기 그래픽 카드 GPU 가속 Vulkan 음성 인식 처리 장치 속도"
-                                    ToolTip="싱크 가사를 자동으로 맞출 때 음성 인식과 목소리 분리를 그래픽 카드로 처리합니다. 그래픽 카드가 없거나 쓸 수 없으면 CPU로 처리합니다. 끄면 모두 CPU로 처리해 곡당 몇 분씩 걸릴 수 있습니다.">
+                                    Tag="가사 싱크 싱크 가사 만들기 자동 맞추기 처리 장치 자동 선택 그래픽 카드 GPU CPU 가속 Vulkan 음성 인식 속도"
+                                    ToolTip="자동: 음성 인식과 목소리 분리를 그래픽 카드로 처리하고(여러 배 빠르고 CPU를 거의 쓰지 않습니다), 그래픽 카드가 없거나 쓸 수 없으면 CPU로 처리합니다. CPU만: 모두 CPU로 처리해 곡당 몇 분씩 걸릴 수 있습니다. 실제로 쓴 장치는 맞추는 동안 진행 표시에 나옵니다.">
                         <ui:CardControl.Header>
                             <StackPanel>
-                                <ui:TextBlock Text="그래픽 카드(GPU) 사용" FontTypography="Body"/>
-                                <ui:TextBlock Text="자동으로 맞추기가 여러 배 빨라지고 CPU를 거의 쓰지 않습니다" Style="{StaticResource Desc}"/>
+                                <ui:TextBlock Text="처리 장치" FontTypography="Body"/>
+                                <ui:TextBlock Text="그래픽 카드를 쓸 수 없으면 자동으로 CPU를 씁니다" Style="{StaticResource Desc}"/>
                             </StackPanel>
                         </ui:CardControl.Header>
-                        <ui:ToggleSwitch IsChecked="{Binding LyricsSyncUseGpu}" OnContent="켬" OffContent="끔"/>
+                        <ComboBox Width="200" ItemsSource="{Binding LyricsSyncDeviceOptions}" DisplayMemberPath="Label"
+                                  SelectedValuePath="Value" SelectedValue="{Binding LyricsSyncUseGpu}"/>
                     </ui:CardControl>
                     <ui:CardControl Style="{StaticResource Card}" Icon="{ui:SymbolIcon Gauge24}"
                                     Tag="가사 싱크 싱크 가사 만들기 자동 맞추기 CPU 사용량 자원 제한 스레드 코어 점유 느려짐"

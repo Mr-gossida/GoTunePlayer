@@ -284,6 +284,15 @@ public sealed partial class SettingsViewModel : ObservableObject
     [ObservableProperty]
     private bool _lyricsSyncUseGpu;
 
+    /// <summary>Where it runs. "자동" is the graphics card when one works and the CPU otherwise -
+    /// the same as asking for the graphics card, which falls back the same way - so it's the only
+    /// other choice besides the CPU alone.</summary>
+    public IReadOnlyList<Choice<bool>> LyricsSyncDeviceOptions { get; } =
+    [
+        new(true, "자동 (그래픽 카드 우선)"),
+        new(false, "CPU만"),
+    ];
+
     partial void OnLyricsSyncUseGpuChanged(bool value)
     {
         _settings.LyricsSyncUseGpu = value;
