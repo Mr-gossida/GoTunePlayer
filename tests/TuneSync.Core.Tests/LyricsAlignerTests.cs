@@ -207,4 +207,66 @@ public class LyricsAlignerTests
         AssertNear(5, result[0].Time);
         AssertNear(12, result[1].Time);
     }
+
+    [Fact]
+    public void A_heard_chorus_goes_to_the_repeat_sung_then_not_to_a_later_one()
+    {
+        // Verse, chorus, verse, then the chorus twice - but recognition heard only the first of
+        // those last two. Its words fit either repeat equally well; the times say which.
+        string[] lines =
+        [
+            "처음 부르는 노래의 첫 줄", "두 번째 다른 가사가 있어",
+            "사랑해 사랑해요 그대만", "너만을 사랑해요 영원히",
+            "세 번째 가사는 또 달라", "네 번째 줄도 새로워",
+            "사랑해 사랑해요 그대만", "너만을 사랑해요 영원히",
+            "사랑해 사랑해요 그대만", "너만을 사랑해요 영원히",
+        ];
+        double[] starts = [10, 14, 18, 22, 26, 30, 34, 38, 42, 46];
+        var heard = Heard(lines, starts, (i, word) => i >= 8 ? null : word);
+
+        var result = LyricsAligner.Align(lines, heard, TimeSpan.FromSeconds(60));
+
+        AssertNear(34, result[6].Time);
+        AssertNear(38, result[7].Time);
+        Assert.True(result[6].IsConfident && result[7].IsConfident);
+        Assert.False(result[8].IsConfident || result[9].IsConfident);
+        Assert.True(result[8].Time > result[7].Time && result[9].Time > result[8].Time);
+    }
+
+    [Fact]
+    public void Lines_not_heard_are_spread_over_the_singing_not_over_an_instrumental()
+    {
+        // Two lines heard, at 10 s and 40 s; the two between them weren't. The singer sings from
+        // 10 to 20 s and from 38 s on - 20 to 38 s is an instrumental.
+        string[] lines = ["창밖에 비가 내리면", "우산을 들고 나가요", "젖은 거리를 걸으며", "그대 생각을 해요"];
+        var heard = Heard(lines, [10, 13, 16, 40], (i, word) => i is 1 or 2 ? null : word);
+        var vocals = new float[AudioDecoder.SampleRate * 60];
+        foreach (var (from, to) in new[] { (10.0, 20.0), (38.0, 50.0) })
+            for (var i = (int)(from * AudioDecoder.SampleRate); i < (int)(to * AudioDecoder.SampleRate); i++)
+                vocals[i] = 0.3f * MathF.Sin(i * 0.2f);
+
+        var result = LyricsAligner.Align(lines, heard, TimeSpan.FromSeconds(60), VoiceActivity.Detect(vocals));
+
+        Assert.InRange(result[1].Time.TotalSeconds, 11, 20);
+        Assert.InRange(result[2].Time.TotalSeconds, result[1].Time.TotalSeconds + 1, 20);
+    }
+
+    [Fact]
+    public void Refilling_after_combining_keeps_heard_times_in_order_and_spreads_the_rest()
+    {
+        static AlignedLine Line(double seconds, bool heard) => new("가사 한 줄입니다", TimeSpan.FromSeconds(seconds), heard);
+        // Heard at 10 and 30 s; line 1 was heard (at disputed times, 14 s kept); line 2 nobody
+        // heard and its old estimate (35 s) is past the next heard line; line 4 was heard at a
+        // time before line 3, out of order.
+        var lines = new List<AlignedLine> { Line(10, true), Line(14, false), Line(35, false), Line(30, true), Line(25, true) };
+
+        var result = LyricsAligner.Refill(lines, TimeSpan.FromSeconds(60), null, [true, true, false, true, true]);
+
+        AssertNear(10, result[0].Time);
+        AssertNear(14, result[1].Time);
+        Assert.InRange(result[2].Time.TotalSeconds, 15, 29);
+        AssertNear(30, result[3].Time);
+        Assert.True(result[4].Time > result[3].Time);
+        Assert.Equal([true, false, false, true, false], result.Select(l => l.IsConfident));
+    }
 }

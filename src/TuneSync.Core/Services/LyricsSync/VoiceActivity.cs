@@ -51,6 +51,36 @@ public sealed class VoiceActivity
         return new VoiceActivity(regions);
     }
 
+    /// <summary>Seconds of singing before <paramref name="time"/>: a clock that stands still
+    /// through instrumentals.</summary>
+    public double SingingBefore(double time)
+    {
+        var singing = 0.0;
+        foreach (var (start, end) in Regions)
+        {
+            if (start >= time) break;
+            singing += Math.Min(end, time) - start;
+        }
+        return singing;
+    }
+
+    /// <summary>When the singing clock reaches <paramref name="singing"/> seconds; a moment at the
+    /// end of one stretch is taken as the start of the next (where a line would begin).</summary>
+    public double TimeAt(double singing)
+    {
+        if (Regions.Count == 0) return singing;
+        if (singing <= 0) return Regions[0].Start + singing;
+        var before = 0.0;
+        foreach (var (start, end) in Regions)
+        {
+            if (singing < before + (end - start)) return start + (singing - before);
+            before += end - start;
+        }
+        return Regions[^1].End + (singing - before);
+    }
+
+    public double TotalSinging => Regions.Sum(r => r.End - r.Start);
+
     /// <summary>Pieces of at most <paramref name="maxSeconds"/> to listen to, each starting
     /// where singing starts and cut only in pauses; long pauses are left out altogether.</summary>
     public List<(double Start, double End)> Windows(double maxSeconds = 30, double splitGap = 2, double pad = 0.3)

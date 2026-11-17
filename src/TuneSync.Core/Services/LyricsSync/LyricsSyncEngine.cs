@@ -14,7 +14,8 @@ namespace TuneSync.Core.Services.LyricsSync;
 /// also writes lyric lines where it isn't sure, at wrong times). Each line then gets the time
 /// most passes agree on. Which single pass is best for a song can't be told from how many lines
 /// it placed - a pass can place lines confidently at wrong times - but two passes rarely make
-/// the same mistake on the same line.
+/// the same mistake on the same line. The lines no pass heard are then spread again between the
+/// lines the passes settled on, over the singing (see <see cref="LyricsAligner.Refill"/>).
 ///
 /// On ten songs with known timings (tools/SyncBench, 378 lines): lines within 1 s went from 61%
 /// to 69%, lines off by over 3 s from 19% to 12%. Without the separation model it falls back
@@ -66,13 +67,13 @@ public sealed class LyricsSyncEngine : IDisposable
             vocals = await Task.Run(() => SeparateVocals(audioPath,
                 new Progress<double>(p => progress?.Report((Stage.Separating, p))), ct), ct);
         }
-        var windows = vocals is null ? null : VoiceActivity.Detect(vocals).Windows();
+        var (windows, voice) = UseVocals(vocals);
 
         progress?.Report((Stage.Listening, 0));
         var language = LanguageOf(lines);
         var passes = Passes(vocals is not null);
         var done = 0;
-        var aligned = await SyncAsync(lines, duration, passes, pass =>
+        var aligned = await SyncAsync(lines, duration, voice, passes, pass =>
         {
             var from = done++ / (double)passes.Count;
             return Task.Run(() => _transcriber.TranscribeAsync(pass.Source == Source.Vocals ? vocals! : song, language,
@@ -83,6 +84,14 @@ public sealed class LyricsSyncEngine : IDisposable
         progress?.Report((Stage.Aligning, 1));
         return aligned;
     }
+
+    /// <summary>What the vocals are used for: the pieces to listen to, cut at the singer's pauses
+    /// (found generously - a breath shouldn't end a piece), and the singing clock that unheard
+    /// lines are spread over (found strictly - accompaniment left in the vocals mustn't make an
+    /// instrumental count as singing; on songs with known timings, a quarter fewer lines off by
+    /// over 3 s than with the generous one).</summary>
+    public static (List<(double Start, double End)>? Windows, VoiceActivity? Voice) UseVocals(float[]? vocals) =>
+        vocals is null ? (null, null) : (VoiceActivity.Detect(vocals).Windows(), VoiceActivity.Detect(vocals, threshold: 0.2));
 
     /// <summary>The singing alone, at the 16 kHz speech recognition expects.</summary>
     public float[] SeparateVocals(string audioPath, IProgress<double>? progress, CancellationToken ct)
@@ -96,17 +105,19 @@ public sealed class LyricsSyncEngine : IDisposable
     /// <summary>The decision between passes, apart from how the listening is done (tools/SyncBench
     /// keeps what was heard between runs, so aligner changes can be measured in seconds).</summary>
     public static async Task<List<AlignedLine>> SyncAsync(IReadOnlyList<string> lines, TimeSpan duration,
-        IReadOnlyList<Pass> passes, Func<Pass, Task<List<TimedText>>> listen)
+        VoiceActivity? voice, IReadOnlyList<Pass> passes, Func<Pass, Task<List<TimedText>>> listen)
     {
         var separated = passes.Any(p => p.Source == Source.Vocals);
         var results = new List<List<AlignedLine>>();
         foreach (var pass in passes)
         {
-            results.Add(LyricsAligner.Align(lines, await listen(pass), duration));
+            results.Add(LyricsAligner.Align(lines, await listen(pass), duration, voice));
             if (separated ? results.Count == 2 && Agreement(results[0], results[1]) >= AgreeEnough
                           : Placed(results[^1]) >= PlacedEnough) break;
         }
-        return separated ? Combine(results) : results.MaxBy(Placed)!;
+        if (!separated) return results.MaxBy(Placed)!;
+        var heard = Enumerable.Range(0, lines.Count).Select(i => results.Any(r => r[i].IsConfident)).ToArray();
+        return LyricsAligner.Refill(Combine(results), duration, voice, heard);
     }
 
     /// <summary>Each line's time from several passes: the time the largest group of passes that

@@ -12,6 +12,9 @@
 //                      and pass: with it, a change to the aligner is measured in seconds instead
 //                      of minutes. Use a fresh folder after changing the listening itself.
 //   BENCH_ALL_PASSES=1 with BENCH_CACHE: listen to every pass (and keep it), not only until one is good enough
+//   BENCH_MIN_REPEATED when picking songs from a folder: only songs where at least this share of
+//                      the lines occur more than once (choruses); BENCH_EXCLUDE: a songs.txt
+//                      whose songs aren't picked (to make a second set)
 using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.InteropServices;
@@ -37,6 +40,8 @@ else
 {
     songs = [];
     var rnd = new Random(3);
+    var minRepeated = double.Parse(Environment.GetEnvironmentVariable("BENCH_MIN_REPEATED") is { Length: > 0 } r ? r : "0", CultureInfo.InvariantCulture);
+    var exclude = Environment.GetEnvironmentVariable("BENCH_EXCLUDE") is { Length: > 0 } x ? File.ReadAllLines(x).ToHashSet(StringComparer.OrdinalIgnoreCase) : [];
     var files = Directory.EnumerateFiles(args[1], "*.*", SearchOption.AllDirectories)
         .Where(f => f.EndsWith(".mp3", StringComparison.OrdinalIgnoreCase) || f.EndsWith(".flac", StringComparison.OrdinalIgnoreCase))
         .OrderBy(_ => rnd.Next()).ToList();
@@ -46,7 +51,9 @@ else
         {
             using var tag = TagLib.File.Create(f);
             var lrc = LrcParser.Parse(tag.Tag.Lyrics);
-            if (lrc.Count(l => l.Text.Length > 0) >= 15) songs.Add(f);
+            var texts = lrc.Where(l => l.Text.Length > 0).Select(l => new string([.. l.Text.ToLowerInvariant().Where(char.IsLetterOrDigit)])).ToList();
+            var repeatedShare = texts.Count == 0 ? 0 : texts.Count(t => texts.Count(u => u == t) > 1) / (double)texts.Count;
+            if (texts.Count >= 15 && repeatedShare >= minRepeated && !exclude.Contains(f)) songs.Add(f);
         }
         catch { }
         if (songs.Count >= count) break;
@@ -102,12 +109,12 @@ async Task<List<AlignedLine>> SyncCached(string song, string plain)
             File.WriteAllBytes(name + ".vocals.f32", MemoryMarshal.AsBytes(vocals.AsSpan()).ToArray());
         }
     }
-    var windows = vocals is null ? null : VoiceActivity.Detect(vocals).Windows();
+    var (windows, voice) = LyricsSyncEngine.UseVocals(vocals);
 
     var passes = LyricsSyncEngine.Passes(vocals is not null);
     if (Environment.GetEnvironmentVariable("BENCH_ALL_PASSES") == "1")
         foreach (var pass in passes) await Listen(pass);
-    return await LyricsSyncEngine.SyncAsync(lines, duration, passes, Listen);
+    return await LyricsSyncEngine.SyncAsync(lines, duration, voice, passes, Listen);
 
     async Task<List<TimedText>> Listen(LyricsSyncEngine.Pass pass)
     {

@@ -14,13 +14,28 @@ public sealed record AlignedLine(string Text, TimeSpan Time, bool IsConfident);
 /// recognition heard. Both sides are reduced to letters and digits, then aligned with an edit-
 /// distance alignment (recognition errors, missed words and extra words all cost a little); a line
 /// starts where its first matched character was heard. Lines with too little matched are filled in
-/// between their neighbors in proportion to their length.</summary>
+/// between their neighbors in proportion to their length - over the singing only, when the
+/// vocals say where that is.
+///
+/// Repeated lines (choruses) need a second look: the same words fit every repeat equally well,
+/// and left to itself the alignment gave a heard chorus to the last repeat it could, so whole
+/// choruses landed one repeat too early. The second round prefers, slightly, the repeat where
+/// the lines that occur only once say it should be.</summary>
 public static class LyricsAligner
 {
     private const double MatchCost = 0;
     private const double MismatchCost = 1;
     private const double SkipHeardCost = 0.5;  // recognition heard something not in the lyrics
     private const double SkipLyricCost = 1;    // a lyric character recognition missed
+
+    /// <summary>Lines sharing at least this share of their letter pairs count as repeats.</summary>
+    private const double SimilarLines = 0.7;
+
+    /// <summary>How far from its expected time a character may be heard at no cost (the expected
+    /// times are rough), what each further tolerance's worth costs, and the most it costs.</summary>
+    private const double OffTolerance = 5;
+    private const double OffCost = 0.1;
+    private const double OffCostCap = 0.3;
 
     /// <summary>Minimum share of a line's characters that must be found for its time to count.</summary>
     private const double ConfidentShare = 0.3;
@@ -31,7 +46,9 @@ public static class LyricsAligner
     /// <summary>Time per sung character when there's nothing better to go on.</summary>
     private static readonly TimeSpan DefaultCharTime = TimeSpan.FromSeconds(0.28);
 
-    public static List<AlignedLine> Align(IReadOnlyList<string> lines, IReadOnlyList<TimedText> heard, TimeSpan duration)
+    /// <param name="voice">Where the singer sings (from the separated vocals), or null: lines that
+    /// weren't heard are then spread over the singing, not over instrumentals.</param>
+    public static List<AlignedLine> Align(IReadOnlyList<string> lines, IReadOnlyList<TimedText> heard, TimeSpan duration, VoiceActivity? voice = null)
     {
         // Lyrics, character by character, remembering the line each came from.
         var lyricChars = new List<(char C, int Line, int Pos)>();
@@ -57,19 +74,84 @@ public static class LyricsAligner
             for (var k = 0; k < text.Length; k++) heardChars.Add((text[k], start + step * k));
         }
 
-        var matched = Match(lyricChars, heardChars);
+        var matched = Match(lyricChars, heardChars, null);
+        var (times, confident, charTime) = Place(lines.Count, lyricChars, lineLength, heardChars, matched);
 
+        // Repeated lines (a chorus) look the same to the alignment wherever they are, so a heard
+        // chorus may be lined up with the wrong one of its repeats - all choices cost the same.
+        // Line it up again, now with a slight preference for where each line should be by the
+        // lines that can't be mistaken for others.
+        if (ExpectedTimes(lines, lineLength, lyricChars, times, confident, charTime, duration.TotalSeconds, voice) is { } expected)
+        {
+            matched = Match(lyricChars, heardChars, expected);
+            (times, confident, charTime) = Place(lines.Count, lyricChars, lineLength, heardChars, matched);
+        }
+
+        return Fill(lines, lineLength, times, confident, charTime, duration.TotalSeconds, voice);
+    }
+
+    /// <summary>The estimates again, for lines put together from several passes: the heard lines
+    /// may be others than in any one pass, so the lines between them are spread anew (a heard
+    /// line out of order is taken as an estimate too).</summary>
+    /// <param name="heard">Lines some pass heard, if at a time the others didn't agree on: their
+    /// time is kept (still marked to check) where it fits between the lines around them.</param>
+    public static List<AlignedLine> Refill(IReadOnlyList<AlignedLine> lines, TimeSpan duration, VoiceActivity? voice, bool[]? heard = null)
+    {
+        var texts = lines.Select(l => l.Text).ToList();
+        var lengths = texts.Select(t => Normalize(t).Length).ToArray();
+        var confident = lines.Select(l => l.IsConfident).ToArray();
+        var times = lines.Select(l => (double?)l.Time.TotalSeconds).ToArray();
+        var previous = -1.0;
+        for (var i = 0; i < lines.Count; i++)
+        {
+            if (!confident[i]) continue;
+            if (times[i]!.Value <= previous + 0.25) confident[i] = false;
+            else previous = times[i]!.Value;
+        }
+
+        // Seconds per character, from neighboring heard lines (breaths included, so a little
+        // generous - only the proportions matter between heard lines).
+        var paces = new List<double>();
+        for (var i = 0; i + 1 < lines.Count; i++)
+            if (confident[i] && confident[i + 1] && lengths[i] >= 4)
+                paces.Add((times[i + 1]!.Value - times[i]!.Value) / lengths[i]);
+        paces.Sort();
+        var charTime = paces.Count >= 5 ? Math.Clamp(paces[paces.Count / 2], 0.08, 0.8) : DefaultCharTime.TotalSeconds;
+
+        // Lines heard at disputed times: kept where they're in order with everything kept.
+        var keep = (bool[])confident.Clone();
+        if (heard is not null)
+        {
+            var before = -1.0;
+            for (var i = 0; i < lines.Count; i++)
+            {
+                if (confident[i]) { before = times[i]!.Value; continue; }
+                if (!heard[i]) continue;
+                var next = Enumerable.Range(i + 1, lines.Count - i - 1).Where(k => confident[k]).Select(k => times[k]!.Value).DefaultIfEmpty(double.MaxValue).First();
+                var t = times[i]!.Value;
+                if (t > before + 0.25 && t < next - 0.25) { keep[i] = true; before = t; }
+            }
+        }
+        var filled = Fill(texts, lengths, times, keep, charTime, duration.TotalSeconds, voice);
+        return [.. filled.Select((l, i) => l with { IsConfident = confident[i] })];
+    }
+
+    /// <summary>Each line's time, and whether it was heard well enough to trust, from the
+    /// characters found for it.</summary>
+    private static (double?[] Times, bool[] Confident, double CharTime) Place(int lineCount,
+        List<(char C, int Line, int Pos)> lyricChars, int[] lineLength, List<(char C, double Time)> heardChars, int?[] matched)
+    {
         // Each line: when its first found character was heard, moved back by the characters
         // before it, and how much of the line was found.
         var charTime = EstimateCharTime(lyricChars, matched, heardChars);
 
         // Per line: the found characters, each giving an estimate of where the line starts
         // (its time minus the characters before it).
-        var starts = new List<double>[lines.Count];
-        var first = new double[lines.Count];
-        var last = new double[lines.Count];
-        var firstPos = new int[lines.Count];
-        for (var i = 0; i < lines.Count; i++) { starts[i] = []; first[i] = double.MaxValue; last[i] = double.MinValue; }
+        var starts = new List<double>[lineCount];
+        var first = new double[lineCount];
+        var last = new double[lineCount];
+        var firstPos = new int[lineCount];
+        for (var i = 0; i < lineCount; i++) { starts[i] = []; first[i] = double.MaxValue; last[i] = double.MinValue; }
         for (var k = 0; k < lyricChars.Count; k++)
         {
             if (matched[k] is not { } h) continue;
@@ -86,14 +168,14 @@ public static class LyricsAligner
         // holds its notes far longer than the gaps between neighboring characters suggest - by
         // those, its well-heard lines looked stretched and were all thrown out.
         var paces = new List<double>();
-        for (var i = 0; i < lines.Count; i++)
+        for (var i = 0; i < lineCount; i++)
             if (lineLength[i] >= 4 && starts[i].Count >= lineLength[i] * 0.5 && last[i] > first[i]) paces.Add((last[i] - first[i]) / lineLength[i]);
         paces.Sort();
         var pace = paces.Count >= 3 ? Math.Max(charTime, paces[paces.Count * 3 / 4]) : charTime;
 
-        var times = new double?[lines.Count];
-        var confident = new bool[lines.Count];
-        for (var i = 0; i < lines.Count; i++)
+        var times = new double?[lineCount];
+        var confident = new bool[lineCount];
+        for (var i = 0; i < lineCount; i++)
         {
             if (starts[i].Count == 0 || lineLength[i] == 0) continue;
             // The line's first character, when it was found, says it directly. Otherwise the
@@ -114,18 +196,53 @@ public static class LyricsAligner
         // Times must move forward: a confident line that lands before an earlier confident one
         // (a repeated chorus matched to the wrong pass, say) is demoted to an estimate.
         var previous = -1.0;
-        for (var i = 0; i < lines.Count; i++)
+        for (var i = 0; i < lineCount; i++)
         {
             if (!confident[i]) continue;
             if (times[i]!.Value <= previous + 0.25) confident[i] = false;
             else previous = times[i]!.Value;
         }
 
-        return Fill(lines, lineLength, times, confident, charTime, duration.TotalSeconds);
+        return (times, confident, charTime);
+    }
+
+    /// <summary>Where each lyric character should be heard, going by the lines heard well that
+    /// occur only once in the song (the rest spread between them as usual); null when there
+    /// are no repeated lines, or too few such lines to go by.</summary>
+    private static double[]? ExpectedTimes(IReadOnlyList<string> lines, int[] lineLength,
+        List<(char C, int Line, int Pos)> lyricChars, double?[] times, bool[] confident, double charTime, double duration, VoiceActivity? voice)
+    {
+        var normalized = lines.Select(Normalize).ToList();
+        var repeated = new bool[lines.Count];
+        for (var i = 0; i < lines.Count; i++)
+            for (var j = 0; j < lines.Count && !repeated[i]; j++)
+                repeated[i] = j != i && Similar(normalized[i], normalized[j]);
+        if (!repeated.Any(r => r)) return null;
+
+        var anchors = Enumerable.Range(0, lines.Count).Select(i => confident[i] && !repeated[i]).ToArray();
+        if (anchors.Count(a => a) < 2) return null;
+        var placed = Fill(lines, lineLength, times, anchors, charTime, duration, voice);
+        return [.. lyricChars.Select(c => placed[c.Line].Time.TotalSeconds + c.Pos * charTime)];
+    }
+
+    /// <summary>Two lines that would be easy to mistake for each other: most of their letter
+    /// pairs are shared ("Just beat it (beat it)" and "Just beat it (beat it, uh)").</summary>
+    private static bool Similar(string a, string b)
+    {
+        if (a.Length < 2 || b.Length < 2) return a == b;
+        var pairs = new Dictionary<(char, char), int>();
+        for (var k = 0; k + 1 < a.Length; k++) pairs[(a[k], a[k + 1])] = pairs.GetValueOrDefault((a[k], a[k + 1])) + 1;
+        var shared = 0;
+        for (var k = 0; k + 1 < b.Length; k++)
+            if (pairs.GetValueOrDefault((b[k], b[k + 1])) is > 0 and var left) { pairs[(b[k], b[k + 1])] = left - 1; shared++; }
+        return 2.0 * shared / (a.Length - 1 + b.Length - 1) >= SimilarLines;
     }
 
     /// <summary>For each lyric character, the heard character it lines up with (or null).</summary>
-    private static int?[] Match(List<(char C, int Line, int Pos)> lyric, List<(char C, double Time)> heard)
+    /// <param name="expected">Where each lyric character should be heard, or null: lining one up
+    /// with a character heard far from there costs a little, never more than a recognition slip,
+    /// so it decides only between otherwise equal choices.</param>
+    private static int?[] Match(List<(char C, int Line, int Pos)> lyric, List<(char C, double Time)> heard, double[]? expected)
     {
         int n = lyric.Count, m = heard.Count;
         var result = new int?[n];
@@ -144,6 +261,11 @@ public static class LyricsAligner
             for (var j = 1; j <= m; j++)
             {
                 var diag = cost[(i - 1) * W + j - 1] + (float)Substitution(a, heard[j - 1].C);
+                if (expected is not null)
+                {
+                    var off = Math.Abs(heard[j - 1].Time - expected[i - 1]) - OffTolerance;
+                    if (off > 0) diag += (float)Math.Min(OffCostCap, OffCost * off / OffTolerance);
+                }
                 var up = cost[(i - 1) * W + j] + (float)SkipLyricCost;
                 var left = cost[i * W + j - 1] + (i == n ? 0f : (float)SkipHeardCost);
                 if (diag <= up && diag <= left) { cost[i * W + j] = diag; move[i * W + j] = 1; }
@@ -230,8 +352,10 @@ public static class LyricsAligner
 
     /// <summary>Estimates for the lines that weren't heard well: spread between the confident
     /// lines around them by length; before the first / after the last, at the sung pace.</summary>
-    private static List<AlignedLine> Fill(IReadOnlyList<string> lines, int[] lengths, double?[] times, bool[] confident, double charTime, double duration)
+    private static List<AlignedLine> Fill(IReadOnlyList<string> lines, int[] lengths, double?[] times, bool[] confident, double charTime, double duration, VoiceActivity? voice)
     {
+        if (voice is { Regions.Count: > 0 }) return FillSinging(lines, lengths, times, confident, charTime, voice);
+
         var result = new double[lines.Count];
         var anchors = Enumerable.Range(0, lines.Count).Where(i => confident[i]).ToList();
         // Weight of a line = its length plus a breath, so short lines still take some time.
@@ -283,6 +407,60 @@ public static class LyricsAligner
         }
 
         return [.. lines.Select((text, i) => new AlignedLine(text, TimeSpan.FromSeconds(Math.Max(0, result[i])), confident[i]))];
+    }
+
+    /// <summary><see cref="Fill"/> on a clock that runs only while the singer sings: lines that
+    /// weren't heard are spread over the singing around them, skipping instrumentals, and one
+    /// that falls on a pause starts where the singing starts again.</summary>
+    private static List<AlignedLine> FillSinging(IReadOnlyList<string> lines, int[] lengths, double?[] times, bool[] confident, double charTime, VoiceActivity voice)
+    {
+        var at = new double[lines.Count];
+        var anchors = Enumerable.Range(0, lines.Count).Where(i => confident[i]).ToList();
+        double Weight(int i) => Math.Max(lengths[i], 2) * charTime;
+        var total = voice.TotalSinging;
+
+        // Lines spread from one singing moment to another, each by its weight; the last line
+        // gets its share too when it isn't an anchor.
+        void Spread(int from, int to, double start, double end, bool lastTakesShare)
+        {
+            var weights = Enumerable.Range(from, to - from + (lastTakesShare ? 1 : 0)).Select(Weight).ToList();
+            var sum = weights.Sum();
+            var t = start;
+            for (var i = from; i <= to && i < lines.Count; i++)
+            {
+                at[i] = t;
+                if (i - from < weights.Count) t += (end - start) * weights[i - from] / sum;
+            }
+        }
+
+        if (anchors.Count == 0) Spread(0, lines.Count - 1, 0, total, true);
+        else
+        {
+            foreach (var i in anchors) at[i] = voice.SingingBefore(times[i]!.Value);
+            // before the first anchor: back from it at the usual pace, or squeezed into the
+            // singing there is
+            var first = anchors[0];
+            if (first > 0)
+            {
+                var needed = Enumerable.Range(0, first).Sum(Weight);
+                var start = Math.Max(0, at[first] - needed);
+                Spread(0, first, start, at[first], false);
+            }
+            for (var a = 0; a + 1 < anchors.Count; a++)
+                if (anchors[a + 1] - anchors[a] >= 2) Spread(anchors[a], anchors[a + 1], at[anchors[a]], at[anchors[a + 1]], false);
+            // after the last anchor: over the rest of the singing, at a pace between half and
+            // three times the usual
+            var last = anchors[^1];
+            if (last + 1 < lines.Count)
+            {
+                var needed = Enumerable.Range(last, lines.Count - last).Sum(Weight);
+                var room = Math.Clamp(total - at[last], needed * 0.5, needed * 3);
+                Spread(last, lines.Count - 1, at[last], at[last] + room, true);
+            }
+        }
+
+        return [.. lines.Select((text, i) => new AlignedLine(text,
+            TimeSpan.FromSeconds(Math.Max(0, confident[i] ? times[i]!.Value : voice.TimeAt(at[i]))), confident[i]))];
     }
 
     /// <summary>Letters and digits only, lower case; Hangul compatibility jamo and full-width forms
