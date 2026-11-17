@@ -72,6 +72,20 @@ public class LyricsAlignerTests
     }
 
     [Fact]
+    public void A_line_whose_beginning_was_heard_is_placed_by_it()
+    {
+        // "걱정 마 I believe": the lead sings 걱정 마, a backing chorus the rest, which the
+        // separated vocals don't carry - only a quarter of the line is heard, its start exactly.
+        string[] lines = [.. Lines.Take(3), "걱정 마 I believe and I believe", .. Lines.Skip(4)];
+        var heard = Heard(lines, Starts, (i, word) => i == 3 && word is not ("걱정" or "마") ? null : word);
+
+        var result = LyricsAligner.Align(lines, heard, TimeSpan.FromSeconds(60));
+
+        AssertNear(Starts[3], result[3].Time);
+        Assert.True(result[3].IsConfident);
+    }
+
+    [Fact]
     public void Estimates_a_line_that_was_not_heard_between_its_neighbors()
     {
         var heard = Heard(Lines, Starts, (line, word) => line == 2 ? null : word);

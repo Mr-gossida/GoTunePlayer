@@ -18,6 +18,8 @@
 //   BENCH_MIN_REPEATED when picking songs from a folder: only songs where at least this share of
 //                      the lines occur more than once (choruses); BENCH_EXCLUDE: a songs.txt
 //                      whose songs aren't picked (to make a second set)
+//   BENCH_TRUTH        a folder of "<song file name>.lrc" files: the timings to compare against,
+//                      for songs whose tags have plain lyrics only
 using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.InteropServices;
@@ -74,6 +76,9 @@ foreach (var song in songs)
 {
     string lyrics;
     using (var tag = TagLib.File.Create(song)) lyrics = tag.Tag.Lyrics ?? "";
+    if (Environment.GetEnvironmentVariable("BENCH_TRUTH") is { Length: > 0 } truthFolder
+        && Path.Combine(truthFolder, Path.GetFileName(song) + ".lrc") is var truthFile && File.Exists(truthFile))
+        lyrics = File.ReadAllText(truthFile);
     var truth = LrcParser.Parse(lyrics).Where(l => l.Text.Length > 0).OrderBy(l => l.Time).ToList();
     var plain = string.Join("\n", truth.Select(l => l.Text));
     var clock = Stopwatch.StartNew();

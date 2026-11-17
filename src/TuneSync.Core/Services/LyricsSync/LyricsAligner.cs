@@ -40,6 +40,11 @@ public static class LyricsAligner
     /// <summary>Minimum share of a line's characters that must be found for its time to count.</summary>
     private const double ConfidentShare = 0.3;
 
+    /// <summary>A line whose beginning was heard exactly - this many letters, a Hangul syllable
+    /// counting two - is placed by it however little of the rest was heard (a backing chorus
+    /// singing the line's end, "걱정 마 I believe", isn't heard from the vocals).</summary>
+    private const double StartRunNeeded = 6;
+
     /// <summary>Longest a sung character plausibly takes (long notes included).</summary>
     private const double MaxCharTime = 0.7;
 
@@ -173,6 +178,19 @@ public static class LyricsAligner
         paces.Sort();
         var pace = paces.Count >= 3 ? Math.Max(charTime, paces[paces.Count * 3 / 4]) : charTime;
 
+        // How much of each line's beginning was found unbroken, a Hangul syllable counting as
+        // two letters (it says about as much as two Latin letters do).
+        var startRun = new double[lineCount];
+        var broken = new bool[lineCount];
+        for (var k = 0; k < lyricChars.Count; k++)
+        {
+            var (c, line, _) = lyricChars[k];
+            if (broken[line]) continue;
+            if (matched[k] is not { } h || Substitution(c, heardChars[h].C) > 0) broken[line] = true;
+            else startRun[line] += IsHangul(c) ? 2 : 1;
+        }
+        bool StartHeard(int line) => startRun[line] >= StartRunNeeded;
+
         var times = new double?[lineCount];
         var confident = new bool[lineCount];
         for (var i = 0; i < lineCount; i++)
@@ -190,7 +208,7 @@ public static class LyricsAligner
             var expected = lineLength[i] * pace;
             var span = last[i] - first[i];
             var plausible = span <= Math.Max(expected * 2.5, expected + 3);
-            confident[i] = enough && plausible;
+            confident[i] = (enough || StartHeard(i)) && plausible;
         }
 
         // Times must move forward: a confident line that lands before an earlier confident one
