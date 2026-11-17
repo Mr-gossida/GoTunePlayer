@@ -83,7 +83,7 @@
                     <Grid Width="14" Margin="0,0,6,0">
                         <Ellipse Width="8" Height="8" Fill="{DynamicResource SystemFillColorCautionBrush}"/>
                     </Grid>
-                    <TextBlock VerticalAlignment="Center" Foreground="{DynamicResource TextFillColorSecondaryBrush}"><Run Text="노란 시간" Foreground="{DynamicResource SystemFillColorCautionBrush}"/><Run Text=" 추정한 시간 (확인 필요)"/></TextBlock>
+                    <TextBlock Text="추정한 시간 (확인 필요)" VerticalAlignment="Center" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
                 </StackPanel>
             </StackPanel>
             <Grid Width="56" Height="56" Margin="0,0,14,0">
