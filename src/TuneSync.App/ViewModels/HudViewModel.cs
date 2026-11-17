@@ -19,6 +19,17 @@ public sealed partial class HudViewModel : ObservableObject
         _isOpen = false;
         _opacity = settings.Hud.Opacity;
         _clickThrough = settings.Hud.ClickThrough;
+        _layout = settings.Hud.Layout;
+    }
+
+    /// <summary>The card's layout. Each one keeps one size for every song.</summary>
+    [ObservableProperty]
+    private HudLayout _layout;
+
+    partial void OnLayoutChanged(HudLayout value)
+    {
+        _settings.Hud.Layout = value;
+        AppSettingsStore.Save(_settings);
     }
 
     public PlaybackViewModel Playback { get; }

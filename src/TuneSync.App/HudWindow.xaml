@@ -6,15 +6,18 @@
         xmlns:conv="clr-namespace:TuneSync.App.Converters"
         xmlns:views="clr-namespace:TuneSync.App.Views"
         Title="GoTune HUD"
-        Width="440" SizeToContent="Height"
+        SizeToContent="WidthAndHeight"
         WindowStyle="None" AllowsTransparency="True" Background="Transparent" ResizeMode="NoResize"
         Topmost="True" ShowInTaskbar="False" ShowActivated="False" WindowStartupLocation="Manual"
         Foreground="{DynamicResource TextFillColorPrimaryBrush}"
         MouseLeftButtonDown="Window_MouseLeftButtonDown" MouseEnter="Window_MouseEnter" MouseLeave="Window_MouseLeave">
     <!-- The HUD: what is playing in a small card that stays above every other program (it never
          takes the focus from them). DataContext: the PlaybackViewModel; the card's own menu works
-         on the HudViewModel (Hud). It is as solid as set (설정 › 재생 or its menu) and turns solid
-         while the mouse is over it, so the buttons can be read; drag it anywhere. -->
+         on the HudViewModel (Tag). It is as solid as set (설정 or its menu) and turns solid while
+         the mouse is over it, so the buttons can be read; drag it anywhere.
+         Four layouts (설정 › HUD 레이아웃): each has a fixed width and fixed line heights, so the
+         card keeps one size and shape for every song (synced lyrics, plain lyrics, none) and for
+         every line in any font. -->
     <Window.Resources>
         <conv:PlayPauseIconConverter x:Key="PlayPauseIconConverter"/>
         <conv:EnumToVisibilityConverter x:Key="EnumToVisibilityConverter"/>
@@ -27,6 +30,119 @@
             <Setter Property="FontSize" Value="13"/>
             <Setter Property="CornerRadius" Value="13"/>
             <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}"/>
+        </Style>
+        <!-- the cover with a note behind it for songs without one; its size is set where used -->
+        <Style x:Key="Cover" TargetType="ContentControl">
+            <Setter Property="Focusable" Value="False"/>
+            <Setter Property="FontSize" Value="20"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ContentControl">
+                        <Grid>
+                            <Border CornerRadius="6" Background="{DynamicResource PlayerHoverBrush}">
+                                <ui:SymbolIcon Symbol="MusicNote224" FontSize="{TemplateBinding FontSize}" Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
+                            </Border>
+                            <Border CornerRadius="6">
+                                <Border.Background>
+                                    <ImageBrush ImageSource="{Binding CurrentCoverSmall}" Stretch="UniformToFill" RenderOptions.BitmapScalingMode="HighQuality"/>
+                                </Border.Background>
+                            </Border>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="Title" TargetType="TextBlock">
+            <Setter Property="Text" Value="{Binding NowPlayingTitle}"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+            <Setter Property="LineStackingStrategy" Value="BlockLineHeight"/>
+        </Style>
+        <Style x:Key="Subtitle" TargetType="TextBlock">
+            <Setter Property="Text" Value="{Binding NowPlayingSubtitle}"/>
+            <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+            <Setter Property="LineStackingStrategy" Value="BlockLineHeight"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}"/>
+        </Style>
+        <!-- the line being sung (fades in at each new line) -->
+        <Style x:Key="LyricNow" TargetType="TextBlock">
+            <Setter Property="Text" Value="{Binding CurrentLyricText, NotifyOnTargetUpdated=True}"/>
+            <Setter Property="FontFamily" Value="{DynamicResource LyricsFontFamily}"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+            <Setter Property="LineStackingStrategy" Value="BlockLineHeight"/>
+            <Setter Property="Foreground" Value="{DynamicResource PlayerAccentBrush}"/>
+            <Style.Triggers>
+                <EventTrigger RoutedEvent="Binding.TargetUpdated">
+                    <BeginStoryboard Storyboard="{StaticResource LineFadeIn}"/>
+                </EventTrigger>
+            </Style.Triggers>
+        </Style>
+        <Style x:Key="LyricNext" TargetType="TextBlock">
+            <Setter Property="Text" Value="{Binding NextLyricText}"/>
+            <Setter Property="FontFamily" Value="{DynamicResource LyricsFontFamily}"/>
+            <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+            <Setter Property="LineStackingStrategy" Value="BlockLineHeight"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorTertiaryBrush}"/>
+        </Style>
+        <!-- what stands in the lyrics' place when the song has no synced lyrics (app font) -->
+        <Style x:Key="Hint" TargetType="TextBlock">
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+            <Setter Property="LineStackingStrategy" Value="BlockLineHeight"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}"/>
+        </Style>
+        <Style x:Key="HintNote" TargetType="TextBlock">
+            <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+            <Setter Property="LineStackingStrategy" Value="BlockLineHeight"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorTertiaryBrush}"/>
+        </Style>
+        <!-- shown only for synced lyrics, but its room is kept (Hidden, not Collapsed) -->
+        <Style x:Key="SyncedOnly" TargetType="FrameworkElement">
+            <Setter Property="Visibility" Value="Hidden"/>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding HasSyncedLyrics}" Value="True">
+                    <Setter Property="Visibility" Value="Visible"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+        <Style x:Key="HudProgress" TargetType="ProgressBar">
+            <Setter Property="Height" Value="3"/>
+            <Setter Property="Minimum" Value="0"/>
+            <Setter Property="Maximum" Value="{Binding DurationSeconds}"/>
+            <Setter Property="Value" Value="{Binding PositionSeconds, Mode=OneWay}"/>
+            <Setter Property="Foreground" Value="{DynamicResource PlayerAccentBrush}"/>
+            <Setter Property="Background" Value="{DynamicResource PlayerTrackBrush}"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="IsHitTestVisible" Value="False"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <Style x:Key="SmallIcon" TargetType="ui:Button" BasedOn="{StaticResource PlayerIconButtonStyle}">
+            <Setter Property="Width" Value="28"/>
+            <Setter Property="Height" Value="28"/>
+            <Setter Property="FontSize" Value="13"/>
+        </Style>
+        <Style x:Key="SmallPlay" TargetType="ui:Button" BasedOn="{StaticResource PlayerPlayButtonStyle}">
+            <Setter Property="Width" Value="32"/>
+            <Setter Property="Height" Value="32"/>
+            <Setter Property="CornerRadius" Value="16"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="Margin" Value="2,0"/>
+        </Style>
+        <!-- the card's menu and close sit at its top right, except in the one-line strip -->
+        <Style x:Key="ChromePlace" TargetType="Border">
+            <Setter Property="HorizontalAlignment" Value="Right"/>
+            <Setter Property="VerticalAlignment" Value="Top"/>
+            <Setter Property="Margin" Value="0,8,8,0"/>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding Tag.Layout, RelativeSource={RelativeSource AncestorType=Window}}" Value="Compact">
+                    <Setter Property="VerticalAlignment" Value="Center"/>
+                    <Setter Property="Margin" Value="0,0,108,0"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Tag.Layout, RelativeSource={RelativeSource AncestorType=Window}}" Value="Vertical">
+                    <Setter Property="Margin" Value="0,14,14,0"/>
+                </DataTrigger>
+            </Style.Triggers>
         </Style>
     </Window.Resources>
 
@@ -52,91 +168,41 @@
                 </Border>
                 <Border CornerRadius="13" Background="{DynamicResource PlayerTintBrush}" Opacity="0.6" IsHitTestVisible="False"/>
 
-                <Grid Margin="14,12,12,10">
+                <!-- ===== 카드: the song, two lyric lines, spectrum and buttons, the times ===== -->
+                <Grid Width="392" Margin="14,12,12,10"
+                      Visibility="{Binding Tag.Layout, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=Card}">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
-
-                    <!-- the song -->
                     <Grid>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto"/>
                             <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <Grid Width="46" Height="46" Margin="0,0,12,0">
-                            <Border CornerRadius="6" Background="{DynamicResource PlayerHoverBrush}">
-                                <ui:SymbolIcon Symbol="MusicNote224" FontSize="20" Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
-                            </Border>
-                            <Border CornerRadius="6">
-                                <Border.Background>
-                                    <ImageBrush ImageSource="{Binding CurrentCoverSmall}" Stretch="UniformToFill" RenderOptions.BitmapScalingMode="HighQuality"/>
-                                </Border.Background>
-                            </Border>
-                        </Grid>
-                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                            <TextBlock Text="{Binding NowPlayingTitle}" FontSize="14" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
-                            <TextBlock FontSize="12" Margin="0,2,0,0" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextFillColorSecondaryBrush}">
-                                <Run Text="{Binding NowPlayingSubtitle, Mode=OneWay}"/>
-                            </TextBlock>
-                        </StackPanel>
-                        <!-- the card's menu and close: shown while the mouse is over it -->
-                        <StackPanel x:Name="Chrome" Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Top" Opacity="0" Margin="6,-4,-4,0">
-                            <ui:Button x:Name="MenuButton" Style="{StaticResource HudChrome}" Icon="{ui:SymbolIcon Options24}" ToolTip="투명도 · 마우스 통과"
-                                       Click="Menu_Click" AutomationProperties.Name="HUD 메뉴"/>
-                            <ui:Button Style="{StaticResource HudChrome}" Icon="{ui:SymbolIcon Dismiss24}" ToolTip="HUD 끄기"
-                                       Command="{Binding Tag.CloseCommand, RelativeSource={RelativeSource AncestorType=Window}}" AutomationProperties.Name="HUD 끄기"/>
+                        <ContentControl Style="{StaticResource Cover}" Width="46" Height="46" Margin="0,0,12,0"/>
+                        <!-- the right margin keeps the title clear of the menu and close buttons -->
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,0,56,0">
+                            <TextBlock Style="{StaticResource Title}" FontSize="14" LineHeight="19"/>
+                            <TextBlock Style="{StaticResource Subtitle}" FontSize="12" LineHeight="16" Margin="0,2,0,0"/>
                         </StackPanel>
                     </Grid>
-
-                    <!-- the lyrics: the line being sung and the next one. The two lines are always
-                         there and have fixed line heights, so the card keeps one size and shape for
-                         every song (synced lyrics, plain lyrics, none) and for every line of any
-                         font; songs without synced lyrics say so in the same place. -->
                     <Grid Grid.Row="1" Margin="0,10,0,0">
-                    <StackPanel>
-                        <StackPanel.Style>
-                            <Style TargetType="StackPanel">
-                                <Setter Property="Visibility" Value="Hidden"/>
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding HasSyncedLyrics}" Value="True">
-                                        <Setter Property="Visibility" Value="Visible"/>
-                                    </DataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </StackPanel.Style>
-                        <TextBlock Text="{Binding CurrentLyricText, NotifyOnTargetUpdated=True}" FontFamily="{DynamicResource LyricsFontFamily}" FontSize="16" FontWeight="SemiBold"
-                                   LineHeight="22" LineStackingStrategy="BlockLineHeight"
-                                   TextTrimming="CharacterEllipsis" Foreground="{DynamicResource PlayerAccentBrush}">
-                            <TextBlock.Triggers>
-                                <EventTrigger RoutedEvent="Binding.TargetUpdated">
-                                    <BeginStoryboard Storyboard="{StaticResource LineFadeIn}"/>
-                                </EventTrigger>
-                            </TextBlock.Triggers>
-                        </TextBlock>
-                        <TextBlock Text="{Binding NextLyricText}" FontFamily="{DynamicResource LyricsFontFamily}" FontSize="12" Margin="0,3,0,0" TextTrimming="CharacterEllipsis"
-                                   LineHeight="17" LineStackingStrategy="BlockLineHeight"
-                                   Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
-                    </StackPanel>
-                    <!-- no synced lyrics: said in the lyrics' place, in the app's font -->
-                    <StackPanel Visibility="{Binding HasNoLyrics, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}">
-                        <TextBlock Text="♪  가사가 없는 곡" FontSize="14" FontWeight="SemiBold" LineHeight="22" LineStackingStrategy="BlockLineHeight"
-                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-                        <TextBlock Text="태그 관리에서 가사를 추가할 수 있습니다" FontSize="12" Margin="0,3,0,0" LineHeight="17" LineStackingStrategy="BlockLineHeight"
-                                   TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
-                    </StackPanel>
-                    <StackPanel Visibility="{Binding HasPlainLyricsOnly, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}">
-                        <TextBlock Text="♪  시간이 맞춰지지 않은 가사" FontSize="14" FontWeight="SemiBold" LineHeight="22" LineStackingStrategy="BlockLineHeight"
-                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-                        <TextBlock Text="싱크 가사 만들기로 한 줄씩 따라가게 할 수 있습니다" FontSize="12" Margin="0,3,0,0" LineHeight="17" LineStackingStrategy="BlockLineHeight"
-                                   TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
-                    </StackPanel>
+                        <StackPanel Style="{StaticResource SyncedOnly}">
+                            <TextBlock Style="{StaticResource LyricNow}" FontSize="16" LineHeight="22"/>
+                            <TextBlock Style="{StaticResource LyricNext}" FontSize="12" LineHeight="17" Margin="0,3,0,0"/>
+                        </StackPanel>
+                        <StackPanel Visibility="{Binding HasNoLyrics, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}">
+                            <TextBlock Style="{StaticResource Hint}" Text="♪  가사가 없는 곡" FontSize="14" LineHeight="22"/>
+                            <TextBlock Style="{StaticResource HintNote}" Text="태그 관리에서 가사를 추가할 수 있습니다" FontSize="12" LineHeight="17" Margin="0,3,0,0"/>
+                        </StackPanel>
+                        <StackPanel Visibility="{Binding HasPlainLyricsOnly, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}">
+                            <TextBlock Style="{StaticResource Hint}" Text="♪  시간이 맞춰지지 않은 가사" FontSize="14" LineHeight="22"/>
+                            <TextBlock Style="{StaticResource HintNote}" Text="싱크 가사 만들기로 한 줄씩 따라가게 할 수 있습니다" FontSize="12" LineHeight="17" Margin="0,3,0,0"/>
+                        </StackPanel>
                     </Grid>
-
-                    <!-- spectrum and the buttons -->
                     <Grid Grid.Row="2" Margin="0,8,0,0">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
@@ -154,16 +220,12 @@
                                        Icon="{ui:SymbolIcon Next24, Filled=True}" Command="{Binding PlayNextCommand}" ToolTip="다음 곡"/>
                         </StackPanel>
                     </Grid>
-
-                    <!-- where in the song: a thin line, and the times -->
                     <Grid Grid.Row="3" Margin="0,8,0,0">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <ProgressBar x:Name="Progress" Height="3" VerticalAlignment="Center" Minimum="0" Maximum="{Binding DurationSeconds}"
-                                     Value="{Binding PositionSeconds, Mode=OneWay}" Foreground="{DynamicResource PlayerAccentBrush}"
-                                     Background="{DynamicResource PlayerTrackBrush}" BorderThickness="0" IsHitTestVisible="False"/>
+                        <ProgressBar Style="{StaticResource HudProgress}"/>
                         <TextBlock Grid.Column="1" FontSize="11" Margin="10,0,0,0" Foreground="{DynamicResource TextFillColorTertiaryBrush}"
                                    Typography.NumeralAlignment="Tabular">
                             <Run Text="{Binding PositionText, Mode=OneWay}"/><Run Text=" / "/><Run Text="{Binding DurationText, Mode=OneWay}"/>
@@ -171,23 +233,139 @@
                     </Grid>
                 </Grid>
 
-                <!-- the menu: how solid, and off -->
-                <Popup x:Name="Menu" PlacementTarget="{Binding ElementName=MenuButton}" Placement="Bottom" HorizontalOffset="-200" VerticalOffset="4"
+                <!-- ===== 한 줄: one thin strip; the line being sung takes the artist's place ===== -->
+                <Grid Width="418" Height="54"
+                      Visibility="{Binding Tag.Layout, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=Compact}">
+                    <Grid Margin="9,0,8,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <ContentControl Style="{StaticResource Cover}" Width="36" Height="36" FontSize="16" Margin="0,0,10,0" VerticalAlignment="Center"/>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,0,8,0">
+                            <TextBlock Style="{StaticResource Title}" FontSize="13" LineHeight="18"/>
+                            <Grid Margin="0,1,0,0">
+                                <TextBlock Style="{StaticResource LyricNow}" FontSize="12" LineHeight="17"
+                                           Visibility="{Binding HasSyncedLyrics, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}"/>
+                                <TextBlock Style="{StaticResource Subtitle}" FontSize="12" LineHeight="17"
+                                           Visibility="{Binding HasSyncedLyrics, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=False}"/>
+                            </Grid>
+                        </StackPanel>
+                        <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                            <ui:Button Style="{StaticResource SmallIcon}" Icon="{ui:SymbolIcon Previous24, Filled=True}" Command="{Binding PlayPreviousCommand}" ToolTip="이전 곡"/>
+                            <ui:Button Style="{StaticResource SmallPlay}" Icon="{Binding IsPlaying, Converter={StaticResource PlayPauseIconConverter}}"
+                                       Command="{Binding TogglePlayPauseCommand}" ToolTip="재생 / 일시정지"/>
+                            <ui:Button Style="{StaticResource SmallIcon}" Icon="{ui:SymbolIcon Next24, Filled=True}" Command="{Binding PlayNextCommand}" ToolTip="다음 곡"/>
+                        </StackPanel>
+                    </Grid>
+                    <ProgressBar Style="{StaticResource HudProgress}" Height="2" VerticalAlignment="Bottom" Margin="14,0,14,3"/>
+                </Grid>
+
+                <!-- ===== 가사 집중: the two lines large and centered, the song small underneath;
+                     the buttons come up while the mouse is over it ===== -->
+                <Grid Width="518" Margin="0,14,0,10"
+                      Visibility="{Binding Tag.Layout, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=Lyrics}">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    <!-- the side margins keep the centered lines clear of the menu and close buttons -->
+                    <Grid Margin="62,0">
+                        <StackPanel Style="{StaticResource SyncedOnly}">
+                            <TextBlock Style="{StaticResource LyricNow}" FontSize="20" LineHeight="28" TextAlignment="Center"/>
+                            <TextBlock Style="{StaticResource LyricNext}" FontSize="14" LineHeight="20" Margin="0,2,0,0" TextAlignment="Center"/>
+                        </StackPanel>
+                        <StackPanel Visibility="{Binding HasNoLyrics, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}">
+                            <TextBlock Style="{StaticResource Hint}" Text="♪  가사가 없는 곡" FontSize="17" LineHeight="28" TextAlignment="Center"/>
+                            <TextBlock Style="{StaticResource HintNote}" Text="태그 관리에서 가사를 추가할 수 있습니다" FontSize="13" LineHeight="20" Margin="0,2,0,0" TextAlignment="Center"/>
+                        </StackPanel>
+                        <StackPanel Visibility="{Binding HasPlainLyricsOnly, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}">
+                            <TextBlock Style="{StaticResource Hint}" Text="♪  시간이 맞춰지지 않은 가사" FontSize="17" LineHeight="28" TextAlignment="Center"/>
+                            <TextBlock Style="{StaticResource HintNote}" Text="싱크 가사 만들기로 한 줄씩 따라가게 할 수 있습니다" FontSize="13" LineHeight="20" Margin="0,2,0,0" TextAlignment="Center"/>
+                        </StackPanel>
+                    </Grid>
+                    <Grid Grid.Row="1" Margin="18,12,18,0" Height="28">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" MaxWidth="220"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock FontSize="11" LineHeight="15" LineStackingStrategy="BlockLineHeight" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}">
+                            <Run Text="{Binding NowPlayingTitle, Mode=OneWay}" FontWeight="SemiBold"/><Run Text="  ·  "/><Run Text="{Binding NowPlayingSubtitle, Mode=OneWay}"/>
+                        </TextBlock>
+                        <ProgressBar Grid.Column="1" Style="{StaticResource HudProgress}" Height="2" Margin="12,0"/>
+                        <TextBlock Grid.Column="2" Text="{Binding PositionText}" FontSize="11" VerticalAlignment="Center" Typography.NumeralAlignment="Tabular"
+                                   Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
+                        <!-- over the progress line while the mouse is on the card -->
+                        <Border x:Name="LyricsButtons" Grid.ColumnSpan="3" HorizontalAlignment="Center" CornerRadius="16" Padding="4,0" Opacity="0"
+                                Background="{DynamicResource PlayerTintBrush}" BorderThickness="1" BorderBrush="{DynamicResource PlayerTrackBrush}">
+                            <StackPanel Orientation="Horizontal">
+                                <ui:Button Style="{StaticResource SmallIcon}" Icon="{ui:SymbolIcon Previous24, Filled=True}" Command="{Binding PlayPreviousCommand}" ToolTip="이전 곡"/>
+                                <ui:Button Style="{StaticResource SmallIcon}" Icon="{Binding IsPlaying, Converter={StaticResource PlayPauseIconConverter}}"
+                                           Foreground="{DynamicResource PlayerAccentBrush}" Command="{Binding TogglePlayPauseCommand}" ToolTip="재생 / 일시정지"/>
+                                <ui:Button Style="{StaticResource SmallIcon}" Icon="{ui:SymbolIcon Next24, Filled=True}" Command="{Binding PlayNextCommand}" ToolTip="다음 곡"/>
+                            </StackPanel>
+                        </Border>
+                    </Grid>
+                </Grid>
+
+                <!-- ===== 세로 미니멀: an upright card around a large cover; one lyric line ===== -->
+                <StackPanel Width="198" Margin="0,9,0,10"
+                            Visibility="{Binding Tag.Layout, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=Vertical}">
+                    <ContentControl Style="{StaticResource Cover}" Width="178" Height="178" FontSize="40"/>
+                    <StackPanel Margin="12,10,12,0">
+                        <TextBlock Style="{StaticResource Title}" FontSize="13" LineHeight="18"/>
+                        <TextBlock Style="{StaticResource Subtitle}" FontSize="11" LineHeight="15" Margin="0,1,0,0"/>
+                        <Grid Margin="0,6,0,0">
+                            <TextBlock Style="{StaticResource LyricNow}" FontSize="12" LineHeight="17"
+                                       Visibility="{Binding HasSyncedLyrics, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}"/>
+                            <TextBlock Style="{StaticResource HintNote}" Text="♪  가사 없음" FontSize="12" LineHeight="17"
+                                       Visibility="{Binding HasNoLyrics, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}"/>
+                            <TextBlock Style="{StaticResource HintNote}" Text="♪  싱크 가사 없음" FontSize="12" LineHeight="17"
+                                       Visibility="{Binding HasPlainLyricsOnly, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}"/>
+                        </Grid>
+                        <ProgressBar Style="{StaticResource HudProgress}" Height="2" Margin="0,9,0,0"/>
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,6,0,0">
+                            <ui:Button Style="{StaticResource SmallIcon}" Icon="{ui:SymbolIcon Previous24, Filled=True}" Command="{Binding PlayPreviousCommand}" ToolTip="이전 곡"/>
+                            <ui:Button Style="{StaticResource SmallPlay}" Margin="8,0" Icon="{Binding IsPlaying, Converter={StaticResource PlayPauseIconConverter}}"
+                                       Command="{Binding TogglePlayPauseCommand}" ToolTip="재생 / 일시정지"/>
+                            <ui:Button Style="{StaticResource SmallIcon}" Icon="{ui:SymbolIcon Next24, Filled=True}" Command="{Binding PlayNextCommand}" ToolTip="다음 곡"/>
+                        </StackPanel>
+                    </StackPanel>
+                </StackPanel>
+
+                <!-- the card's menu and close: shown while the mouse is over it -->
+                <Border x:Name="Chrome" Style="{StaticResource ChromePlace}" Opacity="0" CornerRadius="14" Padding="1"
+                        Background="{DynamicResource PlayerTintBrush}">
+                    <StackPanel Orientation="Horizontal">
+                        <ui:Button x:Name="MenuButton" Style="{StaticResource HudChrome}" Icon="{ui:SymbolIcon Options24}" ToolTip="레이아웃 · 투명도 · 마우스 통과"
+                                   Click="Menu_Click" AutomationProperties.Name="HUD 메뉴"/>
+                        <ui:Button Style="{StaticResource HudChrome}" Icon="{ui:SymbolIcon Dismiss24}" ToolTip="HUD 끄기"
+                                   Command="{Binding Tag.CloseCommand, RelativeSource={RelativeSource AncestorType=Window}}" AutomationProperties.Name="HUD 끄기"/>
+                    </StackPanel>
+                </Border>
+
+                <!-- the menu: layout, how solid, click-through, and off -->
+                <Popup x:Name="Menu" PlacementTarget="{Binding ElementName=MenuButton}" Placement="Bottom" HorizontalOffset="-262" VerticalOffset="4"
                        StaysOpen="False" AllowsTransparency="True" PopupAnimation="Fade">
-                    <Border Margin="8" Width="240" CornerRadius="10" Padding="14,12" Background="{DynamicResource PlayerTintBrush}"
+                    <Border Margin="8" Width="300" CornerRadius="10" Padding="14,12" Background="{DynamicResource PlayerTintBrush}"
                             BorderThickness="1" BorderBrush="{DynamicResource PlayerTrackBrush}"
                             DataContext="{Binding Tag, RelativeSource={RelativeSource AncestorType=Window}}">
                         <Border.Effect>
                             <DropShadowEffect BlurRadius="16" ShadowDepth="3" Opacity="0.4" Color="Black"/>
                         </Border.Effect>
                         <StackPanel>
+                            <TextBlock Text="레이아웃" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                            <views:HudLayoutPicker Layout="{Binding Layout, Mode=TwoWay}" Margin="0,8,0,14"/>
                             <Grid>
                                 <TextBlock Text="투명도" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
                                 <TextBlock Text="{Binding OpacityText}" FontSize="12" HorizontalAlignment="Right" Typography.NumeralAlignment="Tabular"
                                            Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
                             </Grid>
                             <Slider Minimum="0.2" Maximum="1" SmallChange="0.05" LargeChange="0.1" Value="{Binding Opacity}" Margin="0,8,0,4"
-                                    IsMoveToPointEnabled="True" AutomationProperties.Name="HUD 메뉴"/>
+                                    IsMoveToPointEnabled="True" AutomationProperties.Name="HUD 투명도"/>
                             <TextBlock Text="마우스를 올리면 잠시 선명해집니다" FontSize="11" Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
                             <Grid Margin="0,12,0,0">
                                 <TextBlock Text="마우스 통과" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center"

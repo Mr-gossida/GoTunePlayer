@@ -27,6 +27,21 @@ public static class WindowSnapper
         };
     }
 
+    /// <summary>The work area of the monitor the window is on, in the units of its Left/Top
+    /// (empty if the window has no handle yet).</summary>
+    public static Rect WorkAreaOf(Window window)
+    {
+        var hwnd = new WindowInteropHelper(window).Handle;
+        if (hwnd == IntPtr.Zero) return Rect.Empty;
+        var monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+        var info = new MONITORINFO { cbSize = Marshal.SizeOf<MONITORINFO>() };
+        if (monitor == IntPtr.Zero || !GetMonitorInfo(monitor, ref info)) return Rect.Empty;
+        var dpi = VisualTreeHelper.GetDpi(window);
+        var work = info.rcWork;
+        return new Rect(work.Left / dpi.DpiScaleX, work.Top / dpi.DpiScaleY,
+                        (work.Right - work.Left) / dpi.DpiScaleX, (work.Bottom - work.Top) / dpi.DpiScaleY);
+    }
+
     private static void Snap(Window window, IntPtr hwnd, IntPtr lParam)
     {
         var rect = Marshal.PtrToStructure<RECT>(lParam);
@@ -88,6 +103,9 @@ public static class WindowSnapper
 
     [DllImport("user32.dll")]
     private static extern IntPtr MonitorFromRect(ref RECT rect, int flags);
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr MonitorFromWindow(IntPtr hwnd, int flags);
 
     [DllImport("user32.dll")]
     private static extern bool GetMonitorInfo(IntPtr monitor, ref MONITORINFO info);

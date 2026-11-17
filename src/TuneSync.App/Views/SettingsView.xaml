@@ -248,6 +248,22 @@
                         </ui:CardControl.Header>
                         <ui:ToggleSwitch IsChecked="{Binding IsOpen}" OnContent="켬" OffContent="끔"/>
                     </ui:CardControl>
+                    <!-- the layout: tiles with a small drawing of each (the HUD's menu has the same) -->
+                    <Border DataContext="{Binding Hud}" Tag="HUD 레이아웃 모양 카드 한 줄 컴팩트 가사 집중 세로 미니멀 배치"
+                            Margin="0,0,0,4" Padding="16,12,16,14" CornerRadius="6"
+                            Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+                            BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}" BorderThickness="1">
+                        <StackPanel>
+                            <StackPanel Orientation="Horizontal">
+                                <ui:SymbolIcon Symbol="LayoutColumnTwo24" FontSize="20" Margin="0,0,14,0" VerticalAlignment="Center"/>
+                                <StackPanel>
+                                    <ui:TextBlock Text="HUD 레이아웃" FontTypography="Body"/>
+                                    <ui:TextBlock Text="고르면 HUD가 바로 바뀝니다 · 곡이 바뀌어도 크기는 그대로입니다" Style="{StaticResource Desc}"/>
+                                </StackPanel>
+                            </StackPanel>
+                            <views:HudLayoutPicker Layout="{Binding Layout, Mode=TwoWay}" ShowDescriptions="True" Margin="0,12,0,0"/>
+                        </StackPanel>
+                    </Border>
                     <ui:CardControl Style="{StaticResource Card}" DataContext="{Binding Hud}" Icon="{ui:SymbolIcon Blur24}" Tag="HUD 투명도 불투명도 반투명"
                                     ToolTip="마우스를 올리면 잠시 선명해져 버튼을 누르기 쉽습니다. HUD의 메뉴(⚙)에서도 바꿀 수 있습니다.">
                         <ui:CardControl.Header>

@@ -39,6 +39,7 @@ public partial class HudWindow : Window
             ApplyClickThrough();
         };
         Menu.Closed += (_, _) => { if (!IsMouseOver) Settle(); };
+        SizeChanged += (_, e) => StayInPlace(e);
         Closing += (_, e) =>
         {
             // Alt+F4 on it: just hide (the app stays)
@@ -52,14 +53,16 @@ public partial class HudWindow : Window
     {
         var area = SystemParameters.WorkArea;
         var hud = _settings.Hud;
-        var left = hud.Left ?? area.Right - Width - 16;
+        // it sizes itself to its layout, so before the first showing its width is only known from that
+        var width = ActualWidth > 0 ? ActualWidth : OuterWidth(hud.Layout);
+        var left = hud.Left ?? area.Right - width - 16;
         var top = hud.Top ?? area.Top + 16;
         // back on screen if the monitor it was on is gone
         var screen = new Rect(SystemParameters.VirtualScreenLeft, SystemParameters.VirtualScreenTop,
                               SystemParameters.VirtualScreenWidth, SystemParameters.VirtualScreenHeight);
-        if (!screen.IntersectsWith(new Rect(left, top, Width, 60)))
+        if (!screen.IntersectsWith(new Rect(left, top, width, 60)))
         {
-            left = area.Right - Width - 16;
+            left = area.Right - width - 16;
             top = area.Top + 16;
         }
         Left = left;
@@ -83,6 +86,36 @@ public partial class HudWindow : Window
     {
         _closing = true;
         Close();
+    }
+
+    /// <summary>The window's width in each layout: the card (see the XAML) plus the shadow's margin.</summary>
+    private static double OuterWidth(HudLayout layout) => layout switch
+    {
+        HudLayout.Lyrics => 540,
+        HudLayout.Vertical => 220,
+        _ => 440,
+    };
+
+    /// <summary>The layout changed, and with it the size. A card the magnet put against the right
+    /// or bottom edge of the screen stays against it (growing to the left / upwards), and none ends
+    /// up hanging off the screen; where it is now is kept.</summary>
+    private void StayInPlace(SizeChangedEventArgs e)
+    {
+        if (!IsVisible || e.PreviousSize.Width <= 0 || e.PreviousSize.Height <= 0) return;
+        var work = WindowSnapper.WorkAreaOf(this);
+        if (work.IsEmpty) return;
+        var left = Left;
+        var top = Top;
+        if (Math.Abs(Left + e.PreviousSize.Width - work.Right) < 2) left = work.Right - e.NewSize.Width;
+        if (Math.Abs(Top + e.PreviousSize.Height - work.Bottom) < 2) top = work.Bottom - e.NewSize.Height;
+        left = Math.Max(work.Left, Math.Min(left, work.Right - e.NewSize.Width));
+        top = Math.Max(work.Top, Math.Min(top, work.Bottom - e.NewSize.Height));
+        if (Math.Abs(left - Left) < 0.5 && Math.Abs(top - Top) < 0.5) return;
+        Left = left;
+        Top = top;
+        _settings.Hud.Left = left;
+        _settings.Hud.Top = top;
+        AppSettingsStore.Save(_settings);
     }
 
     /// <summary>The set opacity changed (its menu, or 설정).</summary>
@@ -109,7 +142,7 @@ public partial class HudWindow : Window
         }
     }
 
-    private double Idle =>Math.Clamp(_settings.Hud.Opacity, HudSettings.MinOpacity, 1);
+    private double Idle => Math.Clamp(_settings.Hud.Opacity, HudSettings.MinOpacity, 1);
 
     private void Fade(double to, double seconds) =>
         BeginAnimation(OpacityProperty, new DoubleAnimation(to, TimeSpan.FromSeconds(seconds)) { EasingFunction = new QuadraticEase() });
@@ -118,7 +151,15 @@ public partial class HudWindow : Window
     {
         _hovered = true;
         Fade(1, 0.15);
-        Chrome.BeginAnimation(OpacityProperty, new DoubleAnimation(1, TimeSpan.FromSeconds(0.15)));
+        ShowHoverParts(1, 0.15);
+    }
+
+    /// <summary>The menu and close buttons, and the 가사 집중 layout's playback buttons, are only
+    /// there while the mouse is over the card.</summary>
+    private void ShowHoverParts(double to, double seconds)
+    {
+        Chrome.BeginAnimation(OpacityProperty, new DoubleAnimation(to, TimeSpan.FromSeconds(seconds)));
+        LyricsButtons.BeginAnimation(OpacityProperty, new DoubleAnimation(to, TimeSpan.FromSeconds(seconds)));
     }
 
     private void Window_MouseLeave(object sender, MouseEventArgs e)
@@ -131,7 +172,7 @@ public partial class HudWindow : Window
     {
         _hovered = false;
         Fade(Idle, 0.4);
-        Chrome.BeginAnimation(OpacityProperty, new DoubleAnimation(0, TimeSpan.FromSeconds(0.3)));
+        ShowHoverParts(0, 0.3);
     }
 
     /// <summary>Dragged from anywhere but its buttons; where it is left is kept.</summary>

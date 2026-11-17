@@ -18,6 +18,9 @@ public sealed class HudSettings
     /// turned off again from 설정 or the tray menu).</summary>
     public bool ClickThrough { get; set; }
 
+    /// <summary>How the card is laid out (설정 › HUD 레이아웃).</summary>
+    public HudLayout Layout { get; set; } = HudLayout.Card;
+
     public const double MinOpacity = 0.2;
 
     public void Normalize()
@@ -25,5 +28,18 @@ public sealed class HudSettings
         Opacity = double.IsFinite(Opacity) ? Math.Clamp(Opacity, MinOpacity, 1) : 0.85;
         if (Left is { } l && !double.IsFinite(l)) Left = null;
         if (Top is { } t && !double.IsFinite(t)) Top = null;
+        if (!Enum.IsDefined(Layout)) Layout = HudLayout.Card;
     }
+}
+
+public enum HudLayout
+{
+    /// <summary>Song, two lyric lines, spectrum, buttons and times (420 wide).</summary>
+    Card,
+    /// <summary>One thin strip: cover, title, the line being sung, buttons.</summary>
+    Compact,
+    /// <summary>The two lyric lines large and centered; the song small underneath.</summary>
+    Lyrics,
+    /// <summary>A narrow upright card around a large cover.</summary>
+    Vertical,
 }
