@@ -58,25 +58,36 @@ public partial class PlayView
                 () => _ = RemoveSelectedFromListAsync(), "Delete"));
             return;
         }
-        menu.Items.Add(MenuItem("재생", Wpf.Ui.Controls.SymbolRegular.Play24, () => playback.PlayFile(file), "Enter"));
-        if (file.IsUpNext)
-        {
-            menu.Items.Add(MenuItem("다음에 재생 취소", Wpf.Ui.Controls.SymbolRegular.Dismiss24, () => playback.CancelUpNext(file)));
-        }
-        else if (!file.IsNowPlaying)
-        {
-            menu.Items.Add(MenuItem("다음에 재생", Wpf.Ui.Controls.SymbolRegular.TextBulletListAdd24, () => playback.PlayAfterCurrent(file)));
-            menu.Items.Add(MenuItem("나중에 재생", Wpf.Ui.Controls.SymbolRegular.AppsListDetail24, () => playback.PlayLater(file)));
-        }
+        // The same items for every song, so the menu never changes shape: on the playing song
+        // "재생" starts it over and the queueing items are shown greyed out, saying why.
+        menu.Items.Add(file.IsNowPlaying
+            ? MenuItem("처음부터 다시 재생", Wpf.Ui.Controls.SymbolRegular.ArrowCounterclockwise24, () => playback.PlayFile(file), "Enter")
+            : MenuItem("재생", Wpf.Ui.Controls.SymbolRegular.Play24, () => playback.PlayFile(file), "Enter"));
+        menu.Items.Add(file.IsUpNext
+            ? MenuItem("다음에 재생 취소", Wpf.Ui.Controls.SymbolRegular.Dismiss24, () => playback.CancelUpNext(file))
+            : Unavailable(MenuItem("다음에 재생", Wpf.Ui.Controls.SymbolRegular.TextBulletListAdd24, () => playback.PlayAfterCurrent(file)), file));
+        menu.Items.Add(Unavailable(MenuItem("나중에 재생", Wpf.Ui.Controls.SymbolRegular.AppsListDetail24, () => playback.PlayLater(file)), file));
         if (playback.HasUpNext)
             menu.Items.Add(MenuItem("다음에 재생 목록 비우기", Wpf.Ui.Controls.SymbolRegular.Delete24, playback.ClearUpNext));
 
         menu.Items.Add(new Separator());
-        menu.Items.Add(MenuItem("태그 편집", Wpf.Ui.Controls.SymbolRegular.Tag24, () => Shell()?.EditTags([file])));
+        menu.Items.Add(MenuItem("태그 편집", Wpf.Ui.Controls.SymbolRegular.Tag24,
+            () => SongEditorView.Open(System.Windows.Window.GetWindow(this), [file])));
         menu.Items.Add(MenuItem("파일 위치 열기", Wpf.Ui.Controls.SymbolRegular.FolderOpen24, () => RevealInExplorer(file.Path)));
         menu.Items.Add(MenuItem("파일 경로 복사", Wpf.Ui.Controls.SymbolRegular.Copy24, () => CopyPath(file.Path)));
         menu.Items.Add(new Separator());
         menu.Items.Add(MenuItem("목록에서 빼기", Wpf.Ui.Controls.SymbolRegular.Delete24, () => _ = RemoveSelectedFromListAsync(), "Delete"));
+    }
+
+    /// <summary>Greys out a queueing item on the song that is playing (it can't be queued after
+    /// itself), with the reason on hover.</summary>
+    private static MenuItem Unavailable(MenuItem item, LibraryFileViewModel file)
+    {
+        if (!file.IsNowPlaying) return item;
+        item.IsEnabled = false;
+        item.ToolTip = "지금 재생 중인 곡입니다";
+        ToolTipService.SetShowOnDisabled(item, true);
+        return item;
     }
 
     private ShellWindow? Shell() =>

@@ -786,6 +786,7 @@ public sealed partial class TagEditorViewModel : ObservableObject
 
     private void OnPendingChanged(LibraryFileViewModel file)
     {
+        if (_ownFiles is not null && !_ownFiles.Contains(file)) return;
         if (file.HasPendingChanges) _pending.Add(file);
         else _pending.Remove(file);
         if (file.HasPendingChanges) HideUndo();
@@ -842,13 +843,43 @@ public sealed partial class TagEditorViewModel : ObservableObject
             Toast.Warning("입력값을 확인하세요", $"{invalid.Label}: {invalid.Error}");
             return;
         }
-        if (_pending.Count > 1)
+        if (_pending.Count > 1 && ReviewSeveral)
         {
             ShowReview();
             return;
         }
-        await CommitAsync([.. _pending]);
+        await CommitAsync(OrderedPending());
     }
+
+    /// <summary>Saving several songs shows the review first (태그 관리). The one-song editor, which
+    /// only ever has the songs it stepped through, saves them straight away.</summary>
+    public bool ReviewSeveral { get; set; } = true;
+
+    // ---- the one-song editor's own instance (SongEditorView) ----
+
+    private HashSet<LibraryFileViewModel>? _ownFiles;
+
+    /// <summary>Tracks (and saves, and reverts) only these songs' edits - not ones made in 태그 관리
+    /// meanwhile.</summary>
+    public void LimitTo(IEnumerable<LibraryFileViewModel> files)
+    {
+        _ownFiles = [.. files];
+        _pending.Clear();
+        foreach (var file in _ownFiles.Where(f => f.HasPendingChanges)) _pending.Add(file);
+        UpdatePendingSummary();
+    }
+
+    /// <summary>Stops listening to the library (the editor's window closed).</summary>
+    public void Detach()
+    {
+        LibraryFileViewModel.PendingChanged -= OnPendingChanged;
+        _library.Files.CollectionChanged -= OnLibraryFilesChanged;
+        _undoTimer.Stop();
+        _searchCts?.Cancel();
+    }
+
+    /// <summary>The songs with unsaved edits this editor answers for.</summary>
+    public IReadOnlyCollection<LibraryFileViewModel> PendingFiles => _pending;
 
     private void ShowReview()
     {

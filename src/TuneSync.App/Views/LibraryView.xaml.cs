@@ -135,30 +135,14 @@ public partial class LibraryView : Page
         }
     }
 
-    /// <summary>Esc in a tag field puts it back the way it was (when it was changed).</summary>
-    /// <summary>A field's box: takes the caret when its field asks (ticking 적용 on a field whose
-    /// songs differ, with no value typed yet).</summary>
-    private void FieldBox_Loaded(object sender, RoutedEventArgs e)
+    /// <summary>The selected song in the one-song editor, with the list as shown to step through.</summary>
+    private void OpenSongEditor_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is not FrameworkElement { DataContext: TagFieldViewModel field } box || box.Tag is "hooked") return;
-        box.Tag = "hooked";
-        field.FocusRequested += () =>
-        {
-            if (!box.IsVisible) return;
-            box.Focus();
-            Keyboard.Focus(box is Wpf.Ui.Controls.AutoSuggestBox suggest ? FindChild<TextBox>(suggest) ?? (IInputElement)box : box);
-        };
-    }
-
-    private static T? FindChild<T>(DependencyObject parent) where T : DependencyObject
-    {
-        for (var i = 0; i < System.Windows.Media.VisualTreeHelper.GetChildrenCount(parent); i++)
-        {
-            var child = System.Windows.Media.VisualTreeHelper.GetChild(parent, i);
-            if (child is T found) return found;
-            if (FindChild<T>(child) is { } deeper) return deeper;
-        }
-        return null;
+        if (_viewModel.Editor.Selection is not [var song]) return;
+        var list = _viewModel.Library.FilesView.Cast<LibraryFileViewModel>().ToList();
+        var index = list.IndexOf(song);
+        if (index < 0) { list = [song]; index = 0; }
+        SongEditorView.Open(Window.GetWindow(this), list, index);
     }
 
     /// <summary>A song's lyrics comparison in its own, larger window (the review panel is narrow).</summary>
@@ -177,14 +161,6 @@ public partial class LibraryView : Page
             Focusable = false,
         };
         new ToolWindow(page, item.CompareTitle, 960, 780) { Owner = Window.GetWindow(this) }.Show();
-    }
-
-    private void Field_PreviewKeyDown(object sender, KeyEventArgs e)
-    {
-        if (e.Key != Key.Escape || sender is not FrameworkElement { DataContext: TagFieldViewModel field }) return;
-        if (!field.IsChanged && !field.HasError) return;
-        field.RevertCommand.Execute(null);
-        e.Handled = true;
     }
 
     /// <summary>An auto-fill result's covers, large: the current one (full size, read from the
@@ -211,10 +187,6 @@ public partial class LibraryView : Page
 
     // 커버 찾기 gallery: thumbnails are downloaded only for tiles that are (nearly) on screen.
     private bool _thumbCheckQueued;
-
-    private void CoverCandidate_Loaded(object sender, RoutedEventArgs e) => QueueThumbnailCheck();
-
-    private void CoverCandidate_IsVisibleChanged(object sender, DependencyPropertyChangedEventArgs e) => QueueThumbnailCheck();
 
     private void CoverScroll_ScrollChanged(object sender, ScrollChangedEventArgs e) => QueueThumbnailCheck();
 

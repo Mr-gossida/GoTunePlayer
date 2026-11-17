@@ -45,10 +45,13 @@ public sealed partial class TagFieldViewModel : ObservableObject
 
     // ---- 일괄 편집 (several songs): each field says whether it changes them all ----
 
-    /// <summary>Several songs are selected: the field shows its "적용" check and status line.</summary>
+    /// <summary>How many songs are selected (several: the field shows its "적용" check and status).</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(BatchStatus))]
+    [NotifyPropertyChangedFor(nameof(BatchStatus), nameof(IsBatch))]
     private int _selectionCount;
+
+    /// <summary>일괄 편집: several songs at once.</summary>
+    public bool IsBatch => SelectionCount > 1;
 
     /// <summary>How many of the selected songs this field changes.</summary>
     [ObservableProperty]
