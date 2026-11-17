@@ -545,6 +545,9 @@
                                          when not current. Growing is then a pure scale: the line breaks never
                                          change mid-animation (animating FontSize re-wrapped the text every
                                          frame and shifted everything below it). -->
+                                    <!-- PastDim: lines already sung fade to under half of the lines to come
+                                         (its own opacity, so it never fights the current-line animation). -->
+                                    <Grid x:Name="PastDim">
                                     <TextBlock x:Name="LineText" Text="{Binding Text}" TextWrapping="Wrap"
                                                FontSize="28" FontWeight="Bold" Opacity="0.32" RenderTransformOrigin="0,0.5"
                                                Foreground="{DynamicResource TextFillColorPrimaryBrush}">
@@ -552,8 +555,25 @@
                                             <ScaleTransform ScaleX="0.72" ScaleY="0.72"/>
                                         </TextBlock.RenderTransform>
                                     </TextBlock>
+                                    </Grid>
                                 </Border>
                                 <DataTemplate.Triggers>
+                                    <DataTrigger Binding="{Binding IsPast}" Value="True">
+                                        <DataTrigger.EnterActions>
+                                            <BeginStoryboard>
+                                                <Storyboard>
+                                                    <DoubleAnimation Storyboard.TargetName="PastDim" Storyboard.TargetProperty="Opacity" To="0.45" Duration="0:0:0.6"/>
+                                                </Storyboard>
+                                            </BeginStoryboard>
+                                        </DataTrigger.EnterActions>
+                                        <DataTrigger.ExitActions>
+                                            <BeginStoryboard>
+                                                <Storyboard>
+                                                    <DoubleAnimation Storyboard.TargetName="PastDim" Storyboard.TargetProperty="Opacity" To="1" Duration="0:0:0.3"/>
+                                                </Storyboard>
+                                            </BeginStoryboard>
+                                        </DataTrigger.ExitActions>
+                                    </DataTrigger>
                                     <DataTrigger Binding="{Binding IsCurrent}" Value="True">
                                         <DataTrigger.EnterActions>
                                             <BeginStoryboard>

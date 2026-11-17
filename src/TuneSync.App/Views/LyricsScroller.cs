@@ -5,11 +5,21 @@ using System.Windows.Media.Animation;
 
 namespace TuneSync.App.Views;
 
-/// <summary>Glides the synced-lyrics view so the current line sits in the vertical center,
-/// following the line frame by frame while it grows. AnimatedOffset holds the resting offset for
-/// SnapTo/Reset (ScrollViewer.VerticalOffset itself is read-only).</summary>
+/// <summary>Glides the synced-lyrics view so the current line sits at its anchor (the vertical
+/// center unless <see cref="AnchorProperty"/> says otherwise), following the line frame by frame
+/// while it grows. AnimatedOffset holds the resting offset for SnapTo/Reset
+/// (ScrollViewer.VerticalOffset itself is read-only).</summary>
 internal static class LyricsScroller
 {
+    /// <summary>Where the current line rests, as a fraction of the view's height from the top
+    /// (0.5 = middle). The list must be padded by Anchor x height above and the rest below, so
+    /// that the first and last lines can reach it.</summary>
+    public static readonly DependencyProperty AnchorProperty = DependencyProperty.RegisterAttached(
+        "Anchor", typeof(double), typeof(LyricsScroller), new PropertyMetadata(0.5));
+
+    public static double GetAnchor(DependencyObject d) => (double)d.GetValue(AnchorProperty);
+    public static void SetAnchor(DependencyObject d, double value) => d.SetValue(AnchorProperty, value);
+
     private static readonly DependencyProperty AnimatedOffsetProperty = DependencyProperty.RegisterAttached(
         "AnimatedOffset", typeof(double), typeof(LyricsScroller),
         new PropertyMetadata(0.0, (d, e) => ((ScrollViewer)d).ScrollToVerticalOffset((double)e.NewValue)));
@@ -86,7 +96,7 @@ internal static class LyricsScroller
         }
     }
 
-    /// <summary>The offset that puts the line's middle in the middle of the view, right now.</summary>
+    /// <summary>The offset that puts the line's middle at the view's anchor, right now.</summary>
     private static double? Target(ScrollViewer viewer, ItemsControl items, int index)
     {
         if (index < 0 || index >= items.Items.Count
@@ -94,7 +104,7 @@ internal static class LyricsScroller
             || !container.IsDescendantOf(items))
             return null;
         var top = container.TransformToAncestor(items).Transform(new Point(0, 0)).Y + items.Margin.Top;
-        return Math.Clamp(top + container.ActualHeight / 2 - viewer.ViewportHeight / 2, 0, viewer.ScrollableHeight);
+        return Math.Clamp(top + container.ActualHeight / 2 - viewer.ViewportHeight * GetAnchor(viewer), 0, viewer.ScrollableHeight);
     }
 
     private static void Remove(ScrollViewer viewer)
@@ -109,9 +119,9 @@ internal static class LyricsScroller
         viewer.BeginAnimation(AnimatedOffsetProperty, null);
     }
 
-    /// <summary>Keeps the current line centered with no glide while the view is being resized.
-    /// The list is padded by half the viewport above and below, so the offset that centers a line
-    /// is simply its own middle within the list - it doesn't depend on the viewport height.</summary>
+    /// <summary>Keeps the current line at its anchor with no glide while the view is being resized.
+    /// The list is padded by Anchor x viewport above, so the offset that puts a line there is
+    /// simply its own middle within the list - it doesn't depend on the viewport height.</summary>
     public static void SnapTo(ScrollViewer viewer, ItemsControl items, int index)
     {
         Remove(viewer);

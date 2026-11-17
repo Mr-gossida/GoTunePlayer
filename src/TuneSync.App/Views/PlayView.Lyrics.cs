@@ -45,12 +45,18 @@ public partial class PlayView
         _followPausedUntil = DateTime.MinValue;
     }
 
-    /// <summary>Resizing: keep the lyrics padded by half the viewport and the current line
-    /// pinned in the middle, in the same layout pass (so nothing shakes while dragging).</summary>
+    /// <summary>Where the line being sung rests: a third of the way down rather than in the
+    /// middle, so more of what's coming is in view than what has been sung (like phone players).</summary>
+    private const double LyricsAnchor = 0.3;
+
+    /// <summary>Resizing: keep the lyrics padded to the anchor (above) and the rest of the view
+    /// (below) and the current line pinned there, in the same layout pass (so nothing shakes
+    /// while dragging).</summary>
     private void LyricsScrollViewer_SizeChanged(object sender, System.Windows.SizeChangedEventArgs e)
     {
-        var half = LyricsScrollViewer.ActualHeight / 2;
-        LyricsItems.Margin = new System.Windows.Thickness(0, half, 0, half);
+        var height = LyricsScrollViewer.ActualHeight;
+        LyricsScroller.SetAnchor(LyricsScrollViewer, LyricsAnchor);
+        LyricsItems.Margin = new System.Windows.Thickness(0, height * LyricsAnchor, 0, height * (1 - LyricsAnchor));
         LyricsFade.EndPoint = new System.Windows.Point(0, Math.Max(1, LyricsScrollViewer.ActualHeight));
         if (DateTime.UtcNow < _followPausedUntil) return;
         // No forced UpdateLayout here: the lines are already arranged for this size, and the

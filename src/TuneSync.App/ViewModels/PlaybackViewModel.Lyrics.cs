@@ -69,6 +69,10 @@ public sealed partial class PlaybackViewModel
 
         if (index is >= 0 && index < LyricsLines.Count)
             LyricsLines[index].IsCurrent = true;
+
+        // Lines behind the current one fade further (a seek back brings them up again).
+        for (var i = 0; i < LyricsLines.Count; i++)
+            LyricsLines[i].IsPast = i < index;
     }
 
     /// <summary>The playing file's lyrics were just written: show them without restarting.</summary>

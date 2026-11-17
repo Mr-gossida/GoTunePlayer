@@ -10,4 +10,8 @@ public sealed partial class LyricsLineViewModel(TimeSpan time, string text) : Ob
 
     [ObservableProperty]
     private bool _isCurrent;
+
+    /// <summary>Already sung (before the current line): drawn fainter than the lines to come.</summary>
+    [ObservableProperty]
+    private bool _isPast;
 }
