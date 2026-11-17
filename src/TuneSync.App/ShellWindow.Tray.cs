@@ -141,7 +141,7 @@ public partial class ShellWindow
 
     // --- the tray menu ---
 
-    private MenuItem? _trayPlayPause, _trayHud;
+    private MenuItem? _trayPlayPause, _trayHud, _trayHudClickThrough;
 
     private void ShowTrayMenu()
     {
@@ -151,6 +151,9 @@ public partial class ShellWindow
         _trayPlayPause.Icon = new SymbolIcon { Symbol = playing ? SymbolRegular.Pause24 : SymbolRegular.Play24 };
         // (WPF-UI's menu item draws the icon instead of a check mark, so the text says the state)
         _trayHud!.Header = Hud.IsOpen ? "HUD 숨기기" : "HUD 표시";
+        // a click-through HUD can't be clicked, so this is one of the ways back
+        _trayHudClickThrough!.Header = Hud.ClickThrough ? "HUD 마우스 통과 끄기" : "HUD 마우스 통과 켜기";
+        _trayHudClickThrough.Visibility = Hud.IsOpen || Hud.ClickThrough ? Visibility.Visible : Visibility.Collapsed;
         _trayMenu.IsOpen = false;
         _trayMenu.IsOpen = true;
     }
@@ -178,6 +181,7 @@ public partial class ShellWindow
             if (_mini is not null) BringUp(_mini);
         });
         _trayHud = Item("HUD 표시", SymbolRegular.Board24, () => Hud.Toggle());
+        _trayHudClickThrough = Item("HUD 마우스 통과 켜기", SymbolRegular.CursorClick24, () => Hud.ClickThrough = !Hud.ClickThrough);
         menu.Items.Add(new Separator());
         Item("종료", SymbolRegular.Power24, ExitFromTray);
 

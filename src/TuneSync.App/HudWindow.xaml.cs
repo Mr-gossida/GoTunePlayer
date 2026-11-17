@@ -18,6 +18,7 @@ public partial class HudWindow : Window
     private const int GwlExStyle = -20;
     private const int WsExNoActivate = 0x08000000;
     private const int WsExToolWindow = 0x00000080;
+    private const int WsExTransparent = 0x00000020;
 
     private readonly HudViewModel _hud;
     private readonly AppSettings _settings;
@@ -30,10 +31,12 @@ public partial class HudWindow : Window
         _settings = settings;
         DataContext = hud.Playback;
         Tag = hud; // the menu and close button work on the HUD itself
+        WindowSnapper.Attach(this); // magnetic screen edges while dragging, like the mini player
         SourceInitialized += (_, _) =>
         {
             var handle = new WindowInteropHelper(this).Handle;
             SetWindowLong(handle, GwlExStyle, GetWindowLong(handle, GwlExStyle) | WsExNoActivate | WsExToolWindow);
+            ApplyClickThrough();
         };
         Menu.Closed += (_, _) => { if (!IsMouseOver) Settle(); };
         Closing += (_, e) =>
@@ -88,7 +91,25 @@ public partial class HudWindow : Window
         if (!_hovered && IsVisible) Fade(Idle, 0.12);
     }
 
-    private double Idle => Math.Clamp(_settings.Hud.Opacity, HudSettings.MinOpacity, 1);
+    /// <summary>Mouse pass-through on or off. A transparent window style makes Windows hand every
+    /// click (and hover) to the window below, so the card can't be grabbed until it is switched
+    /// off again from 설정 or the tray menu.</summary>
+    public void ApplyClickThrough()
+    {
+        var handle = new WindowInteropHelper(this).Handle;
+        if (handle == IntPtr.Zero) return; // applied once the window exists
+        var style = GetWindowLong(handle, GwlExStyle);
+        var through = _settings.Hud.ClickThrough;
+        SetWindowLong(handle, GwlExStyle, through ? style | WsExTransparent : style & ~WsExTransparent);
+        if (through)
+        {
+            // it stops getting the mouse now: drop the hover look and the menu
+            Menu.IsOpen = false;
+            if (IsVisible) Settle();
+        }
+    }
+
+    private double Idle =>Math.Clamp(_settings.Hud.Opacity, HudSettings.MinOpacity, 1);
 
     private void Fade(double to, double seconds) =>
         BeginAnimation(OpacityProperty, new DoubleAnimation(to, TimeSpan.FromSeconds(seconds)) { EasingFunction = new QuadraticEase() });

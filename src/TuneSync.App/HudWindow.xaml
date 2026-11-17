@@ -85,17 +85,31 @@
                         </StackPanel>
                         <!-- the card's menu and close: shown while the mouse is over it -->
                         <StackPanel x:Name="Chrome" Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Top" Opacity="0" Margin="6,-4,-4,0">
-                            <ui:Button x:Name="MenuButton" Style="{StaticResource HudChrome}" Icon="{ui:SymbolIcon Options24}" ToolTip="투명도"
-                                       Click="Menu_Click" AutomationProperties.Name="HUD 투명도"/>
+                            <ui:Button x:Name="MenuButton" Style="{StaticResource HudChrome}" Icon="{ui:SymbolIcon Options24}" ToolTip="투명도 · 마우스 통과"
+                                       Click="Menu_Click" AutomationProperties.Name="HUD 메뉴"/>
                             <ui:Button Style="{StaticResource HudChrome}" Icon="{ui:SymbolIcon Dismiss24}" ToolTip="HUD 끄기"
                                        Command="{Binding Tag.CloseCommand, RelativeSource={RelativeSource AncestorType=Window}}" AutomationProperties.Name="HUD 끄기"/>
                         </StackPanel>
                     </Grid>
 
-                    <!-- the lyrics: the line being sung and the next one -->
-                    <StackPanel Grid.Row="1" Margin="0,10,0,0"
-                                Visibility="{Binding HasSyncedLyrics, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}">
+                    <!-- the lyrics: the line being sung and the next one. The two lines are always
+                         there and have fixed line heights, so the card keeps one size and shape for
+                         every song (synced lyrics, plain lyrics, none) and for every line of any
+                         font; songs without synced lyrics say so in the same place. -->
+                    <Grid Grid.Row="1" Margin="0,10,0,0">
+                    <StackPanel>
+                        <StackPanel.Style>
+                            <Style TargetType="StackPanel">
+                                <Setter Property="Visibility" Value="Hidden"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding HasSyncedLyrics}" Value="True">
+                                        <Setter Property="Visibility" Value="Visible"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </StackPanel.Style>
                         <TextBlock Text="{Binding CurrentLyricText, NotifyOnTargetUpdated=True}" FontFamily="{DynamicResource LyricsFontFamily}" FontSize="16" FontWeight="SemiBold"
+                                   LineHeight="22" LineStackingStrategy="BlockLineHeight"
                                    TextTrimming="CharacterEllipsis" Foreground="{DynamicResource PlayerAccentBrush}">
                             <TextBlock.Triggers>
                                 <EventTrigger RoutedEvent="Binding.TargetUpdated">
@@ -104,9 +118,23 @@
                             </TextBlock.Triggers>
                         </TextBlock>
                         <TextBlock Text="{Binding NextLyricText}" FontFamily="{DynamicResource LyricsFontFamily}" FontSize="12" Margin="0,3,0,0" TextTrimming="CharacterEllipsis"
-                                   Foreground="{DynamicResource TextFillColorTertiaryBrush}"
-                                   Visibility="{Binding HasSyncedLyrics, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}"/>
+                                   LineHeight="17" LineStackingStrategy="BlockLineHeight"
+                                   Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
                     </StackPanel>
+                    <!-- no synced lyrics: said in the lyrics' place, in the app's font -->
+                    <StackPanel Visibility="{Binding HasNoLyrics, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}">
+                        <TextBlock Text="♪  가사가 없는 곡" FontSize="14" FontWeight="SemiBold" LineHeight="22" LineStackingStrategy="BlockLineHeight"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                        <TextBlock Text="태그 관리에서 가사를 추가할 수 있습니다" FontSize="12" Margin="0,3,0,0" LineHeight="17" LineStackingStrategy="BlockLineHeight"
+                                   TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
+                    </StackPanel>
+                    <StackPanel Visibility="{Binding HasPlainLyricsOnly, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}">
+                        <TextBlock Text="♪  시간이 맞춰지지 않은 가사" FontSize="14" FontWeight="SemiBold" LineHeight="22" LineStackingStrategy="BlockLineHeight"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                        <TextBlock Text="싱크 가사 만들기로 한 줄씩 따라가게 할 수 있습니다" FontSize="12" Margin="0,3,0,0" LineHeight="17" LineStackingStrategy="BlockLineHeight"
+                                   TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
+                    </StackPanel>
+                    </Grid>
 
                     <!-- spectrum and the buttons -->
                     <Grid Grid.Row="2" Margin="0,8,0,0">
@@ -159,8 +187,16 @@
                                            Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
                             </Grid>
                             <Slider Minimum="0.2" Maximum="1" SmallChange="0.05" LargeChange="0.1" Value="{Binding Opacity}" Margin="0,8,0,4"
-                                    IsMoveToPointEnabled="True" AutomationProperties.Name="HUD 투명도"/>
+                                    IsMoveToPointEnabled="True" AutomationProperties.Name="HUD 메뉴"/>
                             <TextBlock Text="마우스를 올리면 잠시 선명해집니다" FontSize="11" Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
+                            <Grid Margin="0,12,0,0">
+                                <TextBlock Text="마우스 통과" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center"
+                                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                                <ui:ToggleSwitch IsChecked="{Binding ClickThrough}" HorizontalAlignment="Right" VerticalAlignment="Center"
+                                                 AutomationProperties.Name="HUD 마우스 통과"/>
+                            </Grid>
+                            <TextBlock Text="클릭이 뒤의 창으로 갑니다. 트레이 메뉴나 설정에서 끕니다" FontSize="11" Margin="0,4,0,0" TextWrapping="Wrap"
+                                       local:KeepWords.IsEnabled="True" Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
                             <ui:Button Content="HUD 끄기" Icon="{ui:SymbolIcon Dismiss24}" HorizontalAlignment="Stretch" Margin="0,10,0,0"
                                        Command="{Binding CloseCommand}"/>
                         </StackPanel>

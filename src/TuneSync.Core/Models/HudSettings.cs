@@ -14,6 +14,10 @@ public sealed class HudSettings
     public double? Left { get; set; }
     public double? Top { get; set; }
 
+    /// <summary>Clicks go through it to the window behind (it can't be moved or used meanwhile;
+    /// turned off again from 설정 or the tray menu).</summary>
+    public bool ClickThrough { get; set; }
+
     public const double MinOpacity = 0.2;
 
     public void Normalize()

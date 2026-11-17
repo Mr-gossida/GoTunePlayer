@@ -263,6 +263,17 @@
                                        Typography.NumeralAlignment="Tabular"/>
                         </StackPanel>
                     </ui:CardControl>
+                    <ui:CardControl Style="{StaticResource Card}" DataContext="{Binding Hud}" Icon="{ui:SymbolIcon CursorClick24}"
+                                    Tag="HUD 마우스 통과 클릭 통과 클릭 무시 투명 고정"
+                                    ToolTip="켜 두면 HUD를 눌러도 그 뒤의 창이 클릭됩니다. 그동안 HUD는 옮기거나 누를 수 없으니, 끌 때는 여기나 트레이 아이콘의 메뉴(HUD 마우스 통과 끄기)를 쓰세요.">
+                        <ui:CardControl.Header>
+                            <StackPanel>
+                                <ui:TextBlock Text="HUD 마우스 통과" FontTypography="Body"/>
+                                <ui:TextBlock Text="클릭이 HUD를 지나 뒤의 창으로 갑니다 · 트레이 메뉴에서도 끌 수 있습니다" Style="{StaticResource Desc}"/>
+                            </StackPanel>
+                        </ui:CardControl.Header>
+                        <ui:ToggleSwitch IsChecked="{Binding ClickThrough}" OnContent="켬" OffContent="끔"/>
+                    </ui:CardControl>
                 </StackPanel>
 
                 <!-- 재생 -->

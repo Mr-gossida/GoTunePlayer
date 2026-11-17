@@ -18,6 +18,7 @@ public sealed partial class HudViewModel : ObservableObject
         Playback = playback;
         _isOpen = false;
         _opacity = settings.Hud.Opacity;
+        _clickThrough = settings.Hud.ClickThrough;
     }
 
     public PlaybackViewModel Playback { get; }
@@ -30,6 +31,18 @@ public sealed partial class HudViewModel : ObservableObject
     private double _opacity;
 
     public string OpacityText => $"{Math.Round(Opacity * 100)}%";
+
+    /// <summary>Clicks pass through the card to whatever is behind it. The card can't then be
+    /// grabbed or used, so this is switched back off from 설정 or the tray menu.</summary>
+    [ObservableProperty]
+    private bool _clickThrough;
+
+    partial void OnClickThroughChanged(bool value)
+    {
+        _settings.Hud.ClickThrough = value;
+        AppSettingsStore.Save(_settings);
+        _window?.ApplyClickThrough();
+    }
 
     /// <summary>Opens it if it was open when the app last closed.</summary>
     public void Restore()
