@@ -46,6 +46,13 @@ public partial class HudWindow
                 if (clear) layout.Resources[key] = brush;
                 else layout.Resources.Remove(key);
             }
+            if (clear && _settings.Hud.ClearEffect == HudClearEffect.Neon)
+            {
+                // the neon's color depends on what it surrounds: see NeonFor
+                foreach (var element in HaloTargets(layout).OfType<FrameworkElement>()) element.Effect = NeonFor(element, wide: false);
+                foreach (var panel in TextPanels(layout)) panel.Effect = NeonFor(panel, wide: true);
+                continue;
+            }
             foreach (var element in HaloTargets(layout)) element.Effect = each;
             foreach (var panel in TextPanels(layout)) panel.Effect = group;
         }
@@ -60,27 +67,78 @@ public partial class HudWindow
     {
         // a soft shadow just under each shape, a little down and to the right, as if lit from above
         HudClearEffect.Shadow => (SoftShadow, null),
-        // a hairline of dark to keep the letters crisp, and around it a faint glow in the cover's color
-        HudClearEffect.Neon => (Hairline, Frozen(new DropShadowEffect
-        {
-            Color = AccentGlow(), ShadowDepth = 0, BlurRadius = 12, Opacity = 0.9, RenderingBias = RenderingBias.Performance,
-        })),
+        HudClearEffect.Neon => (null, null), // per element (NeonFor)
         _ => (Halo, Halo),
     };
 
     private static readonly Effect SoftShadow = Frozen(new DropShadowEffect
     {
-        Color = Colors.Black, Direction = 300, ShadowDepth = 1.5, BlurRadius = 6, Opacity = 0.75, RenderingBias = RenderingBias.Performance,
+        Color = Colors.Black, Direction = 300, ShadowDepth = 2, BlurRadius = 9, Opacity = 0.8, RenderingBias = RenderingBias.Performance,
     });
 
-    private static readonly Effect Hairline = Frozen(new DropShadowEffect
+    /// <summary>네온: a glow in a color set against the thing it surrounds - white words and icons
+    /// glow in a deep, dark shade of the cover's color; what is drawn in that color itself (the
+    /// line being sung, the play button) glows in the opposite hue. A tight glow on each, and a
+    /// wider, fainter one around each group. One frozen effect per color and width, shared.</summary>
+    private Effect NeonFor(FrameworkElement element, bool wide)
     {
-        Color = Colors.Black, ShadowDepth = 0, BlurRadius = 2.5, Opacity = 0.6, RenderingBias = RenderingBias.Performance,
-    });
+        var accent = AccentColor();
+        var color = UsesAccent(element, accent) ? Opposite(accent) : Deep(accent);
+        var key = (color, wide);
+        if (!_neon.TryGetValue(key, out var effect))
+            _neon[key] = effect = Frozen(new DropShadowEffect
+            {
+                Color = color, ShadowDepth = 0, BlurRadius = wide ? 14 : 7, Opacity = wide ? 0.75 : 1, RenderingBias = RenderingBias.Performance,
+            });
+        return effect;
+    }
 
-    /// <summary>The neon's color: the player's accent (from the cover), as the palette settles on it.</summary>
-    private static Color AccentGlow() =>
+    private readonly Dictionary<(Color, bool), Effect> _neon = [];
+
+    /// <summary>Drawn in the cover's color: a line in that color, a button filled with it, or a
+    /// group whose first words are in it.</summary>
+    private static bool UsesAccent(FrameworkElement element, Color accent) => element switch
+    {
+        TextBlock text => IsAccent(text.Foreground, accent),
+        ButtonBase button => IsAccent(button.Background, accent),
+        Panel or Border => LogicalTreeHelper.GetChildren(element).OfType<FrameworkElement>()
+            .Select(c => c is TextBlock or ButtonBase ? c : null).FirstOrDefault(c => c is not null) is { } first && UsesAccent(first, accent),
+        _ => false,
+    };
+
+    private static bool IsAccent(Brush? brush, Color accent) =>
+        brush is SolidColorBrush { Color: var c } && Math.Abs(c.R - accent.R) + Math.Abs(c.G - accent.G) + Math.Abs(c.B - accent.B) < 24;
+
+    /// <summary>The cover's color as the palette settles on it.</summary>
+    private static Color AccentColor() =>
         Application.Current?.TryFindResource(PlayerPalette.AccentKey) is SolidColorBrush accent ? accent.Color : Colors.DeepSkyBlue;
+
+    /// <summary>The same hue, deep and dark: a glow that shows against light backgrounds.</summary>
+    private static Color Deep(Color c) => FromHsl(Hue(c), 0.85, 0.22);
+
+    /// <summary>The opposite hue, strong and dark: sets off something drawn in the accent.</summary>
+    private static Color Opposite(Color c) => FromHsl((Hue(c) + 0.5) % 1, 0.9, 0.2);
+
+    private static double Hue(Color c)
+    {
+        double r = c.R / 255.0, g = c.G / 255.0, b = c.B / 255.0;
+        double max = Math.Max(r, Math.Max(g, b)), min = Math.Min(r, Math.Min(g, b)), d = max - min;
+        if (d < 1e-6) return 0.7; // grey: a violet, like the aurora
+        var h = max == r ? (g - b) / d % 6 : max == g ? (b - r) / d + 2 : (r - g) / d + 4;
+        return (h / 6 + 1) % 1;
+    }
+
+    private static Color FromHsl(double h, double s, double l)
+    {
+        double Channel(double t)
+        {
+            var q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+            var p = 2 * l - q;
+            t = (t % 1 + 1) % 1;
+            return t < 1 / 6.0 ? p + (q - p) * 6 * t : t < 0.5 ? q : t < 2 / 3.0 ? p + (q - p) * (2 / 3.0 - t) * 6 : p;
+        }
+        return Color.FromRgb((byte)Math.Round(Channel(h + 1 / 3.0) * 255), (byte)Math.Round(Channel(h) * 255), (byte)Math.Round(Channel(h - 1 / 3.0) * 255));
+    }
 
     /// <summary>A new song brings a new accent color: the neon follows once the palette's blend is
     /// over (its brush animates for 0.7 s).</summary>

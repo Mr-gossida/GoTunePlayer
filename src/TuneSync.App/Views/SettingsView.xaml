@@ -485,7 +485,7 @@
                         <ComboBox Width="260" ItemsSource="{Binding Devices}" DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding DeviceId}"/>
                     </ui:CardControl>
                     <ui:CardControl Style="{StaticResource Card}" DataContext="{Binding Output}" Icon="{ui:SymbolIcon SpeakerSettings24}" Tag="스피커 구성 채널 스테레오 서라운드 5.1 7.1 4채널 업믹스"
-                                    ToolTip="스테레오 음악을 더 많은 스피커에 나눠 보냅니다: 앞은 원래 좌우, 센터는 둘의 공통된 소리, 서브우퍼는 100Hz 아래 저음, 뒤는 좌우를 조금 작게. 장치에 있는 스피커 수만큼만 고를 수 있습니다.">
+                                    ToolTip="스테레오 음악을 더 많은 스피커에 나눠 보냅니다: 앞은 원래 좌우, 센터는 둘의 공통된 소리, 서브우퍼는 저음, 뒤는 좌우를 조금 작게. 저음을 어디서 우퍼로 나눌지는 리시버의 스피커 설정을 따릅니다. 장치에 있는 스피커 수만큼만 고를 수 있습니다.">
                         <ui:CardControl.Header>
                             <StackPanel>
                                 <ui:TextBlock Text="스피커 구성" FontTypography="Body"/>

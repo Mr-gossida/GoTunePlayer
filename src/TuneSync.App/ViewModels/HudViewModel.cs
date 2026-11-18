@@ -47,7 +47,7 @@ public sealed partial class HudViewModel : ObservableObject
     public IReadOnlyList<Choice<HudClearEffect>> ClearEffectOptions { get; } =
     [
         new(HudClearEffect.Shadow, "그림자 · 부드럽게"),
-        new(HudClearEffect.Neon, "네온 · 커버 색으로 은은하게"),
+        new(HudClearEffect.Neon, "네온 · 대비되는 색으로 빛나게"),
         new(HudClearEffect.Outline, "테두리 · 진하게"),
     ];
 
