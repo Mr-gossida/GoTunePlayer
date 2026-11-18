@@ -69,19 +69,26 @@ public partial class SongEditorView : Page
 
     private void Close_Click(object sender, RoutedEventArgs e) => Window.GetWindow(this)?.Close();
 
-    /// <summary>Unsaved edits: ask before they're dropped.</summary>
-    private async void Window_Closing(object? sender, CancelEventArgs e)
+    /// <summary>Unsaved edits: ask before they're dropped. The question comes once this close has
+    /// been called off - a window can't be shown over one that is still closing (WPF throws), and
+    /// the dialog is placed over this window (as 싱크 편집 and the main window already do).</summary>
+    private void Window_Closing(object? sender, CancelEventArgs e)
     {
         if (_closeConfirmed || Editor.PendingFiles.Count == 0 || Editor.IsSaving) return;
         e.Cancel = true;
-        var count = Editor.PendingFiles.Count;
-        var discard = await Dialogs.ConfirmAsync("저장하지 않은 변경",
-            count == 1 ? "저장하지 않은 변경이 있습니다. 버리고 닫을까요?" : $"{count}곡에 저장하지 않은 변경이 있습니다. 버리고 닫을까요?",
-            "버리고 닫기");
-        if (!discard) return;
-        foreach (var file in Editor.PendingFiles.ToList()) file.ClearAllPending();
-        _closeConfirmed = true;
-        (sender as Window)?.Close();
+        var window = sender as Window;
+        Dispatcher.BeginInvoke(async () =>
+        {
+            var count = Editor.PendingFiles.Count;
+            if (count == 0) return;
+            var discard = await Dialogs.ConfirmAsync("저장하지 않은 변경",
+                count == 1 ? "저장하지 않은 변경이 있습니다. 버리고 닫을까요?" : $"{count}곡에 저장하지 않은 변경이 있습니다. 버리고 닫을까요?",
+                "버리고 닫기");
+            if (!discard) return;
+            foreach (var file in Editor.PendingFiles.ToList()) file.ClearAllPending();
+            _closeConfirmed = true;
+            window?.Close();
+        });
     }
 
     // ---- cover ----
