@@ -23,7 +23,10 @@ public class HotkeySettingsTests
             (HotkeyAction.Repeat, "R", false), (HotkeyAction.Shuffle, "S", false), (HotkeyAction.Mute, "M", false),
             (HotkeyAction.VolumeUp, "Up", false), (HotkeyAction.VolumeDown, "Down", false),
             (HotkeyAction.MiniPlayer, "Back", false), (HotkeyAction.Hud, "D", false),
+            (HotkeyAction.HudClear, "C", false), (HotkeyAction.HudClickThrough, "T", false),
         ];
+        // no two defaults share keys
+        Assert.Equal(hotkeys.Bindings.Count, hotkeys.Bindings.Select(b => b.Key).Distinct().Count());
         foreach (var (action, key, enabled) in expected)
         {
             Assert.Equal(key, hotkeys[action].Key);

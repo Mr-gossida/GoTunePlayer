@@ -142,6 +142,8 @@ public sealed class GlobalHotkeys : IDisposable
             case HotkeyAction.VolumeDown: _playback.ChangeVolume(-0.05); break;
             case HotkeyAction.MiniPlayer:
             case HotkeyAction.Hud:
+            case HotkeyAction.HudClear:
+            case HotkeyAction.HudClickThrough:
                 WindowAction?.Invoke(action);
                 break;
         }
@@ -193,6 +195,8 @@ public static class HotkeyText
         HotkeyAction.VolumeDown => "소리 낮춤",
         HotkeyAction.MiniPlayer => "미니 플레이어 전환",
         HotkeyAction.Hud => "HUD 전환",
+        HotkeyAction.HudClear => "HUD 클리어 모드 켜기/끄기",
+        HotkeyAction.HudClickThrough => "HUD 마우스 통과 켜기/끄기",
         _ => action.ToString(),
     };
 

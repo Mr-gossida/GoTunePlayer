@@ -53,6 +53,17 @@ public partial class HudWindow
         if (!_hovered && !_pointerOverCard && IsVisible) Fade(Idle, 0.12);
     }
 
+    /// <summary>Shows what a hotkey just switched, in the middle of the HUD for a moment.</summary>
+    public void Flash(string text)
+    {
+        FlashText.Text = text;
+        var show = new DoubleAnimationUsingKeyFrames();
+        show.KeyFrames.Add(new LinearDoubleKeyFrame(1, KeyTime.FromTimeSpan(TimeSpan.FromSeconds(0.15))));
+        show.KeyFrames.Add(new LinearDoubleKeyFrame(1, KeyTime.FromTimeSpan(TimeSpan.FromSeconds(1.4))));
+        show.KeyFrames.Add(new LinearDoubleKeyFrame(0, KeyTime.FromTimeSpan(TimeSpan.FromSeconds(1.8))));
+        FlashBadge.BeginAnimation(OpacityProperty, show);
+    }
+
     /// <summary>The card's surface: there as usual; when clear, gone - or faintly there while the
     /// pointer is over the HUD, to show where it is and make its buttons easy to find.</summary>
     private void SetSurface(bool pointerOver, double seconds)

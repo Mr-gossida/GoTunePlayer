@@ -16,6 +16,10 @@ public enum HotkeyAction
     VolumeDown,
     MiniPlayer,
     Hud,
+    /// <summary>HUD 클리어 모드 on/off.</summary>
+    HudClear,
+    /// <summary>HUD 마우스 통과 on/off - also the way back when the HUD can't be clicked.</summary>
+    HudClickThrough,
 }
 
 /// <summary>Modifier keys, with the values Windows' RegisterHotKey uses.</summary>
@@ -75,6 +79,8 @@ public sealed class HotkeySettings
         Bind(HotkeyAction.VolumeDown, false, "Down"),
         Bind(HotkeyAction.MiniPlayer, false, "Back"),
         Bind(HotkeyAction.Hud, false, "D"),
+        Bind(HotkeyAction.HudClear, false, "C"),
+        Bind(HotkeyAction.HudClickThrough, false, "T"),
     ];
 
     private static HotkeyBinding Bind(HotkeyAction action, bool enabled, string key) =>

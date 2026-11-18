@@ -56,6 +56,12 @@ public partial class ShellWindow
             case HotkeyAction.Hud:
                 ToggleHud();
                 break;
+            case HotkeyAction.HudClear:
+                Hud.ToggleClear();
+                break;
+            case HotkeyAction.HudClickThrough:
+                Hud.ToggleClickThrough();
+                break;
         }
     }
 

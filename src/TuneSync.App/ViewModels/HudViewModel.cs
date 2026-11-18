@@ -78,6 +78,26 @@ public sealed partial class HudViewModel : ObservableObject
     [ObservableProperty]
     private bool _clickThroughButtons;
 
+    /// <summary>The hotkeys (설정 › 단축키): switch and say so - on the HUD itself for a moment
+    /// (a click-through HUD gives no other sign), or as a notice when the HUD isn't showing.</summary>
+    public void ToggleClear()
+    {
+        Clear = !Clear;
+        Tell(Clear ? "클리어 모드 켬" : "클리어 모드 끔");
+    }
+
+    public void ToggleClickThrough()
+    {
+        ClickThrough = !ClickThrough;
+        Tell(ClickThrough ? "마우스 통과 켬" : "마우스 통과 끔");
+    }
+
+    private void Tell(string text)
+    {
+        if (IsOpen && _window is not null) _window.Flash(text);
+        else Toast.Info("HUD", text);
+    }
+
     partial void OnClickThroughButtonsChanged(bool value)
     {
         _settings.Hud.ClickThroughButtons = value;

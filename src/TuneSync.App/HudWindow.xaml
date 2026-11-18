@@ -364,6 +364,16 @@
                     </StackPanel>
                 </StackPanel>
 
+                <!-- what a hotkey just switched ("클리어 모드 켬"), for a moment in the middle -->
+                <Border x:Name="FlashBadge" HorizontalAlignment="Center" VerticalAlignment="Center" Opacity="0" IsHitTestVisible="False"
+                        CornerRadius="14" Padding="14,6" Background="{DynamicResource PlayerTintBrush}"
+                        BorderThickness="1" BorderBrush="{DynamicResource PlayerAccentBrush}">
+                    <Border.Effect>
+                        <DropShadowEffect BlurRadius="12" ShadowDepth="2" Opacity="0.5" Color="Black" RenderingBias="Performance"/>
+                    </Border.Effect>
+                    <TextBlock x:Name="FlashText" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                </Border>
+
                 <!-- the card's menu and close: shown while the mouse is over it -->
                 <Border x:Name="Chrome" Style="{StaticResource ChromePlace}" Opacity="0" CornerRadius="14" Padding="1"
                         Background="{DynamicResource PlayerTintBrush}">
