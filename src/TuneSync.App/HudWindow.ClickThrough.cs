@@ -69,6 +69,7 @@ public partial class HudWindow
             _pointerOverCard = overCard;
             Fade(overCard ? 1 : Idle, overCard ? 0.15 : 0.4);
             LyricsButtons.BeginAnimation(OpacityProperty, new DoubleAnimation(overCard ? 1 : 0, TimeSpan.FromSeconds(overCard ? 0.15 : 0.3)));
+            SetSurface(overCard, overCard ? 0.15 : 0.3);
         }
 
         // not switched mid-press: a button keeps the press it got until it is let go

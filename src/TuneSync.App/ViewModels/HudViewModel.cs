@@ -20,6 +20,7 @@ public sealed partial class HudViewModel : ObservableObject
         _opacity = settings.Hud.Opacity;
         _clickThrough = settings.Hud.ClickThrough;
         _clickThroughButtons = settings.Hud.ClickThroughButtons;
+        _clear = settings.Hud.Clear;
         _layout = settings.Hud.Layout;
     }
 
@@ -31,6 +32,22 @@ public sealed partial class HudViewModel : ObservableObject
     {
         _settings.Hud.Layout = value;
         AppSettingsStore.Save(_settings);
+    }
+
+    /// <summary>클리어 모드: no card, just the HUD's contents with an outline (the opacity setting
+    /// doesn't apply then).</summary>
+    [ObservableProperty]
+    private bool _clear;
+
+    /// <summary>The opacity is the card's; with no card (클리어) it is set aside.</summary>
+    public bool CanSetOpacity => !Clear;
+
+    partial void OnClearChanged(bool value)
+    {
+        OnPropertyChanged(nameof(CanSetOpacity));
+        _settings.Hud.Clear = value;
+        AppSettingsStore.Save(_settings);
+        _window?.ApplyClear();
     }
 
     public PlaybackViewModel Playback { get; }

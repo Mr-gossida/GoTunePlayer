@@ -31,6 +31,7 @@ public partial class HudWindow : Window
         _settings = settings;
         DataContext = hud.Playback;
         Tag = hud; // the menu and close button work on the HUD itself
+        ApplyClear();
         WindowSnapper.Attach(this); // magnetic screen edges while dragging, like the mini player
         SourceInitialized += (_, _) =>
         {
@@ -125,7 +126,8 @@ public partial class HudWindow : Window
         if (!_hovered && IsVisible) Fade(Idle, 0.12);
     }
 
-    private double Idle => Math.Clamp(_settings.Hud.Opacity, HudSettings.MinOpacity, 1);
+    /// <summary>How solid it is at rest: as set, or fully solid in 클리어 모드 (no card to see through).</summary>
+    private double Idle => _settings.Hud.Clear ? 1 : Math.Clamp(_settings.Hud.Opacity, HudSettings.MinOpacity, 1);
 
     private void Fade(double to, double seconds) =>
         BeginAnimation(OpacityProperty, new DoubleAnimation(to, TimeSpan.FromSeconds(seconds)) { EasingFunction = new QuadraticEase() });
@@ -146,6 +148,7 @@ public partial class HudWindow : Window
     {
         Chrome.BeginAnimation(OpacityProperty, new DoubleAnimation(to, TimeSpan.FromSeconds(seconds)));
         LyricsButtons.BeginAnimation(OpacityProperty, new DoubleAnimation(to, TimeSpan.FromSeconds(seconds)));
+        SetSurface(to > 0.5, seconds);
     }
 
     private void Window_MouseLeave(object sender, MouseEventArgs e)

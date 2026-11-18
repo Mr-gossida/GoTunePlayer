@@ -22,6 +22,10 @@ public sealed class HudSettings
     /// of the card lets them through.</summary>
     public bool ClickThroughButtons { get; set; }
 
+    /// <summary>클리어 모드: no card behind the HUD, only its text, cover, spectrum and buttons,
+    /// fully solid and outlined so they read over any window (the opacity setting is set aside).</summary>
+    public bool Clear { get; set; }
+
     /// <summary>How the card is laid out (설정 › HUD 레이아웃).</summary>
     public HudLayout Layout { get; set; } = HudLayout.Card;
 

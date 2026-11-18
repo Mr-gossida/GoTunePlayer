@@ -264,7 +264,18 @@
                             <views:HudLayoutPicker Layout="{Binding Layout, Mode=TwoWay}" ShowDescriptions="True" Margin="0,12,0,0"/>
                         </StackPanel>
                     </Border>
-                    <ui:CardControl Style="{StaticResource Card}" DataContext="{Binding Hud}" Icon="{ui:SymbolIcon Blur24}" Tag="HUD 투명도 불투명도 반투명"
+                    <ui:CardControl Style="{StaticResource Card}" DataContext="{Binding Hud}" Icon="{ui:SymbolIcon EyeTrackingOff24}"
+                                    Tag="HUD 클리어 모드 배경 없음 투명 배경 테두리 그림자 글자만"
+                                    ToolTip="카드 배경을 없애고 곡 정보 · 가사 · 스펙트럼 · 버튼만 띄웁니다. 글자와 버튼은 흰색에 어두운 테두리를 둘러, 밝은 창 위에서도 어두운 창 위에서도 읽힙니다. 마우스를 올리면 카드가 옅게 나타납니다.">
+                        <ui:CardControl.Header>
+                            <StackPanel>
+                                <ui:TextBlock Text="HUD 클리어 모드" FontTypography="Body"/>
+                                <ui:TextBlock Text="배경 없이 글자 · 커버 · 버튼만 테두리를 둘러 띄우기 · 그동안 투명도는 쓰지 않습니다" Style="{StaticResource Desc}"/>
+                            </StackPanel>
+                        </ui:CardControl.Header>
+                        <ui:ToggleSwitch IsChecked="{Binding Clear}" OnContent="켬" OffContent="끔" AutomationProperties.Name="HUD 클리어 모드"/>
+                    </ui:CardControl>
+                    <ui:CardControl Style="{StaticResource Card}" DataContext="{Binding Hud}" IsEnabled="{Binding CanSetOpacity}" Icon="{ui:SymbolIcon Blur24}" Tag="HUD 투명도 불투명도 반투명"
                                     ToolTip="마우스를 올리면 잠시 선명해져 버튼을 누르기 쉽습니다. HUD의 메뉴(⚙)에서도 바꿀 수 있습니다.">
                         <ui:CardControl.Header>
                             <StackPanel>

@@ -21,6 +21,7 @@
     <Window.Resources>
         <conv:PlayPauseIconConverter x:Key="PlayPauseIconConverter"/>
         <conv:EnumToVisibilityConverter x:Key="EnumToVisibilityConverter"/>
+        <conv:InverseBooleanConverter x:Key="InverseBooleanConverter"/>
         <Storyboard x:Key="LineFadeIn">
             <DoubleAnimation Storyboard.TargetProperty="Opacity" From="0" To="1" Duration="0:0:0.4"/>
         </Storyboard>
@@ -116,6 +117,12 @@
             <Setter Property="BorderThickness" Value="0"/>
             <Setter Property="IsHitTestVisible" Value="False"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
+            <Style.Triggers>
+                <!-- 클리어: a dark track, so the line shows over light windows too -->
+                <DataTrigger Binding="{Binding Tag.Clear, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
+                    <Setter Property="Background" Value="#8C000000"/>
+                </DataTrigger>
+            </Style.Triggers>
         </Style>
         <Style x:Key="SmallIcon" TargetType="ui:Button" BasedOn="{StaticResource PlayerIconButtonStyle}">
             <Setter Property="Width" Value="28"/>
@@ -152,24 +159,31 @@
              an effect on the card was redone over the whole card every time anything in it changed
              (the spectrum, ~30 times a second), and this window is see-through, so each of those
              frames is also copied back from the GPU. Same shape (and color, so no edge shows). -->
-        <Border CornerRadius="14" Background="{DynamicResource PlayerTintBrush}" IsHitTestVisible="False">
-            <Border.Effect>
-                <DropShadowEffect BlurRadius="18" ShadowDepth="3" Opacity="0.4" Color="Black" RenderingBias="Performance"/>
-            </Border.Effect>
-        </Border>
-        <Border x:Name="Card" CornerRadius="14" BorderThickness="1" BorderBrush="{DynamicResource PlayerTrackBrush}"
-                Background="{DynamicResource PlayerTintBrush}">
+        <!-- The card's surface: its shadow, tint and the cover's colors. In 클리어 모드 it is gone
+             (only faintly there while the mouse is over the HUD, to show its edges and buttons). -->
+        <Grid x:Name="Surface" IsHitTestVisible="False">
+            <Border CornerRadius="14" Background="{DynamicResource PlayerTintBrush}">
+                <Border.Effect>
+                    <DropShadowEffect BlurRadius="18" ShadowDepth="3" Opacity="0.4" Color="Black" RenderingBias="Performance"/>
+                </Border.Effect>
+            </Border>
+            <Border CornerRadius="14" BorderThickness="1" BorderBrush="{DynamicResource PlayerTrackBrush}" Background="{DynamicResource PlayerTintBrush}"/>
+            <!-- the cover's colors behind, like the player -->
+            <Border CornerRadius="13" Margin="1" ClipToBounds="True" Opacity="0.4">
+                <Border.Background>
+                    <ImageBrush ImageSource="{Binding BackdropCover}" Stretch="UniformToFill" RenderOptions.BitmapScalingMode="Linear"/>
+                </Border.Background>
+            </Border>
+            <Border CornerRadius="13" Margin="1" Background="{DynamicResource PlayerTintBrush}" Opacity="0.6"/>
+        </Grid>
+        <!-- The card's contents. Its background is all but invisible (alpha 1/255) on purpose: a
+             see-through window only gets the mouse where it draws something, and in 클리어 모드
+             the HUD must still be grabbed between its words. -->
+        <Border x:Name="Card" CornerRadius="14" BorderThickness="1" BorderBrush="Transparent" Background="#01000000">
             <Grid>
-                <!-- the cover's colors behind, like the player -->
-                <Border CornerRadius="13" ClipToBounds="True" IsHitTestVisible="False" Opacity="0.4">
-                    <Border.Background>
-                        <ImageBrush ImageSource="{Binding BackdropCover}" Stretch="UniformToFill" RenderOptions.BitmapScalingMode="Linear"/>
-                    </Border.Background>
-                </Border>
-                <Border CornerRadius="13" Background="{DynamicResource PlayerTintBrush}" Opacity="0.6" IsHitTestVisible="False"/>
 
                 <!-- ===== 카드: the song, two lyric lines, spectrum and buttons, the times ===== -->
-                <Grid Width="392" Margin="14,12,12,10"
+                <Grid x:Name="CardLayout" Width="392" Margin="14,12,12,10"
                       Visibility="{Binding Tag.Layout, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=Card}">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
@@ -208,6 +222,12 @@
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
+                        <!-- 클리어: the same bars in dark, a pixel and a half down and right, as a hard
+                             shadow (a blur on something redrawn ~30 times a second would cost the GPU
+                             on every frame; this costs one more spectrum, and none when not shown) -->
+                        <views:SpectrumView Playback="{Binding}" Look="{Binding SpectrumLook}" BarBrush="#D0000000"
+                                            Height="22" VerticalAlignment="Center" Margin="1.5,1.5,10.5,-1.5" IsHitTestVisible="False"
+                                            Visibility="{Binding Tag.Clear, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}"/>
                         <views:SpectrumView Playback="{Binding}" Look="{Binding SpectrumLook}" BarBrush="{DynamicResource PlayerAccentBrush}"
                                             Height="22" VerticalAlignment="Center" Margin="0,0,12,0" IsHitTestVisible="False"/>
                         <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
@@ -226,15 +246,17 @@
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <ProgressBar Style="{StaticResource HudProgress}"/>
-                        <TextBlock Grid.Column="1" FontSize="11" Margin="10,0,0,0" Foreground="{DynamicResource TextFillColorTertiaryBrush}"
-                                   Typography.NumeralAlignment="Tabular">
-                            <Run Text="{Binding PositionText, Mode=OneWay}"/><Run Text=" / "/><Run Text="{Binding DurationText, Mode=OneWay}"/>
-                        </TextBlock>
+                        <!-- (lone words sit in a Border: 클리어 gives such groups a second halo) -->
+                        <Border Grid.Column="1" Margin="10,0,0,0">
+                            <TextBlock FontSize="11" Foreground="{DynamicResource TextFillColorTertiaryBrush}" Typography.NumeralAlignment="Tabular">
+                                <Run Text="{Binding PositionText, Mode=OneWay}"/><Run Text=" / "/><Run Text="{Binding DurationText, Mode=OneWay}"/>
+                            </TextBlock>
+                        </Border>
                     </Grid>
                 </Grid>
 
                 <!-- ===== 한 줄: one thin strip; the line being sung takes the artist's place ===== -->
-                <Grid Width="418" Height="54"
+                <Grid x:Name="CompactLayout" Width="418" Height="54"
                       Visibility="{Binding Tag.Layout, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=Compact}">
                     <Grid Margin="9,0,8,0">
                         <Grid.ColumnDefinitions>
@@ -264,7 +286,7 @@
 
                 <!-- ===== 가사 집중: the two lines large and centered, the song small underneath;
                      the buttons come up while the mouse is over it ===== -->
-                <Grid Width="518" Margin="0,14,0,10"
+                <Grid x:Name="LyricsLayout" Width="518" Margin="0,14,0,10"
                       Visibility="{Binding Tag.Layout, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=Lyrics}">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
@@ -291,13 +313,17 @@
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <TextBlock FontSize="11" LineHeight="15" LineStackingStrategy="BlockLineHeight" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
-                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}">
-                            <Run Text="{Binding NowPlayingTitle, Mode=OneWay}" FontWeight="SemiBold"/><Run Text="  ·  "/><Run Text="{Binding NowPlayingSubtitle, Mode=OneWay}"/>
-                        </TextBlock>
+                        <Border VerticalAlignment="Center">
+                            <TextBlock FontSize="11" LineHeight="15" LineStackingStrategy="BlockLineHeight" TextTrimming="CharacterEllipsis"
+                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}">
+                                <Run Text="{Binding NowPlayingTitle, Mode=OneWay}" FontWeight="SemiBold"/><Run Text="  ·  "/><Run Text="{Binding NowPlayingSubtitle, Mode=OneWay}"/>
+                            </TextBlock>
+                        </Border>
                         <ProgressBar Grid.Column="1" Style="{StaticResource HudProgress}" Height="2" Margin="12,0"/>
-                        <TextBlock Grid.Column="2" Text="{Binding PositionText}" FontSize="11" VerticalAlignment="Center" Typography.NumeralAlignment="Tabular"
-                                   Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
+                        <Border Grid.Column="2" VerticalAlignment="Center">
+                            <TextBlock Text="{Binding PositionText}" FontSize="11" Typography.NumeralAlignment="Tabular"
+                                       Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
+                        </Border>
                         <!-- over the progress line while the mouse is on the card -->
                         <Border x:Name="LyricsButtons" Grid.ColumnSpan="3" HorizontalAlignment="Center" CornerRadius="16" Padding="4,0" Opacity="0"
                                 Background="{DynamicResource PlayerTintBrush}" BorderThickness="1" BorderBrush="{DynamicResource PlayerTrackBrush}">
@@ -312,12 +338,14 @@
                 </Grid>
 
                 <!-- ===== 세로 미니멀: an upright card around a large cover; one lyric line ===== -->
-                <StackPanel Width="198" Margin="0,9,0,10"
+                <StackPanel x:Name="VerticalLayout" Width="198" Margin="0,9,0,10"
                             Visibility="{Binding Tag.Layout, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=Vertical}">
                     <ContentControl Style="{StaticResource Cover}" Width="178" Height="178" FontSize="40"/>
                     <StackPanel Margin="12,10,12,0">
-                        <TextBlock Style="{StaticResource Title}" FontSize="13" LineHeight="18"/>
-                        <TextBlock Style="{StaticResource Subtitle}" FontSize="11" LineHeight="15" Margin="0,1,0,0"/>
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource Title}" FontSize="13" LineHeight="18"/>
+                            <TextBlock Style="{StaticResource Subtitle}" FontSize="11" LineHeight="15" Margin="0,1,0,0"/>
+                        </StackPanel>
                         <Grid Margin="0,6,0,0">
                             <TextBlock Style="{StaticResource LyricNow}" FontSize="12" LineHeight="17"
                                        Visibility="{Binding HasSyncedLyrics, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}"/>
@@ -360,13 +388,24 @@
                             <TextBlock Text="레이아웃" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
                             <views:HudLayoutPicker Layout="{Binding Layout, Mode=TwoWay}" Margin="0,8,0,14"/>
                             <Grid>
-                                <TextBlock Text="투명도" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
-                                <TextBlock Text="{Binding OpacityText}" FontSize="12" HorizontalAlignment="Right" Typography.NumeralAlignment="Tabular"
-                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                <TextBlock Text="클리어 모드" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center"
+                                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                                <ui:ToggleSwitch IsChecked="{Binding Clear}" HorizontalAlignment="Right" VerticalAlignment="Center"
+                                                 AutomationProperties.Name="HUD 클리어 모드"/>
                             </Grid>
-                            <Slider Minimum="0.2" Maximum="1" SmallChange="0.05" LargeChange="0.1" Value="{Binding Opacity}" Margin="0,8,0,4"
-                                    IsMoveToPointEnabled="True" AutomationProperties.Name="HUD 투명도"/>
-                            <TextBlock Text="마우스를 올리면 잠시 선명해집니다" FontSize="11" Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
+                            <TextBlock Text="배경 없이 글자와 버튼만 테두리를 둘러 띄웁니다" FontSize="11" Margin="0,4,0,12" TextWrapping="Wrap"
+                                       local:KeepWords.IsEnabled="True" Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
+                            <!-- the opacity is the card's; with no card (클리어) it is set aside -->
+                            <StackPanel IsEnabled="{Binding Clear, Converter={StaticResource InverseBooleanConverter}}">
+                                <Grid>
+                                    <TextBlock Text="투명도" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                                    <TextBlock Text="{Binding OpacityText}" FontSize="12" HorizontalAlignment="Right" Typography.NumeralAlignment="Tabular"
+                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                </Grid>
+                                <Slider Minimum="0.2" Maximum="1" SmallChange="0.05" LargeChange="0.1" Value="{Binding Opacity}" Margin="0,8,0,4"
+                                        IsMoveToPointEnabled="True" AutomationProperties.Name="HUD 투명도"/>
+                                <TextBlock Text="마우스를 올리면 잠시 선명해집니다" FontSize="11" Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
+                            </StackPanel>
                             <Grid Margin="0,12,0,0">
                                 <TextBlock Text="마우스 통과" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center"
                                            Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
