@@ -106,10 +106,29 @@ public sealed partial class SettingsViewModel : ObservableObject
         _ = RefreshCacheUsageAsync();
     }
 
+    /// <summary>위치 추가: the location only (connection checked, then saved). Its music folders are
+    /// chosen afterwards with "폴더 추가" on it.</summary>
     [RelayCommand]
-    private async Task AddNetworkSourceAsync()
+    private void AddNetworkSource()
     {
-        await Library.AddNetworkLocationCommand.ExecuteAsync(null);
+        var owner = Application.Current.Windows.OfType<Window>().FirstOrDefault(w => w.IsActive) ?? Application.Current.MainWindow;
+        var before = _network.Sources.Select(s => s.Id).ToHashSet();
+        var added = Network.RemoteSourceWindow.AddLocation(owner, _network);
+        RefreshNetwork();
+        if (added is null) return;
+        if (before.Contains(added.Id))
+            Toast.Info($"'{added.Name}'은(는) 이미 있는 위치라 정보를 새로 고쳤습니다", "같은 주소와 사용자 이름의 위치는 하나로 둡니다.");
+        else
+            Toast.Success($"'{added.Name}' 위치를 추가했습니다", "오른쪽 '폴더 추가'로 이 위치에서 들을 음악 폴더를 고르세요.");
+    }
+
+    /// <summary>폴더 추가 on a saved location: connects with its saved details and goes straight to
+    /// its folders; the chosen one joins the library.</summary>
+    [RelayCommand]
+    private async Task AddFolderFromSourceAsync(RemoteSource? source)
+    {
+        if (source is null) return;
+        await Library.AddFromSavedSourceCommand.ExecuteAsync(source);
         RefreshNetwork();
     }
 

@@ -15,8 +15,11 @@ public sealed partial class RemoteSourceSetupViewModel : ObservableObject, IDisp
     private IRemoteClient? _browser;
     private CancellationTokenSource? _busy;
 
-    public RemoteSourceSetupViewModel(IReadOnlyList<RemoteSource>? saved = null)
+    /// <param name="saveOnly">설정 › 위치 추가: check the connection and save the location, without
+    /// picking a folder (that's "폴더 추가" on the saved location, or the library's + menu).</param>
+    public RemoteSourceSetupViewModel(IReadOnlyList<RemoteSource>? saved = null, bool saveOnly = false)
     {
+        SaveOnly = saveOnly;
         SavedSources = (saved ?? []).Select(s => new SavedSourceOption(s, s.Name.Length > 0 ? s.Name : s.Address,
             $"{s.KindLabel} · {s.Address}" + (s.UserName.Length > 0 ? $" · {s.UserName}" : ""), IconFor(s.Kind))).ToList();
         Kinds =
@@ -35,10 +38,22 @@ public sealed partial class RemoteSourceSetupViewModel : ObservableObject, IDisp
     // --- locations set up before: pick one to browse it again, no typing ---
 
     public IReadOnlyList<SavedSourceOption> SavedSources { get; }
-    public bool HasSavedSources => SavedSources.Count > 0;
+    public bool HasSavedSources => !SaveOnly && SavedSources.Count > 0;
 
-    /// <summary>Set when a saved location is reused, so it is updated rather than added twice.</summary>
-    private string? _existingId;
+    /// <summary>Adding a location only (no folder step): see the constructor.</summary>
+    public bool SaveOnly { get; }
+
+    public string Heading => SaveOnly ? "어떤 위치를 추가할까요?" : "어디에 연결할까요?";
+
+    public string Lead => SaveOnly
+        ? "연결이 되는지 확인한 뒤 위치만 저장합니다. 음악 폴더는 저장한 위치의 '폴더 추가'에서 따로 고릅니다."
+        : "NAS, 서버, 클라우드에 있는 음악을 바로 재생합니다. 처음 재생할 때 내려받아 두므로 다시 들을 때는 바로 나옵니다.";
+
+    public string ConnectText => SaveOnly ? "확인 후 저장" : "연결";
+
+    /// <summary>Set when a saved location is reused, so it is updated rather than added twice -
+    /// as long as it is still that location (see <see cref="SourceId"/>).</summary>
+    private RemoteSource? _existing;
 
     /// <summary>Raised when a saved password was filled in (the window shows it in its PasswordBox).</summary>
     public event EventHandler? PasswordLoaded;
@@ -66,7 +81,7 @@ public sealed partial class RemoteSourceSetupViewModel : ObservableObject, IDisp
         Name = s.Name;
         AcceptAnyCertificate = s.AcceptAnyCertificate;
         try { Password = CredentialStore.Load(s.Id); } catch { Password = ""; }
-        _existingId = s.Id;
+        _existing = s;
         PasswordLoaded?.Invoke(this, EventArgs.Empty);
         await ConnectAsync();
     }
@@ -75,14 +90,16 @@ public sealed partial class RemoteSourceSetupViewModel : ObservableObject, IDisp
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(AddressPlaceholder), nameof(AddressHint), nameof(ShowPort), nameof(PortPlaceholder),
-        nameof(ShowCertificateOption), nameof(UserPlaceholder))]
+        nameof(ShowCertificateOption), nameof(UserPlaceholder), nameof(SuggestedAddress), nameof(HasSuggestedAddress), nameof(SuggestedAddressText),
+        nameof(ShowAddressExamples))]
     private KindOption _selectedKind;
 
     [ObservableProperty]
     private string _name = "";
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(AddressHint))]
+    [NotifyPropertyChangedFor(nameof(AddressHint), nameof(SuggestedAddress), nameof(HasSuggestedAddress), nameof(SuggestedAddressText),
+        nameof(ShowAddressExamples))]
     private string _address = "";
 
     [ObservableProperty]
@@ -101,7 +118,7 @@ public sealed partial class RemoteSourceSetupViewModel : ObservableObject, IDisp
 
     public string AddressPlaceholder => Kind switch
     {
-        RemoteKind.WebDav => "https://nas.local:5006/music",
+        RemoteKind.WebDav => "https://nas.example.com/music",
         RemoteKind.Smb => @"\\NAS\Music",
         RemoteKind.Sftp => "nas.local 또는 192.168.0.10",
         _ => "ftp.example.com",
@@ -117,14 +134,49 @@ public sealed partial class RemoteSourceSetupViewModel : ObservableObject, IDisp
     /// plain http, where the password would travel unencrypted).</summary>
     public string AddressHint => Kind switch
     {
+        RemoteKind.WebDav when PortTypedAsFolder() is { } port
+            => $"⚠ 주소 뒤의 /{port}은(는) 폴더 이름으로 읽힙니다. 포트라면 :{port}처럼 콜론으로 붙입니다.",
         RemoteKind.WebDav when Address.Trim().StartsWith("http://", StringComparison.OrdinalIgnoreCase)
             => "⚠ http 주소는 비밀번호가 암호화되지 않고 전송됩니다. 가능하면 https를 사용하세요.",
-        RemoteKind.WebDav => "Synology는 WebDAV Server 패키지를 켠 뒤 https://주소:5006 형태로 입력합니다.",
+        RemoteKind.WebDav => "WebDAV 서버 주소를 https://로 시작해 입력합니다. 기본 포트가 아니면 주소 뒤에 :포트번호를 붙입니다.",
         RemoteKind.Smb => "탐색기 주소창에 입력하는 공유 폴더 주소입니다. 이 PC에 이미 연결되어 있다면 로그인 정보는 비워 두어도 됩니다.",
         RemoteKind.Sftp => "SSH로 접속하는 서버 주소입니다. 대부분의 NAS와 리눅스 서버가 지원합니다.",
         RemoteKind.Ftps => "TLS로 암호화된 FTP(명시적 FTPS)입니다.",
         _ => "⚠ FTP는 비밀번호가 암호화되지 않습니다. 집 안 네트워크에서만 사용하세요.",
     };
+
+    /// <summary>WebDAV: where to find the address on common servers. The port differs by product
+    /// (5006 is only Synology's WebDAV Server default), so the examples name the product.</summary>
+    public bool ShowAddressExamples => Kind == RemoteKind.WebDav && SuggestedAddress is null;
+
+    /// <summary>"https://nas.com/5006" - a port typed after a slash, which makes it a folder.
+    /// The address it was probably meant to be ("https://nas.com:5006"), or null.</summary>
+    public string? SuggestedAddress =>
+        PortAsFolderMatch() is { } match ? $"{match.Groups["host"].Value}:{match.Groups["port"].Value}{match.Groups["rest"].Value}" : null;
+
+    public bool HasSuggestedAddress => SuggestedAddress is not null;
+
+    /// <summary>The button that puts it right shows the address it will become.</summary>
+    public string SuggestedAddressText => SuggestedAddress is { } fixedAddress ? $"{fixedAddress}(으)로 고치기" : "";
+
+    private int? PortTypedAsFolder() => PortAsFolderMatch() is { } match ? int.Parse(match.Groups["port"].Value) : null;
+
+    private System.Text.RegularExpressions.Match? PortAsFolderMatch()
+    {
+        if (Kind != RemoteKind.WebDav) return null;
+        var match = PortAsFolder().Match(Address.Trim());
+        return match.Success && int.TryParse(match.Groups["port"].Value, out var port) && port is >= 1 and <= 65535 ? match : null;
+    }
+
+    [RelayCommand]
+    private void UseSuggestedAddress()
+    {
+        if (SuggestedAddress is { } fixedAddress) Address = fixedAddress;
+    }
+
+    // scheme://host (no port yet) / 2-5 digits / the rest
+    [System.Text.RegularExpressions.GeneratedRegex(@"^(?<host>https?://[^/:?#]+)/(?<port>\d{2,5})(?<rest>(/.*)?)$", System.Text.RegularExpressions.RegexOptions.IgnoreCase)]
+    private static partial System.Text.RegularExpressions.Regex PortAsFolder();
 
     // --- shared state ---
 
@@ -178,13 +230,26 @@ public sealed partial class RemoteSourceSetupViewModel : ObservableObject, IDisp
     }
 
     /// <summary>Filled in when the user picks a folder; the window closes then.</summary>
-    public (RemoteSource Source, string Password, LibraryFolderEntry Folder)? Result { get; private set; }
+    public (RemoteSource Source, string Password, LibraryFolderEntry? Folder)? Result { get; private set; }
 
     public event EventHandler? Finished;
 
+    /// <summary>The saved location's id while the kind, address and user name are still its own;
+    /// a different location gets a new id. (Going back from a saved location and typing another
+    /// address used to keep the old id, so the new location replaced it instead of being added.)
+    /// The same location set up again updates the saved one rather than doubling it.</summary>
+    private string SourceId()
+    {
+        bool Same(RemoteSource s) => s.Kind == Kind
+            && string.Equals(s.Address.Trim().TrimEnd('/', '\\'), Address.Trim().TrimEnd('/', '\\'), StringComparison.OrdinalIgnoreCase)
+            && string.Equals(s.UserName.Trim(), UserName.Trim(), StringComparison.OrdinalIgnoreCase);
+        if (_existing is not null && Same(_existing)) return _existing.Id;
+        return SavedSources.Select(o => o.Source).FirstOrDefault(Same)?.Id ?? Guid.NewGuid().ToString("N");
+    }
+
     public RemoteSource BuildSource() => new()
     {
-        Id = _existingId ?? Guid.NewGuid().ToString("N"),
+        Id = SourceId(),
         Name = DisplayName,
         Kind = Kind,
         Address = Address.Trim(),
@@ -207,6 +272,13 @@ public sealed partial class RemoteSourceSetupViewModel : ObservableObject, IDisp
         await RunBusyAsync("연결하는 중…", async ct =>
         {
             await NetworkLibrary.TestAsync(source, Password, ct);
+            if (SaveOnly)
+            {
+                // it answers: keep the location, pick folders later
+                Result = (source, Password, null);
+                Finished?.Invoke(this, EventArgs.Empty);
+                return;
+            }
             _browser?.Dispose();
             _browser = Kind == RemoteKind.Smb ? null : NetworkLibrary.CreateClient(source, Password);
             Step = 1;

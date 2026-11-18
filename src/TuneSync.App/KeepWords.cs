@@ -12,7 +12,7 @@ namespace TuneSync.App;
 /// Hangul between any two syllables ("저장됩" / "니다"); with KeepWords on, a WORD JOINER
 /// (U+2060, invisible) goes between the letters of each word, so lines break only at spaces -
 /// what CSS calls word-break: keep-all. Works for plain Text and for Runs, bound ones included.</summary>
-public static class KeepWords
+public static partial class KeepWords
 {
     private const char Joiner = '⁠';
 
@@ -74,6 +74,7 @@ public static class KeepWords
     public static string Joined(string text)
     {
         text = KeepParenthesesTogether(text);
+        text = NumberAndUnit().Replace(text, "$1\u00A0$2"); // "0.96 GB": a number keeps its unit
         var sb = new StringBuilder(text.Length * 2);
         for (var i = 0; i < text.Length; i++)
         {
@@ -98,11 +99,14 @@ public static class KeepWords
             var close = text.IndexOf(')', open + 1);
             if (close < 0) break;
             for (var i = open + 1; i < close; i++)
-                if (chars[i] == ' ') chars[i] = ' ';
+                if (chars[i] == ' ') chars[i] = '\u00A0';
             open = close;
         }
         return new string(chars);
     }
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"(\d) (GB|MB|KB|TB|kHz|Hz|kbps|ms|%|곡|개|줄|초|분|비트|채널)")]
+    private static partial System.Text.RegularExpressions.Regex NumberAndUnit();
 
     private static bool IsHangul(char c) => c is >= '가' and <= '힣' or >= 'ᄀ' and <= 'ᇿ' or >= '㄰' and <= '㆏';
 }

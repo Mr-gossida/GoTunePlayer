@@ -3,6 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
         xmlns:net="clr-namespace:TuneSync.App.Network"
+        xmlns:app="clr-namespace:TuneSync.App"
         Title="네트워크 위치 추가" Width="640" Height="680" MinWidth="560" MinHeight="600"
         WindowStartupLocation="CenterOwner" ExtendsContentIntoTitleBar="True"
         WindowBackdropType="Mica" WindowCornerPreference="Round" ShowInTaskbar="False">
@@ -52,8 +53,8 @@
         <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto"
                       Visibility="{Binding IsConnectStep, Converter={StaticResource BoolToVisibility}}">
             <StackPanel Margin="28,8,28,16">
-                <TextBlock Text="어디에 연결할까요?" FontSize="22" FontWeight="SemiBold" Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
-                <TextBlock Text="NAS, 서버, 클라우드에 있는 음악을 바로 재생합니다. 처음 재생할 때 내려받아 두므로 다시 들을 때는 바로 나옵니다."
+                <TextBlock Text="{Binding Heading}" FontSize="22" FontWeight="SemiBold" Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                <TextBlock Text="{Binding Lead}" app:KeepWords.IsEnabled="True"
                            FontSize="13" TextWrapping="Wrap" Margin="0,6,0,18" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
 
                 <!-- Locations set up before: one click connects and shows their folders. -->
@@ -116,8 +117,35 @@
                                   ToolTip="포트 (비워 두면 기본값)"
                                   Visibility="{Binding ShowPort, Converter={StaticResource BoolToVisibility}}"/>
                 </Grid>
-                <TextBlock Text="{Binding AddressHint}" FontSize="12" TextWrapping="Wrap" Margin="2,6,0,0"
+                <TextBlock Text="{Binding AddressHint}" FontSize="12" TextWrapping="Wrap" Margin="2,6,0,0" app:KeepWords.IsEnabled="True"
                            Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
+                <!-- a port typed after a slash: one click puts it right -->
+                <ui:Button Content="{Binding SuggestedAddressText}" Icon="{ui:SymbolIcon Wrench24}" Appearance="Transparent" Padding="8,3" Margin="-6,2,0,0" FontSize="12"
+                           HorizontalAlignment="Left" Command="{Binding UseSuggestedAddressCommand}"
+                           Visibility="{Binding HasSuggestedAddress, Converter={StaticResource BoolToVisibility}}"/>
+                <!-- WebDAV: what the address looks like on common servers (the port is the product's) -->
+                <Grid Margin="2,6,0,0" Visibility="{Binding ShowAddressExamples, Converter={StaticResource BoolToVisibility}}">
+                    <Grid.Resources>
+                        <Style TargetType="TextBlock">
+                            <Setter Property="FontSize" Value="12"/>
+                            <Setter Property="Margin" Value="0,1"/>
+                            <Setter Property="Foreground" Value="{DynamicResource TextFillColorTertiaryBrush}"/>
+                        </Style>
+                    </Grid.Resources>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition/><RowDefinition/><RowDefinition/>
+                    </Grid.RowDefinitions>
+                    <TextBlock Text="Synology" Margin="0,1,14,1"/>
+                    <TextBlock Grid.Column="1" Text="WebDAV Server 패키지를 켠 뒤 https://주소:5006"/>
+                    <TextBlock Grid.Row="1" Text="Nextcloud" Margin="0,1,14,1"/>
+                    <TextBlock Grid.Row="1" Grid.Column="1" Text="https://주소/remote.php/dav/files/사용자이름" TextTrimming="CharacterEllipsis"/>
+                    <TextBlock Grid.Row="2" Text="QNAP·기타" Margin="0,1,14,1"/>
+                    <TextBlock Grid.Row="2" Grid.Column="1" Text="장치 설정에 나오는 WebDAV 주소와 포트" TextWrapping="Wrap"/>
+                </Grid>
 
                 <Grid Margin="0,4,0,0">
                     <Grid.ColumnDefinitions>
@@ -231,7 +259,7 @@
                 <StackPanel Grid.Column="1" Orientation="Horizontal">
                     <ui:Button Content="취소" Width="96" Click="Cancel_Click"
                                Visibility="{Binding IsConnectStep, Converter={StaticResource BoolToVisibility}}"/>
-                    <ui:Button Content="연결" Width="120" Margin="8,0,0,0" Appearance="Primary" Icon="{ui:SymbolIcon PlugConnected24}"
+                    <ui:Button Content="{Binding ConnectText}" MinWidth="120" Margin="8,0,0,0" Appearance="Primary" Icon="{ui:SymbolIcon PlugConnected24}"
                                Command="{Binding ConnectCommand}" IsDefault="True"
                                Visibility="{Binding IsConnectStep, Converter={StaticResource BoolToVisibility}}"/>
                     <ui:Button Content="뒤로" Width="96" Command="{Binding BackCommand}" Icon="{ui:SymbolIcon ArrowLeft24}"

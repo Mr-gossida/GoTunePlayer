@@ -10,10 +10,10 @@ public partial class RemoteSourceWindow : FluentWindow
     private readonly RemoteSourceSetupViewModel _viewModel;
 
     public RemoteSourceWindow(IReadOnlyList<TuneSync.Core.Models.RemoteSource>? saved = null,
-        TuneSync.Core.Models.RemoteSource? start = null)
+        TuneSync.Core.Models.RemoteSource? start = null, bool saveOnly = false)
     {
         InitializeComponent();
-        _viewModel = new RemoteSourceSetupViewModel(saved);
+        _viewModel = new RemoteSourceSetupViewModel(saved, saveOnly);
         DataContext = _viewModel;
         _viewModel.PasswordLoaded += (_, _) => PasswordBox.Password = _viewModel.Password;
         _viewModel.Finished += (_, _) =>
@@ -31,7 +31,7 @@ public partial class RemoteSourceWindow : FluentWindow
         Closed += (_, _) => _viewModel.Dispose();
     }
 
-    public (TuneSync.Core.Models.RemoteSource Source, string Password, TuneSync.Core.Models.LibraryFolderEntry Folder)? Result => _viewModel.Result;
+    public (TuneSync.Core.Models.RemoteSource Source, string Password, TuneSync.Core.Models.LibraryFolderEntry? Folder)? Result => _viewModel.Result;
 
     private void PasswordBox_PasswordChanged(object sender, RoutedEventArgs e) => _viewModel.Password = PasswordBox.Password;
 
@@ -57,5 +57,15 @@ public partial class RemoteSourceWindow : FluentWindow
         if (window.ShowDialog() != true || window.Result is not { } result) return null;
         network.Save(result.Source, result.Password);
         return result.Folder;
+    }
+
+    /// <summary>설정 › 위치 추가: checks the connection and saves the location (password to Credential
+    /// Manager) - no folder yet. The saved location, or null if cancelled.</summary>
+    public static TuneSync.Core.Models.RemoteSource? AddLocation(Window? owner, NetworkLibrary network)
+    {
+        var window = new RemoteSourceWindow(network.Sources, saveOnly: true) { Owner = owner };
+        if (window.ShowDialog() != true || window.Result is not { } result) return null;
+        network.Save(result.Source, result.Password);
+        return result.Source;
     }
 }

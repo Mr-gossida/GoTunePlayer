@@ -806,10 +806,16 @@
                                                         <Run Text="{Binding Address, Mode=OneWay}"/><Run Text="  ·  "/><Run Text="{Binding UserName, Mode=OneWay}"/>
                                                     </TextBlock>
                                                 </StackPanel>
-                                                <ui:Button Grid.Column="2" Icon="{ui:SymbolIcon Delete24}" ToolTip="이 위치 제거" Width="34" Height="32" Padding="0"
-                                                           Background="Transparent" BorderThickness="0"
-                                                           Command="{Binding DataContext.RemoveNetworkSourceCommand, RelativeSource={RelativeSource AncestorType=Page}}"
-                                                           CommandParameter="{Binding}"/>
+                                                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                                                    <ui:Button Content="폴더 추가" Icon="{ui:SymbolIcon FolderAdd24}" Padding="10,4" Margin="0,0,4,0"
+                                                               ToolTip="이 위치에 연결해, 라이브러리에 넣을 음악 폴더를 고릅니다"
+                                                               Command="{Binding DataContext.AddFolderFromSourceCommand, RelativeSource={RelativeSource AncestorType=Page}}"
+                                                               CommandParameter="{Binding}"/>
+                                                    <ui:Button Icon="{ui:SymbolIcon Delete24}" ToolTip="이 위치 제거" Width="34" Height="32" Padding="0"
+                                                               Background="Transparent" BorderThickness="0"
+                                                               Command="{Binding DataContext.RemoveNetworkSourceCommand, RelativeSource={RelativeSource AncestorType=Page}}"
+                                                               CommandParameter="{Binding}"/>
+                                                </StackPanel>
                                             </Grid>
                                         </Border>
                                     </DataTemplate>
