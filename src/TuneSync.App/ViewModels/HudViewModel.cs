@@ -21,6 +21,7 @@ public sealed partial class HudViewModel : ObservableObject
         _clickThrough = settings.Hud.ClickThrough;
         _clickThroughButtons = settings.Hud.ClickThroughButtons;
         _clear = settings.Hud.Clear;
+        _clearShadow = settings.Hud.ClearShadow;
         _layout = settings.Hud.Layout;
     }
 
@@ -38,6 +39,24 @@ public sealed partial class HudViewModel : ObservableObject
     /// doesn't apply then).</summary>
     [ObservableProperty]
     private bool _clear;
+
+    /// <summary>클리어 모드's 그림자 세기.</summary>
+    [ObservableProperty]
+    private HudShadow _clearShadow;
+
+    public IReadOnlyList<Choice<HudShadow>> ClearShadowOptions { get; } =
+    [
+        new(HudShadow.Light, "약하게 · 테두리만"),
+        new(HudShadow.Normal, "보통 · 옅은 그림자"),
+        new(HudShadow.Strong, "강하게 · 넓고 진한 그림자"),
+    ];
+
+    partial void OnClearShadowChanged(HudShadow value)
+    {
+        _settings.Hud.ClearShadow = value;
+        AppSettingsStore.Save(_settings);
+        _window?.ApplyClear();
+    }
 
     /// <summary>The opacity is the card's; with no card (클리어) it is set aside.</summary>
     public bool CanSetOpacity => !Clear;

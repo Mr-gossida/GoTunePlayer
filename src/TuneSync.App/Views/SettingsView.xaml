@@ -264,17 +264,37 @@
                             <views:HudLayoutPicker Layout="{Binding Layout, Mode=TwoWay}" ShowDescriptions="True" Margin="0,12,0,0"/>
                         </StackPanel>
                     </Border>
-                    <ui:CardControl Style="{StaticResource Card}" DataContext="{Binding Hud}" Icon="{ui:SymbolIcon EyeTrackingOff24}"
-                                    Tag="HUD 클리어 모드 배경 없음 투명 배경 테두리 그림자 글자만"
-                                    ToolTip="카드 배경을 없애고 곡 정보 · 가사 · 스펙트럼 · 버튼만 띄웁니다. 글자와 버튼은 흰색에 어두운 테두리를 둘러, 밝은 창 위에서도 어두운 창 위에서도 읽힙니다. 마우스를 올리면 카드가 옅게 나타납니다.">
-                        <ui:CardControl.Header>
-                            <StackPanel>
-                                <ui:TextBlock Text="HUD 클리어 모드" FontTypography="Body"/>
-                                <ui:TextBlock Text="배경 없이 글자 · 커버 · 버튼만 테두리를 둘러 띄우기 · 그동안 투명도는 쓰지 않습니다" Style="{StaticResource Desc}"/>
+                    <ui:CardExpander Margin="0,0,0,4" DataContext="{Binding Hud}" Icon="{ui:SymbolIcon EyeTrackingOff24}" IsExpanded="{Binding Clear, Mode=OneWay}"
+                                     Tag="HUD 클리어 모드 배경 없음 투명 배경 테두리 그림자 글자만 그림자 세기"
+                                     ToolTip="카드 배경을 없애고 곡 정보 · 가사 · 스펙트럼 · 버튼만 띄웁니다. 글자와 버튼은 흰색에 어두운 테두리와 그림자를 둘러, 밝은 창 위에서도 어두운 창 위에서도 읽힙니다. 마우스를 올리면 카드가 옅게 나타납니다.">
+                        <ui:CardExpander.Header>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Margin="0,0,16,0">
+                                    <ui:TextBlock Text="HUD 클리어 모드" FontTypography="Body"/>
+                                    <ui:TextBlock Text="배경 없이 글자 · 커버 · 버튼만 테두리를 둘러 띄우기 · 그동안 투명도는 쓰지 않습니다" Style="{StaticResource Desc}"/>
+                                </StackPanel>
+                                <ui:ToggleSwitch Grid.Column="1" VerticalAlignment="Center" Margin="0,0,16,0"
+                                                 IsChecked="{Binding Clear}" OnContent="켬" OffContent="끔" AutomationProperties.Name="HUD 클리어 모드"/>
+                            </Grid>
+                        </ui:CardExpander.Header>
+                        <Grid Margin="40,4,0,4" IsEnabled="{Binding Clear}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel VerticalAlignment="Center" Margin="0,0,16,0">
+                                <ui:TextBlock Text="그림자 세기" FontTypography="BodyStrong"/>
+                                <ui:TextBlock Style="{StaticResource Desc}"
+                                              Text="글자 뒤의 그림자를 넓고 진하게 할수록 밝고 복잡한 화면 위에서도 잘 보입니다."/>
                             </StackPanel>
-                        </ui:CardControl.Header>
-                        <ui:ToggleSwitch IsChecked="{Binding Clear}" OnContent="켬" OffContent="끔" AutomationProperties.Name="HUD 클리어 모드"/>
-                    </ui:CardControl>
+                            <ComboBox Grid.Column="1" Width="220" VerticalAlignment="Center" ItemsSource="{Binding ClearShadowOptions}" DisplayMemberPath="Label"
+                                      SelectedValuePath="Value" SelectedValue="{Binding ClearShadow}" AutomationProperties.Name="HUD 그림자 세기"/>
+                        </Grid>
+                    </ui:CardExpander>
                     <ui:CardControl Style="{StaticResource Card}" DataContext="{Binding Hud}" IsEnabled="{Binding CanSetOpacity}" Icon="{ui:SymbolIcon Blur24}" Tag="HUD 투명도 불투명도 반투명"
                                     ToolTip="마우스를 올리면 잠시 선명해져 버튼을 누르기 쉽습니다. HUD의 메뉴(⚙)에서도 바꿀 수 있습니다.">
                         <ui:CardControl.Header>

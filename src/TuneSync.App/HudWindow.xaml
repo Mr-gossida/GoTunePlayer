@@ -181,6 +181,9 @@
              the HUD must still be grabbed between its words. -->
         <Border x:Name="Card" CornerRadius="14" BorderThickness="1" BorderBrush="Transparent" Background="#01000000">
             <Grid>
+                <!-- 클리어: soft dark shades behind each group of words, the spectrum and the seek
+                     bar (HudWindow.Clear.cs places them); never in the way of the mouse -->
+                <Canvas x:Name="Scrims" IsHitTestVisible="False"/>
 
                 <!-- ===== 카드: the song, two lyric lines, spectrum and buttons, the times ===== -->
                 <Grid x:Name="CardLayout" Width="392" Margin="14,12,12,10"

@@ -26,6 +26,9 @@ public sealed class HudSettings
     /// fully solid and outlined so they read over any window (the opacity setting is set aside).</summary>
     public bool Clear { get; set; }
 
+    /// <summary>클리어 모드: how much shade there is behind the words and buttons.</summary>
+    public HudShadow ClearShadow { get; set; } = HudShadow.Strong;
+
     /// <summary>How the card is laid out (설정 › HUD 레이아웃).</summary>
     public HudLayout Layout { get; set; } = HudLayout.Card;
 
@@ -37,7 +40,19 @@ public sealed class HudSettings
         if (Left is { } l && !double.IsFinite(l)) Left = null;
         if (Top is { } t && !double.IsFinite(t)) Top = null;
         if (!Enum.IsDefined(Layout)) Layout = HudLayout.Card;
+        if (!Enum.IsDefined(ClearShadow)) ClearShadow = HudShadow.Strong;
     }
+}
+
+/// <summary>클리어 모드's 그림자 세기.</summary>
+public enum HudShadow
+{
+    /// <summary>Only an outline around each letter and button.</summary>
+    Light,
+    /// <summary>The outline and a faint soft shade behind each group of words.</summary>
+    Normal,
+    /// <summary>The outline and a deeper, wider shade: reads over busy light pages.</summary>
+    Strong,
 }
 
 public enum HudLayout
