@@ -93,6 +93,7 @@ public sealed class WaveSeekBar : FrameworkElement
 
     private bool Flames => Look == SeekBarStyle.Flame;
     private double _fireTime;
+    private double _fireLevel;
     private readonly List<Spark> _licks = [];
 
     // Value only updates a few times a second; interpolate between updates so the thumb (and
@@ -202,7 +203,7 @@ public sealed class WaveSeekBar : FrameworkElement
             {
                 // Flames may rise a little above the bar's own strip.
                 var flameRoom = maxHeight + FlameOverflow;
-                var amplitude = flameRoom * _activity * (0.38 + 0.62 * _level) * fadeIn * (1 + 0.4 * _flash);
+                var amplitude = FireAmplitude(thumbX);
                 if (amplitude > 0.3) DrawFire(dc, mid, thumbX, flameRoom, amplitude);
                 DrawSparks(dc);
                 DrawPlayedLine(dc, mid, thumbX, Color.FromRgb(0xC2, 0x2E, 0x12), Color.FromRgb(0xFF, 0x7A, 0x1A), Color.FromRgb(0xFF, 0xD2, 0x5A));
@@ -533,16 +534,71 @@ public sealed class WaveSeekBar : FrameworkElement
     private const double FlameOverflow = 9;
     private const double TongueSpacing = 6.5;
 
-    /// <summary>Fire along the played line, built tongue by tongue like a real flame front: each
-    /// tongue has its own rhythm - a slow swell, a quicker flicker and a fast shiver - its own
-    /// lean that sways in a shared draft, and a teardrop shape. Three nested layers give the
-    /// colour of real fire: a deep red-orange body, an orange-yellow middle and a pale hot core
-    /// near the root; the taller a tongue reaches, the yellower its tip. Louder music and beats
-    /// make the tongues leap; the tallest burn right behind the thumb.</summary>
+    /// <summary>How tall the fire burns: follows the music, but through <see cref="_fireLevel"/>,
+    /// which rises and falls more slowly than the meter, so the fire swells and settles instead of
+    /// pumping with every beat.</summary>
+    private double FireAmplitude(double thumbX)
+    {
+        var room = ActualHeight / 2 - 2 + FlameOverflow;
+        var fadeIn = Math.Min(1, (thumbX - Left) / 60);
+        return room * _activity * (0.42 + 0.58 * _fireLevel) * fadeIn * (1 + 0.12 * _flash);
+    }
+
+    /// <summary>The part of a tongue's flicker cycle where it stops stretching and its tip breaks off.</summary>
+    private const double PinchAt = 0.72;
+
+    /// <summary>A tongue's height through one flicker cycle (0..1): it stretches up slowly, then
+    /// its tip pinches off and the rest drops back at once - the way a real flame flickers -
+    /// rather than rising and falling evenly.</summary>
+    private static double FlickerCycle(double p) => p < PinchAt
+        ? 0.42 + 0.58 * SmoothStep(p / PinchAt)
+        : 1 - 0.58 * (1 - Math.Pow(1 - (p - PinchAt) / (1 - PinchAt), 2));
+
+    /// <summary>How many flicker cycles tongue <paramref name="i"/> goes through per unit of fire time.</summary>
+    private static double FlickerRate(int i) => 2.3 * (0.8 + 0.4 * Hash(i + 97));
+
+    /// <summary>The draft at <paramref name="x"/>: one slowly shifting field all tongues lean in,
+    /// so neighbors sway together.</summary>
+    private static double Draft(double x, double t) => 0.55 * Math.Sin(t * 0.6 + x * 0.010) + 0.45 * Math.Sin(t * 1.4 - x * 0.022 + 1.1);
+
+    /// <summary>Tongue <paramref name="i"/> at fire time <paramref name="t"/>: where it stands, how
+    /// tall (<paramref name="h"/>, and <paramref name="full"/> at the top of its cycle), how wide and
+    /// how far its tip leans. False past the thumb.</summary>
+    private bool TongueAt(int i, double t, double endX, double room, double amplitude,
+                          out double x, out double h, out double full, out double w, out double lean)
+    {
+        var seed = Hash(i);
+        x = Left + i * TongueSpacing + (seed - 0.5) * 3;
+        h = full = w = lean = 0;
+        if (x > endX - 1) return false;
+
+        var envelope = SmoothStep(Math.Min(1, (x - Left) / 18)) * SmoothStep(Math.Min(1, (endX - x) / 8));
+        var nearThumb = 0.62 + 0.38 * SmoothStep(Math.Clamp(1 - (endX - x) / 160, 0, 1));
+        // Taller and lower stretches that drift along the fire, so neighbors rise together.
+        var body = 0.90 + 0.18 * Math.Sin((x - Left) * 0.045 - t * 1.9 + Math.Sin(t * 0.7) * 1.5)
+                        + 0.06 * Math.Sin((x - Left) * 0.11 + t * 3.1);
+        var cycle = t * FlickerRate(i) + seed;
+        var g = FlickerCycle(cycle - Math.Floor(cycle));
+        var shimmer = 1 + 0.05 * Math.Sin(t * 21 + seed * 60);
+        full = amplitude * envelope * nearThumb * body * (0.78 + 0.22 * Hash(i + 31));
+        h = full * g * shimmer;
+        // A stretched tongue gets thinner; one that just dropped is short and broad.
+        w = TongueSpacing * (1.6 + 0.8 * Hash(i + 31)) * (1.15 - 0.25 * g);
+        var reach = h / room;
+        lean = Draft(x, t) * w * 0.9 * (reach + 0.3) + Math.Sin(t * 7.3 + seed * 31) * 0.14 * w * reach;
+        return true;
+    }
+
+    /// <summary>Fire along the played line, built tongue by tongue like a real flame front. Each
+    /// tongue flickers in a cycle - it stretches up and thins, then its tip pinches off and rises
+    /// away while the rest drops back (<see cref="FlickerCycle"/>) - all leaning in one shared
+    /// draft, with taller stretches drifting along the fire. Three nested layers give the colour of
+    /// real fire: a deep red-orange body, an orange-yellow middle and a pale hot core that stays
+    /// steadier near the root. Louder music makes the fire grow and flicker faster; the tallest
+    /// tongues burn right behind the thumb.</summary>
     private void DrawFire(DrawingContext dc, double mid, double endX, double room, double amplitude)
     {
         var t = _fireTime;
-        var wind = 2.2 * Math.Sin(t * 0.55) + 1.2 * Math.Sin(t * 1.3 + 1.1);
         var outer = new StreamGeometry();
         var middle = new StreamGeometry();
         var core = new StreamGeometry();
@@ -550,28 +606,12 @@ public sealed class WaveSeekBar : FrameworkElement
         using (var m = middle.Open())
         using (var c = core.Open())
         {
-            for (var i = 0; ; i++)
+            for (var i = 0; TongueAt(i, t, endX, room, amplitude, out var x, out var h, out var full, out var w, out var lean); i++)
             {
-                var seed = Hash(i);
-                var x = Left + i * TongueSpacing + (seed - 0.5) * 3;
-                if (x > endX - 1) break;
-
-                var envelope = SmoothStep(Math.Min(1, (x - Left) / 18)) * SmoothStep(Math.Min(1, (endX - x) / 8));
-                var nearThumb = 0.62 + 0.38 * SmoothStep(Math.Clamp(1 - (endX - x) / 160, 0, 1));
-                var s1 = 0.8 + seed * 0.7;
-                var s2 = 0.9 + Hash(i + 97) * 0.8;
-                var swell = 0.55 * Math.Sin(t * 2.1 * s1 + seed * 40)
-                          + 0.30 * Math.Sin(t * 5.3 * s2 + seed * 17)
-                          + 0.15 * Math.Sin(t * 11.7 + seed * 83);
-                var life = Math.Pow(Math.Clamp(0.5 + 0.5 * swell, 0, 1), 1.3);
-                var h = amplitude * envelope * nearThumb * (0.22 + 0.78 * life);
                 if (h < 1.2) continue;
-
-                var w = TongueSpacing * (1.6 + 0.8 * Hash(i + 31));
-                var lean = (Math.Sin(t * 1.7 + seed * 23) * 0.5 + Math.Sin(t * 4.3 + seed * 7) * 0.22) * w + wind * (h / room);
                 Tongue(o, x, mid + 1, w, h, lean);
                 Tongue(m, x + lean * 0.15, mid + 1, w * 0.62, h * 0.7, lean * 0.7);
-                Tongue(c, x + lean * 0.1, mid + 1, w * 0.34, h * 0.38, lean * 0.4);
+                Tongue(c, x + lean * 0.1, mid + 1, w * 0.34, h * 0.24 + full * 0.12, lean * 0.4);
             }
         }
         outer.Freeze();
@@ -630,15 +670,57 @@ public sealed class WaveSeekBar : FrameworkElement
         return v - Math.Floor(v);
     }
 
-    /// <summary>Bits of flame that break off the tips and rise, shrinking and fading.</summary>
+    /// <summary>Flame tips that pinched off: small teardrops that keep rising in the draft,
+    /// shrinking, turning yellow and fading.</summary>
     private void DrawLicks(DrawingContext dc)
     {
         foreach (var lick in _licks)
         {
-            var k = Math.Clamp(lick.Life / 0.4, 0, 1);
-            var brush = new SolidColorBrush(Color.FromArgb((byte)(200 * k), 0xFF, (byte)(0x90 + 0x50 * k), 0x30));
-            var r = lick.Size * (0.4 + 0.6 * k);
-            dc.DrawEllipse(brush, null, new Point(lick.X, lick.Y), r * 0.75, r * 1.25);
+            var k = lick.Life / (lick.Life + lick.Age); // 1 when it breaks off, 0 when gone
+            var brush = new SolidColorBrush(Color.FromArgb((byte)(210 * Math.Sqrt(k)), 0xFF, (byte)(0x78 + 0x60 * (1 - k)), (byte)(0x20 + 0x30 * (1 - k))));
+            var height = lick.Size * 1.7 * (0.45 + 0.55 * k);
+            var half = lick.Size * (0.35 + 0.35 * k) / 2;
+            var lean = lick.Vx * 0.08;
+            double x = lick.X, y = lick.Y;
+            var shape = new StreamGeometry();
+            using (var g = shape.Open())
+            {
+                g.BeginFigure(new Point(x - half, y - height * 0.3), true, true);
+                g.BezierTo(new Point(x - half, y - height * 0.65), new Point(x + lean * 0.5 - half * 0.3, y - height * 0.9), new Point(x + lean, y - height), true, true);
+                g.BezierTo(new Point(x + lean * 0.5 + half * 0.3, y - height * 0.9), new Point(x + half, y - height * 0.65), new Point(x + half, y - height * 0.3), true, true);
+                g.BezierTo(new Point(x + half, y + height * 0.05), new Point(x - half, y + height * 0.05), new Point(x - half, y - height * 0.3), true, true);
+            }
+            shape.Freeze();
+            dc.DrawGeometry(brush, null, shape);
+        }
+    }
+
+    /// <summary>Tongues whose flicker cycle passed the pinch since the last frame throw their tip
+    /// off as a lick (most of them; some just drop back).</summary>
+    private void SpawnLicks(double previousTime)
+    {
+        if (!Flames || !IsPlaying || _activity < 0.3 || Maximum <= 0) return;
+        var mid = ActualHeight / 2;
+        var thumbX = Left + (Right - Left) * Math.Clamp(CurrentPosition() / Maximum, 0, 1);
+        var room = mid - 2 + FlameOverflow;
+        var amplitude = FireAmplitude(thumbX);
+        var t = _fireTime;
+        for (var i = 0; _licks.Count < 40; i++)
+        {
+            if (!TongueAt(i, t, thumbX, room, amplitude, out var x, out _, out var full, out var w, out var lean)) break;
+            var phase = Hash(i) - PinchAt;
+            var crossed = Math.Floor(t * FlickerRate(i) + phase) > Math.Floor(previousTime * FlickerRate(i) + phase);
+            if (!crossed || full < 6 || Random.Shared.NextDouble() > 0.35 + 0.35 * _flash) continue;
+            _licks.Add(new Spark
+            {
+                X = x + lean * 0.75,
+                Y = mid + 1 - full * 0.72, // where the tip was
+                Vx = Draft(x, t) * 14,
+                Vy = -(room * (1.6 + Random.Shared.NextDouble())),
+                Life = 0.10 + Random.Shared.NextDouble() * 0.10,
+                // Only the tip breaks off: a small piece, never bigger than the tongue's top.
+                Size = Math.Min(full * 0.2, w * 0.35),
+            });
         }
     }
 
@@ -728,8 +810,10 @@ public sealed class WaveSeekBar : FrameworkElement
 
         // Louder music flows faster.
         _phase += dt * (1.4 + 2.4 * _level) * Math.Max(_activity, 0.15);
-        // Fire burns faster when the music is loud.
-        _fireTime += dt * (0.8 + 0.9 * _level) * Math.Max(_activity, 0.2);
+        // The fire grows and settles more slowly than the meter; it flickers faster when loud.
+        _fireLevel += (target - _fireLevel) * Math.Min(1, dt * (target > _fireLevel ? 5 : 2));
+        var previousFireTime = _fireTime;
+        _fireTime += dt * (0.9 + 0.8 * _fireLevel + 0.8 * _flash) * Math.Max(_activity, 0.2);
 
         // A beat: loudness jumping well above its recent average sends a ripple back from the thumb.
         _sinceBeat += dt;
@@ -744,6 +828,7 @@ public sealed class WaveSeekBar : FrameworkElement
         }
         _flash *= Math.Exp(-dt * 5);
         UpdateSparks(dt, beat);
+        SpawnLicks(previousFireTime);
         UpdateStars(dt, beat);
         // The lightning redraws itself every so often - sooner when loud, at once on a beat.
         _sinceBolt += dt;
@@ -778,33 +863,12 @@ public sealed class WaveSeekBar : FrameworkElement
             var l = _licks[i];
             l.X += l.Vx * dt;
             l.Y += l.Vy * dt;
+            l.Vy *= Math.Exp(-dt * 2); // the draft carries it up, ever more gently
             l.Life -= dt;
+            l.Age += dt;
             if (l.Life <= 0) _licks.RemoveAt(i);
             else _licks[i] = l;
         }
-        if (Flames && IsPlaying && _activity > 0.3 && Maximum > 0)
-        {
-            var line = ActualHeight / 2;
-            var tx = Left + (Right - Left) * Math.Clamp(CurrentPosition() / Maximum, 0, 1);
-            var room = line - 2 + FlameOverflow;
-            var chance = dt * (6 + 22 * _level) * (beat ? 4 : 1);
-            while (chance > 0 && tx - Left > 30 && _licks.Count < 24)
-            {
-                if (Random.Shared.NextDouble() > chance) break;
-                chance -= 1;
-                var back = Math.Pow(Random.Shared.NextDouble(), 1.6) * Math.Min(150, tx - Left);
-                _licks.Add(new Spark
-                {
-                    X = tx - 4 - back,
-                    Y = line - room * (0.45 + 0.4 * _level) * (0.6 + 0.4 * Random.Shared.NextDouble()),
-                    Vx = (Random.Shared.NextDouble() - 0.5) * 10,
-                    Vy = -(35 + Random.Shared.NextDouble() * 40),
-                    Life = 0.22 + Random.Shared.NextDouble() * 0.2,
-                    Size = 1.4 + Random.Shared.NextDouble() * 1.6,
-                });
-            }
-        }
-
         for (var i = _sparks.Count - 1; i >= 0; i--)
         {
             var s = _sparks[i];
