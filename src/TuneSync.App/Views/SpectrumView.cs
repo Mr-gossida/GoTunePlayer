@@ -227,6 +227,10 @@ public sealed class SpectrumView : FrameworkElement
                 case SpectrumStyle.Mirror: DrawRoundBars(dc, height, mirrored: true); break;
                 case SpectrumStyle.Wave: DrawCurve(dc, height, c); break;
                 case SpectrumStyle.Dots: DrawDots(dc, height); break;
+                case SpectrumStyle.Neon: DrawNeon(dc, height, c); break;
+                case SpectrumStyle.Rainbow: DrawRainbow(dc, height); break;
+                case SpectrumStyle.Reflect: DrawReflect(dc, height, c); break;
+                case SpectrumStyle.Pins: DrawPins(dc, height, c); break;
             }
             return;
         }
@@ -318,6 +322,166 @@ public sealed class SpectrumView : FrameworkElement
         dc.DrawGeometry(fade, null, area);
         var bright = Color.FromRgb((byte)Math.Min(255, color.R + 50), (byte)Math.Min(255, color.G + 50), (byte)Math.Min(255, color.B + 50));
         dc.DrawGeometry(null, new Pen(new SolidColorBrush(bright), 1.6) { LineJoin = PenLineJoin.Round }, edge);
+    }
+
+    // Brushes and pens for the newer looks, made once per color/size (not per frame).
+    private Color _extrasColor;
+    private Size _extrasSize;
+    private Pen? _neonWide, _neonMid, _neonCore;
+    private Brush? _rainbow, _reflection, _bright;
+    private Pen? _ring;
+
+    private void EnsureExtras(Color color, double height)
+    {
+        var size = new Size(ActualWidth, height);
+        if (_neonWide is not null && color == _extrasColor && size == _extrasSize) return;
+        (_extrasColor, _extrasSize) = (color, size);
+
+        Pen MakePen(byte alpha, Color c, double thickness)
+        {
+            var b = new SolidColorBrush(Color.FromArgb(alpha, c.R, c.G, c.B));
+            b.Freeze();
+            var p = new Pen(b, thickness) { LineJoin = PenLineJoin.Round, StartLineCap = PenLineCap.Round, EndLineCap = PenLineCap.Round };
+            p.Freeze();
+            return p;
+        }
+        var light = Lighten(color, 70);
+        // A glow made of wide, faint strokes under a bright thin one (no blur effect: that would
+        // have the GPU blur the whole strip every frame).
+        _neonWide = MakePen(36, color, 7);
+        _neonMid = MakePen(90, color, 3.5);
+        _neonCore = MakePen(255, light, 1.4);
+        _ring = MakePen(230, light, 1.2);
+
+        var bright = new SolidColorBrush(light);
+        bright.Freeze();
+        _bright = bright;
+
+        // One hue sweep across the whole strip (absolute, built once): each bar gets its own color.
+        var rainbow = new LinearGradientBrush { MappingMode = BrushMappingMode.Absolute, StartPoint = new Point(0, 0), EndPoint = new Point(Math.Max(1, size.Width), 0) };
+        for (var k = 0; k <= 6; k++) rainbow.GradientStops.Add(new GradientStop(FromHue(k * 300.0 / 6), k / 6.0));
+        rainbow.Freeze();
+        _rainbow = rainbow;
+
+        // The reflection fades out going down from the floor.
+        var floor = height * ReflectFloor;
+        var reflection = new LinearGradientBrush
+        {
+            MappingMode = BrushMappingMode.Absolute,
+            StartPoint = new Point(0, floor),
+            EndPoint = new Point(0, Math.Max(floor + 1, height)),
+            GradientStops = { new GradientStop(Color.FromArgb(150, color.R, color.G, color.B), 0), new GradientStop(Color.FromArgb(0, color.R, color.G, color.B), 1) },
+        };
+        reflection.Freeze();
+        _reflection = reflection;
+    }
+
+    private static Color Lighten(Color c, int by) =>
+        Color.FromArgb(c.A, (byte)Math.Min(255, c.R + by), (byte)Math.Min(255, c.G + by), (byte)Math.Min(255, c.B + by));
+
+    private static Color FromHue(double hue)
+    {
+        // Full saturation, a little softened so it sits well on the aurora and dark themes.
+        double h = hue / 60, x = 1 - Math.Abs(h % 2 - 1);
+        (double r, double g, double b) = (int)h switch { 0 => (1d, x, 0d), 1 => (x, 1d, 0d), 2 => (0d, 1d, x), 3 => (0d, x, 1d), 4 => (x, 0d, 1d), _ => (1d, 0d, x) };
+        return Color.FromRgb((byte)(70 + 185 * r), (byte)(70 + 185 * g), (byte)(70 + 185 * b));
+    }
+
+    /// <summary>The bars' tops as one smooth line (through the midpoints between neighbors).</summary>
+    private StreamGeometry BuildTopLine(double height)
+    {
+        var step = BarWidth + 1;
+        var n = _level.Length;
+        Point P(int i) => new(i * step + BarWidth / 2, height - 2 - Math.Min(height - 4, _level[i] * (height - 4)));
+        var line = new StreamGeometry();
+        using (var g = line.Open())
+        {
+            g.BeginFigure(P(0), false, false);
+            for (var i = 1; i < n; i++)
+            {
+                var prev = P(i - 1);
+                var here = P(i);
+                g.QuadraticBezierTo(prev, new Point((prev.X + here.X) / 2, (prev.Y + here.Y) / 2), true, true);
+            }
+            g.LineTo(P(n - 1), true, true);
+        }
+        line.Freeze();
+        return line;
+    }
+
+    /// <summary>Only the outline, glowing like a neon tube: brighter where the music is louder.</summary>
+    private void DrawNeon(DrawingContext dc, double height, Color color)
+    {
+        if (_level.Length < 2) return;
+        EnsureExtras(color, height);
+        var line = BuildTopLine(height);
+        dc.DrawGeometry(null, _neonWide, line);
+        dc.DrawGeometry(null, _neonMid, line);
+        dc.DrawGeometry(null, _neonCore, line);
+    }
+
+    /// <summary>Round bars in the colors of the rainbow, low to high notes, with thin peak caps.</summary>
+    private void DrawRainbow(DrawingContext dc, double height)
+    {
+        EnsureExtras(_fillColor, height);
+        var step = BarWidth + 1;
+        var radius = Math.Min(BarWidth / 2, 2);
+        for (var i = 0; i < _level.Length; i++)
+        {
+            var x = i * step;
+            var h = Math.Max(_level[i] * height, _level[i] > 0.01f ? BarWidth : 0);
+            if (h > 0) dc.DrawRoundedRectangle(_rainbow, null, new Rect(x, height - h, BarWidth, h), radius, radius);
+            if (_peak[i] > 0.03f)
+            {
+                var y = Math.Max(0, height - _peak[i] * height - 3);
+                dc.DrawRectangle(_rainbow, null, new Rect(x, y, BarWidth, 1.5));
+            }
+        }
+    }
+
+    /// <summary>Where the floor of 반사 막대 sits, as a fraction of the height.</summary>
+    private const double ReflectFloor = 0.7;
+
+    /// <summary>Bars standing on a glossy floor, each mirrored below it, fading away.</summary>
+    private void DrawReflect(DrawingContext dc, double height, Color color)
+    {
+        EnsureExtras(color, height);
+        var floor = Math.Round(height * ReflectFloor);
+        var below = height - floor - 1;
+        var step = BarWidth + 1;
+        for (var i = 0; i < _level.Length; i++)
+        {
+            var h = _level[i] * floor;
+            if (h < 0.5) continue;
+            var x = i * step;
+            dc.DrawRectangle(_fill, null, new Rect(x, floor - h, BarWidth, h));
+            var r = Math.Min(below, h * 0.55);
+            if (r > 0.5) dc.DrawRectangle(_reflection, null, new Rect(x, floor + 1, BarWidth, r));
+        }
+    }
+
+    /// <summary>A thin stem with a round head on top for each band; the peak hangs above as a small ring.</summary>
+    private void DrawPins(DrawingContext dc, double height, Color color)
+    {
+        EnsureExtras(color, height);
+        var step = BarWidth + 1;
+        var r = Math.Max(1.2, BarWidth / 2);
+        var stem = Math.Max(1, Math.Round(BarWidth / 3));
+        for (var i = 0; i < _level.Length; i++)
+        {
+            var cx = i * step + BarWidth / 2;
+            var top = height - r - _level[i] * (height - 2 * r);
+            if (_level[i] > 0.01f)
+            {
+                dc.DrawRectangle(_fill, null, new Rect(cx - stem / 2, top, stem, height - top));
+                dc.DrawEllipse(_bright, null, new Point(cx, top), r, r);
+            }
+            if (_peak[i] > 0.04f && _peak[i] - _level[i] > 0.03f)
+            {
+                var py = Math.Max(r, height - r - _peak[i] * (height - 2 * r));
+                dc.DrawEllipse(null, _ring, new Point(cx, py), r * 0.8, r * 0.8);
+            }
+        }
     }
 
     /// <summary>Columns of round dots, with the peak as a dot hanging above.</summary>

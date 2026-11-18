@@ -242,11 +242,7 @@ public sealed partial class SettingsViewModel : ObservableObject
     }
 
     public IReadOnlyList<Choice<SeekBarStyle>> SeekBarStyleOptions { get; } =
-    [
-        new(SeekBarStyle.Wave, "물결"),
-        new(SeekBarStyle.Flame, "불꽃"),
-        new(SeekBarStyle.Random, "임의 (곡마다)"),
-    ];
+        [.. PlaybackViewModel.SeekBarStyleOrder.Select(s => new Choice<SeekBarStyle>(s, PlaybackViewModel.SeekBarStyleName(s)))];
 
     public SeekBarStyle SeekBarStyle
     {
@@ -259,7 +255,7 @@ public sealed partial class SettingsViewModel : ObservableObject
     }
 
     public IReadOnlyList<Choice<SpectrumStyle>> SpectrumStyleOptions { get; } =
-        [.. Enum.GetValues<SpectrumStyle>().Select(s => new Choice<SpectrumStyle>(s, PlaybackViewModel.SpectrumStyleName(s)))];
+        [.. PlaybackViewModel.SpectrumStyleOrder.Select(s => new Choice<SpectrumStyle>(s, PlaybackViewModel.SpectrumStyleName(s)))];
 
     public SpectrumStyle SpectrumStyle
     {

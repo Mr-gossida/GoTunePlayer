@@ -265,8 +265,17 @@ public enum SeekBarStyle
     Wave,
     /// <summary>Flickering flames with sparks.</summary>
     Flame,
-    /// <summary>One of the above, picked anew for each song.</summary>
+    /// <summary>One of the looks, picked anew for each song.</summary>
     Random,
+    // Added later: after Random, as settings store the number.
+    /// <summary>A glowing neon line that pulses with the music.</summary>
+    Neon,
+    /// <summary>The song's own loudness as thin bars along the played part.</summary>
+    Bars,
+    /// <summary>A crackling lightning bolt along the played part.</summary>
+    Electric,
+    /// <summary>Twinkling stars drifting up from the played part.</summary>
+    Sparkle,
 }
 
 public enum SpectrumStyle
@@ -282,8 +291,17 @@ public enum SpectrumStyle
     Mirror,
     /// <summary>Columns of dots.</summary>
     Dots,
-    /// <summary>One of the looks above, picked anew for each song.</summary>
+    /// <summary>One of the looks, picked anew for each song.</summary>
     Random,
+    // Added later: after Random, as settings store the number.
+    /// <summary>A glowing outline with no fill.</summary>
+    Neon,
+    /// <summary>Bars running through the colors of the rainbow.</summary>
+    Rainbow,
+    /// <summary>Bars standing on a mirror-like floor with their reflection.</summary>
+    Reflect,
+    /// <summary>Thin stems with a round head, the peak hanging above as a ring.</summary>
+    Pins,
 }
 
 public enum QueueViewMode

@@ -77,9 +77,33 @@ public sealed partial class PlaybackViewModel
     [ObservableProperty]
     private SeekBarStyle _seekLook;
 
-    private void PickSeekLook() => SeekLook = SeekBarStyle == SeekBarStyle.Random
-        ? (Random.Shared.Next(2) == 0 ? SeekBarStyle.Wave : SeekBarStyle.Flame)
-        : SeekBarStyle;
+    /// <summary>The seek bar looks in the order the settings list them (임의 last).</summary>
+    public static readonly SeekBarStyle[] SeekBarStyleOrder =
+        [SeekBarStyle.Wave, SeekBarStyle.Flame, SeekBarStyle.Neon, SeekBarStyle.Bars, SeekBarStyle.Electric, SeekBarStyle.Sparkle, SeekBarStyle.Random];
+
+    private void PickSeekLook()
+    {
+        if (SeekBarStyle != SeekBarStyle.Random)
+        {
+            SeekLook = SeekBarStyle;
+            return;
+        }
+        // A different one from the last song's, so the change shows.
+        var choices = SeekBarStyleOrder.Where(l => l != SeekBarStyle.Random && l != SeekLook).ToArray();
+        SeekLook = choices[Random.Shared.Next(choices.Length)];
+    }
+
+    public static string SeekBarStyleName(SeekBarStyle style) => style switch
+    {
+        SeekBarStyle.Wave => "물결",
+        SeekBarStyle.Flame => "불꽃",
+        SeekBarStyle.Neon => "네온",
+        SeekBarStyle.Bars => "파형 막대",
+        SeekBarStyle.Electric => "번개",
+        SeekBarStyle.Sparkle => "별빛",
+        SeekBarStyle.Random => "임의 (곡마다)",
+        _ => style.ToString(),
+    };
 
     public SpectrumStyle SpectrumStyle
     {
@@ -98,8 +122,15 @@ public sealed partial class PlaybackViewModel
     [ObservableProperty]
     private SpectrumStyle _spectrumLook;
 
+    /// <summary>The spectrum looks in the order the settings list them and a click cycles through.</summary>
+    public static readonly SpectrumStyle[] SpectrumStyleOrder =
+    [
+        SpectrumStyle.Off, SpectrumStyle.Led, SpectrumStyle.Bars, SpectrumStyle.Wave, SpectrumStyle.Mirror, SpectrumStyle.Dots,
+        SpectrumStyle.Neon, SpectrumStyle.Rainbow, SpectrumStyle.Reflect, SpectrumStyle.Pins, SpectrumStyle.Random,
+    ];
+
     private static readonly SpectrumStyle[] RandomLooks =
-        [SpectrumStyle.Led, SpectrumStyle.Bars, SpectrumStyle.Wave, SpectrumStyle.Mirror, SpectrumStyle.Dots];
+        [.. SpectrumStyleOrder.Where(s => s is not SpectrumStyle.Off and not SpectrumStyle.Random)];
 
     private void PickSpectrumLook()
     {
@@ -113,10 +144,10 @@ public sealed partial class PlaybackViewModel
         SpectrumLook = choices[Random.Shared.Next(choices.Length)];
     }
 
-    /// <summary>Clicking the spectrum: 없음 → LED → 둥근 막대 → 물결 → 대칭 → 점 → 없음 …</summary>
+    /// <summary>Clicking the spectrum steps through <see cref="SpectrumStyleOrder"/>, back to 없음 after 랜덤.</summary>
     public void CycleSpectrumStyle()
     {
-        var all = Enum.GetValues<SpectrumStyle>();
+        var all = SpectrumStyleOrder;
         SpectrumStyle = all[(Array.IndexOf(all, SpectrumStyle) + 1) % all.Length];
     }
 
@@ -128,6 +159,10 @@ public sealed partial class PlaybackViewModel
         SpectrumStyle.Wave => "물결",
         SpectrumStyle.Mirror => "대칭 막대",
         SpectrumStyle.Dots => "도트",
+        SpectrumStyle.Neon => "네온 선",
+        SpectrumStyle.Rainbow => "무지개 막대",
+        SpectrumStyle.Reflect => "반사 막대",
+        SpectrumStyle.Pins => "핀",
         SpectrumStyle.Random => "랜덤 (곡마다)",
         _ => style.ToString(),
     };
