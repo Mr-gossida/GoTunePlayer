@@ -125,6 +125,9 @@
                     <ListBoxItem Tag="Sound">
                         <StackPanel Orientation="Horizontal"><ui:SymbolIcon Symbol="DeviceEq24" Margin="0,0,10,0"/><TextBlock Text="음향"/></StackPanel>
                     </ListBoxItem>
+                    <ListBoxItem Tag="Hud">
+                        <StackPanel Orientation="Horizontal"><ui:SymbolIcon Symbol="Board24" Margin="0,0,10,0"/><TextBlock Text="HUD"/></StackPanel>
+                    </ListBoxItem>
                     <ListBoxItem Tag="Hotkeys">
                         <StackPanel Orientation="Horizontal"><ui:SymbolIcon Symbol="Keyboard24" Margin="0,0,10,0"/><TextBlock Text="단축키"/></StackPanel>
                     </ListBoxItem>
@@ -133,9 +136,6 @@
                     </ListBoxItem>
                     <ListBoxItem Tag="Library">
                         <StackPanel Orientation="Horizontal"><ui:SymbolIcon Symbol="Library24" Margin="0,0,10,0"/><TextBlock Text="라이브러리"/></StackPanel>
-                    </ListBoxItem>
-                    <ListBoxItem Tag="Network">
-                        <StackPanel Orientation="Horizontal"><ui:SymbolIcon Symbol="Server24" Margin="0,0,10,0"/><TextBlock Text="네트워크"/></StackPanel>
                     </ListBoxItem>
                     <ListBoxItem Tag="Tools">
                         <StackPanel Orientation="Horizontal"><ui:SymbolIcon Symbol="Toolbox24" Margin="0,0,10,0"/><TextBlock Text="도구"/></StackPanel>
@@ -154,7 +154,7 @@
                 <!-- 일반 -->
                 <StackPanel Tag="General">
                     <ui:TextBlock Text="일반" Style="{StaticResource CategoryTitle}"/>
-                    <ui:TextBlock Text="모양, Windows 시작, 창과 HUD" Style="{StaticResource CategoryLead}"/>
+                    <ui:TextBlock Text="모양, Windows 시작과 창" Style="{StaticResource CategoryLead}"/>
                     <ui:TextBlock Text="모양" Style="{StaticResource Group}"/>
                     <ui:CardControl Style="{StaticResource Card}" Icon="{ui:SymbolIcon DarkTheme24}" Tag="테마 밝게 어둡게 다크 라이트 모양">
                         <ui:CardControl.Header>
@@ -236,111 +236,6 @@
                         <ComboBox Width="200" ItemsSource="{Binding CloseActionOptions}" DisplayMemberPath="Label"
                                   SelectedValuePath="Value" SelectedValue="{Binding CloseAction}" AutomationProperties.Name="닫기 버튼을 누르면"/>
                     </ui:CardControl>
-                    <ui:TextBlock Text="HUD" Style="{StaticResource Group}"/>
-                    <ui:CardControl Style="{StaticResource Card}" DataContext="{Binding Hud}" Icon="{ui:SymbolIcon Board24}"
-                                    Tag="HUD 항상 위 오버레이 가사 스펙트럼 재생 버튼 떠 있는 창"
-                                    ToolTip="어떤 프로그램을 쓰든 그 위에 작은 카드로 곡 정보, 가사, 스펙트럼과 재생 버튼을 띄웁니다. 끌어서 옮길 수 있고, 제목 표시줄의 HUD 버튼이나 단축키(HUD 전환)로도 켜고 끕니다.">
-                        <ui:CardControl.Header>
-                            <StackPanel>
-                                <ui:TextBlock Text="HUD" FontTypography="Body"/>
-                                <ui:TextBlock Text="다른 프로그램 위에 곡 정보 · 가사 · 스펙트럼 · 재생 버튼을 띄우기" Style="{StaticResource Desc}"/>
-                            </StackPanel>
-                        </ui:CardControl.Header>
-                        <ui:ToggleSwitch IsChecked="{Binding IsOpen}" OnContent="켬" OffContent="끔"/>
-                    </ui:CardControl>
-                    <!-- the layout: tiles with a small drawing of each (the HUD's menu has the same) -->
-                    <Border DataContext="{Binding Hud}" Tag="HUD 레이아웃 모양 카드 한 줄 컴팩트 가사 집중 세로 미니멀 배치"
-                            Margin="0,0,0,4" Padding="16,12,16,14" CornerRadius="6"
-                            Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
-                            BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}" BorderThickness="1">
-                        <StackPanel>
-                            <StackPanel Orientation="Horizontal">
-                                <ui:SymbolIcon Symbol="LayoutColumnTwo24" FontSize="20" Margin="0,0,14,0" VerticalAlignment="Center"/>
-                                <StackPanel>
-                                    <ui:TextBlock Text="HUD 레이아웃" FontTypography="Body"/>
-                                    <ui:TextBlock Text="고르면 HUD가 바로 바뀝니다 · 곡이 바뀌어도 크기는 그대로입니다" Style="{StaticResource Desc}"/>
-                                </StackPanel>
-                            </StackPanel>
-                            <views:HudLayoutPicker Layout="{Binding Layout, Mode=TwoWay}" ShowDescriptions="True" Margin="0,12,0,0"/>
-                        </StackPanel>
-                    </Border>
-                    <ui:CardExpander Margin="0,0,0,4" DataContext="{Binding Hud}" Icon="{ui:SymbolIcon EyeTrackingOff24}" IsExpanded="{Binding Clear, Mode=OneWay}"
-                                     Tag="HUD 클리어 모드 배경 없음 투명 배경 테두리 그림자 글자만 효과 네온 글로우"
-                                     ToolTip="카드 배경을 없애고 곡 정보 · 가사 · 스펙트럼 · 버튼만 띄웁니다. 글자와 버튼은 흰색에 어두운 테두리와 그림자를 둘러, 밝은 창 위에서도 어두운 창 위에서도 읽힙니다. 마우스를 올리면 카드가 옅게 나타납니다.">
-                        <ui:CardExpander.Header>
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-                                <StackPanel Margin="0,0,16,0">
-                                    <ui:TextBlock Text="HUD 클리어 모드" FontTypography="Body"/>
-                                    <ui:TextBlock Text="배경 없이 글자 · 커버 · 버튼만 테두리를 둘러 띄우기 · 그동안 투명도는 쓰지 않습니다" Style="{StaticResource Desc}"/>
-                                </StackPanel>
-                                <ui:ToggleSwitch Grid.Column="1" VerticalAlignment="Center" Margin="0,0,16,0"
-                                                 IsChecked="{Binding Clear}" OnContent="켬" OffContent="끔" AutomationProperties.Name="HUD 클리어 모드"/>
-                            </Grid>
-                        </ui:CardExpander.Header>
-                        <Grid Margin="40,4,0,4" IsEnabled="{Binding Clear}">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
-                            <StackPanel VerticalAlignment="Center" Margin="0,0,16,0">
-                                <ui:TextBlock Text="효과" FontTypography="BodyStrong"/>
-                                <ui:TextBlock Style="{StaticResource Desc}"
-                                              Text="글자와 버튼의 가장자리에만 두르는 효과입니다. 밝고 복잡한 화면에서 잘 안 보이면 '테두리'를 고르세요."/>
-                            </StackPanel>
-                            <ComboBox Grid.Column="1" Width="220" VerticalAlignment="Center" ItemsSource="{Binding ClearEffectOptions}" DisplayMemberPath="Label"
-                                      SelectedValuePath="Value" SelectedValue="{Binding ClearEffect}" AutomationProperties.Name="HUD 클리어 효과"/>
-                        </Grid>
-                    </ui:CardExpander>
-                    <ui:CardControl Style="{StaticResource Card}" DataContext="{Binding Hud}" IsEnabled="{Binding CanSetOpacity}" Icon="{ui:SymbolIcon Blur24}" Tag="HUD 투명도 불투명도 반투명"
-                                    ToolTip="마우스를 올리면 잠시 선명해져 버튼을 누르기 쉽습니다. HUD의 메뉴(⚙)에서도 바꿀 수 있습니다.">
-                        <ui:CardControl.Header>
-                            <StackPanel>
-                                <ui:TextBlock Text="HUD 투명도" FontTypography="Body"/>
-                                <ui:TextBlock Text="낮출수록 뒤가 비쳐 보입니다" Style="{StaticResource Desc}"/>
-                            </StackPanel>
-                        </ui:CardControl.Header>
-                        <StackPanel Orientation="Horizontal">
-                            <Slider Width="180" Minimum="0.2" Maximum="1" SmallChange="0.05" LargeChange="0.1" Value="{Binding Opacity}"
-                                    IsMoveToPointEnabled="True" VerticalAlignment="Center" AutomationProperties.Name="HUD 투명도"/>
-                            <TextBlock Text="{Binding OpacityText}" Width="44" TextAlignment="Right" VerticalAlignment="Center" Margin="8,0,0,0"
-                                       Typography.NumeralAlignment="Tabular"/>
-                        </StackPanel>
-                    </ui:CardControl>
-                    <ui:CardExpander Margin="0,0,0,4" DataContext="{Binding Hud}" Icon="{ui:SymbolIcon CursorClick24}" IsExpanded="{Binding ClickThrough, Mode=OneWay}"
-                                     Tag="HUD 마우스 통과 클릭 통과 클릭 무시 투명 고정 버튼 누르기 재생 버튼"
-                                     ToolTip="켜 두면 HUD를 눌러도 그 뒤의 창이 클릭됩니다. 그동안 HUD는 옮길 수 없으니, 끌 때는 여기나 트레이 아이콘의 메뉴(HUD 마우스 통과 끄기)를 쓰세요.">
-                        <ui:CardExpander.Header>
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-                                <StackPanel Margin="0,0,16,0">
-                                    <ui:TextBlock Text="HUD 마우스 통과" FontTypography="Body"/>
-                                    <ui:TextBlock Text="클릭이 HUD를 지나 뒤의 창으로 갑니다 · 트레이 메뉴에서도 끌 수 있습니다" Style="{StaticResource Desc}"/>
-                                </StackPanel>
-                                <ui:ToggleSwitch Grid.Column="1" VerticalAlignment="Center" Margin="0,0,16,0"
-                                                 IsChecked="{Binding ClickThrough}" OnContent="켬" OffContent="끔" AutomationProperties.Name="HUD 마우스 통과"/>
-                            </Grid>
-                        </ui:CardExpander.Header>
-                        <Grid Margin="40,4,0,4" IsEnabled="{Binding ClickThrough}">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
-                            <StackPanel VerticalAlignment="Center" Margin="0,0,16,0">
-                                <ui:TextBlock Text="버튼은 누를 수 있게" FontTypography="BodyStrong"/>
-                                <ui:TextBlock Style="{StaticResource Desc}"
-                                              Text="이전 곡 · 재생 · 다음 곡 버튼만 눌리고, 나머지 자리의 클릭은 뒤의 창으로 갑니다. 마우스를 올리면 HUD가 선명해집니다."/>
-                            </StackPanel>
-                            <ui:ToggleSwitch Grid.Column="1" VerticalAlignment="Center" IsChecked="{Binding ClickThroughButtons}" OnContent="켬" OffContent="끔"
-                                             AutomationProperties.Name="HUD 버튼은 누를 수 있게"/>
-                        </Grid>
-                    </ui:CardExpander>
                 </StackPanel>
 
                 <!-- 재생 -->
@@ -400,6 +295,17 @@
                             </StackPanel>
                         </ui:CardControl.Header>
                         <ui:ToggleSwitch IsChecked="{Binding ShowIntroGauge}" OnContent="표시" OffContent="숨김"/>
+                    </ui:CardControl>
+                    <ui:CardControl Style="{StaticResource Card}" Icon="{ui:SymbolIcon WeatherSunny24}" Tag="오로라 조명 빛 배경 음악 집중 모드 저사양 내장 그래픽 GPU 절전 성능"
+                                    ToolTip="음악 집중 모드와 화면 보호기 뒤에서 흐르는 빛입니다. 빛이 움직일 때마다 화면 전체를 다시 그리므로, 내장 그래픽에서 GPU 사용량이 높으면 절전이나 끄기를 고르세요. 절전은 빛이 덜 자주 움직이고, 끄기는 배경이 멈춘 채로 보입니다.">
+                        <ui:CardControl.Header>
+                            <StackPanel>
+                                <ui:TextBlock Text="오로라 조명" FontTypography="Body"/>
+                                <ui:TextBlock Text="집중 모드·화면 보호기의 흐르는 빛 · 내장 그래픽이면 절전이나 끄기" Style="{StaticResource Desc}"/>
+                            </StackPanel>
+                        </ui:CardControl.Header>
+                        <ComboBox Width="200" ItemsSource="{Binding AuroraModeOptions}" DisplayMemberPath="Label"
+                                  SelectedValuePath="Value" SelectedValue="{Binding Playback.AuroraMode}" AutomationProperties.Name="오로라 조명"/>
                     </ui:CardControl>
                     <ui:TextBlock Text="가사" Style="{StaticResource Group}"/>
                     <ui:CardControl Style="{StaticResource Card}" Icon="{ui:SymbolIcon SlideText24}" Tag="가사 글꼴 폰트 서체 글씨체 싱크"
@@ -582,6 +488,16 @@
                         <ComboBox Width="200" ItemsSource="{Binding Equalizer.Presets}" DisplayMemberPath="Name"
                                   SelectedItem="{Binding Equalizer.SelectedPreset}"/>
                     </ui:CardControl>
+                    <ui:CardControl Style="{StaticResource Card}" Icon="{ui:SymbolIcon Options24}" Tag="이퀄라이저 열기 밴드 슬라이더 프리앰프 좌우 균형 스테레오 폭"
+                                    ToolTip="재생 바의 이퀄라이저 버튼으로도 열 수 있습니다.">
+                        <ui:CardControl.Header>
+                            <StackPanel>
+                                <ui:TextBlock Text="세부 조절" FontTypography="Body"/>
+                                <ui:TextBlock Text="밴드별 슬라이더, 저음·고음, 스테레오 폭, 좌우 균형" Style="{StaticResource Desc}"/>
+                            </StackPanel>
+                        </ui:CardControl.Header>
+                        <ui:Button Content="이퀄라이저 열기" Icon="{ui:SymbolIcon Open24}" Click="OpenEqualizer_Click"/>
+                    </ui:CardControl>
                     <ui:CardControl Style="{StaticResource Card}" Icon="{ui:SymbolIcon ShieldCheckmark24}" Tag="리미터 클리핑 왜곡 찌그러짐 음량 최대 크기"
                                     ToolTip="끄면 최대 크기를 넘은 소리가 잘린 채로 나가 왜곡될 수 있습니다.">
                         <ui:CardControl.Header>
@@ -602,16 +518,119 @@
                         </ui:CardControl.Header>
                         <ui:ToggleSwitch IsChecked="{Binding Equalizer.AutoHeadroom}" OnContent="켬" OffContent="끔"/>
                     </ui:CardControl>
-                    <ui:CardControl Style="{StaticResource Card}" Icon="{ui:SymbolIcon Options24}" Tag="이퀄라이저 열기 밴드 슬라이더 프리앰프 좌우 균형 스테레오 폭"
-                                    ToolTip="재생 바의 이퀄라이저 버튼으로도 열 수 있습니다.">
+                </StackPanel>
+
+                <!-- HUD: the always-on-top card over other programs (HudViewModel) -->
+                <StackPanel Tag="Hud">
+                    <ui:TextBlock Text="HUD" Style="{StaticResource CategoryTitle}"/>
+                    <ui:TextBlock Text="다른 프로그램 위에 띄우는 작은 카드: 레이아웃, 클리어 모드, 투명도, 마우스 통과" Style="{StaticResource CategoryLead}"/>
+                    <ui:TextBlock Text="표시" Style="{StaticResource Group}"/>
+                    <ui:CardControl Style="{StaticResource Card}" DataContext="{Binding Hud}" Icon="{ui:SymbolIcon Board24}"
+                                    Tag="HUD 항상 위 오버레이 가사 스펙트럼 재생 버튼 떠 있는 창"
+                                    ToolTip="어떤 프로그램을 쓰든 그 위에 작은 카드로 곡 정보, 가사, 스펙트럼과 재생 버튼을 띄웁니다. 끌어서 옮길 수 있고, 제목 표시줄의 HUD 버튼이나 단축키(HUD 전환)로도 켜고 끕니다.">
                         <ui:CardControl.Header>
                             <StackPanel>
-                                <ui:TextBlock Text="세부 조절" FontTypography="Body"/>
-                                <ui:TextBlock Text="밴드별 슬라이더, 저음·고음, 스테레오 폭, 좌우 균형" Style="{StaticResource Desc}"/>
+                                <ui:TextBlock Text="HUD" FontTypography="Body"/>
+                                <ui:TextBlock Text="다른 프로그램 위에 곡 정보 · 가사 · 스펙트럼 · 재생 버튼을 띄우기" Style="{StaticResource Desc}"/>
                             </StackPanel>
                         </ui:CardControl.Header>
-                        <ui:Button Content="이퀄라이저 열기" Icon="{ui:SymbolIcon Open24}" Click="OpenEqualizer_Click"/>
+                        <ui:ToggleSwitch IsChecked="{Binding IsOpen}" OnContent="켬" OffContent="끔"/>
                     </ui:CardControl>
+                    <!-- the layout: tiles with a small drawing of each (the HUD's menu has the same) -->
+                    <Border DataContext="{Binding Hud}" Tag="HUD 레이아웃 모양 카드 한 줄 컴팩트 가사 집중 세로 미니멀 배치"
+                            Margin="0,0,0,4" Padding="16,12,16,14" CornerRadius="6"
+                            Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+                            BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}" BorderThickness="1">
+                        <StackPanel>
+                            <StackPanel Orientation="Horizontal">
+                                <ui:SymbolIcon Symbol="Grid24" FontSize="20" Margin="0,0,14,0" VerticalAlignment="Center"/>
+                                <StackPanel>
+                                    <ui:TextBlock Text="HUD 레이아웃" FontTypography="Body"/>
+                                    <ui:TextBlock Text="고르면 HUD가 바로 바뀝니다 · 곡이 바뀌어도 크기는 그대로입니다" Style="{StaticResource Desc}"/>
+                                </StackPanel>
+                            </StackPanel>
+                            <views:HudLayoutPicker Layout="{Binding Layout, Mode=TwoWay}" ShowDescriptions="True" Margin="0,12,0,0"/>
+                        </StackPanel>
+                    </Border>
+                    <ui:TextBlock Text="모양" Style="{StaticResource Group}"/>
+                    <ui:CardExpander Margin="0,0,0,4" DataContext="{Binding Hud}" Icon="{ui:SymbolIcon EyeTrackingOff24}" IsExpanded="{Binding Clear, Mode=OneWay}"
+                                     Tag="HUD 클리어 모드 배경 없음 투명 배경 테두리 그림자 글자만 효과 네온 글로우"
+                                     ToolTip="카드 배경을 없애고 곡 정보 · 가사 · 스펙트럼 · 버튼만 띄웁니다. 글자와 버튼은 흰색에 어두운 테두리와 그림자를 둘러, 밝은 창 위에서도 어두운 창 위에서도 읽힙니다. 마우스를 올리면 카드가 옅게 나타납니다.">
+                        <ui:CardExpander.Header>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Margin="0,0,16,0">
+                                    <ui:TextBlock Text="HUD 클리어 모드" FontTypography="Body"/>
+                                    <ui:TextBlock Text="배경 없이 글자 · 커버 · 버튼만 테두리를 둘러 띄우기 · 그동안 투명도는 쓰지 않습니다" Style="{StaticResource Desc}"/>
+                                </StackPanel>
+                                <ui:ToggleSwitch Grid.Column="1" VerticalAlignment="Center" Margin="0,0,16,0"
+                                                 IsChecked="{Binding Clear}" OnContent="켬" OffContent="끔" AutomationProperties.Name="HUD 클리어 모드"/>
+                            </Grid>
+                        </ui:CardExpander.Header>
+                        <Grid Margin="40,4,0,4" IsEnabled="{Binding Clear}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel VerticalAlignment="Center" Margin="0,0,16,0">
+                                <ui:TextBlock Text="효과" FontTypography="BodyStrong"/>
+                                <ui:TextBlock Style="{StaticResource Desc}"
+                                              Text="글자와 버튼의 가장자리에만 두르는 효과입니다. 밝고 복잡한 화면에서 잘 안 보이면 '테두리'를 고르세요."/>
+                            </StackPanel>
+                            <ComboBox Grid.Column="1" Width="220" VerticalAlignment="Center" ItemsSource="{Binding ClearEffectOptions}" DisplayMemberPath="Label"
+                                      SelectedValuePath="Value" SelectedValue="{Binding ClearEffect}" AutomationProperties.Name="HUD 클리어 효과"/>
+                        </Grid>
+                    </ui:CardExpander>
+                    <ui:CardControl Style="{StaticResource Card}" DataContext="{Binding Hud}" IsEnabled="{Binding CanSetOpacity}" Icon="{ui:SymbolIcon Blur24}" Tag="HUD 투명도 불투명도 반투명"
+                                    ToolTip="마우스를 올리면 잠시 선명해져 버튼을 누르기 쉽습니다. HUD의 메뉴(⚙)에서도 바꿀 수 있습니다.">
+                        <ui:CardControl.Header>
+                            <StackPanel>
+                                <ui:TextBlock Text="HUD 투명도" FontTypography="Body"/>
+                                <ui:TextBlock Text="낮출수록 뒤가 비쳐 보입니다" Style="{StaticResource Desc}"/>
+                            </StackPanel>
+                        </ui:CardControl.Header>
+                        <StackPanel Orientation="Horizontal">
+                            <Slider Width="180" Minimum="0.2" Maximum="1" SmallChange="0.05" LargeChange="0.1" Value="{Binding Opacity}"
+                                    IsMoveToPointEnabled="True" VerticalAlignment="Center" AutomationProperties.Name="HUD 투명도"/>
+                            <TextBlock Text="{Binding OpacityText}" Width="44" TextAlignment="Right" VerticalAlignment="Center" Margin="8,0,0,0"
+                                       Typography.NumeralAlignment="Tabular"/>
+                        </StackPanel>
+                    </ui:CardControl>
+                    <ui:TextBlock Text="마우스" Style="{StaticResource Group}"/>
+                    <ui:CardExpander Margin="0,0,0,4" DataContext="{Binding Hud}" Icon="{ui:SymbolIcon CursorClick24}" IsExpanded="{Binding ClickThrough, Mode=OneWay}"
+                                     Tag="HUD 마우스 통과 클릭 통과 클릭 무시 투명 고정 버튼 누르기 재생 버튼"
+                                     ToolTip="켜 두면 HUD를 눌러도 그 뒤의 창이 클릭됩니다. 그동안 HUD는 옮길 수 없으니, 끌 때는 여기나 트레이 아이콘의 메뉴(HUD 마우스 통과 끄기)를 쓰세요.">
+                        <ui:CardExpander.Header>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Margin="0,0,16,0">
+                                    <ui:TextBlock Text="HUD 마우스 통과" FontTypography="Body"/>
+                                    <ui:TextBlock Text="클릭이 HUD를 지나 뒤의 창으로 갑니다 · 트레이 메뉴에서도 끌 수 있습니다" Style="{StaticResource Desc}"/>
+                                </StackPanel>
+                                <ui:ToggleSwitch Grid.Column="1" VerticalAlignment="Center" Margin="0,0,16,0"
+                                                 IsChecked="{Binding ClickThrough}" OnContent="켬" OffContent="끔" AutomationProperties.Name="HUD 마우스 통과"/>
+                            </Grid>
+                        </ui:CardExpander.Header>
+                        <Grid Margin="40,4,0,4" IsEnabled="{Binding ClickThrough}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel VerticalAlignment="Center" Margin="0,0,16,0">
+                                <ui:TextBlock Text="버튼은 누를 수 있게" FontTypography="BodyStrong"/>
+                                <ui:TextBlock Style="{StaticResource Desc}"
+                                              Text="이전 곡 · 재생 · 다음 곡 버튼만 눌리고, 나머지 자리의 클릭은 뒤의 창으로 갑니다. 마우스를 올리면 HUD가 선명해집니다."/>
+                            </StackPanel>
+                            <ui:ToggleSwitch Grid.Column="1" VerticalAlignment="Center" IsChecked="{Binding ClickThroughButtons}" OnContent="켬" OffContent="끔"
+                                             AutomationProperties.Name="HUD 버튼은 누를 수 있게"/>
+                        </Grid>
+                    </ui:CardExpander>
                 </StackPanel>
 
                 <!-- 단축키 -->
@@ -721,17 +740,6 @@
                             </Grid>
                         </StackPanel>
                     </ui:CardExpander>
-                    <ui:CardControl Style="{StaticResource Card}" Icon="{ui:SymbolIcon WeatherSunny24}" Tag="오로라 조명 빛 배경 음악 집중 모드 저사양 내장 그래픽 GPU 절전 성능"
-                                    ToolTip="음악 집중 모드와 화면 보호기 뒤에서 흐르는 빛입니다. 빛이 움직일 때마다 화면 전체를 다시 그리므로, 내장 그래픽에서 GPU 사용량이 높으면 절전이나 끄기를 고르세요. 절전은 빛이 덜 자주 움직이고, 끄기는 배경이 멈춘 채로 보입니다.">
-                        <ui:CardControl.Header>
-                            <StackPanel>
-                                <ui:TextBlock Text="오로라 조명" FontTypography="Body"/>
-                                <ui:TextBlock Text="집중 모드·화면 보호기의 흐르는 빛 · 내장 그래픽이면 절전이나 끄기" Style="{StaticResource Desc}"/>
-                            </StackPanel>
-                        </ui:CardControl.Header>
-                        <ComboBox Width="200" ItemsSource="{Binding AuroraModeOptions}" DisplayMemberPath="Label"
-                                  SelectedValuePath="Value" SelectedValue="{Binding Playback.AuroraMode}" AutomationProperties.Name="오로라 조명"/>
-                    </ui:CardControl>
                     <ui:CardControl Style="{StaticResource Card}" Icon="{ui:SymbolIcon Desktop24}" Tag="화면 켜짐 유지 절전 모드 화면 꺼짐"
                                     ToolTip="음악이 재생되는 동안 화면이 꺼지거나 PC가 절전 모드로 들어가지 않게 합니다. 일시정지하거나 멈추면 원래대로 돌아갑니다.">
                         <ui:CardControl.Header>
@@ -747,8 +755,9 @@
                 <!-- 라이브러리 -->
                 <StackPanel Tag="Library">
                     <ui:TextBlock Text="라이브러리" Style="{StaticResource CategoryTitle}"/>
-                    <ui:TextBlock Text="음악 폴더와 파일 목록" Style="{StaticResource CategoryLead}"/>
-                    <ui:CardControl Style="{StaticResource Card}" Margin="0,8,0,4" Icon="{ui:SymbolIcon FolderAdd24}" Tag="폴더 파일 추가 목록 더하기 새로"
+                    <ui:TextBlock Text="음악 폴더와 파일 목록, NAS·서버·클라우드의 음악" Style="{StaticResource CategoryLead}"/>
+                    <ui:TextBlock Text="목록" Style="{StaticResource Group}"/>
+                    <ui:CardControl Style="{StaticResource Card}" Icon="{ui:SymbolIcon FolderAdd24}" Tag="폴더 파일 추가 목록 더하기 새로"
                                     ToolTip="이미 등록된 목록이 있을 때, 새로 고른 항목을 기존 목록에 더할지 목록을 새로 만들지 정합니다.">
                         <ui:CardControl.Header>
                             <StackPanel>
@@ -759,13 +768,8 @@
                         <ComboBox Width="200" ItemsSource="{Binding Library.AddModeOptions}" DisplayMemberPath="Label"
                                   SelectedValuePath="Value" SelectedValue="{Binding Library.AddMode}"/>
                     </ui:CardControl>
-                </StackPanel>
-
-                <!-- 네트워크 -->
-                <StackPanel Tag="Network">
-                    <ui:TextBlock Text="네트워크" Style="{StaticResource CategoryTitle}"/>
-                    <ui:TextBlock Text="NAS·서버·클라우드의 음악" Style="{StaticResource CategoryLead}"/>
-                    <ui:Card Margin="0,8,0,4" Padding="16,14" Tag="네트워크 위치 NAS 서버 WebDAV Samba SMB SFTP FTP 추가">
+                    <ui:TextBlock Text="네트워크" Style="{StaticResource Group}"/>
+                    <ui:Card Margin="0,0,0,4" Padding="16,14" Tag="네트워크 위치 NAS 서버 WebDAV Samba SMB SFTP FTP 추가">
                         <StackPanel>
                             <Grid>
                                 <Grid.ColumnDefinitions>
@@ -844,11 +848,10 @@
                         </StackPanel>
                     </ui:CardControl>
                 </StackPanel>
-
                 <!-- 도구 -->
                 <StackPanel Tag="Tools">
                     <ui:TextBlock Text="도구" Style="{StaticResource CategoryTitle}"/>
-                    <ui:TextBlock Text="폴더 합치기, 가사 싱크와 데이터" Style="{StaticResource CategoryLead}"/>
+                    <ui:TextBlock Text="폴더 합치기와 가사 싱크" Style="{StaticResource CategoryLead}"/>
                     <ui:TextBlock Text="폴더 합치기" Style="{StaticResource Group}"/>
                     <ui:CardControl Style="{StaticResource Card}" Icon="{ui:SymbolIcon FolderProhibited24}" Tag="폴더 합치기 격리 폴더 충돌"
                                     ToolTip="충돌한 파일을 삭제하지 않고 옮겨 두는, 타겟 폴더 안의 폴더 이름입니다.">
@@ -885,17 +888,6 @@
                         <ComboBox Width="200" ItemsSource="{Binding LyricsSyncCpuUsageOptions}" DisplayMemberPath="Label"
                                   SelectedValuePath="Value" SelectedValue="{Binding LyricsSyncCpuUsage}"/>
                     </ui:CardControl>
-                    <ui:TextBlock Text="데이터" Style="{StaticResource Group}"/>
-                    <ui:CardControl Style="{StaticResource Card}" Icon="{ui:SymbolIcon FolderOpen24}" Tag="데이터 폴더 설정 파일 저장 위치"
-                                    ToolTip="설정, 라이브러리 목록, 네트워크 음악 캐시, 가사 싱크용 음성 인식 모델이 저장되는 폴더입니다.">
-                        <ui:CardControl.Header>
-                            <StackPanel>
-                                <ui:TextBlock Text="데이터 폴더" FontTypography="Body"/>
-                                <ui:TextBlock Text="설정·라이브러리 목록·캐시·음성 인식 모델" Style="{StaticResource Desc}"/>
-                            </StackPanel>
-                        </ui:CardControl.Header>
-                        <ui:Button Content="폴더 열기" Icon="{ui:SymbolIcon Open24}" Command="{Binding OpenDataFolderCommand}"/>
-                    </ui:CardControl>
                 </StackPanel>
 
                 <!-- 정보 -->
@@ -919,6 +911,17 @@
                                           Text="싱크 가사 만들기는 OpenAI Whisper(whisper.cpp)로 노래를 듣습니다. 보컬 분리 모델(MDX-Net Voc FT)은 Ultimate Vocal Remover(UVR) 프로젝트와 그 개발자들이 만들었습니다."/>
                         </StackPanel>
                     </ui:Card>
+                    <ui:TextBlock Text="데이터" Style="{StaticResource Group}"/>
+                    <ui:CardControl Style="{StaticResource Card}" Icon="{ui:SymbolIcon FolderOpen24}" Tag="데이터 폴더 설정 파일 저장 위치"
+                                    ToolTip="설정, 라이브러리 목록, 네트워크 음악 캐시, 가사 싱크용 음성 인식 모델이 저장되는 폴더입니다.">
+                        <ui:CardControl.Header>
+                            <StackPanel>
+                                <ui:TextBlock Text="데이터 폴더" FontTypography="Body"/>
+                                <ui:TextBlock Text="설정·라이브러리 목록·캐시·음성 인식 모델" Style="{StaticResource Desc}"/>
+                            </StackPanel>
+                        </ui:CardControl.Header>
+                        <ui:Button Content="폴더 열기" Icon="{ui:SymbolIcon Open24}" Command="{Binding OpenDataFolderCommand}"/>
+                    </ui:CardControl>
                 </StackPanel>
 
                 <!-- nothing matched the search -->
