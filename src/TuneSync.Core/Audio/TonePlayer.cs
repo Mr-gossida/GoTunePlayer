@@ -943,7 +943,7 @@ public sealed class TonePlayer : IDisposable
         _outChannels = channels;
         _ratio = (double)rate / _sampleRate;
         _resampling = rate != _sampleRate;
-        _layout = new ChannelLayout(layout, rate);
+        _layout = new ChannelLayout(layout, rate, _output.SubCrossoverHz);
         _writer = writer;
         if (rate == _sampleRate)
         {

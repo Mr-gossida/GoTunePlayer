@@ -465,7 +465,7 @@
                         <ComboBox Width="260" ItemsSource="{Binding Devices}" DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding DeviceId}"/>
                     </ui:CardControl>
                     <ui:CardControl Style="{StaticResource Card}" DataContext="{Binding Output}" Icon="{ui:SymbolIcon SpeakerSettings24}" Tag="스피커 구성 채널 스테레오 서라운드 5.1 7.1 4채널 업믹스"
-                                    ToolTip="스테레오 음악을 더 많은 스피커에 나눠 보냅니다: 앞은 원래 좌우, 센터는 둘의 공통된 소리, 서브우퍼는 100Hz 아래 저음, 뒤는 좌우를 조금 작게. 장치에 있는 스피커 수만큼만 고를 수 있습니다.">
+                                    ToolTip="스테레오 음악을 더 많은 스피커에 나눠 보냅니다: 앞은 원래 좌우, 센터는 둘의 공통된 소리, 서브우퍼는 크로스오버 주파수(기본 100Hz) 아래 저음, 뒤는 좌우를 조금 작게. 장치에 있는 스피커 수만큼만 고를 수 있습니다.">
                         <ui:CardControl.Header>
                             <StackPanel>
                                 <ui:TextBlock Text="스피커 구성" FontTypography="Body"/>
@@ -474,6 +474,23 @@
                         </ui:CardControl.Header>
                         <ComboBox Width="260" ItemsSource="{Binding Layouts}" DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding Layout}"/>
                     </ui:CardControl>
+                    <!-- 5.1 / 7.1 only: where the subwoofer takes over. (The search sets the
+                         Visibility of the category's direct children, so the "only with a
+                         subwoofer" binding sits on the card inside this tagged border.) -->
+                    <Border DataContext="{Binding Output}" Tag="서브우퍼 우퍼 크로스오버 주파수 저음 LFE 베이스 5.1 7.1 Hz"
+                            ToolTip="이 주파수 아래의 저음을 서브우퍼로 보냅니다(이 주파수에서 -6dB, 그 위로 옥타브당 12dB씩 줄어듦). 앞 스피커가 저음을 잘 내면 낮게, 작은 스피커면 높게 고르세요. 리시버에도 크로스오버 설정이 있다면 같은 값으로 맞추는 것이 좋습니다. 앞 스피커의 소리는 그대로입니다.">
+                    <ui:CardControl Style="{StaticResource Card}" Icon="{ui:SymbolIcon Speaker224}"
+                                    Visibility="{Binding HasSubwoofer, Converter={StaticResource BoolToVisibility}}">
+                        <ui:CardControl.Header>
+                            <StackPanel>
+                                <ui:TextBlock Text="서브우퍼 크로스오버" FontTypography="Body"/>
+                                <ui:TextBlock Text="이 주파수 아래의 저음을 서브우퍼로 보냅니다" Style="{StaticResource Desc}"/>
+                            </StackPanel>
+                        </ui:CardControl.Header>
+                        <ComboBox Width="260" ItemsSource="{Binding SubCrossovers}" DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding SubCrossover}"
+                                  AutomationProperties.Name="서브우퍼 크로스오버"/>
+                    </ui:CardControl>
+                    </Border>
                     <ui:CardExpander Margin="0,0,0,4" DataContext="{Binding Output}" Icon="{ui:SymbolIcon LockClosed24}" IsExpanded="{Binding Exclusive, Mode=OneWay}"
                                      Tag="오디오 독점 모드 비트퍼펙트 WASAPI 샘플 속도 비트 수준 고음질 하이레졸루션 원음"
                                      ToolTip="GoTune Player가 장치를 혼자 씁니다. 소리는 GoTune이 디코딩한 PCM이며, Windows의 믹서와 형식 변환만 거치지 않습니다. 이퀄라이저·잔향·볼륨은 그대로 적용되고, 파일의 소리를 손대지 않고 보내려면 '비트퍼펙트'를 켭니다. 그동안 다른 프로그램의 소리는 나지 않습니다.">
