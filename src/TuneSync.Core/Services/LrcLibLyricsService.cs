@@ -8,8 +8,11 @@ namespace TuneSync.Core.Services;
 
 /// <summary>Looks up lyrics on LRCLIB only (open-licensed, no paywalled/ToS-restricted
 /// providers). Every candidate - from the exact lookup and from search - is scored on title,
-/// artist, length, album and whether it has synced lyrics; versions of a different length (live,
-/// remix, a foreign-language release) are turned down rather than guessed.</summary>
+/// artist, length, album, language and whether it has synced lyrics; versions of a different
+/// length (live, remix, a foreign-language release) are turned down rather than guessed.
+/// Language: a song's lyrics are wanted in the song's own language, not a Japanese release's or
+/// romanized ones uploaded under the same title and length. Hangul or kana in the tags says which
+/// that is; otherwise the candidates of the recording vote, the app's language counting double.</summary>
 public sealed class LrcLibLyricsService : ILyricsService, IDisposable
 {
     /// <summary>Longer or shorter than this, a candidate is another recording of the song.</summary>
@@ -19,28 +22,35 @@ public sealed class LrcLibLyricsService : ILyricsService, IDisposable
         ["live", "remix", "inst", "instrumental", "acoustic", "ver", "version", "japanese", "english", "chinese", "mr", "karaoke", "sped", "slowed"];
 
     private readonly HttpClient _http;
+    private readonly Script _preferred;
 
-    public LrcLibLyricsService() : this(new HttpClientHandler())
+    public LrcLibLyricsService() : this(new HttpClientHandler(), CultureInfo.CurrentUICulture.TwoLetterISOLanguageName)
     {
     }
 
     /// <summary>For tests: a handler standing in for the LRCLIB server.</summary>
-    public LrcLibLyricsService(HttpMessageHandler handler)
+    /// <param name="preferredLanguage">The app's language ("ko", "ja", "zh", anything else = Latin
+    /// script), which wins ties between languages when the tags don't say.</param>
+    public LrcLibLyricsService(HttpMessageHandler handler, string preferredLanguage = "ko")
     {
         _http = new HttpClient(handler) { BaseAddress = new Uri("https://lrclib.net/api/") };
         _http.DefaultRequestHeaders.UserAgent.ParseAdd("GoTunePlayer/1.0");
+        _preferred = preferredLanguage switch { "ko" => Script.Korean, "ja" => Script.Japanese, "zh" => Script.Chinese, _ => Script.Latin };
     }
 
     public async Task<LyricsResult?> FindAsync(LyricsQuery query, CancellationToken ct = default)
     {
         var candidates = new List<LrcLibTrack>();
+        var tagged = TagLanguage(query);
 
         // 1. The exact lookup, with album and length when known (LRCLIB then picks the recording
-        //    within ~2 s of that length). A synced, well-fitting hit ends the search right here.
+        //    within ~2 s of that length). A synced, well-fitting hit in the right language (the
+        //    tags', or the app's when they don't say) ends the search right here.
         if (await TryGetAsync(query, query.Title, ct) is { } exact)
         {
             candidates.Add(exact);
-            if (Score(query, exact) is { } s && s >= GoodEnough && HasSynced(exact)) return ToResult(exact);
+            if (Score(query, exact) is { } s && s >= GoodEnough && HasSynced(exact) && LanguageOf(exact) == (tagged ?? _preferred))
+                return ToResult(exact);
         }
 
         // 2. Without a "(feat. …)" / "(with …)" clause - a common reason the exact lookup misses.
@@ -52,13 +62,73 @@ public sealed class LrcLibLyricsService : ILyricsService, IDisposable
         if (!candidates.Any(c => Score(query, c) is not null))
             candidates.AddRange(await SearchAsync($"search?q={Esc(query.Artist + " " + bare)}", ct));
 
-        var best = candidates
-            .Select(c => (Track: c, Score: Score(query, c)))
+        var fitting = candidates
+            .Select(c => (Track: c, Score: Score(query, c), Language: LanguageOf(c)))
+            .Where(c => c.Score is not null)
+            .ToList();
+        if (fitting.Count == 0) return null;
+
+        // 4. The language: the tags', or the one most of the fitting candidates are in (the app's
+        //    language counting double) - so one Japanese or romanized upload of a Korean song,
+        //    under the same title and length, loses to the Korean ones.
+        var wanted = tagged ?? fitting
+            .GroupBy(c => c.Language)
+            .OrderByDescending(g => g.Count() * (g.Key == _preferred ? 2 : 1))
+            .ThenByDescending(g => g.Key == _preferred)
+            .First().Key;
+        var best = fitting
+            .Select(c => (c.Track, Score: c.Score + LanguageScore(wanted, c.Language, tagged is not null)))
             .Where(c => c.Score is not null)
             .OrderByDescending(c => c.Score)
             .FirstOrDefault();
         return best.Track is null ? null : ToResult(best.Track);
     }
+
+    /// <summary>The script a song's lyrics are written in, which is as much of its language as
+    /// matters here (romanized Korean counts as Latin).</summary>
+    internal enum Script { Latin, Korean, Japanese, Chinese }
+
+    /// <summary>The right language counts for a lot; another one counts against (it is still taken
+    /// when nothing else fits) - except that lyrics in another Asian script than the one the tags
+    /// are written in are not this song's at all (Japanese lyrics for a song tagged in Hangul).</summary>
+    private static double? LanguageScore(Script wanted, Script language, bool fromTags) =>
+        language == wanted ? 3
+        : fromTags && wanted != Script.Latin && language != Script.Latin ? null
+        : -4;
+
+    /// <summary>What the tags themselves say: kana means Japanese, Hangul Korean ("Japanese Ver."
+    /// in the title, Japanese); Latin-only tags ("REALLY REALLY" by "WINNER") say nothing.</summary>
+    internal static Script? TagLanguage(LyricsQuery query)
+    {
+        if (Words(query.Title).Contains("japanese")) return Script.Japanese;
+        var tags = $"{query.Title} {query.Artist} {query.Album}";
+        if (tags.Any(IsKana)) return Script.Japanese;
+        if (tags.Any(IsHangul)) return Script.Korean;
+        return null;
+    }
+
+    /// <summary>The lyrics' script: kana makes it Japanese (Japanese lyrics are full of kanji
+    /// too, but never without kana), Hangul Korean, Chinese characters alone Chinese, and the
+    /// rest - English, or Korean written out in Latin letters - Latin.</summary>
+    internal static Script LanguageOf(LrcLibTrack track)
+    {
+        var text = track.SyncedLyrics ?? track.PlainLyrics ?? "";
+        int hangul = 0, kana = 0, han = 0;
+        foreach (var c in text)
+        {
+            if (IsHangul(c)) hangul++;
+            else if (IsKana(c)) kana++;
+            else if (c is >= '一' and <= '鿿') han++;
+        }
+        if (kana >= 2 && kana >= hangul) return Script.Japanese;
+        if (hangul >= 2) return Script.Korean;
+        if (han >= 2) return Script.Chinese;
+        return Script.Latin;
+    }
+
+    private static bool IsHangul(char c) => c is >= '가' and <= '힣' or >= 'ㄱ' and <= 'ㆎ';
+
+    private static bool IsKana(char c) => c is >= '぀' and <= 'ヿ';
 
     /// <summary>A candidate scoring at least this (title and length both right) can be taken
     /// without searching further.</summary>

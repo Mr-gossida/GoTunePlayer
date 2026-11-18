@@ -119,6 +119,82 @@ public class LrcLibLyricsServiceTests
         Assert.Equal("[00:01.00]일본어", result?.BestLyrics); // same song once "(…)" is set aside; never the other artist
     }
 
+    // ---- language ----
+
+    // (lines like the ones in the WINNER song: Japanese is kanji with kana, Korean may mix in English)
+    private const string Japanese = "君はいるかな? 近くに来たんだ 愛してる hey";
+    private const string Korean = "Hey, really really 널 보면 내 심장이 뛰어";
+    private const string Romanized = "neol bomyeon nae simjangi ttwieo";
+
+    private static readonly LyricsQuery ReallyReally = new("WINNER", "REALLY REALLY", "FATE NUMBER FOR", TimeSpan.FromSeconds(203));
+
+    [Fact]
+    public async Task A_Korean_song_with_English_tags_gets_Korean_lyrics_not_the_Japanese_release()
+    {
+        // what LRCLIB really answers: the exact lookup hits the Japanese upload (same title, album
+        // and length), the search has the Korean ones too
+        var server = new FakeLrcLib { Get = Track("WINNER", "Really Really", 204, "FATE NUMBER FOR", lyrics: Japanese) };
+        server.Search.Add(Track("WINNER", "REALLY REALLY", 204, "FATE NUMBER FOR -JAPAN VERSION-", lyrics: Korean));
+        server.Search.Add(Track("WINNER", "Really Really", 204, "FATE NUMBER FOR", lyrics: Japanese));
+        server.Search.Add(Track("WINNER", "REALLY REALLY", 204, "OUR TWENTY FOR", lyrics: Korean));
+        server.Search.Add(Track("WINNER", "REALLY REALLY", 203, "Best of K-Pop Music 2018", lyrics: Korean));
+        using var service = new LrcLibLyricsService(server);
+
+        var result = await service.FindAsync(ReallyReally);
+
+        Assert.Equal($"[00:01.00]{Korean}", result?.BestLyrics);
+        Assert.True(server.Requests.Count >= 2); // the Japanese exact hit didn't end the search
+    }
+
+    [Fact]
+    public async Task Hangul_beats_romanized_uploads_of_the_same_recording()
+    {
+        var server = new FakeLrcLib();
+        server.Search.Add(Track("WINNER", "REALLY REALLY", 204, lyrics: Romanized));
+        server.Search.Add(Track("WINNER", "REALLY REALLY", 204, lyrics: Romanized));
+        server.Search.Add(Track("WINNER", "REALLY REALLY", 204, lyrics: Korean));
+        using var service = new LrcLibLyricsService(server);
+
+        var result = await service.FindAsync(ReallyReally);
+
+        Assert.Equal($"[00:01.00]{Korean}", result?.BestLyrics);
+    }
+
+    [Fact]
+    public async Task An_English_song_still_gets_its_English_lyrics()
+    {
+        var server = new FakeLrcLib { Get = Track("Coldplay", "Yellow", 266, "Parachutes", lyrics: "Look at the stars") };
+        server.Search.Add(Track("Coldplay", "Yellow", 266, "Parachutes", lyrics: "Look at the stars"));
+        using var service = new LrcLibLyricsService(server);
+
+        var result = await service.FindAsync(new LyricsQuery("Coldplay", "Yellow", "Parachutes", TimeSpan.FromSeconds(266)));
+
+        Assert.Equal("[00:01.00]Look at the stars", result?.BestLyrics);
+    }
+
+    [Fact]
+    public async Task A_song_tagged_in_Hangul_never_gets_Japanese_lyrics()
+    {
+        var server = new FakeLrcLib { Get = Track("아이유", "좋은 날", 234, lyrics: Japanese) };
+        server.Search.Add(Track("아이유", "좋은 날", 234, lyrics: Japanese));
+        using var service = new LrcLibLyricsService(server);
+
+        Assert.Null(await service.FindAsync(new LyricsQuery("아이유", "좋은 날", null, TimeSpan.FromSeconds(234))));
+    }
+
+    [Fact]
+    public async Task A_Japanese_version_gets_the_Japanese_lyrics()
+    {
+        var server = new FakeLrcLib();
+        server.Search.Add(Track("IU", "Good Day (Japanese Ver.)", 236, lyrics: Korean));
+        server.Search.Add(Track("IU", "Good Day (Japanese Ver.)", 236, lyrics: Japanese));
+        using var service = new LrcLibLyricsService(server);
+
+        var result = await service.FindAsync(new LyricsQuery("IU", "Good Day (Japanese Ver.)", null, TimeSpan.FromSeconds(236)));
+
+        Assert.Equal($"[00:01.00]{Japanese}", result?.BestLyrics);
+    }
+
     [Fact]
     public async Task Prefers_the_original_over_a_marked_remix()
     {
