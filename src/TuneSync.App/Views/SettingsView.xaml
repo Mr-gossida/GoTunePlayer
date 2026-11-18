@@ -265,7 +265,7 @@
                         </StackPanel>
                     </Border>
                     <ui:CardExpander Margin="0,0,0,4" DataContext="{Binding Hud}" Icon="{ui:SymbolIcon EyeTrackingOff24}" IsExpanded="{Binding Clear, Mode=OneWay}"
-                                     Tag="HUD 클리어 모드 배경 없음 투명 배경 테두리 그림자 글자만 그림자 세기"
+                                     Tag="HUD 클리어 모드 배경 없음 투명 배경 테두리 그림자 글자만 효과 네온 글로우"
                                      ToolTip="카드 배경을 없애고 곡 정보 · 가사 · 스펙트럼 · 버튼만 띄웁니다. 글자와 버튼은 흰색에 어두운 테두리와 그림자를 둘러, 밝은 창 위에서도 어두운 창 위에서도 읽힙니다. 마우스를 올리면 카드가 옅게 나타납니다.">
                         <ui:CardExpander.Header>
                             <Grid>
@@ -287,12 +287,12 @@
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
                             <StackPanel VerticalAlignment="Center" Margin="0,0,16,0">
-                                <ui:TextBlock Text="그림자 세기" FontTypography="BodyStrong"/>
+                                <ui:TextBlock Text="효과" FontTypography="BodyStrong"/>
                                 <ui:TextBlock Style="{StaticResource Desc}"
-                                              Text="글자 뒤의 그림자를 넓고 진하게 할수록 밝고 복잡한 화면 위에서도 잘 보입니다."/>
+                                              Text="글자와 버튼의 가장자리에만 두르는 효과입니다. 밝고 복잡한 화면에서 잘 안 보이면 '테두리'를 고르세요."/>
                             </StackPanel>
-                            <ComboBox Grid.Column="1" Width="220" VerticalAlignment="Center" ItemsSource="{Binding ClearShadowOptions}" DisplayMemberPath="Label"
-                                      SelectedValuePath="Value" SelectedValue="{Binding ClearShadow}" AutomationProperties.Name="HUD 그림자 세기"/>
+                            <ComboBox Grid.Column="1" Width="220" VerticalAlignment="Center" ItemsSource="{Binding ClearEffectOptions}" DisplayMemberPath="Label"
+                                      SelectedValuePath="Value" SelectedValue="{Binding ClearEffect}" AutomationProperties.Name="HUD 클리어 효과"/>
                         </Grid>
                     </ui:CardExpander>
                     <ui:CardControl Style="{StaticResource Card}" DataContext="{Binding Hud}" IsEnabled="{Binding CanSetOpacity}" Icon="{ui:SymbolIcon Blur24}" Tag="HUD 투명도 불투명도 반투명"

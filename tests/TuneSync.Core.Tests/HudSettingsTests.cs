@@ -13,16 +13,16 @@ public class HudSettingsTests
         Assert.False(hud.ClickThrough);
         Assert.False(hud.ClickThroughButtons);
         Assert.False(hud.Clear);
-        Assert.Equal(HudShadow.Strong, hud.ClearShadow);
+        Assert.Equal(HudClearEffect.Shadow, hud.ClearEffect);
     }
 
     [Fact]
     public void Normalize_UnknownLayout_FallsBackToCard()
     {
-        var hud = new HudSettings { Layout = (HudLayout)42, ClearShadow = (HudShadow)9, Opacity = double.NaN };
+        var hud = new HudSettings { Layout = (HudLayout)42, ClearEffect = (HudClearEffect)9, Opacity = double.NaN };
         hud.Normalize();
         Assert.Equal(HudLayout.Card, hud.Layout);
-        Assert.Equal(HudShadow.Strong, hud.ClearShadow);
+        Assert.Equal(HudClearEffect.Shadow, hud.ClearEffect);
         Assert.Equal(0.85, hud.Opacity);
     }
 

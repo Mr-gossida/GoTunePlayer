@@ -21,7 +21,7 @@ public sealed partial class HudViewModel : ObservableObject
         _clickThrough = settings.Hud.ClickThrough;
         _clickThroughButtons = settings.Hud.ClickThroughButtons;
         _clear = settings.Hud.Clear;
-        _clearShadow = settings.Hud.ClearShadow;
+        _clearEffect = settings.Hud.ClearEffect;
         _layout = settings.Hud.Layout;
     }
 
@@ -40,20 +40,20 @@ public sealed partial class HudViewModel : ObservableObject
     [ObservableProperty]
     private bool _clear;
 
-    /// <summary>클리어 모드's 그림자 세기.</summary>
+    /// <summary>클리어 모드's 효과.</summary>
     [ObservableProperty]
-    private HudShadow _clearShadow;
+    private HudClearEffect _clearEffect;
 
-    public IReadOnlyList<Choice<HudShadow>> ClearShadowOptions { get; } =
+    public IReadOnlyList<Choice<HudClearEffect>> ClearEffectOptions { get; } =
     [
-        new(HudShadow.Light, "약하게 · 테두리만"),
-        new(HudShadow.Normal, "보통 · 옅은 그림자"),
-        new(HudShadow.Strong, "강하게 · 넓고 진한 그림자"),
+        new(HudClearEffect.Shadow, "그림자 · 부드럽게"),
+        new(HudClearEffect.Neon, "네온 · 커버 색으로 은은하게"),
+        new(HudClearEffect.Outline, "테두리 · 진하게"),
     ];
 
-    partial void OnClearShadowChanged(HudShadow value)
+    partial void OnClearEffectChanged(HudClearEffect value)
     {
-        _settings.Hud.ClearShadow = value;
+        _settings.Hud.ClearEffect = value;
         AppSettingsStore.Save(_settings);
         _window?.ApplyClear();
     }

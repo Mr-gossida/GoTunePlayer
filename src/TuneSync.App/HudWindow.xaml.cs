@@ -42,7 +42,7 @@ public partial class HudWindow : Window
         Menu.Closed += (_, _) => { if (!IsMouseOver) Settle(); };
         SizeChanged += (_, e) => StayInPlace(e);
         IsVisibleChanged += (_, _) => UpdatePointerTracking();
-        LayoutUpdated += (_, _) => QueueScrims(); // 클리어's shades follow the words
+        PlayerPalette.Changed += FollowPalette; // 클리어 네온 takes the cover's color
         Closing += (_, e) =>
         {
             // Alt+F4 on it: just hide (the app stays)

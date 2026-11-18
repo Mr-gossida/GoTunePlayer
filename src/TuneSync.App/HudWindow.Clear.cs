@@ -14,8 +14,8 @@ namespace TuneSync.App;
 // white page as well as a dark editor or a film.
 public partial class HudWindow
 {
-    /// <summary>The halo around each word, cover and button: a soft dark shadow right under it.
-    /// One frozen effect shared by all of them; it is only redrawn when the thing it surrounds
+    /// <summary>테두리: a tight dark halo around each word, cover and button. Like the other
+    /// effects here it is one frozen effect shared by all, only redrawn when the thing it surrounds
     /// changes (a new lyric line, the time each second), never on every frame - the spectrum,
     /// which changes every frame, gets a plain dark copy behind it instead (see the XAML).</summary>
     private static readonly Effect Halo = Frozen(new DropShadowEffect
@@ -34,10 +34,11 @@ public partial class HudWindow
 
     private FrameworkElement[] Layouts => [CardLayout, CompactLayout, LyricsLayout, VerticalLayout];
 
-    /// <summary>클리어 on or off (from the constructor and whenever the setting changes).</summary>
+    /// <summary>클리어 on or off, or its 효과 changed (from the constructor and the settings).</summary>
     public void ApplyClear()
     {
         var clear = _settings.Hud.Clear;
+        var (each, group) = clear ? Effects(_settings.Hud.ClearEffect) : (null, null);
         foreach (var layout in Layouts)
         {
             foreach (var (key, brush) in ClearText)
@@ -45,169 +46,51 @@ public partial class HudWindow
                 if (clear) layout.Resources[key] = brush;
                 else layout.Resources.Remove(key);
             }
-            foreach (var element in HaloTargets(layout)) element.Effect = clear ? Halo : null;
-            // a second halo around panels of words only: two layers make an edge that holds on a
-            // white page, where one soft shadow alone fades out too soon
-            foreach (var panel in TextPanels(layout)) panel.Effect = clear ? Halo : null;
+            foreach (var element in HaloTargets(layout)) element.Effect = each;
+            foreach (var panel in TextPanels(layout)) panel.Effect = group;
         }
         SetSurface(_hovered || _pointerOverCard, 0.2);
         if (!_hovered && !_pointerOverCard && IsVisible) Fade(Idle, 0.12);
-        _scrimRects = [];
-        PlaceScrims();
     }
 
-    // --- the shades (보통, 강하게): a soft dark rounded patch behind each group of words, the
-    // buttons, the spectrum and the seek bar - what makes small white text hold over a busy, light
-    // page. They are shapes of their own, under everything, so the spectrum and the seek bar,
-    // redrawn many times a second, never carry a blur; each patch's blur is drawn once into a
-    // cached bitmap and only redone when the patch moves or resizes (a new lyric line). ---
-
-    private Rect[] _scrimRects = [];
-    private bool _scrimsQueued;
-
-    /// <summary>After any layout pass (a new line, a new song, another layout): the patches again,
-    /// once the pass is over - and only changed when the groups actually moved.</summary>
-    private void QueueScrims()
+    /// <summary>The effect on each word, cover and button, and the one on each group of still
+    /// things around them (a second layer, so the edge holds where one alone fades too soon).
+    /// Both hug the shapes' edges: there is never a plate behind the words.</summary>
+    private static (Effect? Each, Effect? Group) Effects(HudClearEffect effect) => effect switch
     {
-        if (_scrimsQueued || !_settings.Hud.Clear || _settings.Hud.ClearShadow == HudShadow.Light) return;
-        _scrimsQueued = true;
-        Dispatcher.BeginInvoke(() => { _scrimsQueued = false; PlaceScrims(); }, System.Windows.Threading.DispatcherPriority.Background);
-    }
+        // a soft shadow just under each shape, a little down and to the right, as if lit from above
+        HudClearEffect.Shadow => (SoftShadow, null),
+        // a hairline of dark to keep the letters crisp, and around it a faint glow in the cover's color
+        HudClearEffect.Neon => (Hairline, Frozen(new DropShadowEffect
+        {
+            Color = AccentGlow(), ShadowDepth = 0, BlurRadius = 12, Opacity = 0.9, RenderingBias = RenderingBias.Performance,
+        })),
+        _ => (Halo, Halo),
+    };
 
-    private void PlaceScrims()
+    private static readonly Effect SoftShadow = Frozen(new DropShadowEffect
     {
-        var shadow = _settings.Hud.ClearShadow;
-        if (!_settings.Hud.Clear || shadow == HudShadow.Light || !IsLoaded)
-        {
-            Scrims.Children.Clear();
-            _scrimRects = [];
-            return;
-        }
-        var strong = shadow == HudShadow.Strong;
-        var pad = strong ? new Size(12, 6) : new Size(9, 4);
-        var rects = Merge(ScrimAreas().Select(r => { r.Inflate(pad.Width, pad.Height); return r; }).ToList());
-        if (rects.Length == _scrimRects.Length && rects.Zip(_scrimRects).All(p => Near(p.First, p.Second))) return;
-        _scrimRects = rects;
+        Color = Colors.Black, Direction = 300, ShadowDepth = 1.5, BlurRadius = 6, Opacity = 0.75, RenderingBias = RenderingBias.Performance,
+    });
 
-        Scrims.Children.Clear();
-        var blur = strong ? StrongBlur : NormalBlur;
-        var fill = strong ? StrongFill : NormalFill;
-        foreach (var r in rects)
-        {
-            // the blur sits on an inner border, so the outer one's cached bitmap holds it already
-            // blurred; the margin leaves the blur room inside that bitmap
-            var spread = blur.Radius;
-            var patch = new Border
-            {
-                Width = r.Width + 2 * spread,
-                Height = r.Height + 2 * spread,
-                CacheMode = new BitmapCache(),
-                Child = new Border
-                {
-                    Margin = new Thickness(spread),
-                    CornerRadius = new CornerRadius(Math.Min(r.Height / 2, 16)),
-                    Background = fill,
-                    Effect = blur,
-                },
-            };
-            Canvas.SetLeft(patch, r.X - spread);
-            Canvas.SetTop(patch, r.Y - spread);
-            Scrims.Children.Add(patch);
-        }
-    }
-
-    private static readonly BlurEffect NormalBlur = Frozen(new BlurEffect { Radius = 10, RenderingBias = RenderingBias.Performance });
-    private static readonly BlurEffect StrongBlur = Frozen(new BlurEffect { Radius = 14, RenderingBias = RenderingBias.Performance });
-    private static readonly Brush NormalFill = Frozen(new SolidColorBrush(Color.FromArgb(0x8C, 0, 0, 0)));
-    private static readonly Brush StrongFill = Frozen(new SolidColorBrush(Color.FromArgb(0xC4, 0, 0, 0)));
-
-    /// <summary>Where the shades go, in the card's coordinates: around the words actually written
-    /// in each group (not the whole width a line could take), its buttons, the spectrum and the
-    /// seek bar of the layout showing.</summary>
-    private IEnumerable<Rect> ScrimAreas()
+    private static readonly Effect Hairline = Frozen(new DropShadowEffect
     {
-        var layout = Layouts.FirstOrDefault(l => l.IsVisible);
-        if (layout is null) yield break;
-        foreach (var group in TextPanels(layout).Where(g => g.IsVisible && g != LyricsButtons))
-        {
-            var area = Rect.Empty;
-            foreach (var part in Visible(group))
-                area.Union(part);
-            if (!area.IsEmpty && area.Width > 0) yield return area;
-        }
-        // words on their own, outside any group of words
-        foreach (var text in HaloTargets(layout).OfType<TextBlock>().Where(t => t.IsVisible && !TextPanels(layout).Any(g => g.IsAncestorOf(t))))
-            if (Ink(text) is { IsEmpty: false } ink) yield return ink;
-        foreach (var bar in Descendants(layout).Where(e => e is SpectrumView or ProgressBar && e.IsVisible))
-            yield return Bounds(bar);
-    }
+        Color = Colors.Black, ShadowDepth = 0, BlurRadius = 2.5, Opacity = 0.6, RenderingBias = RenderingBias.Performance,
+    });
 
-    /// <summary>The written words and the buttons in a group.</summary>
-    private IEnumerable<Rect> Visible(FrameworkElement group)
+    /// <summary>The neon's color: the player's accent (from the cover), as the palette settles on it.</summary>
+    private static Color AccentGlow() =>
+        Application.Current?.TryFindResource(PlayerPalette.AccentKey) is SolidColorBrush accent ? accent.Color : Colors.DeepSkyBlue;
+
+    /// <summary>A new song brings a new accent color: the neon follows once the palette's blend is
+    /// over (its brush animates for 0.7 s).</summary>
+    private void FollowPalette()
     {
-        foreach (var e in Descendants(group).Prepend(group))
-        {
-            if (!e.IsVisible) continue;
-            if (e is TextBlock text && Ink(text) is { IsEmpty: false } ink) yield return ink;
-            else if (e is ButtonBase) yield return Bounds(e);
-        }
+        if (!_settings.Hud.Clear || _settings.Hud.ClearEffect != HudClearEffect.Neon) return;
+        var wait = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(0.8) };
+        wait.Tick += (_, _) => { wait.Stop(); ApplyClear(); };
+        wait.Start();
     }
-
-    /// <summary>Where a line's words are: as wide as the text itself (it may be shorter than the
-    /// room it has), placed by its alignment.</summary>
-    private Rect Ink(TextBlock text)
-    {
-        if (string.IsNullOrWhiteSpace(text.Text)) return Rect.Empty;
-        var box = Bounds(text);
-        // measured apart (measuring the TextBlock itself would start another layout pass)
-        var written = new FormattedText(text.Text, System.Globalization.CultureInfo.CurrentUICulture, text.FlowDirection,
-            new Typeface(text.FontFamily, text.FontStyle, text.FontWeight, text.FontStretch), text.FontSize, Brushes.White,
-            VisualTreeHelper.GetDpi(text).PixelsPerDip);
-        var width = Math.Min(written.WidthIncludingTrailingWhitespace, box.Width);
-        if (width <= 0) return Rect.Empty;
-        var x = text.TextAlignment switch
-        {
-            TextAlignment.Center => box.X + (box.Width - width) / 2,
-            TextAlignment.Right => box.Right - width,
-            _ => box.X,
-        };
-        return new Rect(x, box.Y, width, box.Height);
-    }
-
-    private Rect Bounds(FrameworkElement e) => e.TransformToVisual(Scrims).TransformBounds(new Rect(e.RenderSize));
-
-    private static IEnumerable<FrameworkElement> Descendants(DependencyObject root)
-    {
-        foreach (var child in LogicalTreeHelper.GetChildren(root).OfType<FrameworkElement>())
-        {
-            yield return child;
-            if (child is ButtonBase or ContentControl) continue;
-            foreach (var inner in Descendants(child)) yield return inner;
-        }
-    }
-
-    /// <summary>Patches that touch become one (so where two meet isn't twice as dark).</summary>
-    private static Rect[] Merge(List<Rect> rects)
-    {
-        for (var merged = true; merged;)
-        {
-            merged = false;
-            for (var i = 0; i < rects.Count && !merged; i++)
-                for (var j = i + 1; j < rects.Count; j++)
-                {
-                    if (!rects[i].IntersectsWith(rects[j])) continue;
-                    var union = Rect.Union(rects[i], rects[j]);
-                    rects[i] = union;
-                    rects.RemoveAt(j);
-                    merged = true;
-                    break;
-                }
-        }
-        return [.. rects.OrderBy(r => r.Y).ThenBy(r => r.X)];
-    }
-
-    private static bool Near(Rect a, Rect b) =>
-        Math.Abs(a.X - b.X) < 1 && Math.Abs(a.Y - b.Y) < 1 && Math.Abs(a.Width - b.Width) < 1 && Math.Abs(a.Height - b.Height) < 1;
 
     /// <summary>Shows what a hotkey just switched, in the middle of the HUD for a moment.</summary>
     public void Flash(string text)
