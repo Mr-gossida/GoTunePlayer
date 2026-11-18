@@ -48,7 +48,9 @@ public static class KeepWords
                 TextBlockText.AddValueChanged(block, (_, _) => Join(block, TextBlock.TextProperty, block.Text));
             return;
         }
-        foreach (var run in block.Inlines.OfType<Run>())
+        // A copy: changing a Run's text edits the block's content, which ends a live enumeration
+        // of its Inlines ("컬렉션이 수정되었습니다" when a page with several Runs, like 스트리밍 캐시, opened).
+        foreach (var run in block.Inlines.OfType<Run>().ToList())
         {
             Join(run, Run.TextProperty, run.Text);
             if (Watched.TryAdd(run, run))
@@ -66,9 +68,12 @@ public static class KeepWords
     }
 
     /// <summary>"저장됩니다" -> "저⁠장⁠됩⁠니⁠다": a joiner between two letters of the same word
-    /// when at least one of them is Hangul (Latin words already keep together).</summary>
+    /// when at least one of them is Hangul (Latin words already keep together). A phrase in
+    /// parentheses keeps together too (its spaces become no-break spaces), so a line breaks
+    /// before "(" rather than leaving "적용)" alone on the next line.</summary>
     public static string Joined(string text)
     {
+        text = KeepParenthesesTogether(text);
         var sb = new StringBuilder(text.Length * 2);
         for (var i = 0; i < text.Length; i++)
         {
@@ -80,6 +85,23 @@ public static class KeepWords
             if (IsHangul(c) || IsHangul(next)) sb.Append(Joiner);
         }
         return sb.ToString();
+    }
+
+    /// <summary>Spaces inside each balanced "( … )" become no-break spaces. An unbalanced "(" is
+    /// left alone (it would otherwise glue the rest of the text into one unbreakable run).</summary>
+    private static string KeepParenthesesTogether(string text)
+    {
+        if (!text.Contains('(')) return text;
+        var chars = text.ToCharArray();
+        for (var open = text.IndexOf('('); open >= 0; open = text.IndexOf('(', open + 1))
+        {
+            var close = text.IndexOf(')', open + 1);
+            if (close < 0) break;
+            for (var i = open + 1; i < close; i++)
+                if (chars[i] == ' ') chars[i] = ' ';
+            open = close;
+        }
+        return new string(chars);
     }
 
     private static bool IsHangul(char c) => c is >= '가' and <= '힣' or >= 'ᄀ' and <= 'ᇿ' or >= '㄰' and <= '㆏';
