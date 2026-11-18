@@ -19,14 +19,6 @@ public sealed class OutputSettings
 
     public SpeakerLayout Layout { get; set; } = SpeakerLayout.Stereo;
 
-    /// <summary>5.1 and 7.1: the subwoofer gets the bass below this frequency (Hz) - like a
-    /// receiver's crossover setting; lower for big front speakers, higher for small ones.</summary>
-    public int SubCrossoverHz { get; set; } = DefaultSubCrossoverHz;
-
-    public const int DefaultSubCrossoverHz = 100;
-    public const int MinSubCrossoverHz = 40;
-    public const int MaxSubCrossoverHz = 250;
-
     /// <summary>Takes the device for GoTune alone (WASAPI exclusive): the sound goes to it
     /// untouched by Windows' mixer and its format - bit-perfect when the equalizer is off and the
     /// volume is at 100. Other programs can't play sound meanwhile.</summary>
@@ -48,7 +40,6 @@ public sealed class OutputSettings
     public void Normalize()
     {
         if (!Enum.IsDefined(Layout)) Layout = SpeakerLayout.Stereo;
-        if (SubCrossoverHz is < MinSubCrossoverHz or > MaxSubCrossoverHz) SubCrossoverHz = DefaultSubCrossoverHz;
         if (ExclusiveSampleRate is < 0 or > 768000) ExclusiveSampleRate = 0;
         if (ExclusiveBits is not (0 or 16 or 24 or 32)) ExclusiveBits = 0;
         if (string.IsNullOrWhiteSpace(DeviceId)) DeviceId = null;

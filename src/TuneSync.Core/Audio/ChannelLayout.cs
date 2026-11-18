@@ -5,26 +5,23 @@ namespace TuneSync.Core.Audio;
 /// <summary>Spreads the stereo sound over the speakers of a layout, the way a hi-fi receiver's
 /// "multi-channel stereo" does: the fronts get left and right as they are; the center gets what
 /// the two have in common (turned down, so a voice isn't louder than in stereo); the subwoofer
-/// gets the bass of both (below the crossover, 100 Hz unless set otherwise); the surrounds get
-/// left and right a little quieter. Every speaker stays within full scale.</summary>
+/// gets the bass of both (below about 100 Hz); the surrounds get left and right a little
+/// quieter. Every speaker stays within full scale.</summary>
 public sealed class ChannelLayout
 {
     private const float CenterLevel = 0.5f;      // -6 dB of what left and right share
     private const float SurroundLevel = 0.7f;    // -3 dB
+    private const double SubCutoffHz = 100;
 
     private readonly SpeakerLayout _layout;
     private readonly double _a;
     private double _low1, _low2;
 
-    /// <param name="subCrossoverHz">Where the subwoofer's bass ends: the sound there is down
-    /// 6 dB, as at a receiver's (Linkwitz-Riley) crossover point, and falls 12 dB per octave
-    /// above it.</param>
-    public ChannelLayout(SpeakerLayout layout, int sampleRate, double subCrossoverHz = OutputSettings.DefaultSubCrossoverHz)
+    public ChannelLayout(SpeakerLayout layout, int sampleRate)
     {
         _layout = layout;
-        // two one-pole low-passes in a row (each -3 dB at the crossover: -6 dB together)
-        var cutoff = Math.Clamp(subCrossoverHz, OutputSettings.MinSubCrossoverHz, OutputSettings.MaxSubCrossoverHz);
-        _a = 1 - Math.Exp(-2 * Math.PI * cutoff / sampleRate);
+        // two one-pole low-passes in a row: a gentle 12 dB/octave crossover for the subwoofer
+        _a = 1 - Math.Exp(-2 * Math.PI * SubCutoffHz / sampleRate);
     }
 
     public int Count => Channels(_layout);

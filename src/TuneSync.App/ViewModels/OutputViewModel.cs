@@ -28,7 +28,6 @@ public sealed partial class OutputViewModel : ObservableObject
         _playback = playback;
         _deviceId = settings.Output.DeviceId ?? DefaultKey;
         _layout = settings.Output.Layout;
-        _subCrossover = settings.Output.SubCrossoverHz;
         _exclusive = settings.Output.Exclusive;
         _bitPerfect = settings.Output.BitPerfect;
         _sampleRate = settings.Output.ExclusiveSampleRate;
@@ -49,31 +48,7 @@ public sealed partial class OutputViewModel : ObservableObject
     private string _deviceId;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HasSubwoofer))]
     private SpeakerLayout _layout;
-
-    /// <summary>The layout has a subwoofer (5.1, 7.1), so its crossover can be chosen.</summary>
-    public bool HasSubwoofer => Layout is SpeakerLayout.Surround51 or SpeakerLayout.Surround71;
-
-    /// <summary>The subwoofer's crossover in Hz: the steps a receiver usually offers.</summary>
-    [ObservableProperty]
-    private int _subCrossover;
-
-    public IReadOnlyList<Choice<int>> SubCrossovers { get; } =
-    [
-        new(60, "60Hz · 큰 앞 스피커"),
-        new(80, "80Hz · 일반적 (THX 권장)"),
-        new(100, "100Hz · 기본"),
-        new(120, "120Hz · 작은 앞 스피커"),
-        new(150, "150Hz · 아주 작은 위성 스피커"),
-    ];
-
-    partial void OnSubCrossoverChanged(int value)
-    {
-        if (_loading) return;
-        _settings.Output.SubCrossoverHz = value;
-        Apply();
-    }
 
     [ObservableProperty]
     private bool _exclusive;
