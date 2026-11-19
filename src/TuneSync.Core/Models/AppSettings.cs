@@ -187,7 +187,7 @@ public enum LyricsSyncCpuUsage
 /// <summary>The moving light behind 음악 집중 모드 and the screen saver (Effects/*.hlsl).</summary>
 public enum BackgroundEffect
 {
-    /// <summary>오로라 조명: flowing bands of light.</summary>
+    /// <summary>오로라: flowing bands of light.</summary>
     Aurora,
     /// <summary>물빛: the caustic net of light from rippling water.</summary>
     Caustics,
@@ -199,10 +199,8 @@ public enum BackgroundEffect
     Lava,
     /// <summary>One of the others, picked anew each time the stage opens.</summary>
     Random,
-    /// <summary>창문 빗방울: rain running down a window pane, the backdrop bent through the drops.</summary>
-    RainWindow,
-    /// <summary>불꽃놀이: bursts of fireworks blooming and drifting down.</summary>
-    Fireworks,
+    // (6 and 7 were 창문 빗방울 and 불꽃놀이, taken out: they couldn't look good at this cost. A
+    // setting that still holds one is read as Aurora.)
 }
 
 public enum AuroraMode

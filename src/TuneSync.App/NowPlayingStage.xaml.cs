@@ -305,7 +305,7 @@ public partial class NowPlayingStage : UserControl
         var look = _playback.BackgroundEffect;
         if (look == BackgroundEffect.Random)
         {
-            BackgroundEffect[] choices = [BackgroundEffect.Aurora, BackgroundEffect.Caustics, BackgroundEffect.Bokeh, BackgroundEffect.Nebula, BackgroundEffect.Lava, BackgroundEffect.RainWindow, BackgroundEffect.Fireworks];
+            BackgroundEffect[] choices = [BackgroundEffect.Aurora, BackgroundEffect.Caustics, BackgroundEffect.Bokeh, BackgroundEffect.Nebula, BackgroundEffect.Lava];
             look = choices[Random.Shared.Next(choices.Length)];
         }
         AuroraLight.Look = look;
@@ -330,7 +330,7 @@ public partial class NowPlayingStage : UserControl
     private bool _auroraStepping;
     private int _auroraEvery = 2;
 
-    /// <summary>설정 › 오로라 조명 (or no shader support): the light on, stepping less often, or
+    /// <summary>설정 › 배경 효과 (or no shader support): the light on, stepping less often, or
     /// off - then the plain backdrop is shown full size, and with nothing changing it, it is only
     /// redrawn where something over it changes.</summary>
     private void ApplyAuroraMode()

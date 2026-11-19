@@ -352,8 +352,8 @@
                         </ui:CardControl.Header>
                         <ui:ToggleSwitch IsChecked="{Binding ShowIntroGauge}" OnContent="표시" OffContent="숨김"/>
                     </ui:CardControl>
-                    <ui:CardControl Style="{StaticResource Card}" Icon="{ui:SymbolIcon WeatherSunny24}" Tag="배경 효과 오로라 조명 물빛 빛망울 성운 라바 램프 창문 빗방울 비 불꽃놀이 폭죽 빛 배경 음악 집중 모드 저사양 내장 그래픽 GPU 절전 성능"
-                                    ToolTip="음악 집중 모드와 화면 보호기 뒤에서 움직이는 빛입니다. 효과는 모두 비슷한 부담이고(불꽃놀이가 조금 더 무겁습니다), 빛이 움직일 때마다 화면 전체를 다시 그리므로 내장 그래픽에서 GPU 사용량이 높으면 절전이나 끄기를 고르세요. 절전은 빛이 덜 자주 움직이고, 끄기는 배경이 멈춘 채로 보입니다.">
+                    <ui:CardControl Style="{StaticResource Card}" Icon="{ui:SymbolIcon WeatherSunny24}" Tag="배경 효과 오로라 조명 물빛 빛망울 성운 라바 램프 빛 배경 음악 집중 모드 저사양 내장 그래픽 GPU 절전 성능"
+                                    ToolTip="음악 집중 모드와 화면 보호기 뒤에서 움직이는 빛입니다. 효과는 모두 비슷한 부담이며, 빛이 움직일 때마다 화면 전체를 다시 그리므로 내장 그래픽에서 GPU 사용량이 높으면 절전이나 끄기를 고르세요. 절전은 빛이 덜 자주 움직이고, 끄기는 배경이 멈춘 채로 보입니다.">
                         <ui:CardControl.Header>
                             <StackPanel>
                                 <ui:TextBlock Text="배경 효과" FontTypography="Body"/>
