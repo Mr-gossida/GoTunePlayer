@@ -528,7 +528,7 @@ public sealed class WaveSeekBar : FrameworkElement
             var r = _rockets[i];
             r.Y += r.Vy * dt;
             r.Vy += gravity * dt;
-            if (r.Vy < -12) { _rockets[i] = r; continue; }
+            if (r.Vy < -3) { _rockets[i] = r; continue; }
             // the top of its climb: burst
             _rockets.RemoveAt(i);
             var count = (int)(12 + 14 * r.Size);
@@ -559,12 +559,16 @@ public sealed class WaveSeekBar : FrameworkElement
             // around the thumb on a beat, anywhere along the played part otherwise
             var back = beat ? Math.Pow(Random.Shared.NextDouble(), 1.5) * Math.Min(120, thumbX - Left - 20)
                             : Random.Shared.NextDouble() * (thumbX - Left - 20);
-            var height = room * (0.45 + 0.5 * Math.Min(1, loud) + 0.1 * Random.Shared.NextDouble());
+            // how high it bursts follows the music: low in quiet passages, near the top when loud
+            // (curved so the two ends differ clearly), a little higher on a beat, and every
+            // rocket a bit different
+            var lift = Math.Pow(Math.Clamp(loud, 0, 1.1), 1.4);
+            var height = room * Math.Clamp((0.3 + 0.7 * lift) * (0.78 + 0.44 * Random.Shared.NextDouble()) + (beat ? 0.1 : 0), 0.3, 1.15);
             _rockets.Add(new Spark
             {
                 X = thumbX - 6 - back,
                 Y = mid - 1,
-                Vy = -Math.Sqrt(2 * gravity * height + 12 * 12),
+                Vy = -Math.Sqrt(2 * gravity * height + 3 * 3), // bursts at the top of its climb, that high
                 Size = Math.Clamp(0.25 + 0.75 * loud + (beat ? 0.2 : 0), 0.2, 1.2), // how big it bursts
                 Hue = Random.Shared.NextDouble(),
             });

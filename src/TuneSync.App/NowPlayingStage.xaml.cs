@@ -315,6 +315,9 @@ public partial class NowPlayingStage : UserControl
     {
         ApplyLook();
         var (main, second) = PlayerPalette.AuroraColors();
+        _seekBrush.BeginAnimation(SolidColorBrush.ColorProperty, null);
+        _seekBrush.Color = main;
+        StageSeekBar.WaveBrush = _seekBrush;
         AuroraLight.Color1 = main;
         AuroraLight.Color2 = second;
         if (!AuroraClock.IsRunning) NewAuroraSession();
@@ -385,10 +388,15 @@ public partial class NowPlayingStage : UserControl
     private void ShowAuroraNow() => AuroraLight.Time = _auroraStart + AuroraClock.Elapsed.TotalSeconds;
 
     /// <summary>A new song: the light slowly takes on its cover's colors.</summary>
+    /// <summary>The seek bar takes the stage's own cover color (light and vivid on the dark
+    /// stage, whatever the app's theme), like the player's bar takes the player's.</summary>
+    private readonly SolidColorBrush _seekBrush = new(Colors.White);
+
     private void RecolorAurora()
     {
         var (main, second) = PlayerPalette.AuroraColors();
         var duration = TimeSpan.FromSeconds(2);
+        _seekBrush.BeginAnimation(SolidColorBrush.ColorProperty, new ColorAnimation(main, duration));
         AuroraLight.BeginAnimation(Effects.AuroraEffect.Color1Property, AuroraTimeline(new ColorAnimation(main, duration)));
         AuroraLight.BeginAnimation(Effects.AuroraEffect.Color2Property, AuroraTimeline(new ColorAnimation(second, duration)));
     }

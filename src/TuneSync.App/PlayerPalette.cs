@@ -80,9 +80,11 @@ public static class PlayerPalette
     /// black-and-white cover gets violet and pink.</summary>
     public static (Color Main, Color Second) AuroraColors()
     {
+        // (hue in degrees: the second color a sixth of the way round from the cover's - this used
+        // to add 0.16 and wrap at 1 as if in turns, which made the second color red for every cover)
         var (h, s, _) = ToHsl(_source ?? SystemAccent());
-        if (s < 0.12) h = 0.74;
-        return (FromHsl(h, 0.85, 0.62), FromHsl((h + 0.16) % 1, 0.9, 0.6));
+        if (s < 0.12) h = 266;
+        return (FromHsl(h, 0.85, 0.62), FromHsl((h + 58) % 360, 0.9, 0.6));
     }
 
     public const string ScrimKey = "PlayerScrimBrush";
