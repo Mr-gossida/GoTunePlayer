@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Runtime.InteropServices;
 using NAudio.CoreAudioApi;
 using NAudio.Wave;
+using TuneSync.Core.Audio.Dsd;
 using TuneSync.Core.Models;
 
 namespace TuneSync.Core.Audio;
@@ -31,7 +32,14 @@ public interface IProgressiveSource
 
     /// <summary>The download died: what is missing will never come.</summary>
     bool IsBroken { get; }
+
+    /// <summary>The song's file name or path (what kind of file it is).</summary>
+    string Name { get; }
 }
+
+/// <summary>DoP can't go out the way the output is set now (not exclusive, the device won't take
+/// it, or it has no volume control of its own): the song has to be opened again as PCM.</summary>
+public sealed class DopUnavailableException(string message) : Exception(message);
 
 /// <summary>Plays one song through the sound chain (<see cref="ToneProcessor"/>): a decoding
 /// thread fills a short buffer of raw samples, and an output thread takes them from there, runs
@@ -109,6 +117,12 @@ public sealed class TonePlayer : IDisposable
     private volatile string? _outputBase, _outputNote;
     private volatile bool _bitPerfect, _resampling;
     private volatile string? _resampleFilterName;
+
+    // DSD: the song is DSD (and how it's read), and DSD remastering of PCM.
+    private volatile bool _dop, _converted, _remastering;
+    private string? _dsdName;
+    private int _dsdRate;
+    private double[] _silence = [];
     private ResampleFilter _resampleFilter;
     private int _sourceBits;
     private ChannelLayout? _layout;
@@ -161,6 +175,8 @@ public sealed class TonePlayer : IDisposable
         {
             if (_outputBase is not { } device) return null;
             var volume = _hardwareVolume ? "장치 볼륨" : "볼륨";
+            if (_dop)
+                return Join($"DoP · {_dsdName} ({_dsdRate / 1e6:0.0}MHz) 원음 그대로 · {device} · " + (_muted ? "음소거" : $"장치 볼륨 {Math.Round(_volume * 100)}%"), _outputNote);
             if (_bitPerfect && !_hardwareVolume && (_muted || _volume < 1))
             {
                 // GoTune's volume always counts: below 100 % the samples are turned down, so
@@ -176,6 +192,7 @@ public sealed class TonePlayer : IDisposable
             }
             // what changes the sound on the way, so "독점" isn't mistaken for untouched
             var applied = new List<string>();
+            if (_converted && _dsdName is not null) applied.Add($"{_dsdName} → PCM {_sampleRate / 1000.0:0.#}kHz 변환");
             if (_resampling)
                 applied.Add(_outRate > _sampleRate
                     ? $"업샘플링 {_sampleRate / 1000.0:0.#} → {_outRate / 1000.0:0.#}kHz · {_resampleFilterName}"
@@ -192,6 +209,16 @@ public sealed class TonePlayer : IDisposable
     /// <summary>The samples reach the device exactly as the file holds them (bit-perfect mode,
     /// and the device took the song's own rate).</summary>
     public bool IsBitPerfect => _bitPerfect;
+
+    /// <summary>PCM is going out as DSD (DoP).</summary>
+    public bool IsRemastering => _remastering;
+
+    /// <summary>The song is a DSD file (known once it is open).</summary>
+    public bool IsDsd { get; private set; }
+
+    /// <summary>DoP can't be sent the way the output is set: open the song again with DSD as PCM.
+    /// Nothing is played meanwhile.</summary>
+    public event Action? RerouteNeeded;
 
     /// <summary>The device was (re)opened: <see cref="OutputDescription"/> may have changed.</summary>
     public event Action? OutputChanged;
@@ -337,15 +364,22 @@ public sealed class TonePlayer : IDisposable
 
     private void DecodeLoop()
     {
-        MfDecoder? decoder = null;
+        IAudioDecoder? decoder = null;
         var fromUrl = false;
         try
         {
             try
             {
                 var local = _path ?? _source!.CompletedPath;
+                IsDsd = DsdFile.IsDsdPath(_path ?? _source!.Name);
+                if (IsDsd && local is null)
+                {
+                    // DSD is read from the finished file (Windows has no DSD decoder to stream it)
+                    local = WaitForDownload();
+                    if (local is null) return;
+                }
                 fromUrl = local is null;
-                decoder = new MfDecoder(local ?? _source!.Url);
+                decoder = IsDsd ? OpenDsd(local!) : new MfDecoder(local ?? _source!.Url);
                 if (decoder.Channels > 8) throw new NotSupportedException("Too many channels.");
             }
             catch (Exception ex)
@@ -356,6 +390,7 @@ public sealed class TonePlayer : IDisposable
 
             _sampleRate = decoder.SampleRate;
             _sourceBits = decoder.SourceBits;
+            _converted = decoder.IsConverted;
             _duration = decoder.Duration;
             _ringCapacity = (int)(_sampleRate * RingSeconds);
             _ring = new float[_ringCapacity * 2];
@@ -440,7 +475,7 @@ public sealed class TonePlayer : IDisposable
     /// over http (FLAC fails outright), and never past what has arrived - so: once the download
     /// is complete, the finished file is opened instead and the seek made there; before that, the
     /// stream is tried if the wanted spot has arrived. False when closed or overtaken by a newer seek.</summary>
-    private bool SeekWhileDownloading(ref MfDecoder decoder, ref bool fromUrl, TimeSpan target, long serial)
+    private bool SeekWhileDownloading(ref IAudioDecoder decoder, ref bool fromUrl, TimeSpan target, long serial)
     {
         var source = _source!;
         var fraction = _duration > TimeSpan.Zero ? Math.Clamp(target.TotalSeconds / _duration.TotalSeconds, 0, 1) : 1;
@@ -480,6 +515,37 @@ public sealed class TonePlayer : IDisposable
             }
             Thread.Sleep(40);
         }
+    }
+
+    /// <summary>The finished file of a song still downloading (null once closed).</summary>
+    private string? WaitForDownload()
+    {
+        while (!_closing && !_failed)
+        {
+            if (_source!.CompletedPath is { } path) return path;
+            if (_source.IsBroken) throw new IOException("The download stopped.");
+            Thread.Sleep(100);
+        }
+        return null;
+    }
+
+    /// <summary>A DSD file: as DoP when the output asks for it and the device can take it with a
+    /// volume control of its own, else converted to PCM.</summary>
+    private IAudioDecoder OpenDsd(string path)
+    {
+        var output = _output;
+        var dop = false;
+        if (output.Exclusive && output.DsdOutput == DsdOutput.DoP && output.HardwareVolume)
+        {
+            using var file = new DsdFile(path);
+            dop = file.Channels == 2 && OutputDevices.CanCarryDoP(output.DeviceId, file.SampleRate / 16);
+        }
+        var decoder = new DsdDecoder(path, dop);
+        _dop = decoder.IsDoP;
+        _converted = !decoder.IsDoP;
+        _dsdName = decoder.Name;
+        _dsdRate = decoder.DsdRate;
+        return decoder;
     }
 
     /// <summary>Mono is doubled; surround is folded down to two channels (front + center + its
@@ -554,6 +620,12 @@ public sealed class TonePlayer : IDisposable
             {
                 OpenDevice();
             }
+            catch (DopUnavailableException)
+            {
+                CloseDevice();
+                RefuseDoP();
+                return;
+            }
             catch (Exception ex)
             {
                 CloseDevice();
@@ -578,6 +650,12 @@ public sealed class TonePlayer : IDisposable
                         try
                         {
                             OpenDevice();
+                        }
+                        catch (DopUnavailableException)
+                        {
+                            CloseDevice();
+                            RefuseDoP();
+                            return;
                         }
                         catch
                         {
@@ -612,7 +690,8 @@ public sealed class TonePlayer : IDisposable
                         started = false;
                         client.Reset();
                         // and what the converter still holds of it
-                        if (_resampler is not null) _resampler = Resamplers.Create(_sampleRate, _outRate, _resampleFilter);
+                        if (_resampler is DsdRemasterer dsd) _resampler = new DsdRemasterer(_sampleRate, dsd.DsdRate, _resampleFilter);
+                        else if (_resampler is not null) _resampler = Resamplers.Create(_sampleRate, _outRate, _resampleFilter);
                         lock (_lock)
                         {
                             serial = _renderSerial = _seekSerial;
@@ -687,8 +766,17 @@ public sealed class TonePlayer : IDisposable
                             // still counts - never full blast because the volume was left to
                             // an amplifier that isn't there: below 100 % (without the device's
                             // own volume) they're turned down, gliding over the block
-                            processor.Scope.Write(buffer.AsSpan(0, frames * 2));
-                            var level = _hardwareVolume ? 1.0 : _muted ? 0.0 : _volume;
+                            if (_dop)
+                            {
+                                // DSD words: the displays get silence, and nothing may touch the words
+                                if (_silence.Length < frames * 2) _silence = new double[buffer.Length];
+                                processor.Scope.Write(_silence.AsSpan(0, frames * 2));
+                            }
+                            else
+                            {
+                                processor.Scope.Write(buffer.AsSpan(0, frames * 2));
+                            }
+                            var level = _hardwareVolume || _dop ? 1.0 : _muted ? 0.0 : _volume;
                             if (level != 1 || _bitPerfectGain != 1)
                             {
                                 var g = _bitPerfectGain;
@@ -735,7 +823,7 @@ public sealed class TonePlayer : IDisposable
                             // The limiter and the converter still hold the song's last few
                             // milliseconds: push them out with silence.
                             tailWritten = true;
-                            var held = Math.Min(Math.Min((int)(room / _ratio), buffer.Length / 2),
+                            var held = _dop ? 0 : Math.Min(Math.Min((int)(room / _ratio), buffer.Length / 2),
                                 processor.LatencyFrames + (_resampler?.LookaheadFrames ?? 0));
                             Array.Clear(buffer, 0, held * 2);
                             if (!_bitPerfect) processor.Process(buffer.AsSpan(0, held * 2));
@@ -776,6 +864,15 @@ public sealed class TonePlayer : IDisposable
             CloseDevice();
             if (mmcss != IntPtr.Zero) try { AvRevertMmThreadCharacteristics(mmcss); } catch { /* thread is ending anyway */ }
         }
+    }
+
+    /// <summary>DoP can't go out: nothing is played (DoP anywhere else is noise), and the owner
+    /// opens the song again as PCM.</summary>
+    private void RefuseDoP()
+    {
+        _wantPlay = false;
+        Freeze();
+        if (!_closing) RerouteNeeded?.Invoke();
     }
 
     /// <summary>Holds the position where it is (paused, or the device is gone).</summary>
@@ -860,7 +957,9 @@ public sealed class TonePlayer : IDisposable
         var channels = ChannelLayout.Channels(layout);
         string? note = output.Layout != layout ? "이 장치에는 스피커가 그만큼 없어 스테레오로 재생 중" : null;
         if (output.DeviceId is not null && output.DeviceId != _deviceId) note = "고른 장치가 없어 기본 장치로 재생 중";
-        var wantBitPerfect = output.Exclusive && output.BitPerfect;
+        var wantBitPerfect = output.Exclusive && output.BitPerfect || _dop;
+        if (_dop && !output.Exclusive) throw new DopUnavailableException("not exclusive");
+        _remastering = false;
         if (wantBitPerfect)
         {
             // the file's own channels: no spreading over more speakers
@@ -870,13 +969,52 @@ public sealed class TonePlayer : IDisposable
         }
         _bitPerfect = false;
 
+        if (output.Exclusive && !_dop && !wantBitPerfect && output.Remaster != DsdRemaster.Off)
+        {
+            // DSD remastering: the processed PCM goes out as DSD (DoP) - stereo
+            var dsdRate = DsdRemasterer.DsdRateFor(_sampleRate, output.Remaster == DsdRemaster.Dsd128 ? 128 : 64);
+            PcmFormat? dopFormat;
+            using (var probe = _device.AudioClient) dopFormat = OutputDevices.DoPFormat(probe, dsdRate / 16);
+            if (dopFormat is not null && TryOpenExclusive(dopFormat))
+            {
+                _exclusiveOpen = true;
+                _remastering = true;
+                var remaster = new DsdRemasterer(_sampleRate, dsdRate, output.Filter);
+                Prepare(dopFormat.SampleRate, 2, SpeakerLayout.Stereo,
+                    new SampleWriter(dopFormat.ValidBits, isFloat: false, dopFormat.BitsPerSample, dither: false), output.Filter, remaster);
+                if (layout != SpeakerLayout.Stereo) note = Join("DSD는 스테레오로 보냄", note);
+                if (output.HardwareVolume && !TakeHardwareVolume())
+                    note = note is null ? "장치에 하드웨어 볼륨이 없어 디지털 볼륨 사용" : Join(note, "장치에 하드웨어 볼륨이 없어 디지털 볼륨 사용");
+                var name = $"DSD{dsdRate / (dsdRate % 44100 == 0 ? 44100 : 48000)}";
+                _outputBase = $"DSD 리마스터링 · {name} ({dsdRate / 1e6:0.0}MHz, DoP {dopFormat.SampleRate / 1000.0:0.#}kHz)";
+                _outputNote = note;
+                OutputChanged?.Invoke();
+                return;
+            }
+            note = Join($"장치가 DoP({dsdRate / 16 / 1000.0:0.#}kHz)를 받지 않아 리마스터링하지 않음", note);
+            if (dopFormat is not null)
+            {
+                CloseDevice();
+                _device = OutputDevices.Open(_enumerator, output.DeviceId) ?? throw new InvalidOperationException("No playback device.");
+                _deviceId = _device.ID;
+            }
+        }
+
         if (output.Exclusive)
         {
             var format = PickExclusiveFormat(output, channels);
+            if (_dop && (format is null || format.SampleRate != _sampleRate || format.ValidBits < 24))
+                throw new DopUnavailableException("format");
             if (format is not null && TryOpenExclusive(format))
             {
                 _exclusiveOpen = true;
-                var exact = wantBitPerfect && format.SampleRate == _sampleRate && (_sourceBits == 0 || format.ValidBits >= _sourceBits);
+                if (_dop && !TakeHardwareVolume())
+                {
+                    // DoP without the device's own volume would be full level: never
+                    CloseDevice();
+                    throw new DopUnavailableException("no hardware volume");
+                }
+                var exact = wantBitPerfect && !_converted && format.SampleRate == _sampleRate && (_sourceBits == 0 || format.ValidBits >= _sourceBits);
                 Prepare(format.SampleRate, channels, layout, new SampleWriter(format.ValidBits, format.IsFloat, format.BitsPerSample, dither: !exact,
                     noiseShaping: format.SampleRate >= 88200, channels: channels), output.Filter);
                 var rate = $"{format.ValidBits}비트 {format.SampleRate / 1000.0:0.#}kHz";
@@ -884,7 +1022,7 @@ public sealed class TonePlayer : IDisposable
                     note = format.SampleRate != _sampleRate
                         ? $"비트퍼펙트 아님: 장치가 {_sampleRate / 1000.0:0.#}kHz를 받지 않아 변환 중"
                         : $"비트퍼펙트 아님: 장치가 {_sourceBits}비트를 받지 않음";
-                if (output.HardwareVolume && !TakeHardwareVolume())
+                if (!_dop && output.HardwareVolume && !TakeHardwareVolume())
                 {
                     const string noHardware = "장치에 하드웨어 볼륨이 없어 디지털 볼륨 사용";
                     note = note is null ? noHardware : Join(note, noHardware);
@@ -895,6 +1033,7 @@ public sealed class TonePlayer : IDisposable
                 OutputChanged?.Invoke();
                 return;
             }
+            if (_dop) throw new DopUnavailableException("device busy");
             note = Join(format is null ? "장치가 이 형식을 독점 모드로 받지 않아 공유 모드로 재생 중" : "다른 프로그램이 장치를 쓰고 있어 공유 모드로 재생 중", note);
             if (wantBitPerfect) note = "비트퍼펙트 아님: " + note;
             CloseDevice();
@@ -902,6 +1041,7 @@ public sealed class TonePlayer : IDisposable
             _deviceId = _device.ID;
         }
 
+        if (_dop) throw new DopUnavailableException("shared");
         _exclusiveOpen = false;
         // Upsampling in shared mode: GoTune converts to the rate Windows runs the device at, so
         // Windows' own converter has nothing left to do.
@@ -1013,6 +1153,7 @@ public sealed class TonePlayer : IDisposable
         // last audible bit), then 32; 16 last (exact only for a 16-bit file)
         int[] bitsOrder = bitPerfect ? [24, 32, 16]
             : output.ExclusiveBits > 0 ? [output.ExclusiveBits, 32, 24, 16] : [32, 24, 16];
+        if (_dop) return OutputDevices.DoPFormat(probe, _sampleRate);
         var rates = new List<int>();
         if (!bitPerfect && output.ExclusiveSampleRate == 0 && output.Upsampling != UpsampleMode.Off)
         {
@@ -1067,7 +1208,7 @@ public sealed class TonePlayer : IDisposable
         return false;
     }
 
-    private void Prepare(int rate, int channels, SpeakerLayout layout, SampleWriter writer, ResampleFilter filter)
+    private void Prepare(int rate, int channels, SpeakerLayout layout, SampleWriter writer, ResampleFilter filter, IResampler? converter = null)
     {
         _outRate = rate;
         _outChannels = channels;
@@ -1075,7 +1216,8 @@ public sealed class TonePlayer : IDisposable
         _resampling = rate != _sampleRate;
         _layout = new ChannelLayout(layout, rate);
         _writer = writer;
-        _resampler = rate == _sampleRate ? null : Resamplers.Create(_sampleRate, rate, filter);
+        _resampler = converter ?? (rate == _sampleRate ? null : Resamplers.Create(_sampleRate, rate, filter));
+        if (converter is not null) _resampling = false; // described as remastering instead
         _resampleFilter = filter;
         _resampleFilterName = _resampler is PolyphaseResampler ? Resamplers.FilterName(filter) : "기본 변환";
     }

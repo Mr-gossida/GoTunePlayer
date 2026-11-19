@@ -66,6 +66,8 @@ internal sealed class PlaySource : IProgressiveSource
 
     string IProgressiveSource.Url => Uri.AbsoluteUri;
 
+    string IProgressiveSource.Name => Cache?.RemotePath ?? LocalPath ?? "";
+
     string? IProgressiveSource.CompletedPath => Cache is { IsComplete: true } item ? item.FilePath : null;
 
     bool IProgressiveSource.HasReached(double fraction)
@@ -108,6 +110,7 @@ internal sealed class ToneEngine : IPlayerEngine
     {
         _player = source.LocalPath is { } path ? new TonePlayer(path, config, output) : new TonePlayer(source, config, output);
         _player.OutputChanged += () => Post(() => OutputChanged?.Invoke());
+        _player.RerouteNeeded += () => Post(() => RerouteNeeded?.Invoke());
         _player.Opened += () => Post(() => MediaOpened?.Invoke(this));
         _player.Ended += () => Post(() => MediaEnded?.Invoke(this));
         _player.Failed += (error, kind) =>
@@ -132,7 +135,13 @@ internal sealed class ToneEngine : IPlayerEngine
 
     public bool IsBitPerfect => _player.IsBitPerfect;
 
+    /// <summary>The song is a DSD file: a change of output may change how it is read (DoP or PCM).</summary>
+    public bool IsDsd => _player.IsDsd;
+
     public event Action? OutputChanged;
+
+    /// <summary>DoP can't go out as the output is set: the song must be opened again (as PCM).</summary>
+    public event Action? RerouteNeeded;
 
     public ToneConfig Config { set => _player.Config = value; }
 

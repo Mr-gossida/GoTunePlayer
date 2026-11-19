@@ -34,6 +34,24 @@ public enum ResampleFilter
     Soft,
 }
 
+/// <summary>How DSD files (DSF, DFF) are played.</summary>
+public enum DsdOutput
+{
+    /// <summary>Converted to PCM: plays anywhere, with the equalizer and the volume.</summary>
+    Pcm,
+    /// <summary>Sent as DSD (DoP) to a DAC that takes it - exclusive mode with the device's own
+    /// volume only, since DoP can't be turned down on the way.</summary>
+    DoP,
+}
+
+/// <summary>PCM songs turned into DSD and sent as DoP (exclusive mode).</summary>
+public enum DsdRemaster
+{
+    Off,
+    Dsd64,
+    Dsd128,
+}
+
 /// <summary>Where and how the sound goes out (설정 › 음향 › 출력).</summary>
 public sealed class OutputSettings
 {
@@ -72,6 +90,10 @@ public sealed class OutputSettings
     /// too. Windows' volume for the device is put back when GoTune lets go of it.</summary>
     public bool HardwareVolume { get; set; }
 
+    public DsdOutput DsdOutput { get; set; }
+
+    public DsdRemaster Remaster { get; set; }
+
     public OutputSettings Clone() => (OutputSettings)MemberwiseClone();
 
     public void Normalize()
@@ -79,6 +101,8 @@ public sealed class OutputSettings
         if (!Enum.IsDefined(Layout)) Layout = SpeakerLayout.Stereo;
         if (!Enum.IsDefined(Upsampling)) Upsampling = UpsampleMode.Off;
         if (!Enum.IsDefined(Filter)) Filter = ResampleFilter.Sharp;
+        if (!Enum.IsDefined(DsdOutput)) DsdOutput = DsdOutput.Pcm;
+        if (!Enum.IsDefined(Remaster)) Remaster = DsdRemaster.Off;
         if (ExclusiveSampleRate is < 0 or > 768000) ExclusiveSampleRate = 0;
         if (ExclusiveBits is not (0 or 16 or 24 or 32)) ExclusiveBits = 0;
         if (string.IsNullOrWhiteSpace(DeviceId)) DeviceId = null;

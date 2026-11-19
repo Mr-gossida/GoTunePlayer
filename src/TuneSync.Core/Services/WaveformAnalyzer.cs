@@ -19,12 +19,12 @@ public static class WaveformAnalyzer
     {
         try
         {
-            using var reader = new MediaFoundationReader(path);
-            var samples = reader.ToSampleProvider();
+            using var reader = Audio.AudioFiles.Open(path);
+            var samples = reader.Provider;
             var channels = samples.WaveFormat.Channels;
             var framesPerBucket = Math.Max(1, (int)(samples.WaveFormat.SampleRate * BucketSeconds));
             var buffer = new float[framesPerBucket * channels];
-            var rms = new List<float>((int)(reader.TotalTime.TotalSeconds / BucketSeconds) + 1);
+            var rms = new List<float>((int)(reader.Duration.TotalSeconds / BucketSeconds) + 1);
 
             int read;
             while ((read = ReadFully(samples, buffer)) > 0)

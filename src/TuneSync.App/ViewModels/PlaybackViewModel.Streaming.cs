@@ -38,6 +38,15 @@ public sealed partial class PlaybackViewModel
     public void ApplyOutput()
     {
         if (_player is not Audio.ToneEngine engine) return;
+        _dopRefused.Clear(); // a new setting: DoP may work now
+        if (engine.IsDsd && CurrentFile is { } dsd)
+        {
+            // a DSD song is read as DoP or as PCM depending on the output: open it again
+            _pendingRestore = (CurrentPosition, IsPlaying);
+            OpenSource(SourceFor(dsd.Path));
+            OnPropertyChanged(nameof(OutputDescription));
+            return;
+        }
         var at = CurrentPosition;
         engine.Output = _settings.Output;
         if (CurrentFile is not null) _player.Position = at; // what the old device still held is heard again from here
@@ -58,14 +67,30 @@ public sealed partial class PlaybackViewModel
         _openSource = source;
         _streamWatch = source.IsStream ? new StreamWatch(DateTime.UtcNow) : null;
         windows |= CurrentFile is { } file && _windowsOnly.Contains(file.Path);
-        Audio.IPlayerEngine player = windows ? new Audio.WindowsEngine(source) : new Audio.ToneEngine(source, _equalizer.Config, _settings.Output);
+        var output = _settings.Output;
+        if (CurrentFile is { } current && _dopRefused.Contains(current.Path))
+        {
+            // DoP didn't work out for this song as things are: DSD as PCM
+            output = output.Clone();
+            output.DsdOutput = TuneSync.Core.Models.DsdOutput.Pcm;
+        }
+        Audio.IPlayerEngine player = windows ? new Audio.WindowsEngine(source) : new Audio.ToneEngine(source, _equalizer.Config, output);
         player.Volume = Volume;
         player.IsMuted = IsMuted;
-        if (player is Audio.ToneEngine tone) tone.OutputChanged += () =>
+        if (player is Audio.ToneEngine tone)
         {
-            OnPropertyChanged(nameof(OutputDescription));
-            OnPropertyChanged(nameof(IsBitPerfect));
-        };
+            tone.OutputChanged += () =>
+            {
+                OnPropertyChanged(nameof(OutputDescription));
+                OnPropertyChanged(nameof(IsBitPerfect));
+            };
+            tone.RerouteNeeded += () =>
+            {
+                if (!ReferenceEquals(_player, tone) || CurrentFile is not { } file || !_dopRefused.Add(file.Path)) return;
+                _pendingRestore = (CurrentPosition, true);
+                OpenSource(SourceFor(file.Path));
+            };
+        }
         _player = player;
         Wire(player);
         player.Open();
@@ -95,6 +120,9 @@ public sealed partial class PlaybackViewModel
     }
 
     private StreamWatch? _streamWatch;
+
+    /// <summary>DSD songs DoP couldn't go out for (as the output is set now): played as PCM.</summary>
+    private readonly HashSet<string> _dopRefused = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>Windows' media player now and then stops reading a network song a moment after
     /// it starts and sits at 0:00 (or stops mid-song) although the data is there. If the position

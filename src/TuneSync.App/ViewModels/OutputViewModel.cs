@@ -35,6 +35,8 @@ public sealed partial class OutputViewModel : ObservableObject
         _upsampling = settings.Output.Upsampling;
         _filter = settings.Output.Filter;
         _hardwareVolume = settings.Output.HardwareVolume;
+        _dsdOutput = settings.Output.DsdOutput;
+        _remaster = settings.Output.Remaster;
         playback.PropertyChanged += Playback_PropertyChanged;
     }
 
@@ -81,6 +83,27 @@ public sealed partial class OutputViewModel : ObservableObject
 
     [ObservableProperty]
     private bool _hardwareVolume;
+
+    public IReadOnlyList<Choice<DsdOutput>> DsdOutputs { get; } =
+    [
+        new(DsdOutput.Pcm, "PCM으로 변환 (권장)"),
+        new(DsdOutput.DoP, "DoP로 원음 그대로"),
+    ];
+
+    public IReadOnlyList<Choice<DsdRemaster>> Remasters { get; } =
+    [
+        new(DsdRemaster.Off, "끔"),
+        new(DsdRemaster.Dsd64, "DSD64 (2.8MHz)"),
+        new(DsdRemaster.Dsd128, "DSD128 (5.6MHz)"),
+    ];
+
+    [ObservableProperty]
+    private DsdOutput _dsdOutput;
+
+    [ObservableProperty]
+    private DsdRemaster _remaster;
+
+    private bool _dsdConfirmed;
 
     /// <summary>Upsampling has nothing to do when the sound goes out bit-perfect.</summary>
     public bool CanUpsample => !(Exclusive && BitPerfect);
@@ -319,6 +342,55 @@ public sealed partial class OutputViewModel : ObservableObject
     }
 
     private bool _hardwareVolumeConfirmed;
+
+    /// <summary>What a DAC that doesn't take DoP does with it - said before DoP is turned on.</summary>
+    private const string DopWarning =
+        "• DAC가 DoP를 지원하지 않으면 DSD가 아니라 '쉬익' 하는 큰 잡음으로 재생됩니다. 처음에는 이어폰·헤드폰을 귀에서 빼고, 볼륨을 낮춘 상태에서 확인하세요.\n" +
+        "• DAC의 표시등이나 앱에서 DSD로 인식하는지 확인할 수 있습니다.\n";
+
+    partial void OnDsdOutputChanged(DsdOutput value)
+    {
+        if (_loading) return;
+        if (value == DsdOutput.DoP && !_dsdConfirmed)
+        {
+            _loading = true;
+            DsdOutput = DsdOutput.Pcm;
+            _loading = false;
+            _ = ConfirmDsdAsync(() => DsdOutput = DsdOutput.DoP, "DoP로 DSD 보내기",
+                "DSD 파일을 변환하지 않고 DoP로 DAC에 그대로 보냅니다.\n\n" +
+                "• 독점 모드이고, '하드웨어 볼륨'이 켜져 있고, 장치에 하드웨어 볼륨이 있을 때만 DoP로 보냅니다. DoP는 소리 데이터를 줄일 수 없어 GoTune 볼륨이 장치 볼륨으로만 적용되기 때문입니다. 조건이 안 되면 PCM으로 변환해 재생합니다.\n" +
+                DopWarning, "확인했고 켜기");
+            return;
+        }
+        _dsdConfirmed = false;
+        _settings.Output.DsdOutput = value;
+        Apply();
+    }
+
+    partial void OnRemasterChanged(DsdRemaster value)
+    {
+        if (_loading) return;
+        if (value != DsdRemaster.Off && _settings.Output.Remaster == DsdRemaster.Off && !_dsdConfirmed)
+        {
+            _loading = true;
+            Remaster = DsdRemaster.Off;
+            _loading = false;
+            _ = ConfirmDsdAsync(() => Remaster = value, "DSD 리마스터링 켜기",
+                "독점 모드에서 PCM 곡을 DSD로 바꿔 DoP로 DAC에 보냅니다. 볼륨과 이퀄라이저는 DSD로 바꾸기 전에 적용됩니다.\n\n" +
+                DopWarning, "확인했고 켜기");
+            return;
+        }
+        _dsdConfirmed = false;
+        _settings.Output.Remaster = value;
+        Apply();
+    }
+
+    private async Task ConfirmDsdAsync(Action turnOn, string title, string message, string confirm)
+    {
+        if (!await Dialogs.ConfirmAsync(title, message, confirm)) return;
+        _dsdConfirmed = true;
+        turnOn();
+    }
 
     private async Task ConfirmHardwareVolumeAsync()
     {

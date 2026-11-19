@@ -174,6 +174,30 @@ public static class OutputDevices
 
     internal static bool Supports(AudioClient client, int rate, int bits, int channels) => Format(client, rate, bits, channels) is not null;
 
+    /// <summary>The exclusive format that carries DoP at <paramref name="rate"/>: stereo with at
+    /// least 24 bits (24 packed or in 32, or 32), or null.</summary>
+    internal static PcmFormat? DoPFormat(AudioClient client, int rate) =>
+        Format(client, rate, 24, 2) ?? Format(client, rate, 32, 2);
+
+    /// <summary>Whether DoP can go to the device at <paramref name="rate"/>: it takes such a
+    /// format in exclusive mode, and it has a volume control of its own (DoP can't be turned
+    /// down on the way, so without one it would play at full level).</summary>
+    public static bool CanCarryDoP(string? deviceId, int rate)
+    {
+        try
+        {
+            using var enumerator = new MMDeviceEnumerator();
+            using var device = Open(enumerator, deviceId);
+            if (device is null || ((int)device.AudioEndpointVolume.HardwareSupport & 1) == 0) return false;
+            using var client = device.AudioClient;
+            return DoPFormat(client, rate) is not null;
+        }
+        catch (COMException)
+        {
+            return false;
+        }
+    }
+
     /// <summary>The exclusive format the device takes for these bits, or null: 24 bits come
     /// packed in three bytes on some devices and in a four-byte container on most (HDMI and
     /// most sound cards), so both are tried.</summary>

@@ -11,12 +11,12 @@ public static class AudioDecoder
 
     public static float[] ReadMono16k(string path, CancellationToken ct = default)
     {
-        using var reader = new MediaFoundationReader(path);
-        ISampleProvider source = reader.ToSampleProvider();
+        using var reader = Audio.AudioFiles.Open(path);
+        var source = reader.Provider;
         if (source.WaveFormat.Channels > 1) source = new MonoMix(source);
         if (source.WaveFormat.SampleRate != SampleRate) source = new WdlResamplingSampleProvider(source, SampleRate);
 
-        var samples = new List<float>((int)Math.Min(int.MaxValue / 2, reader.TotalTime.TotalSeconds * SampleRate + SampleRate));
+        var samples = new List<float>((int)Math.Min(int.MaxValue / 2, reader.Duration.TotalSeconds * SampleRate + SampleRate));
         var buffer = new float[SampleRate];
         int read;
         while ((read = source.Read(buffer, 0, buffer.Length)) > 0)
@@ -31,12 +31,12 @@ public static class AudioDecoder
     /// the first two channels of a surround one).</summary>
     public static (float[] Left, float[] Right) ReadStereo(string path, int sampleRate, CancellationToken ct = default)
     {
-        using var reader = new MediaFoundationReader(path);
-        ISampleProvider source = reader.ToSampleProvider();
+        using var reader = Audio.AudioFiles.Open(path);
+        var source = reader.Provider;
         var channels = source.WaveFormat.Channels;
         if (source.WaveFormat.SampleRate != sampleRate) source = new WdlResamplingSampleProvider(source, sampleRate);
 
-        var capacity = (int)Math.Min(int.MaxValue / 2, reader.TotalTime.TotalSeconds * sampleRate + sampleRate);
+        var capacity = (int)Math.Min(int.MaxValue / 2, reader.Duration.TotalSeconds * sampleRate + sampleRate);
         List<float> left = new(capacity), right = new(capacity);
         var buffer = new float[sampleRate / 10 * channels];
         int read;

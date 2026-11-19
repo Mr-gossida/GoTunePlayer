@@ -40,8 +40,8 @@ public static class SpectrumAnalyzer
 
     public static SpectrumData Analyze(string path, int bands = DefaultBands, double framesPerSecond = 60, CancellationToken ct = default)
     {
-        using var reader = new MediaFoundationReader(path);
-        var source = reader.ToSampleProvider();
+        using var reader = Audio.AudioFiles.Open(path);
+        var source = reader.Provider;
         int channels = source.WaveFormat.Channels, rate = source.WaveFormat.SampleRate;
         var hop = Math.Max(1, (int)Math.Round(rate / framesPerSecond));
         var fps = rate / (double)hop;
@@ -68,7 +68,7 @@ public static class SpectrumAnalyzer
         var ringPos = 0;
         var sinceFrame = 0;
         var fft = new Complex[FftSize];
-        var decibels = new List<float>(capacity: (int)(reader.TotalTime.TotalSeconds * fps * bands) + bands);
+        var decibels = new List<float>(capacity: (int)(reader.Duration.TotalSeconds * fps * bands) + bands);
         var buffer = new float[hop * channels * 8];
         int read;
         while ((read = source.Read(buffer, 0, buffer.Length)) > 0)

@@ -506,6 +506,31 @@
                         </ui:CardControl.Header>
                         <ComboBox Width="260" ItemsSource="{Binding Filters}" DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding Filter}"/>
                     </ui:CardControl>
+                    <ui:CardControl Style="{StaticResource Card}" DataContext="{Binding Output}" Icon="{ui:SymbolIcon MusicNote224}"
+                                    Tag="DSD DSF DFF DoP SACD 원음 DSD64 DSD128 DSD256 재생"
+                                    ToolTip="PCM으로 변환: 어떤 장치에서도 재생되고 이퀄라이저·볼륨이 적용됩니다(176.4kHz로 변환). DoP로 원음 그대로: DSD를 변환하지 않고 DAC에 보냅니다. 독점 모드 + 하드웨어 볼륨이 켜져 있고 장치에 하드웨어 볼륨이 있을 때만 DoP로 보내고, 아니면 PCM으로 재생합니다.">
+                        <ui:CardControl.Header>
+                            <StackPanel>
+                                <ui:TextBlock Text="DSD 재생" FontTypography="Body"/>
+                                <ui:TextBlock Text="DSF·DFF 파일 · DoP는 독점 모드와 하드웨어 볼륨이 있어야 합니다(없으면 PCM으로 재생)" Style="{StaticResource Desc}" TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </ui:CardControl.Header>
+                        <ComboBox Width="260" ItemsSource="{Binding DsdOutputs}" DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding DsdOutput}"/>
+                    </ui:CardControl>
+                    <ui:CardControl Style="{StaticResource Card}" DataContext="{Binding Output}" Icon="{ui:SymbolIcon Wand24}"
+                                    IsEnabled="{Binding CanChooseFormat}"
+                                    Tag="DSD 리마스터링 업스케일링 PCM DSD 변환 DoP 시그마 델타"
+                                    ToolTip="독점 모드에서 PCM 곡을 5차 시그마-델타 변조로 DSD로 바꿔 DoP로 보냅니다. 볼륨과 이퀄라이저는 DSD로 바꾸기 전에 적용됩니다. DAC가 DoP를 지원해야 하며, 장치가 그 형식을 받지 않으면 평소처럼 PCM으로 재생합니다.">
+                        <ui:CardControl.Header>
+                            <StackPanel>
+                                <ui:TextBlock Text="DSD 리마스터링" FontTypography="Body"/>
+                                <ui:TextBlock Text="PCM 곡을 DSD로 바꿔 DoP로 보내기 · 독점 모드 전용 · DAC가 DoP를 지원해야 합니다" Style="{StaticResource Desc}" TextWrapping="Wrap"/>
+                                <ui:TextBlock Style="{StaticResource Desc}" Margin="0,4,0,0" Foreground="{DynamicResource SystemFillColorCautionBrush}" TextWrapping="Wrap"
+                                              Text="⚠ DoP를 지원하지 않는 DAC에서는 큰 잡음이 납니다. 처음엔 이어폰을 빼고 볼륨을 낮춘 채 확인하세요."/>
+                            </StackPanel>
+                        </ui:CardControl.Header>
+                        <ComboBox Width="260" ItemsSource="{Binding Remasters}" DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding Remaster}"/>
+                    </ui:CardControl>
 
                     <ui:TextBlock Text="이퀄라이저" Style="{StaticResource Group}"/>
                     <ui:CardControl Style="{StaticResource Card}" Icon="{ui:SymbolIcon DeviceEq24}" Tag="이퀄라이저 EQ 음향 음색 저음 고음 켜기 끄기"

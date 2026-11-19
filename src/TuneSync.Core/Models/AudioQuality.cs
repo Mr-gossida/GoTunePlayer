@@ -13,8 +13,15 @@ public sealed record AudioQuality(string Format, int BitrateKbps, int SampleRate
         get
         {
             var parts = new List<string> { Format };
-            if (BitsPerSample > 0) parts.Add($"{BitsPerSample}bit");
             var inv = System.Globalization.CultureInfo.InvariantCulture;
+            if (BitsPerSample == 1)
+            {
+                // DSD: "DSD64 · 2.8MHz"
+                parts.Add((SampleRate / 1e6).ToString("0.0", inv) + "MHz");
+                if (Channels > 2) parts.Add($"{Channels}채널");
+                return string.Join(" · ", parts);
+            }
+            if (BitsPerSample > 0) parts.Add($"{BitsPerSample}bit");
             if (SampleRate > 0) parts.Add((SampleRate / 1000.0).ToString("0.#", inv) + "kHz");
             if (BitrateKbps > 0) parts.Add(BitrateKbps.ToString("N0", inv) + "kbps");
             if (Channels is 1) parts.Add("모노");

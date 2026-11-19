@@ -10,7 +10,7 @@ namespace TuneSync.Core.Audio;
 /// nearest earlier point it can (for FLAC that can be seconds before), and the samples up to the
 /// wanted time are dropped here - otherwise the lyrics would run ahead of the sound after a seek.
 /// Created, used and disposed on one thread.</summary>
-public sealed class MfDecoder : IDisposable
+public sealed class MfDecoder : IAudioDecoder
 {
     private const int FirstAudioStream = MediaFoundationInterop.MF_SOURCE_READER_FIRST_AUDIO_STREAM;
     private const int InvalidMediaType = unchecked((int)0xC00D36B4);
@@ -29,6 +29,9 @@ public sealed class MfDecoder : IDisposable
 
     public int SampleRate { get; private set; }
     public int Channels { get; private set; }
+
+    public bool IsConverted => false;
+    public bool IsDoP => false;
 
     /// <summary>Zero when Windows can't tell (some streams).</summary>
     public TimeSpan Duration { get; }

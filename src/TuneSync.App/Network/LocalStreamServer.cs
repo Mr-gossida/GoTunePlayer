@@ -168,6 +168,8 @@ public sealed class LocalStreamServer : IDisposable
         ".ogg" => "audio/ogg",
         ".wma" => "audio/x-ms-wma",
         ".wav" => "audio/wav",
+        ".dsf" => "audio/x-dsf",
+        ".dff" => "audio/x-dff",
         _ => "application/octet-stream",
     };
 
