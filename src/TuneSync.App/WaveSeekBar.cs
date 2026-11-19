@@ -47,6 +47,7 @@ public sealed class WaveSeekBar : FrameworkElement
         _sparks.Clear();
         _licks.Clear();
         _stars.Clear();
+        _motes.Clear();
     }
 
     public SeekBarStyle Look { get => (SeekBarStyle)GetValue(LookProperty); set => SetValue(LookProperty, value); }
@@ -67,6 +68,23 @@ public sealed class WaveSeekBar : FrameworkElement
     private const double ThumbRadius = 7;
     private const double LineThickness = 3.5;
     private const double KeyStepSeconds = 5;
+
+    /// <summary>The effects are drawn this much bigger than they were first tuned.</summary>
+    private const double EffectScale = 1.1;
+
+    /// <summary>The gap between how an effect looks in quiet and in loud passages is this much
+    /// wider than first tuned (+15%).</summary>
+    private const double RangeBoost = 1.15;
+
+    /// <summary>Waves and bars may reach this far past the strip's own half height.</summary>
+    private const double Overshoot = 3;
+
+    /// <summary>An effect's size at loudness <paramref name="level"/> (0..1): tuned as
+    /// <paramref name="floor"/> in silence up to floor + <paramref name="span"/> when loud, with
+    /// that range widened by <see cref="RangeBoost"/> around its middle (quiet gets quieter, loud
+    /// louder) and the whole scaled by <see cref="EffectScale"/>.</summary>
+    private static double Loud(double floor, double span, double level) =>
+        EffectScale * Math.Max(0, floor + span * (0.5 + (level - 0.5) * RangeBoost));
 
     /// <summary>Loudness used while a track is still being analyzed or can't be (e.g. OGG), so the
     /// wave still flows at a moderate height.</summary>
@@ -170,12 +188,7 @@ public sealed class WaveSeekBar : FrameworkElement
         var drift = 22 * Math.Sin(_phase * 0.35);
         var cool = Shift(accent, -38 + drift, 1.0);
         var warm = Shift(accent, 42 + drift, 1.12 + 0.25 * _flash);
-        var thumbColor = Look switch
-        {
-            SeekBarStyle.Flame => Color.FromRgb(0xFF, 0x9A, 0x2E),
-            SeekBarStyle.Electric => ElectricBlue,
-            _ => accent,
-        };
+        var thumbColor = Look == SeekBarStyle.Flame ? Color.FromRgb(0xFF, 0x9A, 0x2E) : accent;
 
         if (thumbX > Left)
         {
@@ -190,9 +203,17 @@ public sealed class WaveSeekBar : FrameworkElement
             {
                 // Drawn above with the unplayed part.
             }
-            else if (Look == SeekBarStyle.Electric)
+            else if (Look == SeekBarStyle.Strands)
             {
-                DrawElectric(dc, mid, thumbX, maxHeight + 4, fadeIn);
+                DrawStrands(dc, mid, thumbX, maxHeight, fadeIn, cool, accent, warm);
+            }
+            else if (Look == SeekBarStyle.Flow)
+            {
+                DrawFlow(dc, mid, thumbX, maxHeight, cool, accent, warm);
+            }
+            else if (Look == SeekBarStyle.Aurora)
+            {
+                DrawAurora(dc, mid, thumbX, maxHeight + AuroraOverflow, fadeIn, cool, accent, warm);
             }
             else if (Look == SeekBarStyle.Sparkle)
             {
@@ -210,7 +231,7 @@ public sealed class WaveSeekBar : FrameworkElement
             }
             else
             {
-                var amplitude = maxHeight * _activity * (0.18 + 0.82 * _level) * fadeIn;
+                var amplitude = maxHeight * _activity * Loud(0.18, 0.82, _level) * fadeIn;
                 if (amplitude > 0.3 || _ripples.Count > 0)
                 {
                     DrawWaveLayer(dc, cool, warm, mid, thumbX, maxHeight, amplitude * 0.8, wavelength: 64, speed: 1.6, offset: 0, alpha: 0.45, withRipples: false);
@@ -287,11 +308,11 @@ public sealed class WaveSeekBar : FrameworkElement
                     foreach (var (distance, strength) in _ripples)
                     {
                         var d = (endX - 10 - distance - x) / 16;
-                        y += maxHeight * strength * Math.Exp(-d * d) * envelope;
+                        y += maxHeight * EffectScale * strength * Math.Exp(-d * d) * envelope;
                     }
                 }
 
-                ctx.LineTo(new Point(x, mid - Math.Min(maxHeight, y)), true, true);
+                ctx.LineTo(new Point(x, mid - Math.Min(maxHeight + Overshoot, y)), true, true);
             }
             ctx.LineTo(new Point(endX, mid), true, true);
         }
@@ -329,7 +350,7 @@ public sealed class WaveSeekBar : FrameworkElement
     /// faint strokes under the line (a blur effect would be redrawn by the GPU every frame).</summary>
     private void DrawNeon(DrawingContext dc, double mid, double thumbX, Color cool, Color accent, Color warm)
     {
-        var energy = _activity * (0.35 + 0.65 * _level) + 0.5 * _flash;
+        var energy = _activity * Loud(0.35, 0.65, _level) + 0.5 * EffectScale * _flash;
         var brush = new LinearGradientBrush
         {
             MappingMode = BrushMappingMode.Absolute,
@@ -381,16 +402,16 @@ public sealed class WaveSeekBar : FrameworkElement
             {
                 var at = Maximum > 0 ? (x - Left) / Math.Max(1, Right - Left) * Maximum : 0;
                 var level = waveform is not null ? waveform.LevelAt(at) : 0.25 + 0.5 * Hash(i);
-                var h = maxHeight * (0.12 + 0.88 * level);
+                var h = maxHeight * Loud(0.12, 0.88, level);
                 var isPlayed = x <= thumbX;
                 if (isPlayed)
                 {
                     // Close behind the thumb, the bars jump with the music playing now.
                     var near = SmoothStep(Math.Clamp(1 - (thumbX - x) / 70, 0, 1));
                     var bounce = 0.55 + 0.45 * Math.Sin(_phase * 3.1 + i * 1.7);
-                    h *= 1 + near * _activity * (0.35 * _level * bounce + 0.5 * _flash);
+                    h *= 1 + near * _activity * (0.35 * Loud(0, 1, _level) * bounce + 0.5 * EffectScale * _flash);
                 }
-                h = Math.Clamp(h, 1, maxHeight + 3);
+                h = Math.Clamp(h, 1, maxHeight + Overshoot + 1);
                 var ctx = isPlayed ? p : a;
                 ctx.BeginFigure(new Point(x - BarThickness / 2, mid - h), true, true);
                 ctx.PolyLineTo([new Point(x + BarThickness / 2, mid - h), new Point(x + BarThickness / 2, mid + h), new Point(x - BarThickness / 2, mid + h)], false, false);
@@ -422,50 +443,225 @@ public sealed class WaveSeekBar : FrameworkElement
         }
     }
 
-    // ---- 번개 ----
+    // ---- 빛의 실 ----
 
-    private static readonly Color ElectricBlue = Color.FromRgb(0x8C, 0xD8, 0xFF);
-    private int _boltSeed;
-    private double _sinceBolt;
-
-    /// <summary>A crackling bolt of lightning along the played part: a jagged line that redraws
-    /// itself several times a second, wilder when loud, with forks that split off on beats.
-    /// A pale blue glow under a white core.</summary>
-    private void DrawElectric(DrawingContext dc, double mid, double thumbX, double room, double fadeIn)
+    /// <summary>Three threads of light in the cover's colors twisting around the played line like a
+    /// slowly turning braid, each a smooth wave of its own length and speed, gathered into the
+    /// start and the thumb. Louder music opens the braid wider and turns it faster; a beat flings
+    /// the threads apart and they draw together again. Each thread is a faint wide glow under a
+    /// bright core, fading in from the start toward the thumb.</summary>
+    private void DrawStrands(DrawingContext dc, double mid, double thumbX, double room, double fadeIn, Color cool, Color accent, Color warm)
     {
-        var amplitude = room * fadeIn * (0.12 + 0.55 * _level * _activity + 0.35 * _flash);
-        var bolt = new StreamGeometry();
-        using (var g = bolt.Open())
-        {
-            g.BeginFigure(new Point(Left, mid), false, false);
-            var i = 0;
-            for (var x = Left + 7; x < thumbX; x += 7, i++)
-            {
-                var envelope = SmoothStep(Math.Min(1, (x - Left) / 24)) * SmoothStep(Math.Min(1, (thumbX - x) / 14));
-                var jag = (Hash(i * 7 + _boltSeed * 131) - 0.5) * 2;
-                g.LineTo(new Point(x, mid + jag * amplitude * envelope), true, false);
-            }
-            g.LineTo(new Point(thumbX, mid), true, false);
+        var open = _activity * Loud(0.16, 0.84, _level) + 0.5 * EffectScale * _flash;
+        var amplitude = Math.Min(room + Overshoot, room * fadeIn * open);
 
-            // Forks: short branches off the bolt, more and longer on a beat.
-            var forks = (int)(1 + 4 * _flash + 2 * _level);
-            for (var f = 0; f < forks && thumbX - Left > 40; f++)
+        dc.PushOpacity(0.35);
+        DrawPlayedLine(dc, mid, thumbX, cool, accent, warm);
+        dc.Pop();
+
+        (Color Color, double Wavelength, double Speed, double Offset)[] threads =
+            [(cool, 150, 1.0, 0), (accent, 104, -1.35, 2.2), (warm, 71, 1.8, 4.1)];
+        foreach (var (color, wavelength, speed, offset) in threads)
+        {
+            var k = 2 * Math.PI / wavelength;
+            var k2 = 2 * Math.PI / (wavelength * 3.3);
+            var path = new StreamGeometry();
+            using (var g = path.Open())
             {
-                var fx = Left + 20 + Hash(f * 13 + _boltSeed * 17) * (thumbX - Left - 30);
-                var fy = mid + (Hash(f * 29 + _boltSeed) - 0.5) * amplitude;
-                var up = Hash(f * 5 + _boltSeed * 3) < 0.5 ? -1 : 1;
-                var length = room * (0.5 + 0.8 * _flash) * (0.5 + Hash(f + _boltSeed * 7));
-                g.BeginFigure(new Point(fx, fy), false, false);
-                g.LineTo(new Point(fx + length * 0.4, fy + up * length * 0.5), true, false);
-                g.LineTo(new Point(fx + length * 0.55, fy + up * length * 0.95), true, false);
+                g.BeginFigure(new Point(Left, mid), false, false);
+                for (var x = Left + 3; x < thumbX; x += 3)
+                {
+                    var envelope = SmoothStep(Math.Min(1, (x - Left) / 40)) * SmoothStep(Math.Min(1, (thumbX - x) / 34));
+                    var twist = Math.Sin(x * k + _phase * speed + offset);
+                    var breathe = 0.72 + 0.28 * Math.Sin(x * k2 - _phase * 0.5 + offset * 1.3);
+                    g.LineTo(new Point(x, mid + amplitude * envelope * twist * breathe), true, false);
+                }
+                g.LineTo(new Point(thumbX, mid), true, false);
+            }
+            path.Freeze();
+
+            var bright = Shift(color, 0, 1.18 + 0.2 * _flash);
+            var glow = AlongBar(thumbX, Color.FromArgb(0x10, color.R, color.G, color.B),
+                Color.FromArgb((byte)(0x38 + 0x40 * Math.Min(1, open)), color.R, color.G, color.B));
+            var line = AlongBar(thumbX, Color.FromArgb(0x50, bright.R, bright.G, bright.B), Color.FromArgb(0xF0, bright.R, bright.G, bright.B));
+            dc.DrawGeometry(null, new Pen(glow, 5.5 + 2.5 * Math.Min(1, open)) { LineJoin = PenLineJoin.Round }, path);
+            dc.DrawGeometry(null, new Pen(line, 1.9) { LineJoin = PenLineJoin.Round }, path);
+        }
+        // Where the threads cross the line they light it up a little: a white-hot core.
+        var core = AlongBar(thumbX, Color.FromArgb(0x00, 0xFF, 0xFF, 0xFF), Color.FromArgb((byte)(0x60 + 0x70 * Math.Min(1, open)), 0xFF, 0xFF, 0xFF));
+        dc.DrawLine(new Pen(core, 1), new Point(Left, mid), new Point(thumbX, mid));
+    }
+
+    /// <summary>A brush running from <paramref name="start"/> at the bar's left end to
+    /// <paramref name="end"/> at the thumb.</summary>
+    private LinearGradientBrush AlongBar(double thumbX, Color start, Color end)
+    {
+        var brush = new LinearGradientBrush(start, end, new Point(Left, 0), new Point(Math.Max(Left + 1, thumbX), 0))
+        {
+            MappingMode = BrushMappingMode.Absolute,
+        };
+        brush.Freeze();
+        return brush;
+    }
+
+    // ---- 빛의 흐름 ----
+
+    /// <summary>Specks of light streaming along the played part. X: where it is; Y: its lane, -1..1
+    /// (above or below the line, scaled by how loud it is); Vx: its own speed factor; Size; Age;
+    /// Life: a random 0..1 that picks its color.</summary>
+    private readonly List<Spark> _motes = [];
+
+    /// <summary>The stream's speed in pixels a second: a calm drift when quiet, a rush when loud.</summary>
+    private double FlowSpeed => 46 + 190 * Loud(0, 1, _level) * Math.Max(_activity, 0.2);
+
+    /// <summary>Specks of light streaming along the played line into the thumb, each trailing a
+    /// short tail. Louder music makes more of them, faster, spread wider around the line; they
+    /// gather onto the line as they reach the thumb, where they're absorbed. Each beat sends a
+    /// bright pulse running back along the line from the thumb.</summary>
+    private void DrawFlow(DrawingContext dc, double mid, double thumbX, double room, Color cool, Color accent, Color warm)
+    {
+        dc.PushOpacity(0.55);
+        DrawPlayedLine(dc, mid, thumbX, cool, accent, warm);
+        dc.Pop();
+
+        // Beat pulses: a soft bright glow sliding back along the line.
+        foreach (var (distance, strength) in _ripples)
+        {
+            var x = thumbX - 8 - distance;
+            if (x < Left) continue;
+            var a = (byte)(255 * Math.Min(1, strength * 1.6));
+            var pulse = new RadialGradientBrush(Color.FromArgb(a, warm.R, warm.G, warm.B), Color.FromArgb(0, warm.R, warm.G, warm.B));
+            pulse.Freeze();
+            dc.DrawEllipse(pulse, null, new Point(x, mid), 22, 3 + 4 * strength);
+        }
+
+        var spread = room * (0.22 + 0.6 * _activity * Loud(0, 1, _level) + 0.3 * _flash);
+        var speed = FlowSpeed;
+        foreach (var mote in _motes)
+        {
+            var gather = SmoothStep(Math.Clamp((thumbX - mote.X) / 60, 0, 1));
+            var y = mid + mote.Y * Math.Min(room, spread) * gather * (0.8 + 0.2 * Math.Sin(mote.Age * 2.3 + mote.Life * 9));
+            var fade = Math.Min(1, mote.Age / 0.35) * Math.Clamp((thumbX - mote.X) / 10, 0, 1) * Math.Clamp((mote.X - Left) / 20, 0, 1);
+            if (fade <= 0.01) continue;
+            var color = mote.Life < 0.33 ? cool : mote.Life < 0.66 ? accent : warm;
+            color = Color.FromRgb((byte)((color.R + 255) / 2), (byte)((color.G + 255) / 2), (byte)((color.B + 255) / 2));
+            var tail = 5 + speed * mote.Vx * 0.09;
+            var tailBrush = new LinearGradientBrush(Color.FromArgb(0, color.R, color.G, color.B), Color.FromArgb((byte)(170 * fade), color.R, color.G, color.B),
+                new Point(mote.X - tail, 0), new Point(mote.X, 0)) { MappingMode = BrushMappingMode.Absolute };
+            tailBrush.Freeze();
+            dc.DrawLine(new Pen(tailBrush, mote.Size * 1.3) { EndLineCap = PenLineCap.Round }, new Point(mote.X - tail, y), new Point(mote.X, y));
+            dc.DrawEllipse(new SolidColorBrush(Color.FromArgb((byte)(255 * fade), 0xFF, 0xFF, 0xFF)), null, new Point(mote.X, y), mote.Size * 0.75, mote.Size * 0.75);
+        }
+    }
+
+    private void UpdateFlow(double dt, bool beat)
+    {
+        var thumbX = Maximum > 0 ? Left + (Right - Left) * Math.Clamp(CurrentPosition() / Maximum, 0, 1) : Left;
+        var speed = FlowSpeed;
+        for (var i = _motes.Count - 1; i >= 0; i--)
+        {
+            var m = _motes[i];
+            m.X += speed * m.Vx * dt;
+            m.Age += dt;
+            if (m.X >= thumbX - 1 || (!IsPlaying && _activity < 0.05)) _motes.RemoveAt(i);
+            else _motes[i] = m;
+        }
+        if (Look != SeekBarStyle.Flow || !IsPlaying || _activity < 0.3 || thumbX - Left < 30) return;
+
+        var count = (beat ? 3 + (int)Loud(0, 4, _level) : 0) + (Random.Shared.NextDouble() < dt * Loud(10, 36, _level) ? 1 : 0);
+        for (var n = 0; n < count && _motes.Count < 70; n++)
+        {
+            var lane = Random.Shared.NextDouble() * 2 - 1;
+            _motes.Add(new Spark
+            {
+                X = Left + Math.Pow(Random.Shared.NextDouble(), 0.8) * (thumbX - Left - 20),
+                Y = Math.Sign(lane) * Math.Pow(Math.Abs(lane), 1.3),
+                Vx = 0.65 + 0.7 * Random.Shared.NextDouble(),
+                Size = (1.3 + 1.2 * Random.Shared.NextDouble() + (beat ? 0.6 : 0)) * EffectScale,
+                Life = Random.Shared.NextDouble(),
+            });
+        }
+    }
+
+    // ---- 오로라 ----
+
+    /// <summary>How far above the strip the aurora may hang.</summary>
+    private const double AuroraOverflow = 6;
+
+    /// <summary>A curtain of northern lights hanging over the played part: its top edge billows in
+    /// slow folds, its colors run through the cover's hues along the bar, and it is brightest at
+    /// the line and fades upward. Fine vertical rays drift and glimmer inside it. It rises with
+    /// the music and flares brighter and taller on each beat.</summary>
+    private void DrawAurora(DrawingContext dc, double mid, double thumbX, double room, double fadeIn, Color cool, Color accent, Color warm)
+    {
+        var t = _phase;
+        var lift = _activity * Loud(0.22, 0.78, _level) + 0.4 * EffectScale * _flash;
+        double HeightAt(double x)
+        {
+            var envelope = SmoothStep(Math.Min(1, (x - Left) / 36)) * SmoothStep(Math.Min(1, (thumbX - x) / 18));
+            var folds = 0.6 + 0.28 * Math.Sin(x * 0.031 - t * 0.8) + 0.14 * Math.Sin(x * 0.083 + t * 1.7);
+            return Math.Min(room, 1.45 * room * fadeIn * envelope * lift * folds);
+        }
+
+        var curtain = new StreamGeometry();
+        var rays = new[] { new StreamGeometry(), new StreamGeometry() };
+        using (var g = curtain.Open())
+        {
+            g.BeginFigure(new Point(Left, mid), true, true);
+            for (var x = Left; x <= thumbX; x += 3) g.LineTo(new Point(x, mid - HeightAt(x)), true, true);
+            g.LineTo(new Point(thumbX, mid), true, true);
+        }
+        using (StreamGeometryContext dim = rays[0].Open(), lit = rays[1].Open())
+        {
+            for (var j = 0; ; j++)
+            {
+                var x = Left + 4 + j * 4.5 + 2.2 * Math.Sin(t * 0.55 + j * 0.9);
+                if (x >= thumbX - 2) break;
+                var h = HeightAt(x) * (0.75 + 0.25 * Math.Sin(t * 1.1 + j * 1.7));
+                if (h < 1.5) continue;
+                var glimmer = 0.5 + 0.5 * Math.Sin(t * 1.3 + j * 2.1);
+                var ctx = glimmer > 0.6 ? lit : dim;
+                ctx.BeginFigure(new Point(x - 0.6, mid), true, true);
+                ctx.PolyLineTo([new Point(x - 0.6, mid - h), new Point(x + 0.6, mid - h), new Point(x + 0.6, mid)], false, false);
             }
         }
-        bolt.Freeze();
+        curtain.Freeze();
+        rays[0].Freeze();
+        rays[1].Freeze();
 
-        var glowAlpha = (byte)(40 + 70 * Math.Min(1, _level + _flash));
-        dc.DrawGeometry(null, new Pen(new SolidColorBrush(Color.FromArgb(glowAlpha, 0x4A, 0x9C, 0xFF)), 6) { LineJoin = PenLineJoin.Round }, bolt);
-        dc.DrawGeometry(null, new Pen(new SolidColorBrush(Color.FromArgb(0xC0, ElectricBlue.R, ElectricBlue.G, ElectricBlue.B)), 2.6) { LineJoin = PenLineJoin.Round }, bolt);
-        dc.DrawGeometry(null, new Pen(Brushes.White, 1.1) { LineJoin = PenLineJoin.Round }, bolt);
+        // Brightest at the line, gone at the top.
+        var mask = new LinearGradientBrush
+        {
+            MappingMode = BrushMappingMode.Absolute,
+            StartPoint = new Point(0, mid),
+            EndPoint = new Point(0, mid - room),
+            GradientStops = { new GradientStop(Color.FromArgb(0xFF, 0, 0, 0), 0), new GradientStop(Color.FromArgb(0x90, 0, 0, 0), 0.35), new GradientStop(Color.FromArgb(0x00, 0, 0, 0), 1) },
+        };
+        mask.Freeze();
+        var hue = new LinearGradientBrush
+        {
+            MappingMode = BrushMappingMode.Absolute,
+            StartPoint = new Point(Left, 0),
+            EndPoint = new Point(Math.Max(Left + 1, thumbX), 0),
+            GradientStops =
+            {
+                new GradientStop(Color.FromArgb(0x50, cool.R, cool.G, cool.B), 0),
+                new GradientStop(Color.FromArgb(0xA0, accent.R, accent.G, accent.B), 0.5),
+                new GradientStop(Color.FromArgb((byte)(0xB8 + 0x40 * _flash), warm.R, warm.G, warm.B), 1),
+            },
+        };
+        hue.Freeze();
+        var glimmer1 = AlongBar(thumbX, Color.FromArgb(0x18, 0xFF, 0xFF, 0xFF), Color.FromArgb(0x50, 0xFF, 0xFF, 0xFF));
+        var glimmer2 = AlongBar(thumbX, Color.FromArgb(0x30, 0xFF, 0xFF, 0xFF), Color.FromArgb((byte)(0x90 + 0x50 * _flash), 0xFF, 0xFF, 0xFF));
+
+        dc.PushOpacityMask(mask);
+        dc.DrawGeometry(hue, null, curtain);
+        dc.DrawGeometry(glimmer1, null, rays[0]);
+        dc.DrawGeometry(glimmer2, null, rays[1]);
+        dc.Pop();
+
+        // The curtain's lower hem glows on the line.
+        DrawPlayedLine(dc, mid, thumbX, cool, accent, warm);
     }
 
     // ---- 별빛 ----
@@ -514,7 +710,7 @@ public sealed class WaveSeekBar : FrameworkElement
         var mid = ActualHeight / 2;
         var thumbX = Left + (Right - Left) * Math.Clamp(CurrentPosition() / Maximum, 0, 1);
         if (thumbX - Left < 20) return;
-        var count = beat ? 2 + (int)(_level * 4) : Random.Shared.NextDouble() < dt * (3 + 8 * _level) ? 1 : 0;
+        var count = beat ? 2 + (int)Loud(0, 4, _level) : Random.Shared.NextDouble() < dt * Loud(3, 8, _level) ? 1 : 0;
         for (var n = 0; n < count && _stars.Count < 36; n++)
         {
             // Anywhere along the played part, a few more toward the thumb.
@@ -525,7 +721,7 @@ public sealed class WaveSeekBar : FrameworkElement
                 Y = mid - 2 - Random.Shared.NextDouble() * (mid - 2),
                 Vy = -(4 + Random.Shared.NextDouble() * 8),
                 Life = 0.9 + Random.Shared.NextDouble() * 0.9,
-                Size = 1.8 + Random.Shared.NextDouble() * 2.2 + (beat ? 1.2 : 0),
+                Size = (1.8 + Random.Shared.NextDouble() * 2.2 + (beat ? 1.2 : 0)) * EffectScale,
             });
         }
     }
@@ -541,7 +737,7 @@ public sealed class WaveSeekBar : FrameworkElement
     {
         var room = ActualHeight / 2 - 2 + FlameOverflow;
         var fadeIn = Math.Min(1, (thumbX - Left) / 60);
-        return room * _activity * (0.42 + 0.58 * _fireLevel) * fadeIn * (1 + 0.12 * _flash);
+        return room * _activity * Loud(0.42, 0.58, _fireLevel) * fadeIn * (1 + 0.12 * _flash);
     }
 
     /// <summary>The part of a tongue's flicker cycle where it stops stretching and its tip breaks off.</summary>
@@ -599,24 +795,45 @@ public sealed class WaveSeekBar : FrameworkElement
     private void DrawFire(DrawingContext dc, double mid, double endX, double room, double amplitude)
     {
         var t = _fireTime;
-        var outer = new StreamGeometry();
-        var middle = new StreamGeometry();
-        var core = new StreamGeometry();
+        // Nonzero: overlapping tongues merge into one flame front (even-odd would cut their
+        // overlaps out as holes).
+        var bloomWide = new StreamGeometry { FillRule = FillRule.Nonzero };
+        var bloomNear = new StreamGeometry { FillRule = FillRule.Nonzero };
+        var outer = new StreamGeometry { FillRule = FillRule.Nonzero };
+        var feather = new StreamGeometry { FillRule = FillRule.Nonzero };
+        var middle = new StreamGeometry { FillRule = FillRule.Nonzero };
+        var core = new StreamGeometry { FillRule = FillRule.Nonzero };
+        using (var bw = bloomWide.Open())
+        using (var bn = bloomNear.Open())
         using (var o = outer.Open())
+        using (var f = feather.Open())
         using (var m = middle.Open())
         using (var c = core.Open())
         {
             for (var i = 0; TongueAt(i, t, endX, room, amplitude, out var x, out var h, out var full, out var w, out var lean); i++)
             {
                 if (h < 1.2) continue;
+                // The bloom: two larger, fainter ghosts of each tongue, so the fire's edge melts
+                // into a warm haze instead of ending at a hard outline (cheaper than a blur, which
+                // the GPU would redo every frame).
+                Tongue(bw, x, mid + 2, w * 2.2, h * 0.95 + 2, lean * 0.9);
+                Tongue(bn, x, mid + 1.5, w * 1.5, h * 1.02 + 1, lean);
                 Tongue(o, x, mid + 1, w, h, lean);
+                // The middle layer's edge feathered by a slightly larger, fainter copy.
+                Tongue(f, x + lean * 0.15, mid + 1, w * 0.8, h * 0.78, lean * 0.76);
                 Tongue(m, x + lean * 0.15, mid + 1, w * 0.62, h * 0.7, lean * 0.7);
                 Tongue(c, x + lean * 0.1, mid + 1, w * 0.34, h * 0.24 + full * 0.12, lean * 0.4);
             }
         }
+        bloomWide.Freeze();
+        bloomNear.Freeze();
         outer.Freeze();
+        feather.Freeze();
         middle.Freeze();
         core.Freeze();
+        // Tongues can stretch past the strip's room now that the effects are bigger; the colors
+        // reach that far too, so the tips still show.
+        room *= EffectScale;
 
         // A warm glow on the line under the fire.
         var glow = new LinearGradientBrush
@@ -634,7 +851,14 @@ public sealed class WaveSeekBar : FrameworkElement
         glow.Freeze();
         dc.DrawRectangle(glow, null, new Rect(Left, mid - 4, Math.Max(0, endX - Left), 6));
 
-        dc.DrawGeometry(FireBrush(mid, room, [(0, 0xF0, 0xC8, 0x22, 0x08), (0.3, 0xE0, 0xFF, 0x52, 0x10), (0.65, 0x99, 0xFF, 0x94, 0x22), (1, 0x00, 0xFF, 0xD0, 0x60)]), null, outer);
+        var bloom = 1 + 0.6 * _flash;
+        // A light, warm haze (dark reds would read as brown smoke on the dark player).
+        // Bright at the root and gone well below the tips: a haze lit by the flames, not an outline.
+        dc.DrawGeometry(FireBrush(mid, room * 0.8, [(0, (byte)Math.Min(255, 0x58 * bloom), 0xFF, 0x8C, 0x30), (0.45, (byte)(0x22 * bloom), 0xFF, 0xA0, 0x40), (1, 0x00, 0xFF, 0xB0, 0x50)]), null, bloomWide);
+        dc.DrawGeometry(FireBrush(mid, room * 0.9, [(0, (byte)Math.Min(255, 0x90 * bloom), 0xFF, 0x9A, 0x38), (0.4, (byte)(0x3C * bloom), 0xFF, 0xB0, 0x48), (0.75, 0x00, 0xFF, 0xC4, 0x60)]), null, bloomNear);
+        // The outer body a little see-through, so its edge blends into the bloom.
+        dc.DrawGeometry(FireBrush(mid, room, [(0, 0xD8, 0xC8, 0x22, 0x08), (0.3, 0xC4, 0xFF, 0x52, 0x10), (0.65, 0x80, 0xFF, 0x94, 0x22), (1, 0x00, 0xFF, 0xD0, 0x60)]), null, outer);
+        dc.DrawGeometry(FireBrush(mid, room * 0.82, [(0, 0x70, 0xFF, 0xA8, 0x2E), (0.55, 0x48, 0xFF, 0xC8, 0x48), (1, 0x00, 0xFF, 0xE8, 0x90)]), null, feather);
         dc.DrawGeometry(FireBrush(mid, room * 0.75, [(0, 0xF5, 0xFF, 0xA8, 0x2E), (0.55, 0xB0, 0xFF, 0xC8, 0x48), (1, 0x00, 0xFF, 0xE8, 0x90)]), null, middle);
         dc.DrawGeometry(FireBrush(mid, room * 0.42, [(0, 0xFA, 0xFF, 0xFB, 0xE6), (0.6, 0xC0, 0xFF, 0xF0, 0xB0), (1, 0x00, 0xFF, 0xF4, 0xC0)]), null, core);
         DrawLicks(dc);
@@ -778,7 +1002,7 @@ public sealed class WaveSeekBar : FrameworkElement
 
     private void UpdateAnimationState()
     {
-        if (IsLoaded && OnScreen.Check(this) && (IsPlaying || _activity > 0.002 || _ripples.Count > 0 || _sparks.Count > 0 || _licks.Count > 0 || _stars.Count > 0)) StartAnimating();
+        if (IsLoaded && OnScreen.Check(this) && (IsPlaying || _activity > 0.002 || _ripples.Count > 0 || _sparks.Count > 0 || _licks.Count > 0 || _stars.Count > 0 || _motes.Count > 0)) StartAnimating();
     }
 
     private void StartAnimating()
@@ -802,7 +1026,12 @@ public sealed class WaveSeekBar : FrameworkElement
         if (now == _lastFrame) return;
         var dt = _lastFrame == TimeSpan.Zero ? 0 : Math.Min(0.1, (now - _lastFrame).TotalSeconds);
         _lastFrame = now;
+        Step(dt);
+    }
 
+    /// <summary>Moves everything on by <paramref name="dt"/> seconds and redraws.</summary>
+    private void Step(double dt)
+    {
         var target = !IsPlaying ? 0 : Waveform is { } waveform ? waveform.LevelAt(CurrentPosition()) : FallbackLevel;
         _level += (target - _level) * Math.Min(1, dt * (target > _level ? 18 : 4));
         _baseline += (target - _baseline) * Math.Min(1, dt * 1.2);
@@ -830,13 +1059,7 @@ public sealed class WaveSeekBar : FrameworkElement
         UpdateSparks(dt, beat);
         SpawnLicks(previousFireTime);
         UpdateStars(dt, beat);
-        // The lightning redraws itself every so often - sooner when loud, at once on a beat.
-        _sinceBolt += dt;
-        if (beat || _sinceBolt > 0.11 - 0.06 * _level)
-        {
-            _sinceBolt = 0;
-            _boltSeed++;
-        }
+        UpdateFlow(dt, beat);
         for (var i = _ripples.Count - 1; i >= 0; i--)
         {
             var (distance, strength) = _ripples[i];
@@ -845,7 +1068,7 @@ public sealed class WaveSeekBar : FrameworkElement
             else _ripples[i] = (distance + dt * 150, strength);
         }
 
-        if (!IsPlaying && _activity < 0.002 && _ripples.Count == 0 && _sparks.Count == 0 && _licks.Count == 0 && _stars.Count == 0)
+        if (!IsPlaying && _activity < 0.002 && _ripples.Count == 0 && _sparks.Count == 0 && _licks.Count == 0 && _stars.Count == 0 && _motes.Count == 0)
         {
             _activity = 0;
             _level = 0;

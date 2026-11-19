@@ -272,10 +272,15 @@ public enum SeekBarStyle
     Neon,
     /// <summary>The song's own loudness as thin bars along the played part.</summary>
     Bars,
-    /// <summary>A crackling lightning bolt along the played part.</summary>
-    Electric,
+    /// <summary>Glowing threads of light twisting around the played part. (This slot was the
+    /// lightning bolt; settings that chose it get the threads.)</summary>
+    Strands,
     /// <summary>Twinkling stars drifting up from the played part.</summary>
     Sparkle,
+    /// <summary>Specks of light streaming along the played part toward the thumb.</summary>
+    Flow,
+    /// <summary>A shimmering aurora curtain hanging above the played part.</summary>
+    Aurora,
 }
 
 public enum SpectrumStyle

@@ -79,7 +79,8 @@ public sealed partial class PlaybackViewModel
 
     /// <summary>The seek bar looks in the order the settings list them (임의 last).</summary>
     public static readonly SeekBarStyle[] SeekBarStyleOrder =
-        [SeekBarStyle.Wave, SeekBarStyle.Flame, SeekBarStyle.Neon, SeekBarStyle.Bars, SeekBarStyle.Electric, SeekBarStyle.Sparkle, SeekBarStyle.Random];
+        [SeekBarStyle.Wave, SeekBarStyle.Flame, SeekBarStyle.Neon, SeekBarStyle.Bars, SeekBarStyle.Strands, SeekBarStyle.Flow, SeekBarStyle.Aurora,
+         SeekBarStyle.Sparkle, SeekBarStyle.Random];
 
     private void PickSeekLook()
     {
@@ -99,7 +100,9 @@ public sealed partial class PlaybackViewModel
         SeekBarStyle.Flame => "불꽃",
         SeekBarStyle.Neon => "네온",
         SeekBarStyle.Bars => "파형 막대",
-        SeekBarStyle.Electric => "번개",
+        SeekBarStyle.Strands => "빛의 실",
+        SeekBarStyle.Flow => "빛의 흐름",
+        SeekBarStyle.Aurora => "오로라",
         SeekBarStyle.Sparkle => "별빛",
         SeekBarStyle.Random => "임의 (곡마다)",
         _ => style.ToString(),
