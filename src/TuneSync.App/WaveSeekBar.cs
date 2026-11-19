@@ -587,10 +587,10 @@ public sealed class WaveSeekBar : FrameworkElement
     /// 0..1 that picks the tint.</summary>
     private readonly List<Spark> _jets = [];
 
-    /// <summary>A fountain at the thumb: droplets shot up from where the music is, arcing over
-    /// and falling back onto the line, with smaller sprays rising along the played part. Louder
-    /// music throws more water, higher; each beat sends up a burst. The water takes the cover's
-    /// colors, lightened, with a short streak behind each drop.</summary>
+    /// <summary>A fountain show along the played part: a row of jets, evenly spaced, each throwing
+    /// droplets that arc over and fall back onto the line, swaying up and down in rhythms of their
+    /// own. Louder music throws more water, higher; each beat sends every jet up at once. The
+    /// water takes the cover's colors, lightened, with a short streak behind each drop.</summary>
     private void DrawFountain(DrawingContext dc, double mid, double thumbX, double room, Color cool, Color accent, Color warm)
     {
         DrawPlayedLine(dc, mid, thumbX, cool, accent, warm);
@@ -642,22 +642,30 @@ public sealed class WaveSeekBar : FrameworkElement
         var room = mid - 2 + FountainOverflow;
         var loud = Loud(0, 1, _level);
 
-        // the main jet at the thumb, a burst on each beat
-        var rate = dt * Loud(55, 150, _level);
-        var jet = (int)rate + (Random.Shared.NextDouble() < rate - Math.Floor(rate) ? 1 : 0) + (beat ? 8 + (int)(loud * 8) : 0);
-        for (var n = 0; n < jet; n++) Throw(thumbX, mid, room * (0.4 + 0.8 * loud + (beat ? 0.3 : 0)), spread: 22, size: 2.0);
-        // smaller sprays along the played part
-        if (Random.Shared.NextDouble() < dt * Loud(3, 12, _level))
+        // A row of jets along the played part, like a fountain show: one every FountainSpacing
+        // pixels (fixed spots on the bar, so they don't wander; a new one joins as the thumb
+        // passes), each rising and falling in a rhythm of its own. Louder music: every jet
+        // higher and fuller; a beat: all of them shoot up at once.
+        var lift = Math.Pow(Math.Clamp(loud, 0, 1.1), 1.2);
+        var rate = dt * Loud(9, 26, _level);
+        for (var x = Left + FountainSpacing / 2; x < thumbX - 6; x += FountainSpacing)
         {
-            var x = Left + 10 + Random.Shared.NextDouble() * (thumbX - Left - 20);
-            for (var n = 0; n < 2; n++) Throw(x, mid, room * (0.2 + 0.35 * loud), spread: 18, size: 1.1);
+            var k = (x - Left) / FountainSpacing;
+            var sway = 0.72 + 0.28 * Math.Sin(_phase * 1.15 + k * 1.9);
+            var height = room * (0.3 + 0.7 * lift) * sway;
+            var count = (Random.Shared.NextDouble() < rate - Math.Floor(rate) ? 1 : 0) + (int)rate + (beat ? 2 + (int)(loud * 3) : 0);
+            for (var n = 0; n < count; n++)
+                Throw(x, mid, beat && n >= count - 2 ? height * 1.25 : height, spread: 14, size: 0.85);
         }
     }
+
+    /// <summary>Pixels between two jets of the fountain.</summary>
+    private const double FountainSpacing = 46;
 
     /// <summary>One droplet from <paramref name="x"/>, to reach about <paramref name="height"/> pixels up.</summary>
     private void Throw(double x, double mid, double height, double spread, double size)
     {
-        if (_jets.Count >= 140) return;
+        if (_jets.Count >= 220) return;
         var h = Math.Max(2, height * (0.7 + 0.5 * Random.Shared.NextDouble()));
         _jets.Add(new Spark
         {
@@ -665,7 +673,7 @@ public sealed class WaveSeekBar : FrameworkElement
             Y = mid - 1.5,
             Vx = (Random.Shared.NextDouble() - 0.5) * 2 * spread,
             Vy = -Math.Sqrt(2 * FountainGravity * h),
-            Size = (size + 0.6 * Random.Shared.NextDouble()) * EffectScale,
+            Size = (size + 0.35 * Random.Shared.NextDouble()) * EffectScale,
             Life = Random.Shared.NextDouble(),
         });
     }
@@ -828,7 +836,9 @@ public sealed class WaveSeekBar : FrameworkElement
     // ---- 오로라 ----
 
     /// <summary>How far above the strip the aurora may hang.</summary>
-    private const double AuroraOverflow = 6;
+    /// <summary>How far above the strip the aurora may hang: not at all - reaching up past the bar
+    /// it ran under the playback controls above it and looked cut off.</summary>
+    private const double AuroraOverflow = 0;
 
     /// <summary>A curtain of northern lights hanging over the played part: its top edge billows in
     /// slow folds, its colors run through the cover's hues along the bar, and it is brightest at
@@ -842,7 +852,7 @@ public sealed class WaveSeekBar : FrameworkElement
         {
             var envelope = SmoothStep(Math.Min(1, (x - Left) / 36)) * SmoothStep(Math.Min(1, (thumbX - x) / 18));
             var folds = 0.6 + 0.28 * Math.Sin(x * 0.031 - t * 0.8) + 0.14 * Math.Sin(x * 0.083 + t * 1.7);
-            return Math.Min(room, 1.45 * room * fadeIn * envelope * lift * folds);
+            return Math.Min(room, 1.15 * room * fadeIn * envelope * lift * folds);
         }
 
         var curtain = new StreamGeometry();
@@ -896,6 +906,17 @@ public sealed class WaveSeekBar : FrameworkElement
         var glimmer1 = AlongBar(thumbX, Color.FromArgb(0x18, 0xFF, 0xFF, 0xFF), Color.FromArgb(0x50, 0xFF, 0xFF, 0xFF));
         var glimmer2 = AlongBar(thumbX, Color.FromArgb(0x30, 0xFF, 0xFF, 0xFF), Color.FromArgb((byte)(0x90 + 0x50 * _flash), 0xFF, 0xFF, 0xFF));
 
+        // A faint reflection below the line (half as tall, a third as bright), as on still water:
+        // the curtain looks full without reaching up any further.
+        dc.PushTransform(new ScaleTransform(1, -0.5, 0, mid));
+        dc.PushOpacity(0.32);
+        dc.PushOpacityMask(mask);
+        dc.DrawGeometry(hue, null, curtain);
+        dc.DrawGeometry(glimmer2, null, rays[1]);
+        dc.Pop();
+        dc.Pop();
+        dc.Pop();
+
         dc.PushOpacityMask(mask);
         dc.DrawGeometry(hue, null, curtain);
         dc.DrawGeometry(glimmer1, null, rays[0]);
@@ -917,7 +938,8 @@ public sealed class WaveSeekBar : FrameworkElement
         {
             // Fade in, twinkle, fade out.
             var age = star.Age;
-            var fade = Math.Min(1, age / 0.25) * Math.Clamp(star.Life / 0.5, 0, 1);
+            // fading out before they drift up past the bar's own area (into the controls above)
+            var fade = Math.Min(1, age / 0.25) * Math.Clamp(star.Life / 0.5, 0, 1) * Math.Clamp((star.Y + 1) / 7, 0, 1);
             var twinkle = 0.6 + 0.4 * Math.Sin(age * 9 + star.X);
             var s = star.Size * (0.7 + 0.3 * twinkle);
             var color = Color.FromArgb((byte)(255 * fade * twinkle),
@@ -956,8 +978,8 @@ public sealed class WaveSeekBar : FrameworkElement
         // and faster - and every beat a shower of them. (The loudness is curved so the two ends
         // look clearly different, not just a little busier.)
         var energy = Math.Pow(Math.Clamp(Loud(0, 1, _level), 0, 1.2), 1.6);
-        var count = (beat ? 3 + (int)(9 * energy) : 0) + (Random.Shared.NextDouble() < dt * (1.5 + 34 * energy) ? 1 : 0);
-        for (var n = 0; n < count && _stars.Count < 64; n++)
+        var count = (beat ? 2 + (int)(6 * energy) : 0) + (Random.Shared.NextDouble() < dt * (1 + 22 * energy) ? 1 : 0);
+        for (var n = 0; n < count && _stars.Count < 44; n++)
         {
             // Anywhere along the played part, more toward the thumb (beats: around it).
             var back = Math.Pow(Random.Shared.NextDouble(), beat ? 2.4 : 1.4) * (thumbX - Left - 6);
@@ -965,9 +987,9 @@ public sealed class WaveSeekBar : FrameworkElement
             {
                 X = thumbX - 4 - back,
                 Y = mid - 2 - Random.Shared.NextDouble() * (mid - 2) * (0.35 + 0.65 * energy),
-                Vy = -(3 + Random.Shared.NextDouble() * 8 + 26 * energy),
+                Vy = -(3 + Random.Shared.NextDouble() * 7 + 20 * energy),
                 Life = 0.7 + Random.Shared.NextDouble() * 0.8 + 0.5 * energy,
-                Size = (1.1 + Random.Shared.NextDouble() * 1.2 + 3.2 * energy + (beat ? 1.5 : 0)) * EffectScale,
+                Size = (1.0 + Random.Shared.NextDouble() * 0.9 + 2.2 * energy + (beat ? 1.0 : 0)) * EffectScale,
             });
         }
     }

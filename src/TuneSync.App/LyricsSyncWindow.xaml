@@ -326,11 +326,11 @@
                     <ui:Button Content="지금 시간 찍기" Icon="{ui:SymbolIcon Flag24}" Appearance="Primary" Command="{Binding StampCommand}"
                                ToolTip="선택한 줄을 지금 재생 위치로 정하고 다음 줄로 (Space)"/>
                 </StackPanel>
-                <!-- Where the song is, with its waveform (the player's seek bar): click or drag to
+                <!-- Where the song is (the player's seek bar, as a plain line: no effect while syncing): click or drag to
                      listen from anywhere. Driven from code each tick (LyricsSyncWindow): it shows
                      this song only, not whatever else the player has loaded. -->
                 <local:WaveSeekBar x:Name="SeekBar" Grid.Row="1" Grid.ColumnSpan="3" Height="30" Margin="0,8,0,0"
-                                   Maximum="1" Value="0" Look="{Binding Playback.SeekLook}"
+                                   Maximum="1" Value="0" Look="None"
                                    WaveBrush="{DynamicResource AccentFillColorDefaultBrush}"
                                    TrackBrush="{DynamicResource ControlStrongFillColorDisabledBrush}"
                                    SeekStarted="SeekBar_SeekStarted" SeekCompleted="SeekBar_SeekCompleted"/>
