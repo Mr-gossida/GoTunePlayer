@@ -36,6 +36,7 @@
     <Resource Include="Effects\Nebula.ps" />
     <Resource Include="Effects\Lava.ps" />
     <Resource Include="Effects\RainWindow.ps" />
+    <Resource Include="Effects\Fireworks.ps" />
   </ItemGroup>
 
 </Project>

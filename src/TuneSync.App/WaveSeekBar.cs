@@ -51,6 +51,8 @@ public sealed class WaveSeekBar : FrameworkElement
         _splashes.Clear();
         _droplets.Clear();
         _jets.Clear();
+        _rockets.Clear();
+        _embers.Clear();
         UpdateAnimationState();
         if (Look == SeekBarStyle.None) StopAnimating();
     }
@@ -112,7 +114,7 @@ public sealed class WaveSeekBar : FrameworkElement
     // _flash: a beat's brief brightening (decays fast). _sparks: embers rising off the flames.
     private double _flash;
     private readonly List<Spark> _sparks = [];
-    private struct Spark { public double X, Y, Vx, Vy, Life, Size, Age; }
+    private struct Spark { public double X, Y, Vx, Vy, Life, Size, Age, Hue; }
 
     private bool Flames => Look == SeekBarStyle.Flame;
     private double _fireTime;
@@ -216,6 +218,10 @@ public sealed class WaveSeekBar : FrameworkElement
             else if (Look == SeekBarStyle.Fountain)
             {
                 DrawFountain(dc, mid, thumbX, maxHeight + FountainOverflow, cool, accent, warm);
+            }
+            else if (Look == SeekBarStyle.Fireworks)
+            {
+                DrawFireworks(dc, mid, thumbX, cool, accent, warm);
             }
             else if (Look == SeekBarStyle.None)
             {
@@ -455,6 +461,113 @@ public sealed class WaveSeekBar : FrameworkElement
             };
             fill.Freeze();
             dc.DrawGeometry(fill, null, played);
+        }
+    }
+
+    // ---- 불꽃놀이 ----
+
+    /// <summary>How far above the strip the fireworks may burst.</summary>
+    private const double FireworksOverflow = 10;
+
+    /// <summary>Rockets climbing (X, Y, Vy; Hue picks the color), and the sparks of the bursts
+    /// (X, Y, Vx, Vy, Life left, Size, Age, Hue).</summary>
+    private readonly List<Spark> _rockets = [], _embers = [];
+
+    /// <summary>Fireworks over the played part: rockets launched on the beats (and now and then
+    /// between them, more often when it's loud) climb from the line, burst into a ring of sparks
+    /// in the cover's colors that drift down and fade - bigger, higher bursts when the music is
+    /// louder.</summary>
+    private void DrawFireworks(DrawingContext dc, double mid, double thumbX, Color cool, Color accent, Color warm)
+    {
+        DrawPlayedLine(dc, mid, thumbX, cool, accent, warm);
+        Color Tint(double hue) => hue < 0.34 ? cool : hue < 0.67 ? accent : warm;
+
+        foreach (var rocket in _rockets)
+        {
+            var tint = Mix(Tint(rocket.Hue), Colors.White, 0.5);
+            var trail = new LinearGradientBrush(Color.FromArgb(0, tint.R, tint.G, tint.B), Color.FromArgb(0xC0, tint.R, tint.G, tint.B),
+                new Point(0, rocket.Y + 7), new Point(0, rocket.Y)) { MappingMode = BrushMappingMode.Absolute };
+            trail.Freeze();
+            dc.DrawLine(new Pen(trail, 1.2), new Point(rocket.X, rocket.Y + 7), new Point(rocket.X, rocket.Y));
+            dc.DrawEllipse(Brushes.White, null, new Point(rocket.X, rocket.Y), 1.1, 1.1);
+        }
+        foreach (var ember in _embers)
+        {
+            var left = Math.Clamp(ember.Life / 0.35, 0, 1);       // fades out over its last moments
+            var twinkle = ember.Age > 0.4 ? 0.65 + 0.35 * Math.Sin(ember.Age * 40 + ember.Hue * 50) : 1;
+            var tint = Mix(Tint(ember.Hue), Colors.White, Math.Max(0, 0.6 - ember.Age * 1.5)); // white-hot at first
+            var a = (byte)(255 * left * twinkle);
+            // a short streak along its flight
+            var tail = new Point(ember.X - ember.Vx * 0.035, ember.Y - ember.Vy * 0.035);
+            var streak = new LinearGradientBrush(Color.FromArgb(0, tint.R, tint.G, tint.B), Color.FromArgb(a, tint.R, tint.G, tint.B),
+                tail, new Point(ember.X, ember.Y)) { MappingMode = BrushMappingMode.Absolute };
+            streak.Freeze();
+            dc.DrawLine(new Pen(streak, ember.Size) { EndLineCap = PenLineCap.Round }, tail, new Point(ember.X, ember.Y));
+        }
+    }
+
+    private void UpdateFireworks(double dt, bool beat)
+    {
+        const double gravity = 140;
+        for (var i = _embers.Count - 1; i >= 0; i--)
+        {
+            var e = _embers[i];
+            var drag = Math.Exp(-dt * 2.2);
+            e.Vx *= drag;
+            e.Vy = e.Vy * drag + gravity * 0.35 * dt;
+            e.X += e.Vx * dt;
+            e.Y += e.Vy * dt;
+            e.Life -= dt;
+            e.Age += dt;
+            if (e.Life <= 0) _embers.RemoveAt(i);
+            else _embers[i] = e;
+        }
+        var loud = Loud(0, 1, _level);
+        for (var i = _rockets.Count - 1; i >= 0; i--)
+        {
+            var r = _rockets[i];
+            r.Y += r.Vy * dt;
+            r.Vy += gravity * dt;
+            if (r.Vy < -12) { _rockets[i] = r; continue; }
+            // the top of its climb: burst
+            _rockets.RemoveAt(i);
+            var count = (int)(12 + 14 * r.Size);
+            var speed = 24 + 34 * r.Size;
+            for (var n = 0; n < count && _embers.Count < 180; n++)
+            {
+                var angle = 2 * Math.PI * (n + Random.Shared.NextDouble() * 0.5) / count;
+                var s = speed * (0.75 + 0.35 * Random.Shared.NextDouble());
+                _embers.Add(new Spark
+                {
+                    X = r.X, Y = r.Y,
+                    Vx = Math.Cos(angle) * s, Vy = Math.Sin(angle) * s * 0.75,
+                    Life = 0.55 + 0.45 * Random.Shared.NextDouble() + 0.3 * r.Size,
+                    Size = (1.0 + 0.6 * Random.Shared.NextDouble()) * EffectScale,
+                    Hue = Random.Shared.NextDouble() < 0.75 ? r.Hue : Random.Shared.NextDouble(),
+                });
+            }
+        }
+        if (Look != SeekBarStyle.Fireworks || !IsPlaying || _activity < 0.3 || Maximum <= 0) return;
+
+        var mid = ActualHeight / 2;
+        var thumbX = Left + (Right - Left) * Math.Clamp(CurrentPosition() / Maximum, 0, 1);
+        if (thumbX - Left < 30) return;
+        var room = mid - 2 + FireworksOverflow;
+        var launches = (beat ? 1 + (loud > 0.6 ? 1 : 0) : 0) + (Random.Shared.NextDouble() < dt * Loud(0.25, 2.2, _level) ? 1 : 0);
+        for (var n = 0; n < launches && _rockets.Count < 6; n++)
+        {
+            // around the thumb on a beat, anywhere along the played part otherwise
+            var back = beat ? Math.Pow(Random.Shared.NextDouble(), 1.5) * Math.Min(120, thumbX - Left - 20)
+                            : Random.Shared.NextDouble() * (thumbX - Left - 20);
+            var height = room * (0.45 + 0.5 * Math.Min(1, loud) + 0.1 * Random.Shared.NextDouble());
+            _rockets.Add(new Spark
+            {
+                X = thumbX - 6 - back,
+                Y = mid - 1,
+                Vy = -Math.Sqrt(2 * gravity * height + 12 * 12),
+                Size = Math.Clamp(0.25 + 0.75 * loud + (beat ? 0.2 : 0), 0.2, 1.2), // how big it bursts
+                Hue = Random.Shared.NextDouble(),
+            });
         }
     }
 
@@ -1131,7 +1244,7 @@ public sealed class WaveSeekBar : FrameworkElement
 
     private void UpdateAnimationState()
     {
-        if (IsLoaded && OnScreen.Check(this) && (IsPlaying || _activity > 0.002 || _ripples.Count > 0 || _sparks.Count > 0 || _licks.Count > 0 || _stars.Count > 0 || _drops.Count > 0 || _splashes.Count > 0 || _droplets.Count > 0 || _jets.Count > 0)
+        if (IsLoaded && OnScreen.Check(this) && (IsPlaying || _activity > 0.002 || _ripples.Count > 0 || _sparks.Count > 0 || _licks.Count > 0 || _stars.Count > 0 || _drops.Count > 0 || _splashes.Count > 0 || _droplets.Count > 0 || _jets.Count > 0 || _rockets.Count > 0 || _embers.Count > 0)
             && Look != SeekBarStyle.None) StartAnimating();
     }
 
@@ -1191,6 +1304,7 @@ public sealed class WaveSeekBar : FrameworkElement
         UpdateStars(dt, beat);
         UpdateRain(dt, beat);
         UpdateFountain(dt, beat);
+        UpdateFireworks(dt, beat);
         for (var i = _ripples.Count - 1; i >= 0; i--)
         {
             var (distance, strength) = _ripples[i];
@@ -1199,7 +1313,7 @@ public sealed class WaveSeekBar : FrameworkElement
             else _ripples[i] = (distance + dt * 150, strength);
         }
 
-        if (!IsPlaying && _activity < 0.002 && _ripples.Count == 0 && _sparks.Count == 0 && _licks.Count == 0 && _stars.Count == 0 && _drops.Count == 0 && _splashes.Count == 0 && _droplets.Count == 0 && _jets.Count == 0)
+        if (!IsPlaying && _activity < 0.002 && _ripples.Count == 0 && _sparks.Count == 0 && _licks.Count == 0 && _stars.Count == 0 && _drops.Count == 0 && _splashes.Count == 0 && _droplets.Count == 0 && _jets.Count == 0 && _rockets.Count == 0 && _embers.Count == 0)
         {
             _activity = 0;
             _level = 0;

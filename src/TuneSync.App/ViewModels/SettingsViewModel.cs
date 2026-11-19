@@ -382,6 +382,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         new(BackgroundEffect.Nebula, "성운"),
         new(BackgroundEffect.Lava, "라바 램프"),
         new(BackgroundEffect.RainWindow, "창문 빗방울"),
+        new(BackgroundEffect.Fireworks, "불꽃놀이"),
         new(BackgroundEffect.Random, "랜덤 (열 때마다)"),
     ];
 

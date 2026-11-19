@@ -201,6 +201,8 @@ public enum BackgroundEffect
     Random,
     /// <summary>창문 빗방울: rain running down a window pane, the backdrop bent through the drops.</summary>
     RainWindow,
+    /// <summary>불꽃놀이: bursts of fireworks blooming and drifting down.</summary>
+    Fireworks,
 }
 
 public enum AuroraMode
@@ -306,6 +308,8 @@ public enum SeekBarStyle
     Aurora,
     /// <summary>No effect: a plain line, nothing animated.</summary>
     None,
+    /// <summary>Rockets bursting over the played part on the beats.</summary>
+    Fireworks,
 }
 
 public enum SpectrumStyle
