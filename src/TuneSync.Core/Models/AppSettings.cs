@@ -277,8 +277,9 @@ public enum SeekBarStyle
     Strands,
     /// <summary>Twinkling stars drifting up from the played part.</summary>
     Sparkle,
-    /// <summary>Specks of light streaming along the played part toward the thumb.</summary>
-    Flow,
+    /// <summary>Raindrops falling onto the played part, rippling where they land. (This slot was
+    /// a stream of light specks; settings that chose it get the rain.)</summary>
+    Rain,
     /// <summary>A shimmering aurora curtain hanging above the played part.</summary>
     Aurora,
 }

@@ -47,7 +47,9 @@ public sealed class WaveSeekBar : FrameworkElement
         _sparks.Clear();
         _licks.Clear();
         _stars.Clear();
-        _motes.Clear();
+        _drops.Clear();
+        _splashes.Clear();
+        _droplets.Clear();
     }
 
     public SeekBarStyle Look { get => (SeekBarStyle)GetValue(LookProperty); set => SetValue(LookProperty, value); }
@@ -207,9 +209,9 @@ public sealed class WaveSeekBar : FrameworkElement
             {
                 DrawStrands(dc, mid, thumbX, maxHeight, fadeIn, cool, accent, warm);
             }
-            else if (Look == SeekBarStyle.Flow)
+            else if (Look == SeekBarStyle.Rain)
             {
-                DrawFlow(dc, mid, thumbX, maxHeight, cool, accent, warm);
+                DrawRain(dc, mid, thumbX, cool, accent, warm);
             }
             else if (Look == SeekBarStyle.Aurora)
             {
@@ -504,84 +506,148 @@ public sealed class WaveSeekBar : FrameworkElement
         return brush;
     }
 
-    // ---- 빛의 흐름 ----
+    // ---- 빗방울 ----
 
-    /// <summary>Specks of light streaming along the played part. X: where it is; Y: its lane, -1..1
-    /// (above or below the line, scaled by how loud it is); Vx: its own speed factor; Size; Age;
-    /// Life: a random 0..1 that picks its color.</summary>
-    private readonly List<Spark> _motes = [];
+    /// <summary>How far above the strip the raindrops start falling.</summary>
+    private const double RainOverflow = 8;
 
-    /// <summary>The stream's speed in pixels a second: a calm drift when quiet, a rush when loud.</summary>
-    private double FlowSpeed => 46 + 190 * Loud(0, 1, _level) * Math.Max(_activity, 0.2);
+    /// <summary>Falling raindrops. X, Y: the drop's tip; Vx, Vy: its speed; Size: its thickness;
+    /// Life: a random 0..1 that picks its tint.</summary>
+    private readonly List<Spark> _drops = [];
 
-    /// <summary>Specks of light streaming along the played line into the thumb, each trailing a
-    /// short tail. Louder music makes more of them, faster, spread wider around the line; they
-    /// gather onto the line as they reach the thumb, where they're absorbed. Each beat sends a
-    /// bright pulse running back along the line from the thumb.</summary>
-    private void DrawFlow(DrawingContext dc, double mid, double thumbX, double room, Color cool, Color accent, Color warm)
+    /// <summary>Rings spreading on the line where a drop landed. X: where; Size: how wide the ring
+    /// grows; Age, Life: how far along, and how long it lasts; Y: how strong it starts.</summary>
+    private readonly List<Spark> _splashes = [];
+
+    /// <summary>Tiny droplets thrown up by a landing drop; they arc and fall back.</summary>
+    private readonly List<Spark> _droplets = [];
+
+    /// <summary>Rain falling onto the played line as if onto water: thin slanting streaks that
+    /// land with a small flash, send a flat ring (and a fainter second one) spreading along the
+    /// line, and throw up a droplet or two. Louder music brings more, faster and heavier rain with
+    /// wider rings; each beat lets a shower fall around the thumb.</summary>
+    private void DrawRain(DrawingContext dc, double mid, double thumbX, Color cool, Color accent, Color warm)
     {
-        dc.PushOpacity(0.55);
         DrawPlayedLine(dc, mid, thumbX, cool, accent, warm);
-        dc.Pop();
 
-        // Beat pulses: a soft bright glow sliding back along the line.
-        foreach (var (distance, strength) in _ripples)
+        var ringColor = Mix(accent, Colors.White, 0.55);
+        foreach (var splash in _splashes)
         {
-            var x = thumbX - 8 - distance;
-            if (x < Left) continue;
-            var a = (byte)(255 * Math.Min(1, strength * 1.6));
-            var pulse = new RadialGradientBrush(Color.FromArgb(a, warm.R, warm.G, warm.B), Color.FromArgb(0, warm.R, warm.G, warm.B));
-            pulse.Freeze();
-            dc.DrawEllipse(pulse, null, new Point(x, mid), 22, 3 + 4 * strength);
+            var p = Math.Clamp(splash.Age / splash.Life, 0, 1);
+            var grow = 1 - (1 - p) * (1 - p);
+            var alpha = splash.Y * (1 - p);
+            if (p < 0.3)
+            {
+                // The moment of impact: a small bright spot on the line.
+                var flash = new SolidColorBrush(Color.FromArgb((byte)(230 * (1 - p / 0.3)), 0xFF, 0xFF, 0xFF));
+                dc.DrawEllipse(flash, null, new Point(splash.X, mid), 2.2, 1.6);
+            }
+            var rx = 1.5 + splash.Size * grow;
+            dc.DrawEllipse(null, new Pen(new SolidColorBrush(Color.FromArgb((byte)(255 * alpha), ringColor.R, ringColor.G, ringColor.B)), 1.1),
+                new Point(splash.X, mid), rx, rx * 0.32);
+            if (p > 0.18)
+            {
+                var inner = rx * 0.55;
+                dc.DrawEllipse(null, new Pen(new SolidColorBrush(Color.FromArgb((byte)(150 * alpha), ringColor.R, ringColor.G, ringColor.B)), 0.9),
+                    new Point(splash.X, mid), inner, inner * 0.32);
+            }
         }
 
-        var spread = room * (0.22 + 0.6 * _activity * Loud(0, 1, _level) + 0.3 * _flash);
-        var speed = FlowSpeed;
-        foreach (var mote in _motes)
+        foreach (var drop in _droplets)
         {
-            var gather = SmoothStep(Math.Clamp((thumbX - mote.X) / 60, 0, 1));
-            var y = mid + mote.Y * Math.Min(room, spread) * gather * (0.8 + 0.2 * Math.Sin(mote.Age * 2.3 + mote.Life * 9));
-            var fade = Math.Min(1, mote.Age / 0.35) * Math.Clamp((thumbX - mote.X) / 10, 0, 1) * Math.Clamp((mote.X - Left) / 20, 0, 1);
-            if (fade <= 0.01) continue;
-            var color = mote.Life < 0.33 ? cool : mote.Life < 0.66 ? accent : warm;
-            color = Color.FromRgb((byte)((color.R + 255) / 2), (byte)((color.G + 255) / 2), (byte)((color.B + 255) / 2));
-            var tail = 5 + speed * mote.Vx * 0.09;
-            var tailBrush = new LinearGradientBrush(Color.FromArgb(0, color.R, color.G, color.B), Color.FromArgb((byte)(170 * fade), color.R, color.G, color.B),
-                new Point(mote.X - tail, 0), new Point(mote.X, 0)) { MappingMode = BrushMappingMode.Absolute };
-            tailBrush.Freeze();
-            dc.DrawLine(new Pen(tailBrush, mote.Size * 1.3) { EndLineCap = PenLineCap.Round }, new Point(mote.X - tail, y), new Point(mote.X, y));
-            dc.DrawEllipse(new SolidColorBrush(Color.FromArgb((byte)(255 * fade), 0xFF, 0xFF, 0xFF)), null, new Point(mote.X, y), mote.Size * 0.75, mote.Size * 0.75);
+            var a = (byte)(220 * Math.Clamp(drop.Life / 0.15, 0, 1));
+            dc.DrawEllipse(new SolidColorBrush(Color.FromArgb(a, 0xFF, 0xFF, 0xFF)), null, new Point(drop.X, drop.Y), drop.Size, drop.Size);
+        }
+
+        foreach (var drop in _drops)
+        {
+            var tint = Mix(drop.Life < 0.5 ? cool : accent, Colors.White, 0.55);
+            var length = 3 + drop.Vy * 0.065;
+            var top = new Point(drop.X - drop.Vx / drop.Vy * length, drop.Y - length);
+            var streak = new LinearGradientBrush(Color.FromArgb(0, tint.R, tint.G, tint.B), Color.FromArgb(0xE0, tint.R, tint.G, tint.B),
+                new Point(0, top.Y), new Point(0, drop.Y)) { MappingMode = BrushMappingMode.Absolute };
+            streak.Freeze();
+            dc.DrawLine(new Pen(streak, drop.Size) { StartLineCap = PenLineCap.Round, EndLineCap = PenLineCap.Round }, top, new Point(drop.X, drop.Y));
         }
     }
 
-    private void UpdateFlow(double dt, bool beat)
+    private void UpdateRain(double dt, bool beat)
     {
-        var thumbX = Maximum > 0 ? Left + (Right - Left) * Math.Clamp(CurrentPosition() / Maximum, 0, 1) : Left;
-        var speed = FlowSpeed;
-        for (var i = _motes.Count - 1; i >= 0; i--)
+        var mid = ActualHeight / 2;
+        for (var i = _splashes.Count - 1; i >= 0; i--)
         {
-            var m = _motes[i];
-            m.X += speed * m.Vx * dt;
-            m.Age += dt;
-            if (m.X >= thumbX - 1 || (!IsPlaying && _activity < 0.05)) _motes.RemoveAt(i);
-            else _motes[i] = m;
+            var s = _splashes[i];
+            s.Age += dt;
+            if (s.Age >= s.Life) _splashes.RemoveAt(i);
+            else _splashes[i] = s;
         }
-        if (Look != SeekBarStyle.Flow || !IsPlaying || _activity < 0.3 || thumbX - Left < 30) return;
-
-        var count = (beat ? 3 + (int)Loud(0, 4, _level) : 0) + (Random.Shared.NextDouble() < dt * Loud(10, 36, _level) ? 1 : 0);
-        for (var n = 0; n < count && _motes.Count < 70; n++)
+        for (var i = _droplets.Count - 1; i >= 0; i--)
         {
-            var lane = Random.Shared.NextDouble() * 2 - 1;
-            _motes.Add(new Spark
+            var d = _droplets[i];
+            d.X += d.Vx * dt;
+            d.Y += d.Vy * dt;
+            d.Vy += 260 * dt;
+            d.Life -= dt;
+            if (d.Life <= 0 || d.Y > mid + 1) _droplets.RemoveAt(i);
+            else _droplets[i] = d;
+        }
+        var loud = Loud(0, 1, _level);
+        for (var i = _drops.Count - 1; i >= 0; i--)
+        {
+            var d = _drops[i];
+            d.X += d.Vx * dt;
+            d.Y += d.Vy * dt;
+            d.Vy += 120 * dt;
+            if (d.Y < mid - 1)
             {
-                X = Left + Math.Pow(Random.Shared.NextDouble(), 0.8) * (thumbX - Left - 20),
-                Y = Math.Sign(lane) * Math.Pow(Math.Abs(lane), 1.3),
-                Vx = 0.65 + 0.7 * Random.Shared.NextDouble(),
-                Size = (1.3 + 1.2 * Random.Shared.NextDouble() + (beat ? 0.6 : 0)) * EffectScale,
+                _drops[i] = d;
+                continue;
+            }
+            // Landed: a ring, and now and then a droplet or two thrown up.
+            _drops.RemoveAt(i);
+            if (_splashes.Count < 40)
+                _splashes.Add(new Spark { X = d.X, Size = 3 + 2.5 * d.Size + 4 * loud, Life = 0.45 + 0.15 * loud, Y = Math.Min(1, 0.55 + 0.35 * loud) });
+            var thrown = (Random.Shared.NextDouble() < 0.35 + 0.4 * loud ? 1 : 0) + (d.Size > 1.6 ? 1 : 0);
+            for (var n = 0; n < thrown && _droplets.Count < 40; n++)
+            {
+                var side = Random.Shared.NextDouble() < 0.5 ? -1 : 1;
+                _droplets.Add(new Spark
+                {
+                    X = d.X, Y = mid - 1,
+                    Vx = side * (14 + 20 * Random.Shared.NextDouble()),
+                    Vy = -(28 + 26 * Random.Shared.NextDouble()) * (0.75 + 0.45 * loud),
+                    Life = 0.3 + 0.15 * Random.Shared.NextDouble(),
+                    Size = 0.6 + 0.4 * Random.Shared.NextDouble(),
+                });
+            }
+        }
+        if (Look != SeekBarStyle.Rain || !IsPlaying || _activity < 0.3 || Maximum <= 0) return;
+
+        var thumbX = Left + (Right - Left) * Math.Clamp(CurrentPosition() / Maximum, 0, 1);
+        if (thumbX - Left < 24) return;
+        var room = mid - 2 + RainOverflow;
+        var count = (beat ? 3 + (int)Loud(0, 4, _level) : 0) + (Random.Shared.NextDouble() < dt * Loud(7, 30, _level) ? 1 : 0);
+        for (var n = 0; n < count && _drops.Count < 50; n++)
+        {
+            // Anywhere over the played part; a beat's shower falls around the thumb.
+            var back = beat && n < count - 1
+                ? Math.Pow(Random.Shared.NextDouble(), 1.5) * Math.Min(140, thumbX - Left - 12)
+                : Random.Shared.NextDouble() * (thumbX - Left - 12);
+            _drops.Add(new Spark
+            {
+                X = thumbX - 6 - back,
+                Y = mid - room - Random.Shared.NextDouble() * 8,
+                Vx = 6,
+                Vy = 70 + 80 * loud + 25 * Random.Shared.NextDouble(),
+                Size = (1.0 + 0.6 * Random.Shared.NextDouble() + (beat ? 0.4 : 0)) * EffectScale,
                 Life = Random.Shared.NextDouble(),
             });
         }
     }
+
+    /// <summary><paramref name="a"/> moved toward <paramref name="b"/> by <paramref name="t"/> (0..1).</summary>
+    private static Color Mix(Color a, Color b, double t) => Color.FromRgb(
+        (byte)(a.R + (b.R - a.R) * t), (byte)(a.G + (b.G - a.G) * t), (byte)(a.B + (b.B - a.B) * t));
 
     // ---- 오로라 ----
 
@@ -1002,7 +1068,7 @@ public sealed class WaveSeekBar : FrameworkElement
 
     private void UpdateAnimationState()
     {
-        if (IsLoaded && OnScreen.Check(this) && (IsPlaying || _activity > 0.002 || _ripples.Count > 0 || _sparks.Count > 0 || _licks.Count > 0 || _stars.Count > 0 || _motes.Count > 0)) StartAnimating();
+        if (IsLoaded && OnScreen.Check(this) && (IsPlaying || _activity > 0.002 || _ripples.Count > 0 || _sparks.Count > 0 || _licks.Count > 0 || _stars.Count > 0 || _drops.Count > 0 || _splashes.Count > 0 || _droplets.Count > 0)) StartAnimating();
     }
 
     private void StartAnimating()
@@ -1059,7 +1125,7 @@ public sealed class WaveSeekBar : FrameworkElement
         UpdateSparks(dt, beat);
         SpawnLicks(previousFireTime);
         UpdateStars(dt, beat);
-        UpdateFlow(dt, beat);
+        UpdateRain(dt, beat);
         for (var i = _ripples.Count - 1; i >= 0; i--)
         {
             var (distance, strength) = _ripples[i];
@@ -1068,7 +1134,7 @@ public sealed class WaveSeekBar : FrameworkElement
             else _ripples[i] = (distance + dt * 150, strength);
         }
 
-        if (!IsPlaying && _activity < 0.002 && _ripples.Count == 0 && _sparks.Count == 0 && _licks.Count == 0 && _stars.Count == 0 && _motes.Count == 0)
+        if (!IsPlaying && _activity < 0.002 && _ripples.Count == 0 && _sparks.Count == 0 && _licks.Count == 0 && _stars.Count == 0 && _drops.Count == 0 && _splashes.Count == 0 && _droplets.Count == 0)
         {
             _activity = 0;
             _level = 0;
