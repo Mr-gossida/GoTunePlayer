@@ -11,6 +11,52 @@
                 <ui:ControlsDictionary />
             </ResourceDictionary.MergedDictionaries>
 
+            <!-- Output badges ([독점] [32bit · 352.8kHz] [업샘플링 ×8] ...), items of
+                 PlaybackViewModel.OutputBadges: the path filled in the cover's color, details
+                 outlined, "설정과 다름" in the caution color. On the play screen and in 설정 › 음향. -->
+            <Style x:Key="OutputBadgeList" TargetType="ItemsControl">
+                <Setter Property="Focusable" Value="False"/>
+                <Setter Property="ItemsPanel">
+                    <Setter.Value>
+                        <ItemsPanelTemplate>
+                            <WrapPanel Orientation="Horizontal"/>
+                        </ItemsPanelTemplate>
+                    </Setter.Value>
+                </Setter>
+                <Setter Property="ItemTemplate">
+                    <Setter.Value>
+                        <DataTemplate>
+                            <Border x:Name="Badge" CornerRadius="4" Padding="7,2" Margin="0,4,6,0" BorderThickness="1"
+                                    BorderBrush="{DynamicResource ControlStrongStrokeColorDefaultBrush}" Background="Transparent"
+                                    ToolTip="{Binding ToolTip}" ToolTipService.InitialShowDelay="250">
+                                <StackPanel Orientation="Horizontal">
+                                    <ui:SymbolIcon x:Name="Icon" Symbol="Speaker224" FontSize="11" Margin="0,0,4,0" VerticalAlignment="Center" Visibility="Collapsed"/>
+                                    <TextBlock x:Name="Label" Text="{Binding Text}" FontSize="10.5" FontWeight="SemiBold" VerticalAlignment="Center"
+                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                </StackPanel>
+                            </Border>
+                            <DataTemplate.Triggers>
+                                <DataTrigger Binding="{Binding IsPath}" Value="True">
+                                    <Setter TargetName="Badge" Property="Background" Value="{DynamicResource PlayerAccentBrush}"/>
+                                    <Setter TargetName="Badge" Property="BorderBrush" Value="{DynamicResource PlayerAccentBrush}"/>
+                                    <Setter TargetName="Label" Property="Foreground" Value="{DynamicResource PlayerOnAccentBrush}"/>
+                                    <Setter TargetName="Label" Property="FontWeight" Value="Bold"/>
+                                    <Setter TargetName="Icon" Property="Visibility" Value="Visible"/>
+                                    <Setter TargetName="Icon" Property="Foreground" Value="{DynamicResource PlayerOnAccentBrush}"/>
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding IsCaution}" Value="True">
+                                    <Setter TargetName="Badge" Property="BorderBrush" Value="{DynamicResource SystemFillColorCautionBrush}"/>
+                                    <Setter TargetName="Label" Property="Foreground" Value="{DynamicResource SystemFillColorCautionBrush}"/>
+                                    <Setter TargetName="Icon" Property="Symbol" Value="Warning24"/>
+                                    <Setter TargetName="Icon" Property="Visibility" Value="Visible"/>
+                                    <Setter TargetName="Icon" Property="Foreground" Value="{DynamicResource SystemFillColorCautionBrush}"/>
+                                </DataTrigger>
+                            </DataTemplate.Triggers>
+                        </DataTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
             <!-- 앱 글꼴 / 가사 글꼴 (AppFonts): replaced with the saved choices at startup. -->
             <FontFamily x:Key="AppFontFamily">Segoe UI</FontFamily>
             <FontFamily x:Key="LyricsFontFamily">Segoe UI</FontFamily>

@@ -121,6 +121,15 @@ public sealed partial class PlaybackViewModel : ObservableObject, IDisposable
 
     public PlaybackViewModel(LibraryViewModel library, AppSettings settings, Network.NetworkLibrary network, EqualizerViewModel equalizer)
     {
+        // the badges follow the description, wherever that is refreshed from
+        PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName is nameof(OutputDescription) or nameof(CurrentFile))
+            {
+                OnPropertyChanged(nameof(OutputBadges));
+                OnPropertyChanged(nameof(HasOutputBadges));
+            }
+        };
         _library = library;
         _settings = settings;
         _network = network;

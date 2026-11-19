@@ -37,6 +37,32 @@ public interface IProgressiveSource
     string Name { get; }
 }
 
+/// <summary>The way the sound reaches the device.</summary>
+public enum OutputPath
+{
+    /// <summary>Through Windows' mixer.</summary>
+    Shared,
+    /// <summary>To the device alone, through GoTune's processing.</summary>
+    Exclusive,
+    /// <summary>The file's samples, untouched.</summary>
+    BitPerfect,
+    /// <summary>A DSD file's own bits, as DoP.</summary>
+    DoP,
+    /// <summary>PCM turned into DSD, as DoP.</summary>
+    Remaster,
+}
+
+/// <summary>How the sound is going out right now, piece by piece (for the play screen's badges).</summary>
+/// <param name="Bits">The device format's bits (0 in shared mode, where Windows' mixer takes float).</param>
+/// <param name="Rate">What goes to the device: its sample rate, or the DSD rate for DoP and remastering.</param>
+/// <param name="Conversion">A rate change GoTune makes ("업샘플링 ×8", "DSD → PCM"), or null.</param>
+/// <param name="ConversionDetail">"44.1 → 352.8kHz · 선형 위상".</param>
+/// <param name="Dsd">"DSD64" for a DSD song or remastering.</param>
+/// <param name="Equalizer">The equalizer is shaping the sound.</param>
+/// <param name="Note">Why it isn't quite as the settings ask, when it isn't.</param>
+public sealed record OutputInfo(OutputPath Path, int Bits, int Rate, int SongRate, string? Conversion, string? ConversionDetail,
+    string? Dsd, bool Equalizer, bool HardwareVolume, string Layout, string? Note);
+
 /// <summary>DoP can't go out the way the output is set now (not exclusive, the device won't take
 /// it, or it has no volume control of its own): the song has to be opened again as PCM.</summary>
 public sealed class DopUnavailableException(string message) : Exception(message);
@@ -123,6 +149,8 @@ public sealed class TonePlayer : IDisposable
     private string? _dsdName;
     private int _dsdRate;
     private double[] _silence = [];
+    private volatile int _outBits;
+    private volatile string _layoutName = "스테레오";
     private ResampleFilter _resampleFilter;
     private int _sourceBits;
     private ChannelLayout? _layout;
@@ -208,7 +236,45 @@ public sealed class TonePlayer : IDisposable
 
     /// <summary>The samples reach the device exactly as the file holds them (bit-perfect mode,
     /// and the device took the song's own rate).</summary>
-    public bool IsBitPerfect => _bitPerfect;
+    public bool IsBitPerfect => _bitPerfect && (_hardwareVolume || (_volume >= 1 && !_muted));
+
+    /// <summary>How the sound is going out right now, piece by piece (null until the device is open).</summary>
+    public OutputInfo? Info
+    {
+        get
+        {
+            if (_outputBase is null) return null;
+            var path = _dop ? OutputPath.DoP
+                : _remastering ? OutputPath.Remaster
+                : IsBitPerfect ? OutputPath.BitPerfect
+                : _exclusiveOpen ? OutputPath.Exclusive
+                : OutputPath.Shared;
+            string? conversion = null, detail = null;
+            if (_converted && _dsdName is not null)
+            {
+                conversion = "DSD → PCM";
+                detail = $"{_dsdName} ({_dsdRate / 1e6:0.0}MHz) → PCM {_sampleRate / 1000.0:0.#}kHz";
+            }
+            else if (_resampling)
+            {
+                conversion = _outRate > _sampleRate
+                    ? _outRate % _sampleRate == 0 ? $"업샘플링 ×{_outRate / _sampleRate}" : "업샘플링"
+                    : "샘플 속도 변환";
+                detail = $"{_sampleRate / 1000.0:0.#} → {_outRate / 1000.0:0.#}kHz · {_resampleFilterName}";
+            }
+            else if (_remastering && _resampler is DsdRemasterer remaster)
+            {
+                detail = $"PCM {_sampleRate / 1000.0:0.#}kHz → DSD{remaster.DsdRate / (remaster.DsdRate % 44100 == 0 ? 44100 : 48000)} ({remaster.DsdRate / 1e6:0.0}MHz) · {_resampleFilterName}";
+            }
+            var dsdRate = _dop ? _dsdRate : _resampler is DsdRemasterer r ? r.DsdRate : 0;
+            var dsd = _dop ? _dsdName : dsdRate > 0 ? $"DSD{dsdRate / (dsdRate % 44100 == 0 ? 44100 : 48000)}" : _converted ? _dsdName : null;
+            var note = _outputNote;
+            if (_bitPerfect && !IsBitPerfect) note = note is null ? "볼륨이 100%일 때 비트퍼펙트" : $"{note} — 볼륨이 100%일 때 비트퍼펙트";
+            var equalizer = path is not (OutputPath.BitPerfect or OutputPath.DoP) && !ReferenceEquals(_config, ToneConfig.Neutral);
+            return new OutputInfo(path, _exclusiveOpen ? _outBits : 0, dsdRate > 0 ? dsdRate : _outRate, _sampleRate,
+                conversion, detail, dsd, equalizer, _hardwareVolume, _layoutName, note);
+        }
+    }
 
     /// <summary>PCM is going out as DSD (DoP).</summary>
     public bool IsRemastering => _remastering;
@@ -982,6 +1048,8 @@ public sealed class TonePlayer : IDisposable
                 var remaster = new DsdRemasterer(_sampleRate, dsdRate, output.Filter);
                 Prepare(dopFormat.SampleRate, 2, SpeakerLayout.Stereo,
                     new SampleWriter(dopFormat.ValidBits, isFloat: false, dopFormat.BitsPerSample, dither: false), output.Filter, remaster);
+                _outBits = dopFormat.ValidBits;
+                _layoutName = LayoutName(SpeakerLayout.Stereo);
                 if (layout != SpeakerLayout.Stereo) note = Join("DSD는 스테레오로 보냄", note);
                 if (output.HardwareVolume && !TakeHardwareVolume())
                     note = note is null ? "장치에 하드웨어 볼륨이 없어 디지털 볼륨 사용" : Join(note, "장치에 하드웨어 볼륨이 없어 디지털 볼륨 사용");
@@ -1017,6 +1085,8 @@ public sealed class TonePlayer : IDisposable
                 var exact = wantBitPerfect && !_converted && format.SampleRate == _sampleRate && (_sourceBits == 0 || format.ValidBits >= _sourceBits);
                 Prepare(format.SampleRate, channels, layout, new SampleWriter(format.ValidBits, format.IsFloat, format.BitsPerSample, dither: !exact,
                     noiseShaping: format.SampleRate >= 88200, channels: channels), output.Filter);
+                _outBits = format.ValidBits;
+                _layoutName = LayoutName(layout);
                 var rate = $"{format.ValidBits}비트 {format.SampleRate / 1000.0:0.#}kHz";
                 if (wantBitPerfect && !exact)
                     note = format.SampleRate != _sampleRate
@@ -1054,6 +1124,8 @@ public sealed class TonePlayer : IDisposable
         _bufferFrames = _client.BufferSize;
         _render = _client.AudioRenderClient;
         Prepare(sharedRate, channels, layout, new SampleWriter(32, isFloat: true), output.Filter);
+        _outBits = 0;
+        _layoutName = LayoutName(layout);
         _outputBase = sharedRate != _sampleRate ? $"공유 · {sharedRate / 1000.0:0.#}kHz · {LayoutName(layout)}" : $"공유 · {LayoutName(layout)}";
         _outputNote = note;
         OutputChanged?.Invoke();

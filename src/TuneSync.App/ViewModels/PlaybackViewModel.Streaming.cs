@@ -30,6 +30,13 @@ public sealed partial class PlaybackViewModel
     /// it can't go out as set; null while nothing plays through the app's own player.</summary>
     public string? OutputDescription => _player is Audio.ToneEngine engine ? engine.OutputDescription : null;
 
+    /// <summary>The play screen's output badges ("독점", "32bit · 352.8kHz", "업샘플링 ×8"...);
+    /// refreshed whenever <see cref="OutputDescription"/> is.</summary>
+    public IReadOnlyList<OutputBadge> OutputBadges =>
+        _player is Audio.ToneEngine engine && CurrentFile is not null ? OutputBadge.For(engine.OutputInfo, engine.OutputDescription) : [];
+
+    public bool HasOutputBadges => OutputBadges.Count > 0;
+
     /// <summary>The song goes out bit-perfect: the equalizer and the volume are left out.</summary>
     public bool IsBitPerfect => _player is Audio.ToneEngine engine && engine.IsBitPerfect;
 

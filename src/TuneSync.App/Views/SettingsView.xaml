@@ -71,6 +71,62 @@
                 </Setter.Value>
             </Setter>
         </Style>
+        <!-- A row of choices side by side, the chosen one filled in the player's color (a
+             segmented control): for a few short options that read better all at once than in
+             a drop-down. Items are Choice<T> (Label/Value). -->
+        <Style x:Key="Segmented" TargetType="ListBox">
+            <Setter Property="DisplayMemberPath" Value="Label"/>
+            <Setter Property="SelectedValuePath" Value="Value"/>
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled"/>
+            <Setter Property="ItemsPanel">
+                <Setter.Value>
+                    <ItemsPanelTemplate>
+                        <UniformGrid Rows="1"/>
+                    </ItemsPanelTemplate>
+                </Setter.Value>
+            </Setter>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ListBox">
+                        <Border CornerRadius="6" Padding="2" BorderThickness="1"
+                                Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}">
+                            <ItemsPresenter/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Setter Property="ItemContainerStyle">
+                <Setter.Value>
+                    <Style TargetType="ListBoxItem">
+                        <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+                        <Setter Property="Cursor" Value="Hand"/>
+                        <Setter Property="Template">
+                            <Setter.Value>
+                                <ControlTemplate TargetType="ListBoxItem">
+                                    <Border x:Name="Bd" CornerRadius="4" Padding="10,5" Margin="1,0" Background="Transparent">
+                                        <ContentPresenter x:Name="Content" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                          TextElement.FontSize="13" TextElement.Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter TargetName="Bd" Property="Background" Value="{DynamicResource ControlFillColorSecondaryBrush}"/>
+                                            <Setter TargetName="Content" Property="TextElement.Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}"/>
+                                        </Trigger>
+                                        <Trigger Property="IsSelected" Value="True">
+                                            <Setter TargetName="Bd" Property="Background" Value="{DynamicResource PlayerAccentBrush}"/>
+                                            <Setter TargetName="Content" Property="TextElement.Foreground" Value="{DynamicResource PlayerOnAccentBrush}"/>
+                                            <Setter TargetName="Content" Property="TextElement.FontWeight" Value="SemiBold"/>
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Setter.Value>
+                        </Setter>
+                    </Style>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <Style x:Key="Card" TargetType="ui:CardControl" BasedOn="{StaticResource {x:Type ui:CardControl}}">
             <Setter Property="Margin" Value="0,0,0,4"/>
         </Style>
@@ -373,10 +429,17 @@
                             <ui:SymbolIcon Symbol="Speaker224" FontSize="24" Margin="0,0,16,0" VerticalAlignment="Center" Foreground="{DynamicResource PlayerAccentBrush}"/>
                             <ui:Button DockPanel.Dock="Right" Content="Windows 소리 설정" Icon="{ui:SymbolIcon Open24}" VerticalAlignment="Center"
                                        Command="{Binding OpenWindowsSoundCommand}" ToolTip="공유 모드의 샘플 속도·비트(장치 속성 › 고급)는 Windows 소리 설정에서 바꿉니다"/>
-                            <StackPanel VerticalAlignment="Center">
+                            <StackPanel VerticalAlignment="Center" Margin="0,0,12,0">
                                 <ui:TextBlock Text="지금 재생" FontTypography="Caption" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-                                <ui:TextBlock Text="{Binding Now}" FontTypography="BodyStrong" TextWrapping="Wrap" app:KeepWords.IsEnabled="True"/>
-                                <ui:TextBlock Text="{Binding WindowsFormat}" Style="{StaticResource Desc}"/>
+                                <!-- the same badges as the play screen; the full sentence is their tooltip -->
+                                <ItemsControl ItemsSource="{Binding NowBadges}" Style="{StaticResource OutputBadgeList}" Margin="0,0,0,2"
+                                              Visibility="{Binding HasNowBadges, Converter={StaticResource BoolToVisibility}}"/>
+                                <ui:TextBlock Text="재생 중인 곡이 없습니다" FontTypography="BodyStrong"
+                                              Visibility="{Binding IsIdle, Converter={StaticResource BoolToVisibility}}"/>
+                                <ui:TextBlock Text="{Binding NowNote}" Style="{StaticResource Desc}" Margin="0,4,0,0" TextWrapping="Wrap" app:KeepWords.IsEnabled="True"
+                                              Foreground="{DynamicResource SystemFillColorCautionBrush}"
+                                              Visibility="{Binding HasNowNote, Converter={StaticResource BoolToVisibility}}"/>
+                                <ui:TextBlock Text="{Binding WindowsFormat}" Style="{StaticResource Desc}" Margin="0,4,0,0"/>
                             </StackPanel>
                         </DockPanel>
                     </Border>
@@ -481,11 +544,11 @@
                         </StackPanel>
                     </ui:CardExpander>
 
-                    <!-- 하이레스: GoTune's own sample rate converter (Resampler.cs) -->
-                    <ui:TextBlock Text="하이레스" Style="{StaticResource Group}"/>
+                    <!-- Hi-Res: GoTune's own sample rate converter (Resampler.cs) -->
+                    <ui:TextBlock Text="Hi-Res" Style="{StaticResource Group}"/>
                     <ui:CardControl Style="{StaticResource Card}" DataContext="{Binding Output}" Icon="{ui:SymbolIcon ArrowTrendingLines24}"
                                     IsEnabled="{Binding CanUpsample}"
-                                    Tag="업샘플링 업스케일링 하이레스 고음질 샘플 속도 192kHz 384kHz 768kHz 변환 DAC"
+                                    Tag="업샘플링 업스케일링 하이레스 Hi-Res 고음질 샘플 속도 192kHz 384kHz 768kHz 변환 DAC"
                                     ToolTip="곡을 더 높은 샘플 속도로 변환해 보냅니다. 원음에 없던 소리가 생기지는 않지만, 정밀한 디지털 필터로 미리 변환해 두면 DAC 안쪽 필터의 부담이 줄어 고음이 더 깨끗해질 수 있습니다. 변환은 64비트로 계산합니다.">
                         <ui:CardControl.Header>
                             <StackPanel>
@@ -493,7 +556,13 @@
                                 <ui:TextBlock Text="{Binding UpsampleNote}" Style="{StaticResource Desc}" TextWrapping="Wrap"/>
                             </StackPanel>
                         </ui:CardControl.Header>
-                        <ComboBox Width="260" ItemsSource="{Binding UpsampleModes}" DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding Upsampling}"/>
+                        <StackPanel Width="260">
+                            <ListBox Style="{StaticResource Segmented}" ItemsSource="{Binding UpsampleModes}" SelectedValue="{Binding Upsampling}"
+                                     AutomationProperties.Name="업샘플링"/>
+                            <!-- what that does to the usual rates -->
+                            <TextBlock Text="{Binding UpsampleExample}" FontSize="11" Margin="0,5,0,0" HorizontalAlignment="Center"
+                                       Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
+                        </StackPanel>
                     </ui:CardControl>
                     <ui:CardControl Style="{StaticResource Card}" DataContext="{Binding Output}" Icon="{ui:SymbolIcon Filter24}"
                                     Tag="변환 필터 업샘플링 선형 위상 최소 위상 프리링잉 아포다이징 디지털 필터"
@@ -512,10 +581,13 @@
                         <ui:CardControl.Header>
                             <StackPanel>
                                 <ui:TextBlock Text="DSD 재생" FontTypography="Body"/>
-                                <ui:TextBlock Text="DSF·DFF 파일 · DoP는 독점 모드와 하드웨어 볼륨이 있어야 합니다(없으면 PCM으로 재생)" Style="{StaticResource Desc}" TextWrapping="Wrap"/>
+                                <ui:TextBlock Text="DSF·DFF 파일을 PCM으로 바꾸거나, DoP로 DAC에 그대로 보냅니다" Style="{StaticResource Desc}"/>
+                                <ui:TextBlock Text="DoP는 독점 모드와 하드웨어 볼륨이 있을 때만 · 아니면 PCM으로 재생" Style="{StaticResource Desc}" Margin="0,2,0,0"
+                                              Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
                             </StackPanel>
                         </ui:CardControl.Header>
-                        <ComboBox Width="260" ItemsSource="{Binding DsdOutputs}" DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding DsdOutput}"/>
+                        <ListBox Width="260" Style="{StaticResource Segmented}" ItemsSource="{Binding DsdOutputs}" SelectedValue="{Binding DsdOutput}"
+                                 AutomationProperties.Name="DSD 재생"/>
                     </ui:CardControl>
                     <ui:CardControl Style="{StaticResource Card}" DataContext="{Binding Output}" Icon="{ui:SymbolIcon Wand24}"
                                     IsEnabled="{Binding CanChooseFormat}"
@@ -524,12 +596,15 @@
                         <ui:CardControl.Header>
                             <StackPanel>
                                 <ui:TextBlock Text="DSD 리마스터링" FontTypography="Body"/>
-                                <ui:TextBlock Text="PCM 곡을 DSD로 바꿔 DoP로 보내기 · 독점 모드 전용 · DAC가 DoP를 지원해야 합니다" Style="{StaticResource Desc}" TextWrapping="Wrap"/>
+                                <ui:TextBlock Text="PCM 곡을 DSD로 바꿔 DoP로 보냅니다" Style="{StaticResource Desc}"/>
+                                <ui:TextBlock Text="독점 모드 전용 · DAC가 DoP를 지원해야 합니다" Style="{StaticResource Desc}" Margin="0,2,0,0"
+                                              Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
                                 <ui:TextBlock Style="{StaticResource Desc}" Margin="0,4,0,0" Foreground="{DynamicResource SystemFillColorCautionBrush}" TextWrapping="Wrap"
                                               Text="⚠ DoP를 지원하지 않는 DAC에서는 큰 잡음이 납니다. 처음엔 이어폰을 빼고 볼륨을 낮춘 채 확인하세요."/>
                             </StackPanel>
                         </ui:CardControl.Header>
-                        <ComboBox Width="260" ItemsSource="{Binding Remasters}" DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding Remaster}"/>
+                        <ListBox Width="260" Style="{StaticResource Segmented}" ItemsSource="{Binding Remasters}" SelectedValue="{Binding Remaster}"
+                                 AutomationProperties.Name="DSD 리마스터링"/>
                     </ui:CardControl>
 
                     <ui:TextBlock Text="이퀄라이저" Style="{StaticResource Group}"/>

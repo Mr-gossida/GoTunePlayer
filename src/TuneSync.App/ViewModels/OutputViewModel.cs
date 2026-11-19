@@ -62,9 +62,9 @@ public sealed partial class OutputViewModel : ObservableObject
     public IReadOnlyList<Choice<UpsampleMode>> UpsampleModes { get; } =
     [
         new(UpsampleMode.Off, "끔"),
-        new(UpsampleMode.Double, "2배 (44.1 → 88.2kHz)"),
-        new(UpsampleMode.Quadruple, "4배 (44.1 → 176.4kHz)"),
-        new(UpsampleMode.Max, "가장 높은 정수배 (예: 44.1 → 352.8kHz)"),
+        new(UpsampleMode.Double, "2배"),
+        new(UpsampleMode.Quadruple, "4배"),
+        new(UpsampleMode.Max, "최대"),
     ];
 
     public IReadOnlyList<Choice<ResampleFilter>> Filters { get; } =
@@ -75,8 +75,17 @@ public sealed partial class OutputViewModel : ObservableObject
     ];
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(UpsampleNote))]
+    [NotifyPropertyChangedFor(nameof(UpsampleNote), nameof(UpsampleExample))]
     private UpsampleMode _upsampling;
+
+    /// <summary>What the chosen upsampling makes of the usual rates, under the choices.</summary>
+    public string UpsampleExample => Upsampling switch
+    {
+        UpsampleMode.Double => "44.1 → 88.2kHz · 48 → 96kHz",
+        UpsampleMode.Quadruple => "44.1 → 176.4kHz · 48 → 192kHz",
+        UpsampleMode.Max => "장치가 받는 최고 정수배 (예: 44.1 → 352.8kHz)",
+        _ => "곡의 샘플 속도 그대로",
+    };
 
     [ObservableProperty]
     private ResampleFilter _filter;
@@ -86,15 +95,15 @@ public sealed partial class OutputViewModel : ObservableObject
 
     public IReadOnlyList<Choice<DsdOutput>> DsdOutputs { get; } =
     [
-        new(DsdOutput.Pcm, "PCM으로 변환 (권장)"),
-        new(DsdOutput.DoP, "DoP로 원음 그대로"),
+        new(DsdOutput.Pcm, "PCM 변환"),
+        new(DsdOutput.DoP, "DoP 원음"),
     ];
 
     public IReadOnlyList<Choice<DsdRemaster>> Remasters { get; } =
     [
         new(DsdRemaster.Off, "끔"),
-        new(DsdRemaster.Dsd64, "DSD64 (2.8MHz)"),
-        new(DsdRemaster.Dsd128, "DSD128 (5.6MHz)"),
+        new(DsdRemaster.Dsd64, "DSD64"),
+        new(DsdRemaster.Dsd128, "DSD128"),
     ];
 
     [ObservableProperty]
@@ -145,13 +154,33 @@ public sealed partial class OutputViewModel : ObservableObject
     /// <summary>How the sound is going out right now.</summary>
     public string Now => _playback.OutputDescription is { } now ? now : "재생 중인 곡이 없습니다";
 
+    /// <summary>The same as badges ([독점] [32bit · 352.8kHz] [업샘플링 ×8] ...), as on the play screen.</summary>
+    public IReadOnlyList<OutputBadge> NowBadges => _playback.OutputBadges;
+
+    public bool HasNowBadges => NowBadges.Count > 0;
+
+    /// <summary>Nothing plays through GoTune's own player right now.</summary>
+    public bool IsIdle => !HasNowBadges;
+
+    /// <summary>Why the sound isn't quite as set, in words (the caution badge's reason), or "".</summary>
+    public string NowNote => NowBadges.FirstOrDefault(b => b.IsCaution)?.ToolTip ?? "";
+
+    public bool HasNowNote => NowNote.Length > 0;
+
     /// <summary>The device takes nothing in exclusive mode that we could ask about.</summary>
     public bool NoExclusiveFormats => !IsProbing && _formats.Count == 0;
 
     private void Playback_PropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName is nameof(PlaybackViewModel.OutputDescription) or nameof(PlaybackViewModel.CurrentFile))
+        if (e.PropertyName is nameof(PlaybackViewModel.OutputDescription) or nameof(PlaybackViewModel.CurrentFile) or nameof(PlaybackViewModel.OutputBadges))
+        {
             OnPropertyChanged(nameof(Now));
+            OnPropertyChanged(nameof(NowBadges));
+            OnPropertyChanged(nameof(HasNowBadges));
+            OnPropertyChanged(nameof(IsIdle));
+            OnPropertyChanged(nameof(NowNote));
+            OnPropertyChanged(nameof(HasNowNote));
+        }
     }
 
     private OutputDeviceWatcher? _watcher;
@@ -238,7 +267,7 @@ public sealed partial class OutputViewModel : ObservableObject
         Layout = Layouts.Any(l => l.Value == output.Layout) ? output.Layout : SpeakerLayout.Stereo;
 
         SampleRates.Clear();
-        SampleRates.Add(new(0, "자동 (곡 속도 · 업샘플링 설정대로)"));
+        SampleRates.Add(new(0, "자동"));
         foreach (var rate in _formats.Select(f => f.SampleRate).Distinct().Order())
             SampleRates.Add(new(rate, $"{rate / 1000.0:0.#}kHz"));
         SampleRate = SampleRates.Any(r => r.Value == output.ExclusiveSampleRate) ? output.ExclusiveSampleRate : 0;

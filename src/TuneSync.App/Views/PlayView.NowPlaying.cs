@@ -30,6 +30,7 @@ public partial class PlayView
         Cover(full);
         PanelSpectrum.Visibility = visible;
         PanelQuality.Visibility = visible;
+        PanelOutput.Visibility = visible;
         PanelDetails.Visibility = visible;
 
         var room = NowPlayingGrid.ActualHeight;
@@ -47,7 +48,7 @@ public partial class PlayView
         if ((over = Over()) <= 0.5) return;
 
         // Still too tall with the smallest cover: drop the extras, least important first.
-        foreach (var extra in new System.Windows.UIElement[] { PanelSpectrum, PanelQuality, PanelDetails })
+        foreach (var extra in new System.Windows.UIElement[] { PanelSpectrum, PanelOutput, PanelQuality, PanelDetails })
         {
             extra.Visibility = System.Windows.Visibility.Collapsed;
             Cover(smallestCover);

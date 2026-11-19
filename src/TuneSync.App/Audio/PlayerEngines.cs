@@ -135,6 +135,9 @@ internal sealed class ToneEngine : IPlayerEngine
 
     public bool IsBitPerfect => _player.IsBitPerfect;
 
+    /// <summary>How the sound is going out, piece by piece (for the play screen's badges).</summary>
+    public OutputInfo? OutputInfo => _player.Info;
+
     /// <summary>The song is a DSD file: a change of output may change how it is read (DoP or PCM).</summary>
     public bool IsDsd => _player.IsDsd;
 
