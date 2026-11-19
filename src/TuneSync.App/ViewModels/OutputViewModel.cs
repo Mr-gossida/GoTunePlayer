@@ -304,8 +304,34 @@ public sealed partial class OutputViewModel : ObservableObject
     partial void OnHardwareVolumeChanged(bool value)
     {
         if (_loading) return;
+        if (value && !_hardwareVolumeConfirmed)
+        {
+            // asked first: the switch stays off until the warning has been read
+            _loading = true;
+            HardwareVolume = false;
+            _loading = false;
+            _ = ConfirmHardwareVolumeAsync();
+            return;
+        }
+        _hardwareVolumeConfirmed = false;
         _settings.Output.HardwareVolume = value;
         Apply();
+    }
+
+    private bool _hardwareVolumeConfirmed;
+
+    private async Task ConfirmHardwareVolumeAsync()
+    {
+        var ok = await Dialogs.ConfirmAsync("하드웨어 볼륨 켜기",
+            "볼륨을 장치(DAC) 자체에서 조절합니다. 처음 확인할 때는 안전을 위해 다음을 지켜 주세요.\n\n" +
+            "• 이어폰·헤드폰을 귀에서 빼고, GoTune 볼륨을 낮춘 상태에서 켜세요.\n" +
+            "• GoTune 볼륨 100%는 켜기 전 Windows에 설정된 장치 볼륨과 같습니다. 그보다 커지지는 않습니다.\n" +
+            "• 장치가 하드웨어 볼륨을 지원한다고 알려도 실제로는 줄지 않는 장치가 있습니다. 재생해 보고 볼륨을 움직였을 때 소리가 줄어드는지 먼저 확인하세요.\n" +
+            "• 하드웨어 볼륨이 없는 장치에서는 GoTune 볼륨이 디지털로 적용됩니다.",
+            "확인했고 켜기");
+        if (!ok) return;
+        _hardwareVolumeConfirmed = true;
+        HardwareVolume = true;
     }
 
     private void Apply()

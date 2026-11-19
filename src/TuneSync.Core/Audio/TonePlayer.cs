@@ -124,6 +124,7 @@ public sealed class TonePlayer : IDisposable
     private float _savedLevel;
     private bool _savedMute;
     private volatile bool _hardwareVolume, _volumeDirty;
+    private double _bitPerfectGain = 1; // the volume last applied to bit-perfect samples (output thread)
 
     public TonePlayer(string path, ToneConfig config, OutputSettings? output = null)
     {
@@ -160,6 +161,13 @@ public sealed class TonePlayer : IDisposable
         {
             if (_outputBase is not { } device) return null;
             var volume = _hardwareVolume ? "장치 볼륨" : "볼륨";
+            if (_bitPerfect && !_hardwareVolume && (_muted || _volume < 1))
+            {
+                // GoTune's volume always counts: below 100 % the samples are turned down, so
+                // the sound isn't the file's own any more
+                var turned = _muted ? "음소거" : $"볼륨 {Math.Round(_volume * 100)}%";
+                return Join($"독점 · {device} · {turned}", _outputNote ?? "볼륨이 100%일 때 비트퍼펙트");
+            }
             if (_bitPerfect)
             {
                 var source = _sourceBits > 0 ? $"원본 {_sourceBits}비트 그대로" : "디코딩한 소리 그대로";
@@ -245,6 +253,7 @@ public sealed class TonePlayer : IDisposable
             return;
         }
         if (_processor is { } processor) processor.Volume = _muted ? 0 : _volume;
+        OutputChanged?.Invoke(); // the description names the volume
     }
 
     /// <summary>The sound going out, for the live spectrum and meters (null until the song is opened).</summary>
@@ -674,9 +683,24 @@ public sealed class TonePlayer : IDisposable
                         _decodeWake.Set();
                         if (_bitPerfect)
                         {
-                            // the file's samples as they are: none of the chain, no volume (only mute)
-                            if (_muted && !_hardwareVolume) Array.Clear(buffer, 0, frames * 2);
+                            // the file's samples as they are: none of the chain. GoTune's volume
+                            // still counts - never full blast because the volume was left to
+                            // an amplifier that isn't there: below 100 % (without the device's
+                            // own volume) they're turned down, gliding over the block
                             processor.Scope.Write(buffer.AsSpan(0, frames * 2));
+                            var level = _hardwareVolume ? 1.0 : _muted ? 0.0 : _volume;
+                            if (level != 1 || _bitPerfectGain != 1)
+                            {
+                                var g = _bitPerfectGain;
+                                var step = (level - g) / frames;
+                                for (var i = 0; i < frames; i++)
+                                {
+                                    g += step;
+                                    buffer[2 * i] *= g;
+                                    buffer[2 * i + 1] *= g;
+                                }
+                                _bitPerfectGain = level;
+                            }
                         }
                         else
                         {
@@ -944,7 +968,9 @@ public sealed class TonePlayer : IDisposable
         if (!_hardwareVolume || _endpointVolume is not { } volume) return;
         try
         {
-            volume.MasterVolumeLevelScalar = Math.Clamp(_volume, 0f, 1f);
+            // GoTune's 100 % is the level Windows had the device at before - turning hardware
+            // volume on never makes it louder than it was
+            volume.MasterVolumeLevelScalar = Math.Clamp(_savedLevel * _volume, 0f, 1f);
             volume.Mute = _muted;
         }
         catch (Exception)

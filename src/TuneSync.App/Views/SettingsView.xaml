@@ -426,7 +426,7 @@
                                 <StackPanel VerticalAlignment="Center" Margin="0,0,16,0">
                                     <ui:TextBlock Text="비트퍼펙트" FontTypography="BodyStrong"/>
                                     <ui:TextBlock Style="{StaticResource Desc}"
-                                                  Text="파일의 소리를 한 비트도 바꾸지 않고 곡의 샘플 속도 그대로 보냅니다. 이퀄라이저·잔향·리미터·볼륨을 거치지 않으니 음량은 앰프나 리시버에서, 또는 아래 '하드웨어 볼륨'을 켜고 GoTune 볼륨으로 조절하세요."/>
+                                                  Text="파일의 소리를 한 비트도 바꾸지 않고 곡의 샘플 속도 그대로 보냅니다(이퀄라이저·잔향·리미터 없음). GoTune 볼륨이 100%일 때만 비트퍼펙트이고, 100%보다 낮으면 안전을 위해 그만큼 디지털로 줄여서 보냅니다. 볼륨을 줄여도 비트퍼펙트를 유지하려면 아래 '하드웨어 볼륨'을 쓰세요."/>
                                 </StackPanel>
                                 <ui:ToggleSwitch Grid.Column="1" VerticalAlignment="Center" IsChecked="{Binding BitPerfect}" OnContent="켬" OffContent="끔"
                                                  AutomationProperties.Name="비트퍼펙트"/>
@@ -439,7 +439,9 @@
                                 <StackPanel VerticalAlignment="Center" Margin="0,0,16,0">
                                     <ui:TextBlock Text="하드웨어 볼륨" FontTypography="BodyStrong"/>
                                     <ui:TextBlock Style="{StaticResource Desc}"
-                                                  Text="GoTune 볼륨을 장치(DAC) 자체의 볼륨으로 조절합니다. 소리 데이터를 줄이지 않아 해상도가 그대로이고, 비트퍼펙트에서도 볼륨이 됩니다. 장치에 하드웨어 볼륨이 있어야 하며, GoTune이 장치를 놓으면 Windows 볼륨은 원래대로 돌아갑니다."/>
+                                                  Text="GoTune 볼륨을 장치(DAC) 자체의 볼륨으로 조절합니다. 소리 데이터를 줄이지 않아 비트퍼펙트를 유지합니다. GoTune 100%는 켜기 전 Windows 장치 볼륨과 같고, GoTune이 장치를 놓으면 Windows 볼륨은 원래대로 돌아갑니다."/>
+                                    <ui:TextBlock Style="{StaticResource Desc}" Margin="0,4,0,0" Foreground="{DynamicResource SystemFillColorCautionBrush}"
+                                                  Text="⚠ 처음 켤 때는 이어폰·헤드폰을 귀에서 빼고 확인하세요. 하드웨어 볼륨이 있다고 알리면서 실제로는 줄지 않는 장치가 있습니다."/>
                                 </StackPanel>
                                 <ui:ToggleSwitch Grid.Column="1" VerticalAlignment="Center" IsChecked="{Binding HardwareVolume}" OnContent="켬" OffContent="끔"
                                                  AutomationProperties.Name="하드웨어 볼륨"/>
