@@ -14,8 +14,11 @@
             <!-- Output badges ([독점] [32bit · 352.8kHz] [업샘플링 ×8] ...), items of
                  PlaybackViewModel.OutputBadges: the path filled in the cover's color, details
                  outlined, "설정과 다름" in the caution color. On the play screen and in 설정 › 음향. -->
+            <!-- The badges' text size follows the list's FontSize (smaller in the playback bar). A
+                 badge wider than the list is shortened with "…" rather than cut. -->
             <Style x:Key="OutputBadgeList" TargetType="ItemsControl">
                 <Setter Property="Focusable" Value="False"/>
+                <Setter Property="FontSize" Value="10.5"/>
                 <Setter Property="ItemsPanel">
                     <Setter.Value>
                         <ItemsPanelTemplate>
@@ -26,12 +29,13 @@
                 <Setter Property="ItemTemplate">
                     <Setter.Value>
                         <DataTemplate>
-                            <Border x:Name="Badge" CornerRadius="4" Padding="7,2" Margin="0,4,6,0" BorderThickness="1"
+                            <Border x:Name="Badge" CornerRadius="4" Padding="6,1" Margin="0,4,5,0" BorderThickness="1"
+                                    MaxWidth="{Binding ActualWidth, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
                                     BorderBrush="{DynamicResource ControlStrongStrokeColorDefaultBrush}" Background="Transparent"
                                     ToolTip="{Binding ToolTip}" ToolTipService.InitialShowDelay="250">
                                 <StackPanel Orientation="Horizontal">
                                     <ui:SymbolIcon x:Name="Icon" Symbol="Speaker224" FontSize="11" Margin="0,0,4,0" VerticalAlignment="Center" Visibility="Collapsed"/>
-                                    <TextBlock x:Name="Label" Text="{Binding Text}" FontSize="10.5" FontWeight="SemiBold" VerticalAlignment="Center"
+                                    <TextBlock x:Name="Label" Text="{Binding Text}" FontWeight="SemiBold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
                                                Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
                                 </StackPanel>
                             </Border>

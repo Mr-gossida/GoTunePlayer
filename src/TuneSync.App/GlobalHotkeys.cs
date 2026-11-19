@@ -189,7 +189,7 @@ public static class HotkeyText
         HotkeyAction.SeekBack => "뒤로 가기 (5초)",
         HotkeyAction.SeekForward => "앞으로 가기 (5초)",
         HotkeyAction.Repeat => "반복 재생",
-        HotkeyAction.Shuffle => "무작위 재생",
+        HotkeyAction.Shuffle => "랜덤 재생",
         HotkeyAction.Mute => "음소거",
         HotkeyAction.VolumeUp => "소리 높임",
         HotkeyAction.VolumeDown => "소리 낮춤",

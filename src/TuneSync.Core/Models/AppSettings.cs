@@ -121,6 +121,9 @@ public sealed class AppSettings
     /// Off leaves the backdrop still.</summary>
     public AuroraMode AuroraMode { get; set; } = AuroraMode.On;
 
+    /// <summary>Which moving light it is (the aurora, or another; all cost about the same).</summary>
+    public BackgroundEffect BackgroundEffect { get; set; } = BackgroundEffect.Aurora;
+
     /// <summary>What the player opens with when the app starts.</summary>
     public StartupResume StartupResume { get; set; } = StartupResume.LastPosition;
 
@@ -179,6 +182,25 @@ public enum LyricsSyncCpuUsage
     Low,
     Normal,
     Max,
+}
+
+/// <summary>The moving light behind 음악 집중 모드 and the screen saver (Effects/*.hlsl).</summary>
+public enum BackgroundEffect
+{
+    /// <summary>오로라 조명: flowing bands of light.</summary>
+    Aurora,
+    /// <summary>물빛: the caustic net of light from rippling water.</summary>
+    Caustics,
+    /// <summary>빛망울: soft out-of-focus lights drifting up.</summary>
+    Bokeh,
+    /// <summary>성운: clouds of colored gas and twinkling stars.</summary>
+    Nebula,
+    /// <summary>라바 램프: blobs of light rising, merging and parting.</summary>
+    Lava,
+    /// <summary>One of the others, picked anew each time the stage opens.</summary>
+    Random,
+    /// <summary>창문 빗방울: rain running down a window pane, the backdrop bent through the drops.</summary>
+    RainWindow,
 }
 
 public enum AuroraMode
@@ -272,9 +294,9 @@ public enum SeekBarStyle
     Neon,
     /// <summary>The song's own loudness as thin bars along the played part.</summary>
     Bars,
-    /// <summary>Glowing threads of light twisting around the played part. (This slot was the
-    /// lightning bolt; settings that chose it get the threads.)</summary>
-    Strands,
+    /// <summary>A fountain of droplets from the thumb. (This slot was the lightning bolt, then
+    /// threads of light; settings that chose either get the fountain.)</summary>
+    Fountain,
     /// <summary>Twinkling stars drifting up from the played part.</summary>
     Sparkle,
     /// <summary>Raindrops falling onto the played part, rippling where they land. (This slot was
@@ -282,6 +304,8 @@ public enum SeekBarStyle
     Rain,
     /// <summary>A shimmering aurora curtain hanging above the played part.</summary>
     Aurora,
+    /// <summary>No effect: a plain line, nothing animated.</summary>
+    None,
 }
 
 public enum SpectrumStyle

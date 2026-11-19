@@ -163,7 +163,7 @@ public sealed partial class OutputViewModel : ObservableObject
     public bool IsIdle => !HasNowBadges;
 
     /// <summary>Why the sound isn't quite as set, in words (the caution badge's reason), or "".</summary>
-    public string NowNote => NowBadges.FirstOrDefault(b => b.IsCaution)?.ToolTip ?? "";
+    public string NowNote => NowBadges.FirstOrDefault(b => b.IsCaution)?.ToolTip.Replace("설정과 다르게 재생 중: ", "") ?? "";
 
     public bool HasNowNote => NowNote.Length > 0;
 

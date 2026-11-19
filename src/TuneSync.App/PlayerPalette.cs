@@ -53,6 +53,11 @@ public static class PlayerPalette
         {
             tint = FromHsl(h, neutral ? 0.05 : Math.Min(s, 0.40), 0.93);
             accent = neutral ? Color.FromRgb(0x24, 0x24, 0x24) : FromHsl(h, Math.Clamp(s, 0.50, 0.80), 0.36);
+            // Yellows and greens are far brighter than blues at the same lightness: white text on
+            // them (badges, buttons) and they as text on the light background fell to about
+            // 2.5:1. Darker until both read at 4.5:1 (WCAG's bar for small text).
+            for (var l = 0.35; !neutral && (Contrast(accent, Colors.White) < 4.5 || Contrast(accent, tint) < 4.5) && l > 0.15; l -= 0.01)
+                accent = FromHsl(h, Math.Clamp(s, 0.50, 0.80), l);
             onAccent = Colors.White;
         }
 
@@ -198,6 +203,22 @@ public static class PlayerPalette
         else if (max == g) h = (b - r) / d + 2;
         else h = (r - g) / d + 4;
         return (h * 60, s, l);
+    }
+
+    /// <summary>WCAG contrast ratio of two colors (1 to 21).</summary>
+    private static double Contrast(Color a, Color b)
+    {
+        static double Luminance(Color c)
+        {
+            static double Channel(byte v)
+            {
+                var x = v / 255.0;
+                return x <= 0.03928 ? x / 12.92 : Math.Pow((x + 0.055) / 1.055, 2.4);
+            }
+            return 0.2126 * Channel(c.R) + 0.7152 * Channel(c.G) + 0.0722 * Channel(c.B);
+        }
+        double la = Luminance(a), lb = Luminance(b);
+        return (Math.Max(la, lb) + 0.05) / (Math.Min(la, lb) + 0.05);
     }
 
     private static Color FromHsl(double h, double s, double l)

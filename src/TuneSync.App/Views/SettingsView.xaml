@@ -300,7 +300,7 @@
                     <ui:TextBlock Text="시작할 때의 재생과 재생 화면의 효과" Style="{StaticResource CategoryLead}"/>
                     <ui:TextBlock Text="시작할 때" Style="{StaticResource Group}"/>
                     <ui:CardControl Style="{StaticResource Card}" Icon="{ui:SymbolIcon Play24}" Tag="시작하면 바로 재생 자동 재생"
-                                    ToolTip="이어 들을 곡이 없으면 재생 대기열의 첫 곡(셔플이 켜져 있으면 무작위 곡)부터 재생합니다.">
+                                    ToolTip="이어 들을 곡이 없으면 재생 대기열의 첫 곡(랜덤 재생이 켜져 있으면 랜덤으로 고른 곡)부터 재생합니다.">
                         <ui:CardControl.Header>
                             <StackPanel>
                                 <ui:TextBlock Text="시작하면 바로 재생" FontTypography="Body"/>
@@ -320,12 +320,12 @@
                                   SelectedValuePath="Value" SelectedValue="{Binding StartupResume}"/>
                     </ui:CardControl>
                     <ui:TextBlock Text="화면 효과" Style="{StaticResource Group}"/>
-                    <ui:CardControl Style="{StaticResource Card}" Icon="{ui:SymbolIcon Flash24}" Tag="재생바 효과 물결 불꽃 임의 시크바"
-                                    ToolTip="재생한 부분 위에서 음악에 맞춰 움직이는 효과입니다. 임의는 곡마다 물결과 불꽃 중 하나를 고릅니다.">
+                    <ui:CardControl Style="{StaticResource Card}" Icon="{ui:SymbolIcon Flash24}" Tag="재생바 효과 물결 불꽃 네온 파형 막대 분수 빗방울 오로라 별빛 없음 랜덤 임의 시크바"
+                                    ToolTip="재생한 부분 위에서 음악에 맞춰 움직이는 효과입니다. 랜덤은 곡마다 효과 중 하나를 고르고, 없음은 움직이지 않는 선만 그립니다(가장 가벼움).">
                         <ui:CardControl.Header>
                             <StackPanel>
                                 <ui:TextBlock Text="재생바 효과" FontTypography="Body"/>
-                                <ui:TextBlock Text="물결 · 불꽃 · 임의(곡마다)" Style="{StaticResource Desc}"/>
+                                <ui:TextBlock Text="물결 · 불꽃 · 분수 · 빗방울 등 · 랜덤 · 없음" Style="{StaticResource Desc}"/>
                             </StackPanel>
                         </ui:CardControl.Header>
                         <ComboBox Width="200" ItemsSource="{Binding SeekBarStyleOptions}" DisplayMemberPath="Label"
@@ -352,16 +352,20 @@
                         </ui:CardControl.Header>
                         <ui:ToggleSwitch IsChecked="{Binding ShowIntroGauge}" OnContent="표시" OffContent="숨김"/>
                     </ui:CardControl>
-                    <ui:CardControl Style="{StaticResource Card}" Icon="{ui:SymbolIcon WeatherSunny24}" Tag="오로라 조명 빛 배경 음악 집중 모드 저사양 내장 그래픽 GPU 절전 성능"
-                                    ToolTip="음악 집중 모드와 화면 보호기 뒤에서 흐르는 빛입니다. 빛이 움직일 때마다 화면 전체를 다시 그리므로, 내장 그래픽에서 GPU 사용량이 높으면 절전이나 끄기를 고르세요. 절전은 빛이 덜 자주 움직이고, 끄기는 배경이 멈춘 채로 보입니다.">
+                    <ui:CardControl Style="{StaticResource Card}" Icon="{ui:SymbolIcon WeatherSunny24}" Tag="배경 효과 오로라 조명 물빛 빛망울 성운 라바 램프 창문 빗방울 비 빛 배경 음악 집중 모드 저사양 내장 그래픽 GPU 절전 성능"
+                                    ToolTip="음악 집중 모드와 화면 보호기 뒤에서 움직이는 빛입니다. 효과는 모두 비슷한 부담이며, 빛이 움직일 때마다 화면 전체를 다시 그리므로 내장 그래픽에서 GPU 사용량이 높으면 절전이나 끄기를 고르세요. 절전은 빛이 덜 자주 움직이고, 끄기는 배경이 멈춘 채로 보입니다.">
                         <ui:CardControl.Header>
                             <StackPanel>
-                                <ui:TextBlock Text="오로라 조명" FontTypography="Body"/>
-                                <ui:TextBlock Text="집중 모드·화면 보호기의 흐르는 빛 · 내장 그래픽이면 절전이나 끄기" Style="{StaticResource Desc}"/>
+                                <ui:TextBlock Text="배경 효과" FontTypography="Body"/>
+                                <ui:TextBlock Text="집중 모드·화면 보호기 뒤의 움직이는 빛 · 내장 그래픽이면 절전이나 끄기" Style="{StaticResource Desc}"/>
                             </StackPanel>
                         </ui:CardControl.Header>
-                        <ComboBox Width="200" ItemsSource="{Binding AuroraModeOptions}" DisplayMemberPath="Label"
-                                  SelectedValuePath="Value" SelectedValue="{Binding Playback.AuroraMode}" AutomationProperties.Name="오로라 조명"/>
+                        <StackPanel Orientation="Horizontal">
+                            <ComboBox Width="150" ItemsSource="{Binding BackgroundEffectOptions}" DisplayMemberPath="Label"
+                                      SelectedValuePath="Value" SelectedValue="{Binding Playback.BackgroundEffect}" AutomationProperties.Name="배경 효과"/>
+                            <ComboBox Width="170" Margin="8,0,0,0" ItemsSource="{Binding AuroraModeOptions}" DisplayMemberPath="Label"
+                                      SelectedValuePath="Value" SelectedValue="{Binding Playback.AuroraMode}" AutomationProperties.Name="배경 효과 움직임"/>
+                        </StackPanel>
                     </ui:CardControl>
                     <ui:TextBlock Text="가사" Style="{StaticResource Group}"/>
                     <ui:CardControl Style="{StaticResource Card}" Icon="{ui:SymbolIcon SlideText24}" Tag="가사 글꼴 폰트 서체 글씨체 싱크"
@@ -798,12 +802,12 @@
                         <ui:ToggleSwitch IsChecked="{Binding MediaKeys}" OnContent="켬" OffContent="끔"/>
                     </ui:CardControl>
 
-                    <Grid Margin="0,14,0,6" Tag="단축키 목록 이전 곡 재생 일시정지 정지 다음 곡 뒤로 앞으로 반복 무작위 음소거 소리 높임 낮춤 미니 플레이어 HUD 기본값">
+                    <Grid Margin="0,14,0,6" Tag="단축키 목록 이전 곡 재생 일시정지 정지 다음 곡 뒤로 앞으로 반복 랜덤 무작위 셔플 음소거 소리 높임 낮춤 미니 플레이어 HUD 기본값">
                         <ui:TextBlock Text="단축키 목록" FontTypography="BodyStrong" Foreground="{DynamicResource TextFillColorSecondaryBrush}" VerticalAlignment="Center"/>
                         <ui:Button Content="기본값으로" Icon="{ui:SymbolIcon ArrowReset24}" HorizontalAlignment="Right" Padding="10,4"
                                    Command="{Binding ResetCommand}" ToolTip="모든 단축키를 처음 설정(Ctrl+Alt + PageUp/Insert/End/PageDown 켜짐)으로 되돌립니다"/>
                     </Grid>
-                    <Border Tag="단축키 목록 이전 곡 재생 일시정지 정지 다음 곡 뒤로 앞으로 반복 무작위 음소거 소리 높임 낮춤 미니 플레이어 HUD 키 바꾸기"
+                    <Border Tag="단축키 목록 이전 곡 재생 일시정지 정지 다음 곡 뒤로 앞으로 반복 랜덤 무작위 셔플 음소거 소리 높임 낮춤 미니 플레이어 HUD 키 바꾸기"
                             CornerRadius="8" BorderThickness="1" Padding="16,8"
                             Background="{DynamicResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
                             IsEnabled="{Binding Enabled}">

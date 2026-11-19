@@ -4,14 +4,39 @@ using System.Windows.Media.Effects;
 
 namespace TuneSync.App.Effects;
 
-/// <summary>Flowing aurora-lamp light (Aurora.hlsl), drawn on the GPU. Put it on any filled
-/// element; the element's own pixels are ignored. Animate <see cref="Time"/> to make it move.</summary>
+/// <summary>The moving light behind focus mode and the screen saver, drawn on the GPU: the
+/// flowing aurora (Aurora.hlsl) or another of the background effects (<see cref="Look"/>) - all
+/// take the same inputs. Put it on any filled element; it is laid over the element's own pixels.
+/// Animate <see cref="Time"/> to make it move.</summary>
 public sealed class AuroraEffect : ShaderEffect
 {
-    private static readonly PixelShader Shader = new()
+    private static readonly Dictionary<TuneSync.Core.Models.BackgroundEffect, PixelShader> Shaders = [];
+
+    private static PixelShader ShaderFor(TuneSync.Core.Models.BackgroundEffect look)
     {
-        UriSource = new Uri("pack://application:,,,/Effects/Aurora.ps", UriKind.Absolute),
-    };
+        if (!Shaders.TryGetValue(look, out var shader))
+        {
+            shader = new PixelShader { UriSource = new Uri($"pack://application:,,,/Effects/{look}.ps", UriKind.Absolute) };
+            Shaders[look] = shader;
+        }
+        return shader;
+    }
+
+    private static readonly PixelShader Shader = ShaderFor(TuneSync.Core.Models.BackgroundEffect.Aurora);
+
+    /// <summary>Which light it draws (not Random: the stage picks one for that).</summary>
+    public TuneSync.Core.Models.BackgroundEffect Look
+    {
+        get => _look;
+        set
+        {
+            if (value == TuneSync.Core.Models.BackgroundEffect.Random || value == _look) return;
+            _look = value;
+            PixelShader = ShaderFor(value);
+        }
+    }
+
+    private TuneSync.Core.Models.BackgroundEffect _look = TuneSync.Core.Models.BackgroundEffect.Aurora;
 
     public static readonly DependencyProperty InputProperty =
         RegisterPixelShaderSamplerProperty(nameof(Input), typeof(AuroraEffect), 0);

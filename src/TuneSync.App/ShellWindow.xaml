@@ -219,6 +219,12 @@
                                    TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
                         <TextBlock Text="{Binding NowPlayingSubtitle}" FontSize="12" Margin="0,2,0,0" TextTrimming="CharacterEllipsis"
                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                        <!-- How the sound is going out ([Exclusive] [24bit · 176.4kHz] [Upsampling ×4] ...).
+                             One row only: badges that don't fit drop out whole (they wrap into the
+                             clipped second row) instead of being cut. -->
+                        <ItemsControl ItemsSource="{Binding OutputBadges}" Style="{StaticResource OutputBadgeList}" FontSize="9.5"
+                                      Height="20" Margin="0,-1,0,-1" ClipToBounds="True"
+                                      Visibility="{Binding HasOutputBadges, Converter={StaticResource BoolToVisibility}}"/>
                     </StackPanel>
                 </Grid>
 

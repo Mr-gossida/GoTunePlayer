@@ -32,15 +32,6 @@
             </StackPanel>
         </DataTemplate>
 
-        <!-- How the sound is going out: [독점] [32bit · 352.8kHz] [업샘플링 ×8] [EQ] ...
-             (PlaybackViewModel.OutputBadges). The first badge - the path - is filled in the cover's
-             color; the rest are outlined; "설정과 다름" is in the caution color. Content is the
-             PlaybackViewModel. -->
-        <DataTemplate x:Key="OutputBadgesTemplate">
-            <ItemsControl ItemsSource="{Binding OutputBadges}" Focusable="False" Style="{StaticResource OutputBadgeList}"
-                          Visibility="{Binding HasOutputBadges, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}"/>
-        </DataTemplate>
-
         <!-- Queue rows: flat, rounded hover/selection instead of the default accent block. -->
         <Style x:Key="QueueItemStyle" TargetType="ListBoxItem">
             <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
@@ -375,7 +366,6 @@
                     <TextBlock Text="{Binding NowPlayingDetails}" FontSize="12" Margin="0,2,0,0" TextTrimming="CharacterEllipsis"
                                Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
                     <ContentControl Content="{Binding}" ContentTemplate="{StaticResource QualityLineTemplate}" Margin="0,4,0,0" Focusable="False"/>
-                    <ContentControl Content="{Binding}" ContentTemplate="{StaticResource OutputBadgesTemplate}" Margin="0,2,0,0" Focusable="False"/>
                     <views:SpectrumView Playback="{Binding}" Look="{Binding SpectrumLook}" CycleOnClick="True" BarBrush="{DynamicResource PlayerAccentBrush}" Height="21" Margin="0,8,0,0"/>
                 </StackPanel>
             </Grid>
@@ -428,7 +418,6 @@
                 <TextBlock x:Name="PanelDetails" Text="{Binding NowPlayingDetails}" FontSize="12" TextWrapping="Wrap" Margin="0,4,0,0"
                            Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
                 <ContentControl x:Name="PanelQuality" Content="{Binding}" ContentTemplate="{StaticResource QualityLineTemplate}" Margin="0,8,0,0" Focusable="False"/>
-                <ContentControl x:Name="PanelOutput" Content="{Binding}" ContentTemplate="{StaticResource OutputBadgesTemplate}" Margin="0,4,0,0" Focusable="False"/>
                 <!-- Spectrum analyzer of what's playing (SpectrumView): transparent, in the cover's color. -->
                 <views:SpectrumView x:Name="PanelSpectrum" Playback="{Binding}" Look="{Binding SpectrumLook}" CycleOnClick="True" BarBrush="{DynamicResource PlayerAccentBrush}" Height="42" Margin="0,18,0,0"/>
                 <!-- Intro (hero card, PlayView.ApplyIntroStage): how far the opening has played. -->

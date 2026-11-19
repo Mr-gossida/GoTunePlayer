@@ -68,6 +68,16 @@ public sealed partial class PlaybackViewModel : ObservableObject, IDisposable
         AppSettingsStore.Save(_settings);
     }
 
+    /// <summary>Which light it is (설정 › 화면 보호기 › 배경 효과); open stages follow a change at once.</summary>
+    [ObservableProperty]
+    private BackgroundEffect _backgroundEffect;
+
+    partial void OnBackgroundEffectChanged(BackgroundEffect value)
+    {
+        _settings.BackgroundEffect = value;
+        AppSettingsStore.Save(_settings);
+    }
+
     partial void OnKeepScreenOnChanged(bool value)
     {
         _settings.KeepScreenOnWhilePlaying = value;
@@ -144,7 +154,7 @@ public sealed partial class PlaybackViewModel : ObservableObject, IDisposable
         LibraryFileViewModel.ArtistFirst = settings.QueueArtistFirst;
         PickSeekLook();
         PickSpectrumLook();
-        // 임의 / 랜덤: a new look for every song.
+        // 랜덤: a new look for every song.
         PropertyChanged += (_, e) =>
         {
             if (e.PropertyName != nameof(CurrentFile)) return;
@@ -160,6 +170,7 @@ public sealed partial class PlaybackViewModel : ObservableObject, IDisposable
         _isMiniQueueExpanded = settings.MiniQueueExpanded;
         _keepScreenOn = settings.KeepScreenOnWhilePlaying;
         _auroraMode = settings.AuroraMode;
+        _backgroundEffect = Enum.IsDefined(settings.BackgroundEffect) ? settings.BackgroundEffect : BackgroundEffect.Aurora;
         WatchForSessionToResume();
 
         _timer = new DispatcherTimer(DispatcherPriority.Normal) { Interval = TimeSpan.FromMilliseconds(200) };

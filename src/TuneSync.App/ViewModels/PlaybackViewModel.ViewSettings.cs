@@ -79,8 +79,8 @@ public sealed partial class PlaybackViewModel
 
     /// <summary>The seek bar looks in the order the settings list them (임의 last).</summary>
     public static readonly SeekBarStyle[] SeekBarStyleOrder =
-        [SeekBarStyle.Wave, SeekBarStyle.Flame, SeekBarStyle.Neon, SeekBarStyle.Bars, SeekBarStyle.Strands, SeekBarStyle.Rain, SeekBarStyle.Aurora,
-         SeekBarStyle.Sparkle, SeekBarStyle.Random];
+        [SeekBarStyle.Wave, SeekBarStyle.Flame, SeekBarStyle.Neon, SeekBarStyle.Bars, SeekBarStyle.Fountain, SeekBarStyle.Rain, SeekBarStyle.Aurora,
+         SeekBarStyle.Sparkle, SeekBarStyle.Random, SeekBarStyle.None];
 
     private void PickSeekLook()
     {
@@ -90,7 +90,7 @@ public sealed partial class PlaybackViewModel
             return;
         }
         // A different one from the last song's, so the change shows.
-        var choices = SeekBarStyleOrder.Where(l => l != SeekBarStyle.Random && l != SeekLook).ToArray();
+        var choices = SeekBarStyleOrder.Where(l => l is not (SeekBarStyle.Random or SeekBarStyle.None) && l != SeekLook).ToArray();
         SeekLook = choices[Random.Shared.Next(choices.Length)];
     }
 
@@ -100,11 +100,12 @@ public sealed partial class PlaybackViewModel
         SeekBarStyle.Flame => "불꽃",
         SeekBarStyle.Neon => "네온",
         SeekBarStyle.Bars => "파형 막대",
-        SeekBarStyle.Strands => "빛의 실",
+        SeekBarStyle.Fountain => "분수",
         SeekBarStyle.Rain => "빗방울",
         SeekBarStyle.Aurora => "오로라",
         SeekBarStyle.Sparkle => "별빛",
-        SeekBarStyle.Random => "임의 (곡마다)",
+        SeekBarStyle.Random => "랜덤 (곡마다)",
+        SeekBarStyle.None => "없음",
         _ => style.ToString(),
     };
 

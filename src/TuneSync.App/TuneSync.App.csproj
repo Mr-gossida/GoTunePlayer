@@ -31,6 +31,11 @@
     <Resource Include="Assets\TuneSync.png" />
     <Resource Include="Assets\TuneSync.ico" />
     <Resource Include="Effects\Aurora.ps" />
+    <Resource Include="Effects\Caustics.ps" />
+    <Resource Include="Effects\Bokeh.ps" />
+    <Resource Include="Effects\Nebula.ps" />
+    <Resource Include="Effects\Lava.ps" />
+    <Resource Include="Effects\RainWindow.ps" />
   </ItemGroup>
 
 </Project>

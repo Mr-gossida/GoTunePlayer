@@ -136,6 +136,9 @@ public partial class NowPlayingStage : UserControl
             case nameof(PlaybackViewModel.AuroraMode):
                 ApplyAuroraMode();
                 break;
+            case nameof(PlaybackViewModel.BackgroundEffect):
+                ApplyLook();
+                break;
         }
     }
 
@@ -296,8 +299,21 @@ public partial class NowPlayingStage : UserControl
         AuroraLight.Span = span;
     }
 
+    /// <summary>The background effect chosen (for 임의, one picked when the stage opens).</summary>
+    private void ApplyLook()
+    {
+        var look = _playback.BackgroundEffect;
+        if (look == BackgroundEffect.Random)
+        {
+            BackgroundEffect[] choices = [BackgroundEffect.Aurora, BackgroundEffect.Caustics, BackgroundEffect.Bokeh, BackgroundEffect.Nebula, BackgroundEffect.Lava, BackgroundEffect.RainWindow];
+            look = choices[Random.Shared.Next(choices.Length)];
+        }
+        AuroraLight.Look = look;
+    }
+
     private void StartAurora()
     {
+        ApplyLook();
         var (main, second) = PlayerPalette.AuroraColors();
         AuroraLight.Color1 = main;
         AuroraLight.Color2 = second;

@@ -373,7 +373,19 @@ public sealed partial class SettingsViewModel : ObservableObject
     [ObservableProperty]
     private ScreenSaverExit _screenSaverExit;
 
-    /// <summary>설정 › 화면 보호기 › 오로라 조명 (bound to Playback.AuroraMode).</summary>
+    /// <summary>설정 › 화면 보호기 › 배경 효과: which light (bound to Playback.BackgroundEffect).</summary>
+    public IReadOnlyList<Choice<BackgroundEffect>> BackgroundEffectOptions { get; } =
+    [
+        new(BackgroundEffect.Aurora, "오로라 조명"),
+        new(BackgroundEffect.Caustics, "물빛"),
+        new(BackgroundEffect.Bokeh, "빛망울"),
+        new(BackgroundEffect.Nebula, "성운"),
+        new(BackgroundEffect.Lava, "라바 램프"),
+        new(BackgroundEffect.RainWindow, "창문 빗방울"),
+        new(BackgroundEffect.Random, "랜덤 (열 때마다)"),
+    ];
+
+    /// <summary>설정 › 화면 보호기 › 배경 효과: how it moves (bound to Playback.AuroraMode).</summary>
     public IReadOnlyList<Choice<AuroraMode>> AuroraModeOptions { get; } =
     [
         new(AuroraMode.On, "켜기"),
