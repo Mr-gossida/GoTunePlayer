@@ -426,10 +426,23 @@
                                 <StackPanel VerticalAlignment="Center" Margin="0,0,16,0">
                                     <ui:TextBlock Text="비트퍼펙트" FontTypography="BodyStrong"/>
                                     <ui:TextBlock Style="{StaticResource Desc}"
-                                                  Text="파일의 소리를 한 비트도 바꾸지 않고 곡의 샘플 속도 그대로 보냅니다. 이퀄라이저·잔향·리미터·볼륨을 거치지 않으니 음량은 앰프나 리시버에서 조절하세요."/>
+                                                  Text="파일의 소리를 한 비트도 바꾸지 않고 곡의 샘플 속도 그대로 보냅니다. 이퀄라이저·잔향·리미터·볼륨을 거치지 않으니 음량은 앰프나 리시버에서, 또는 아래 '하드웨어 볼륨'을 켜고 GoTune 볼륨으로 조절하세요."/>
                                 </StackPanel>
                                 <ui:ToggleSwitch Grid.Column="1" VerticalAlignment="Center" IsChecked="{Binding BitPerfect}" OnContent="켬" OffContent="끔"
                                                  AutomationProperties.Name="비트퍼펙트"/>
+                            </Grid>
+                            <Grid Margin="0,0,0,10">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel VerticalAlignment="Center" Margin="0,0,16,0">
+                                    <ui:TextBlock Text="하드웨어 볼륨" FontTypography="BodyStrong"/>
+                                    <ui:TextBlock Style="{StaticResource Desc}"
+                                                  Text="GoTune 볼륨을 장치(DAC) 자체의 볼륨으로 조절합니다. 소리 데이터를 줄이지 않아 해상도가 그대로이고, 비트퍼펙트에서도 볼륨이 됩니다. 장치에 하드웨어 볼륨이 있어야 하며, GoTune이 장치를 놓으면 Windows 볼륨은 원래대로 돌아갑니다."/>
+                                </StackPanel>
+                                <ui:ToggleSwitch Grid.Column="1" VerticalAlignment="Center" IsChecked="{Binding HardwareVolume}" OnContent="켬" OffContent="끔"
+                                                 AutomationProperties.Name="하드웨어 볼륨"/>
                             </Grid>
                             <Grid Margin="0,4" IsEnabled="{Binding CanChooseFormat}">
                                 <Grid.ColumnDefinitions>
@@ -438,7 +451,7 @@
                                 </Grid.ColumnDefinitions>
                                 <StackPanel VerticalAlignment="Center" Margin="0,0,16,0">
                                     <ui:TextBlock Text="샘플 속도" FontTypography="Body"/>
-                                    <ui:TextBlock Text="'곡과 같게'는 곡마다 그 곡의 속도로 바꿔 변환 없이 보냅니다" Style="{StaticResource Desc}"/>
+                                    <ui:TextBlock Text="'자동'은 곡마다 그 곡의 속도로 보내고, 업샘플링을 켜면 그 정수배로 보냅니다" Style="{StaticResource Desc}"/>
                                 </StackPanel>
                                 <ComboBox Grid.Column="1" Width="230" ItemsSource="{Binding SampleRates}" DisplayMemberPath="Label"
                                           SelectedValuePath="Value" SelectedValue="{Binding SampleRate}"/>
@@ -465,6 +478,32 @@
                                           Visibility="{Binding NoExclusiveFormats, Converter={StaticResource BoolToVisibility}}"/>
                         </StackPanel>
                     </ui:CardExpander>
+
+                    <!-- 하이레스: GoTune's own sample rate converter (Resampler.cs) -->
+                    <ui:TextBlock Text="하이레스" Style="{StaticResource Group}"/>
+                    <ui:CardControl Style="{StaticResource Card}" DataContext="{Binding Output}" Icon="{ui:SymbolIcon ArrowTrendingLines24}"
+                                    IsEnabled="{Binding CanUpsample}"
+                                    Tag="업샘플링 업스케일링 하이레스 고음질 샘플 속도 192kHz 384kHz 768kHz 변환 DAC"
+                                    ToolTip="곡을 더 높은 샘플 속도로 변환해 보냅니다. 원음에 없던 소리가 생기지는 않지만, 정밀한 디지털 필터로 미리 변환해 두면 DAC 안쪽 필터의 부담이 줄어 고음이 더 깨끗해질 수 있습니다. 변환은 64비트로 계산합니다.">
+                        <ui:CardControl.Header>
+                            <StackPanel>
+                                <ui:TextBlock Text="업샘플링" FontTypography="Body"/>
+                                <ui:TextBlock Text="{Binding UpsampleNote}" Style="{StaticResource Desc}" TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </ui:CardControl.Header>
+                        <ComboBox Width="260" ItemsSource="{Binding UpsampleModes}" DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding Upsampling}"/>
+                    </ui:CardControl>
+                    <ui:CardControl Style="{StaticResource Card}" DataContext="{Binding Output}" Icon="{ui:SymbolIcon Filter24}"
+                                    Tag="변환 필터 업샘플링 선형 위상 최소 위상 프리링잉 아포다이징 디지털 필터"
+                                    ToolTip="선형 위상: 원음의 대역 끝까지 평탄하고 모든 주파수가 같은 시간만큼 늦습니다(교과서적인 정확한 복원). 최소 위상: 같은 주파수 특성에, 날카로운 소리 앞에 울림(프리링잉)이 없습니다. 부드러운 필터: 조금 일찍(CD 기준 약 17.6kHz부터) 완만하게 줄여 울림이 가장 적습니다.">
+                        <ui:CardControl.Header>
+                            <StackPanel>
+                                <ui:TextBlock Text="변환 필터" FontTypography="Body"/>
+                                <ui:TextBlock Text="GoTune이 샘플 속도를 바꿀 때마다 쓰는 필터 · 대역 밖 잡음은 약 140dB 줄입니다" Style="{StaticResource Desc}"/>
+                            </StackPanel>
+                        </ui:CardControl.Header>
+                        <ComboBox Width="260" ItemsSource="{Binding Filters}" DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding Filter}"/>
+                    </ui:CardControl>
 
                     <ui:TextBlock Text="이퀄라이저" Style="{StaticResource Group}"/>
                     <ui:CardControl Style="{StaticResource Card}" Icon="{ui:SymbolIcon DeviceEq24}" Tag="이퀄라이저 EQ 음향 음색 저음 고음 켜기 끄기"

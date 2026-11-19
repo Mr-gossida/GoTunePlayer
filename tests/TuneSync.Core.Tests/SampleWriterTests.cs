@@ -63,3 +63,56 @@ public class SampleWriterTests
         Assert.Equal(stereo, output);
     }
 }
+
+/// <summary>Dither at the output: 16-bit noise shaping moves the rounding noise out of the
+/// audible band, and 64-bit samples convert as exactly as float ones did.</summary>
+public class DitherTests
+{
+    /// <summary>Rounding noise of a quiet tone written at 16 bits at 176.4 kHz, below 20 kHz
+    /// (through a windowed-sinc low-pass).</summary>
+    private static double InBandNoise(bool shaped)
+    {
+        const int count = 1 << 16;
+        var samples = new double[count * 2];
+        for (var i = 0; i < count; i++)
+            samples[2 * i] = samples[2 * i + 1] = 0.001 * Math.Sin(2 * Math.PI * 1000 * i / 176400.0);
+        var bytes = new byte[samples.Length * 2];
+        new SampleWriter(16, isFloat: false, dither: true, noiseShaping: shaped, channels: 2).Write(samples, bytes);
+        var error = new double[count];
+        for (var i = 0; i < count; i++) error[i] = BitConverter.ToInt16(bytes, i * 4) / 32768.0 - samples[2 * i];
+        const int half = 200;
+        var fc = 20000.0 / 176400;
+        var taps = new double[2 * half + 1];
+        for (var k = -half; k <= half; k++)
+        {
+            var sinc = k == 0 ? 2 * fc : Math.Sin(2 * Math.PI * fc * k) / (Math.PI * k);
+            taps[k + half] = sinc * (0.42 + 0.5 * Math.Cos(Math.PI * k / half) + 0.08 * Math.Cos(2 * Math.PI * k / half));
+        }
+        double energy = 0;
+        for (var n = half; n < count - half; n++)
+        {
+            double y = 0;
+            for (var k = 0; k < taps.Length; k++) y += taps[k] * error[n - half + k];
+            energy += y * y;
+        }
+        return energy;
+    }
+
+    [Fact]
+    public void NoiseShaping_LeavesTheAudibleBandQuieter()
+    {
+        var plain = InBandNoise(shaped: false);
+        var shaped = InBandNoise(shaped: true);
+        Assert.True(10 * Math.Log10(shaped / plain) < -10, $"{10 * Math.Log10(shaped / plain):0.0} dB");
+    }
+
+    [Fact]
+    public void WideSamples_ComeBackExactly()
+    {
+        var samples = new double[65536];
+        for (var i = 0; i < samples.Length; i++) samples[i] = (i - 32768) / 32768.0;
+        var out16 = new byte[samples.Length * 2];
+        new SampleWriter(16, isFloat: false, dither: false).Write(samples, out16);
+        for (var i = 0; i < samples.Length; i++) Assert.Equal(i - 32768, BitConverter.ToInt16(out16, i * 2));
+    }
+}

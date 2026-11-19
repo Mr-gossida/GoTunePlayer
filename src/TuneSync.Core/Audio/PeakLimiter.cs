@@ -17,18 +17,18 @@ public sealed class PeakLimiter
     public const float Ceiling = 0.985f;
 
     private readonly int _lookahead;
-    private readonly float[] _delay;
+    private readonly double[] _delay;
     private int _delayAt;
 
     // The lowest wanted gain within the lookahead window: a queue whose values only rise from
     // front to back, so the front is always the window's minimum.
-    private readonly float[] _queueGain;
+    private readonly double[] _queueGain;
     private readonly long[] _queueIndex;
     private int _queueHead, _queueCount;
 
     // The average of those minimums over the same length: turns a step down into a ramp that
     // has arrived by the time the peak leaves the delay.
-    private readonly float[] _ramp;
+    private readonly double[] _ramp;
     private int _rampAt;
     private double _rampSum;
     private int _rampBelowOne;
@@ -44,11 +44,11 @@ public sealed class PeakLimiter
     {
         _hold = (int)(sampleRate * holdSeconds);
         _lookahead = Math.Max(8, (int)(sampleRate * lookaheadSeconds));
-        _delay = new float[_lookahead * 2];
-        _queueGain = new float[_lookahead + 2];
+        _delay = new double[_lookahead * 2];
+        _queueGain = new double[_lookahead + 2];
         _queueIndex = new long[_lookahead + 2];
-        _ramp = new float[_lookahead];
-        Array.Fill(_ramp, 1f);
+        _ramp = new double[_lookahead];
+        Array.Fill(_ramp, 1.0);
         _rampSum = _lookahead;
         _release = 1 - Math.Exp(-1.0 / (sampleRate * releaseSeconds));
     }
@@ -68,8 +68,11 @@ public sealed class PeakLimiter
         return gain;
     }
 
-    /// <summary>Stereo frames, left/right interleaved, processed in place.</summary>
-    public void Process(Span<float> frames)
+    /// <summary>The same for float frames (tests and tools; the player runs the 64-bit one).</summary>
+    public void Process(Span<float> frames) => Wide.Run(frames, this, static (limiter, wide) => limiter.Process(wide));
+
+    /// <summary>Stereo frames, left/right interleaved, processed in place (64-bit).</summary>
+    public void Process(Span<double> frames)
     {
         var capacity = _queueGain.Length;
         for (var i = 0; i + 1 < frames.Length; i += 2)
@@ -77,11 +80,11 @@ public sealed class PeakLimiter
             var left = frames[i];
             var right = frames[i + 1];
             var peak = Math.Max(Math.Abs(left), Math.Abs(right));
-            if (!(peak <= float.MaxValue)) { left = right = peak = 0; } // NaN or infinity never reaches the speakers
+            if (!(peak <= double.MaxValue)) { left = right = peak = 0; } // NaN or infinity never reaches the speakers
 
             // The gain this frame needs; after a peak it holds a moment (so the next beat or the
             // next cycle of a bass note finds it still down) and then recovers slowly.
-            var needed = peak > Ceiling && IsOn ? Ceiling / (double)peak : 1.0;
+            var needed = peak > Ceiling && IsOn ? Ceiling / peak : 1.0;
             if (needed <= _wanted)
             {
                 _wanted = needed;
@@ -97,8 +100,7 @@ public sealed class PeakLimiter
                 if (_wanted > 0.999999) _wanted = 1;
                 if (needed < _wanted) _wanted = needed;
             }
-            var wanted = (float)_wanted;
-            if (wanted > _wanted) wanted = MathF.BitDecrement(wanted); // rounding must never raise it
+            var wanted = _wanted;
 
             // Window minimum.
             while (_queueCount > 0 && _queueGain[(_queueHead + _queueCount - 1) % capacity] >= wanted) _queueCount--;
@@ -119,7 +121,7 @@ public sealed class PeakLimiter
             _rampAt = _rampAt + 1 == _lookahead ? 0 : _rampAt + 1;
             if (leaving < 1) _rampBelowOne--;
             if (minimum < 1) _rampBelowOne++;
-            float gain;
+            double gain;
             if (_rampBelowOne == 0)
             {
                 gain = 1;
@@ -128,9 +130,9 @@ public sealed class PeakLimiter
             else
             {
                 _rampSum += minimum - leaving;
-                gain = (float)(_rampSum / _lookahead);
+                gain = _rampSum / _lookahead;
                 if (gain > 1) gain = 1;
-                if (gain < _lowestGain) _lowestGain = gain;
+                if (gain < _lowestGain) _lowestGain = (float)gain;
             }
 
             frames[i] = _delay[_delayAt] * gain;

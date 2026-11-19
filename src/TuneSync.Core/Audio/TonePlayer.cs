@@ -1,7 +1,6 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using NAudio.CoreAudioApi;
-using NAudio.Dsp;
 using NAudio.Wave;
 using TuneSync.Core.Models;
 
@@ -40,7 +39,9 @@ public interface IProgressiveSource
 /// a fraction of a second later, and a slow disk or network never stalls the sound device. Where
 /// the sound goes is <see cref="Output"/>: a chosen device or Windows' default, stereo or spread
 /// over more speakers, shared with other programs or (exclusive mode) sent to the device alone at
-/// a sample rate and bit depth it takes - the song's own rate when it can, resampled when not.
+/// a sample rate and bit depth it takes - the song's own rate when it can, resampled when not
+/// (or upsampled on purpose, <see cref="OutputSettings.Upsampling"/>). From the ring on, the sound
+/// is carried in 64-bit floating point all the way to the device's own sample format.
 /// One player per song; <see cref="Close"/> releases the file.
 /// Events arrive on the player's own threads.</summary>
 public sealed class TonePlayer : IDisposable
@@ -107,15 +108,22 @@ public sealed class TonePlayer : IDisposable
     // isn't as asked, and whether the sound goes out bit-perfect.
     private volatile string? _outputBase, _outputNote;
     private volatile bool _bitPerfect, _resampling;
+    private volatile string? _resampleFilterName;
+    private ResampleFilter _resampleFilter;
     private int _sourceBits;
-    private float[]? _resampleInput;
-    private int _resampleOffset;
     private ChannelLayout? _layout;
     private SampleWriter? _writer;
-    private WdlResampler? _resampler;
-    private float[] _expanded = [];
-    private float[] _resampled = [];
+    private IResampler? _resampler;
+    private double[] _expanded = [];
+    private double[] _resampled = [];
     private byte[] _bytes = [];
+
+    // Hardware volume (exclusive mode): the device's own volume control, and what Windows had it
+    // at before, to put back when GoTune lets go.
+    private AudioEndpointVolume? _endpointVolume;
+    private float _savedLevel;
+    private bool _savedMute;
+    private volatile bool _hardwareVolume, _volumeDirty;
 
     public TonePlayer(string path, ToneConfig config, OutputSettings? output = null)
     {
@@ -151,18 +159,23 @@ public sealed class TonePlayer : IDisposable
         get
         {
             if (_outputBase is not { } device) return null;
+            var volume = _hardwareVolume ? "장치 볼륨" : "볼륨";
             if (_bitPerfect)
             {
                 var source = _sourceBits > 0 ? $"원본 {_sourceBits}비트 그대로" : "디코딩한 소리 그대로";
-                return Join($"비트퍼펙트 · {device} · {source}", _outputNote);
+                var level = _hardwareVolume ? (_muted ? " · 음소거" : $" · 장치 볼륨 {Math.Round(_volume * 100)}%") : "";
+                return Join($"비트퍼펙트 · {device} · {source}{level}", _outputNote);
             }
             // what changes the sound on the way, so "독점" isn't mistaken for untouched
             var applied = new List<string>();
-            if (_resampling) applied.Add($"곡 {_sampleRate / 1000.0:0.#}kHz에서 변환");
+            if (_resampling)
+                applied.Add(_outRate > _sampleRate
+                    ? $"업샘플링 {_sampleRate / 1000.0:0.#} → {_outRate / 1000.0:0.#}kHz · {_resampleFilterName}"
+                    : $"곡 {_sampleRate / 1000.0:0.#}kHz에서 변환 · {_resampleFilterName}");
             if (!_exclusiveOpen) applied.Add("Windows 믹서 거침");
             if (!ReferenceEquals(_config, ToneConfig.Neutral)) applied.Add("이퀄라이저 적용");
             if (_muted) applied.Add("음소거");
-            else if (_volume < 1) applied.Add($"볼륨 {Math.Round(_volume * 100)}%");
+            else if (_volume < 1 || _hardwareVolume) applied.Add($"{volume} {Math.Round(_volume * 100)}%");
             var text = applied.Count > 0 ? $"{device} ({string.Join(" · ", applied)})" : device;
             return Join(text, _outputNote);
         }
@@ -223,6 +236,14 @@ public sealed class TonePlayer : IDisposable
 
     private void ApplyVolume()
     {
+        if (_hardwareVolume)
+        {
+            // the device turns it down; the samples go out whole (set on the output thread)
+            if (_processor is { } p) p.Volume = 1;
+            _volumeDirty = true;
+            _renderWake.Set();
+            return;
+        }
         if (_processor is { } processor) processor.Volume = _muted ? 0 : _volume;
     }
 
@@ -499,12 +520,13 @@ public sealed class TonePlayer : IDisposable
         _ringCount += frames;
     }
 
-    private int Pull(float[] target, int frames)
+    /// <summary>Takes frames off the ring into the output's 64-bit buffer.</summary>
+    private int Pull(double[] target, int frames)
     {
         frames = Math.Min(frames, _ringCount);
         var first = Math.Min(frames, _ringCapacity - _ringStart);
-        Array.Copy(_ring, _ringStart * 2, target, 0, first * 2);
-        Array.Copy(_ring, 0, target, first * 2, (frames - first) * 2);
+        for (var i = 0; i < first * 2; i++) target[i] = _ring[_ringStart * 2 + i];
+        for (var i = 0; i < (frames - first) * 2; i++) target[first * 2 + i] = _ring[i];
         _ringStart = (_ringStart + frames) % _ringCapacity;
         _ringCount -= frames;
         return frames;
@@ -566,6 +588,11 @@ public sealed class TonePlayer : IDisposable
                         continue;
                     }
                     var client = _client!;
+                    if (_volumeDirty)
+                    {
+                        _volumeDirty = false;
+                        SetHardwareVolume();
+                    }
 
                     long wanted;
                     lock (_lock) wanted = _seekSerial;
@@ -575,6 +602,8 @@ public sealed class TonePlayer : IDisposable
                         if (started) client.Stop();
                         started = false;
                         client.Reset();
+                        // and what the converter still holds of it
+                        if (_resampler is not null) _resampler = Resamplers.Create(_sampleRate, _outRate, _resampleFilter);
                         lock (_lock)
                         {
                             serial = _renderSerial = _seekSerial;
@@ -646,7 +675,7 @@ public sealed class TonePlayer : IDisposable
                         if (_bitPerfect)
                         {
                             // the file's samples as they are: none of the chain, no volume (only mute)
-                            if (_muted) Array.Clear(buffer, 0, frames * 2);
+                            if (_muted && !_hardwareVolume) Array.Clear(buffer, 0, frames * 2);
                             processor.Scope.Write(buffer.AsSpan(0, frames * 2));
                         }
                         else
@@ -679,12 +708,14 @@ public sealed class TonePlayer : IDisposable
                     {
                         if (!tailWritten)
                         {
-                            // The limiter still holds the song's last few milliseconds: push them out.
+                            // The limiter and the converter still hold the song's last few
+                            // milliseconds: push them out with silence.
                             tailWritten = true;
-                            var tail = Math.Min(Math.Min((int)(room / _ratio), buffer.Length / 2), processor.LatencyFrames);
-                            Array.Clear(buffer, 0, tail * 2);
-                            processor.Process(buffer.AsSpan(0, tail * 2));
-                            Write(buffer, tail, room);
+                            var held = Math.Min(Math.Min((int)(room / _ratio), buffer.Length / 2),
+                                processor.LatencyFrames + (_resampler?.LookaheadFrames ?? 0));
+                            Array.Clear(buffer, 0, held * 2);
+                            if (!_bitPerfect) processor.Process(buffer.AsSpan(0, held * 2));
+                            Write(buffer, held, room);
                         }
                         else if (_exclusiveOpen && !silenceAfterTail)
                         {
@@ -737,17 +768,15 @@ public sealed class TonePlayer : IDisposable
 
     /// <summary>The song's processed stereo frames out to the device: resampled to its rate,
     /// spread over its speakers, in its sample format. Returns the device frames written.</summary>
-    private int Write(float[] buffer, int frames, int room)
+    private int Write(double[] buffer, int frames, int room)
     {
         if (frames <= 0) return 0;
-        ReadOnlySpan<float> stereo = buffer.AsSpan(0, frames * 2);
+        ReadOnlySpan<double> stereo = buffer.AsSpan(0, frames * 2);
         var count = frames;
         if (_resampler is { } resampler)
         {
-            // the frames go where SongFramesFor was told they would
-            stereo.CopyTo(_resampleInput.AsSpan(_resampleOffset, frames * 2));
-            if (_resampled.Length < room * 2) _resampled = new float[room * 2];
-            count = resampler.ResampleOut(_resampled, 0, frames, room, 2);
+            if (_resampled.Length < room * 2) _resampled = new double[room * 2];
+            count = resampler.Process(stereo, _resampled.AsSpan(0, room * 2));
             stereo = _resampled.AsSpan(0, count * 2);
         }
         if (count <= 0) return 0;
@@ -758,7 +787,7 @@ public sealed class TonePlayer : IDisposable
             device = room;
         }
         var samples = count * _outChannels;
-        if (_expanded.Length < samples) _expanded = new float[samples];
+        if (_expanded.Length < samples) _expanded = new double[samples];
         _layout!.Expand(stereo, _expanded.AsSpan(0, samples));
         var bytes = samples * _writer!.BytesPerSample;
         if (_bytes.Length < bytes) _bytes = new byte[bytes];
@@ -780,22 +809,15 @@ public sealed class TonePlayer : IDisposable
     }
 
     /// <summary>How many of the song's frames make <paramref name="room"/> device frames. With a
-    /// resampler that is its call (it keeps a few back between calls), and it is then told where
-    /// they will be put - so exactly that many must follow in <see cref="Write"/>.</summary>
-    private int SongFramesFor(int room)
-    {
-        if (_resampler is not { } resampler) return room;
-        var needed = resampler.ResamplePrepare(room, 2, out var input, out var offset);
-        _resampleInput = input;
-        _resampleOffset = offset;
-        return needed;
-    }
+    /// resampler that is its call (it keeps a few back between calls) - at most that many may
+    /// follow in <see cref="Write"/>.</summary>
+    private int SongFramesFor(int room) => _resampler is { } resampler ? resampler.InputFor(room) : room;
 
     /// <summary>Song frames enough to fill the device's whole buffer once.</summary>
-    private float[] EnsureBuffer(float[] buffer)
+    private double[] EnsureBuffer(double[] buffer)
     {
-        var frames = (int)Math.Ceiling(_bufferFrames / _ratio) + 64;
-        return buffer.Length >= frames * 2 ? buffer : new float[frames * 2];
+        var frames = (int)Math.Ceiling(_bufferFrames / _ratio) + 64 + (_resampler?.LookaheadFrames ?? 0);
+        return buffer.Length >= frames * 2 ? buffer : new double[frames * 2];
     }
 
     /// <summary>Opens the playback device as <see cref="Output"/> says. Shared: float at the
@@ -831,12 +853,18 @@ public sealed class TonePlayer : IDisposable
             {
                 _exclusiveOpen = true;
                 var exact = wantBitPerfect && format.SampleRate == _sampleRate && (_sourceBits == 0 || format.ValidBits >= _sourceBits);
-                Prepare(format.SampleRate, channels, layout, new SampleWriter(format.ValidBits, format.IsFloat, format.BitsPerSample, dither: !exact));
+                Prepare(format.SampleRate, channels, layout, new SampleWriter(format.ValidBits, format.IsFloat, format.BitsPerSample, dither: !exact,
+                    noiseShaping: format.SampleRate >= 88200, channels: channels), output.Filter);
                 var rate = $"{format.ValidBits}비트 {format.SampleRate / 1000.0:0.#}kHz";
                 if (wantBitPerfect && !exact)
                     note = format.SampleRate != _sampleRate
                         ? $"비트퍼펙트 아님: 장치가 {_sampleRate / 1000.0:0.#}kHz를 받지 않아 변환 중"
                         : $"비트퍼펙트 아님: 장치가 {_sourceBits}비트를 받지 않음";
+                if (output.HardwareVolume && !TakeHardwareVolume())
+                {
+                    const string noHardware = "장치에 하드웨어 볼륨이 없어 디지털 볼륨 사용";
+                    note = note is null ? noHardware : Join(note, noHardware);
+                }
                 _outputBase = exact ? rate : $"독점 · {rate} · {LayoutName(layout)}";
                 _outputNote = note;
                 _bitPerfect = exact;
@@ -851,15 +879,18 @@ public sealed class TonePlayer : IDisposable
         }
 
         _exclusiveOpen = false;
+        // Upsampling in shared mode: GoTune converts to the rate Windows runs the device at, so
+        // Windows' own converter has nothing left to do.
+        var sharedRate = output.Upsampling != UpsampleMode.Off && SafeMixRate(_device) is > 0 and var mix ? mix : _sampleRate;
         _client = _device.AudioClient;
         _client.Initialize(AudioClientShareMode.Shared,
             AudioClientStreamFlags.EventCallback | AudioClientStreamFlags.AutoConvertPcm | AudioClientStreamFlags.SrcDefaultQuality,
-            DeviceBufferMilliseconds * 10_000L, 0, PcmFormat.CreateFloat(_sampleRate, channels), Guid.Empty);
+            DeviceBufferMilliseconds * 10_000L, 0, PcmFormat.CreateFloat(sharedRate, channels), Guid.Empty);
         _client.SetEventHandle(_audioEvent.SafeWaitHandle.DangerousGetHandle());
         _bufferFrames = _client.BufferSize;
         _render = _client.AudioRenderClient;
-        Prepare(_sampleRate, channels, layout, new SampleWriter(32, isFloat: true));
-        _outputBase = $"공유 · {LayoutName(layout)}";
+        Prepare(sharedRate, channels, layout, new SampleWriter(32, isFloat: true), output.Filter);
+        _outputBase = sharedRate != _sampleRate ? $"공유 · {sharedRate / 1000.0:0.#}kHz · {LayoutName(layout)}" : $"공유 · {LayoutName(layout)}";
         _outputNote = note;
         OutputChanged?.Invoke();
     }
@@ -880,6 +911,70 @@ public sealed class TonePlayer : IDisposable
         catch (COMException) { return 2; }
     }
 
+    private static int SafeMixRate(MMDevice device)
+    {
+        try { return device.AudioClient.MixFormat.SampleRate; }
+        catch (COMException) { return 0; }
+    }
+
+    /// <summary>Hands the volume to the device (exclusive mode), when it has a volume control of
+    /// its own; what Windows had it at is kept to be put back. False when it has none.</summary>
+    private bool TakeHardwareVolume()
+    {
+        try
+        {
+            var volume = _device!.AudioEndpointVolume;
+            if (((int)volume.HardwareSupport & 1) == 0) return false; // ENDPOINT_HARDWARE_SUPPORT_VOLUME
+            _endpointVolume = volume;
+            _savedLevel = volume.MasterVolumeLevelScalar;
+            _savedMute = volume.Mute;
+            _hardwareVolume = true;
+            ApplyVolume();
+            SetHardwareVolume();
+            return true;
+        }
+        catch (Exception ex) when (ex is COMException or InvalidCastException)
+        {
+            return false;
+        }
+    }
+
+    private void SetHardwareVolume()
+    {
+        if (!_hardwareVolume || _endpointVolume is not { } volume) return;
+        try
+        {
+            volume.MasterVolumeLevelScalar = Math.Clamp(_volume, 0f, 1f);
+            volume.Mute = _muted;
+        }
+        catch (Exception)
+        {
+            // the device is going away
+        }
+        OutputChanged?.Invoke();
+    }
+
+    /// <summary>Puts Windows' volume for the device back the way it was.</summary>
+    private void ReleaseHardwareVolume()
+    {
+        if (!_hardwareVolume) return;
+        _hardwareVolume = false;
+        try
+        {
+            if (_endpointVolume is { } volume)
+            {
+                volume.MasterVolumeLevelScalar = _savedLevel;
+                volume.Mute = _savedMute;
+            }
+        }
+        catch (Exception)
+        {
+            // unplugged: nothing to put back
+        }
+        _endpointVolume = null;
+        ApplyVolume(); // the samples carry the volume again
+    }
+
     /// <summary>The exclusive format: the wanted rate (the song's, or the chosen one) if the
     /// device takes it, else the nearest it does (preferring the same family - 44.1/88.2/176.4 or
     /// 48/96/192 - so the conversion is gentler); the wanted bits, else the most it takes.</summary>
@@ -892,7 +987,16 @@ public sealed class TonePlayer : IDisposable
         // last audible bit), then 32; 16 last (exact only for a 16-bit file)
         int[] bitsOrder = bitPerfect ? [24, 32, 16]
             : output.ExclusiveBits > 0 ? [output.ExclusiveBits, 32, 24, 16] : [32, 24, 16];
-        var rates = new List<int> { rate };
+        var rates = new List<int>();
+        if (!bitPerfect && output.ExclusiveSampleRate == 0 && output.Upsampling != UpsampleMode.Off)
+        {
+            // whole multiples of the song's rate, the highest wanted first: the device's own
+            // filter then has the least to do, and the conversion is exact (no fractional ratio)
+            var most = output.Upsampling switch { UpsampleMode.Double => 2, UpsampleMode.Quadruple => 4, _ => 64 };
+            for (var factor = most; factor >= 2; factor /= 2)
+                if (_sampleRate * (long)factor <= OutputDevices.Rates[^1]) rates.Add(_sampleRate * factor);
+        }
+        rates.Add(rate);
         rates.AddRange(OutputDevices.Rates
             .OrderBy(r => r % 11025 == 0 == (rate % 11025 == 0) ? 0 : 1)
             .ThenBy(r => r < rate ? 1 : 0) // above first: no detail lost
@@ -937,7 +1041,7 @@ public sealed class TonePlayer : IDisposable
         return false;
     }
 
-    private void Prepare(int rate, int channels, SpeakerLayout layout, SampleWriter writer)
+    private void Prepare(int rate, int channels, SpeakerLayout layout, SampleWriter writer, ResampleFilter filter)
     {
         _outRate = rate;
         _outChannels = channels;
@@ -945,20 +1049,14 @@ public sealed class TonePlayer : IDisposable
         _resampling = rate != _sampleRate;
         _layout = new ChannelLayout(layout, rate);
         _writer = writer;
-        if (rate == _sampleRate)
-        {
-            _resampler = null;
-            return;
-        }
-        _resampler = new WdlResampler();
-        _resampler.SetMode(true, 2, false);
-        _resampler.SetFilterParms();
-        _resampler.SetFeedMode(false); // asked for so many out, it says how many in
-        _resampler.SetRates(_sampleRate, rate);
+        _resampler = rate == _sampleRate ? null : Resamplers.Create(_sampleRate, rate, filter);
+        _resampleFilter = filter;
+        _resampleFilterName = _resampler is PolyphaseResampler ? Resamplers.FilterName(filter) : "기본 변환";
     }
 
     private void CloseDevice()
     {
+        ReleaseHardwareVolume();
         try { _client?.Stop(); } catch { /* already invalid */ }
         try { _render?.Dispose(); } catch { /* already invalid */ }
         try { _client?.Dispose(); } catch { /* already invalid */ }

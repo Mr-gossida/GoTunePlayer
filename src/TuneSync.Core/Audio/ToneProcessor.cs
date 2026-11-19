@@ -62,7 +62,8 @@ public sealed class ToneConfig
 /// (<see cref="Audio.Reverb"/>), a limiter that keeps boosts from clipping, and the volume (with a copy of the sound before the volume
 /// kept for the live displays, <see cref="Scope"/>). Every level glides to a new setting over a
 /// few hundredths of a second, so moving a slider while music plays never clicks or "zips".
-/// Nothing here allocates once it is built.</summary>
+/// The sound is carried in 64-bit floating point from end to end (a 24-bit master has some 29
+/// bits of room to spare at every stage), and nothing here allocates once it is built.</summary>
 public sealed class ToneProcessor
 {
     /// <summary>Levels move in steps this many frames long; the filters are re-tuned per step.</summary>
@@ -78,7 +79,7 @@ public sealed class ToneProcessor
     private readonly PeakLimiter _limiter;
     private readonly Reverb _reverb;
     private readonly double _filterStepDb;
-    private readonly float _gainStep;
+    private readonly double _gainStep;
 
     private ToneConfig _config = ToneConfig.Neutral;
     private ToneConfig? _applied;
@@ -93,11 +94,11 @@ public sealed class ToneProcessor
     private readonly double[] _memory = new double[ToneCurve.FilterCount * 4];
 
     // Plain gains: now / target.
-    private float _gain = 1, _gainTarget = 1;
-    private float _side = 1, _sideTarget = 1;
-    private float _left = 1, _leftTarget = 1;
-    private float _right = 1, _rightTarget = 1;
-    private float _volume = 1;
+    private double _gain = 1, _gainTarget = 1;
+    private double _side = 1, _sideTarget = 1;
+    private double _left = 1, _leftTarget = 1;
+    private double _right = 1, _rightTarget = 1;
+    private double _volume = 1;
     private bool _volumeSet;
 
     public ToneProcessor(int sampleRate)
@@ -107,7 +108,7 @@ public sealed class ToneProcessor
         _reverb = new Reverb(sampleRate);
         Scope = new OutputScope(sampleRate);
         _filterStepDb = 2 * ToneCurve.MaxFilterGainDb * Step / (FullSwingSeconds * sampleRate);
-        _gainStep = (float)(1 - Math.Exp(-Step / (GainSettleSeconds * sampleRate)));
+        _gainStep = 1 - Math.Exp(-Step / (GainSettleSeconds * sampleRate));
         Array.Fill(_filters, BiquadCoefficients.Identity);
     }
 
@@ -157,8 +158,11 @@ public sealed class ToneProcessor
         _reverb.Settle();
     }
 
-    /// <summary>Stereo frames, left/right interleaved, processed in place.</summary>
-    public void Process(Span<float> frames)
+    /// <summary>The same for float frames (tests and tools; the player runs the 64-bit one).</summary>
+    public void Process(Span<float> frames) => Wide.Run(frames, this, static (processor, wide) => processor.Process(wide));
+
+    /// <summary>Stereo frames, left/right interleaved, processed in place (64-bit).</summary>
+    public void Process(Span<double> frames)
     {
         if (!_volumeSet) Settle();
         TakeConfig();
@@ -172,15 +176,15 @@ public sealed class ToneProcessor
         if (ReferenceEquals(config, _applied)) return;
         _applied = config;
         config.FilterGainsDb.CopyTo(_levelTargetDb);
-        _gainTarget = (float)Math.Pow(10, config.GainDb / 20);
-        _sideTarget = (float)config.Width;
-        _leftTarget = (float)Math.Min(1, 1 - config.Balance);
-        _rightTarget = (float)Math.Min(1, 1 + config.Balance);
+        _gainTarget = Math.Pow(10, config.GainDb / 20);
+        _sideTarget = config.Width;
+        _leftTarget = Math.Min(1, 1 - config.Balance);
+        _rightTarget = Math.Min(1, 1 + config.Balance);
         _limiter.IsOn = config.Limiter;
         _reverb.SetTarget(config.ReverbRoom, config.ReverbMix, config.ReverbDecaySeconds);
     }
 
-    private void ProcessStep(Span<float> frames)
+    private void ProcessStep(Span<double> frames)
     {
         // 1. Preamp (and headroom).
         var gainNext = Approach(_gain, _gainTarget);
@@ -219,17 +223,17 @@ public sealed class ToneProcessor
             double l1 = _memory[m], l2 = _memory[m + 1], r1 = _memory[m + 2], r2 = _memory[m + 3];
             for (var i = 0; i < frames.Length; i += 2)
             {
-                double x = frames[i];
+                var x = frames[i];
                 var y = c.B0 * x + l1;
                 l1 = c.B1 * x - c.A1 * y + l2;
                 l2 = c.B2 * x - c.A2 * y;
-                frames[i] = (float)y;
+                frames[i] = y;
 
                 x = frames[i + 1];
                 y = c.B0 * x + r1;
                 r1 = c.B1 * x - c.A1 * y + r2;
                 r2 = c.B2 * x - c.A2 * y;
-                frames[i + 1] = (float)y;
+                frames[i + 1] = y;
             }
             // Numbers this small are silence, and slow to compute with: drop them.
             _memory[m] = Math.Abs(l1) < 1e-25 ? 0 : l1;
@@ -239,16 +243,16 @@ public sealed class ToneProcessor
         }
 
         // 3. Stereo width (how much of the left/right difference is kept) and balance.
-        float sideNext = Approach(_side, _sideTarget), leftNext = Approach(_left, _leftTarget), rightNext = Approach(_right, _rightTarget);
+        double sideNext = Approach(_side, _sideTarget), leftNext = Approach(_left, _leftTarget), rightNext = Approach(_right, _rightTarget);
         if (_side != 1 || sideNext != 1 || _left != 1 || leftNext != 1 || _right != 1 || rightNext != 1)
         {
             var count = frames.Length / 2;
-            float s = _side, l = _left, r = _right;
-            float sSlope = (sideNext - s) / count, lSlope = (leftNext - l) / count, rSlope = (rightNext - r) / count;
+            double s = _side, l = _left, r = _right;
+            double sSlope = (sideNext - s) / count, lSlope = (leftNext - l) / count, rSlope = (rightNext - r) / count;
             for (var i = 0; i < frames.Length; i += 2)
             {
-                var mid = (frames[i] + frames[i + 1]) * 0.5f;
-                var side = (frames[i] - frames[i + 1]) * 0.5f * s;
+                var mid = (frames[i] + frames[i + 1]) * 0.5;
+                var side = (frames[i] - frames[i + 1]) * 0.5 * s;
                 frames[i] = (mid + side) * l;
                 frames[i + 1] = (mid - side) * r;
                 s += sSlope;
@@ -286,7 +290,7 @@ public sealed class ToneProcessor
     /// <summary>Runs one filter over a step during which its level moves: the coefficients slide
     /// from the old tuning to the new one frame by frame (re-tuning in one go at each step would
     /// be heard as a faint buzz - "zipper noise" - while a slider moves).</summary>
-    private void Glide(int f, Span<float> frames)
+    private void Glide(int f, Span<double> frames)
     {
         var from = _filters[f];
         Tune(f);
@@ -301,17 +305,17 @@ public sealed class ToneProcessor
         {
             b0 += db0; b1 += db1; b2 += db2; a1 += da1; a2 += da2;
 
-            double x = frames[i];
+            var x = frames[i];
             var y = b0 * x + l1;
             l1 = b1 * x - a1 * y + l2;
             l2 = b2 * x - a2 * y;
-            frames[i] = (float)y;
+            frames[i] = y;
 
             x = frames[i + 1];
             y = b0 * x + r1;
             r1 = b1 * x - a1 * y + r2;
             r2 = b2 * x - a2 * y;
-            frames[i + 1] = (float)y;
+            frames[i + 1] = y;
         }
         if (_filterOn[f])
         {
@@ -320,11 +324,11 @@ public sealed class ToneProcessor
     }
 
     /// <summary>One step of a gain toward its target; lands on it exactly once close.</summary>
-    private float Approach(float value, float target)
+    private double Approach(double value, double target)
     {
         if (value == target) return target;
         var next = value + (target - value) * _gainStep;
-        return Math.Abs(target - next) < 1e-4f ? target : next;
+        return Math.Abs(target - next) < 1e-5 ? target : next;
     }
 
     /// <summary>Recomputes one filter for its current level. At 0 dB it's switched off, with its

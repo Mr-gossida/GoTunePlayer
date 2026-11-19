@@ -47,6 +47,20 @@ public sealed class OutputScope
         Volatile.Write(ref _written, written + count);
     }
 
+    /// <summary>The 64-bit chain's frames (kept as float: a picture of the sound needs no more).</summary>
+    internal void Write(ReadOnlySpan<double> frames)
+    {
+        var written = _written;
+        var count = frames.Length / 2;
+        for (var i = 0; i < count; i++)
+        {
+            var at = (int)((written + i) & _mask) * 2;
+            _ring[at] = (float)frames[i * 2];
+            _ring[at + 1] = (float)frames[i * 2 + 1];
+        }
+        Volatile.Write(ref _written, written + count);
+    }
+
     /// <summary>Copies the frames heard most recently into <paramref name="stereo"/> (left/right
     /// interleaved, oldest first; silence before the song's start). Returns <see cref="HeardFrames"/>.</summary>
     public long Read(Span<float> stereo)

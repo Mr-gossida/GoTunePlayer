@@ -15,7 +15,7 @@ public readonly record struct DeviceFormat(int SampleRate, int Bits);
 /// <summary>The playback devices, and what each can take.</summary>
 public static class OutputDevices
 {
-    public static readonly int[] Rates = [44100, 48000, 88200, 96000, 176400, 192000, 352800, 384000];
+    public static readonly int[] Rates = [44100, 48000, 88200, 96000, 176400, 192000, 352800, 384000, 705600, 768000];
     public static readonly int[] BitDepths = [16, 24, 32];
 
     public static IReadOnlyList<OutputDevice> List()
@@ -39,16 +39,23 @@ public static class OutputDevices
                 using (device)
                 {
                     int channels = 2, rate = 48000, bits = 32;
-                    try
+                    if (SharedFormat(device) is { } shared)
                     {
-                        var mix = device.AudioClient.MixFormat;
-                        channels = mix.Channels;
-                        rate = mix.SampleRate;
-                        bits = mix is WaveFormatExtensible { } x ? ValidBits(x) : mix.BitsPerSample;
+                        (channels, rate, bits) = shared;
                     }
-                    catch (COMException)
+                    else
                     {
-                        // can't ask it now: shown with the usual format
+                        try
+                        {
+                            var mix = device.AudioClient.MixFormat;
+                            channels = mix.Channels;
+                            rate = mix.SampleRate;
+                            bits = mix is WaveFormatExtensible { } x ? ValidBits(x) : mix.BitsPerSample;
+                        }
+                        catch (COMException)
+                        {
+                            // can't ask it now: shown with the usual format
+                        }
                     }
                     list.Add(new OutputDevice(device.ID, device.FriendlyName, device.ID == defaultId, channels, rate, bits));
                 }
@@ -59,6 +66,29 @@ public static class OutputDevices
             // audio service unavailable
         }
         return list;
+    }
+
+    /// <summary>PKEY_AudioEngine_DeviceFormat: the format Windows runs the device at in shared
+    /// mode - what 소리 › 장치 속성 › 고급 › 기본 형식 sets. (The engine's mix format has the same rate
+    /// and channels, but always 32-bit float, whatever the device's bits.)</summary>
+    internal static readonly PropertyKey DeviceFormatKey = new(new Guid("f19f064d-082c-4e27-bc73-6882a1bb8e4c"), 0);
+
+    /// <summary>The device's shared-mode format as Windows has it set, or null when it can't be read.</summary>
+    private static (int Channels, int Rate, int Bits)? SharedFormat(MMDevice device)
+    {
+        try
+        {
+            var store = device.Properties;
+            if (!store.Contains(DeviceFormatKey) || store[DeviceFormatKey].Value is not byte[] blob || blob.Length < 16) return null;
+            // WAVEFORMATEX: tag, channels, rate, bytes/s, block align, bits; EXTENSIBLE adds valid bits
+            int channels = BitConverter.ToInt16(blob, 2), rate = BitConverter.ToInt32(blob, 4), bits = BitConverter.ToInt16(blob, 14);
+            if (BitConverter.ToUInt16(blob, 0) == 0xFFFE && blob.Length >= 20 && BitConverter.ToInt16(blob, 18) is > 0 and var valid) bits = valid;
+            return channels > 0 && rate > 0 && bits > 0 ? (channels, rate, bits) : null;
+        }
+        catch (Exception ex) when (ex is COMException or InvalidCastException or NotImplementedException)
+        {
+            return null;
+        }
     }
 
     /// <summary>The bits a format really carries (a 24-bit device often reports a 32-bit container).</summary>

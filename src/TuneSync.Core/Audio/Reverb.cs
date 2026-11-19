@@ -156,9 +156,13 @@ public sealed class Reverb
         _wet = _mixTarget;
     }
 
+    /// <summary>The same for float frames (tests and tools; the player runs the 64-bit one).</summary>
+    public void Process(Span<float> frames) => Wide.Run(frames, this, static (reverb, wide) => reverb.Process(wide));
+
     /// <summary>Adds the room to stereo frames, left/right interleaved, in place. Meant for short
-    /// steps (the processor's 32 frames): levels move once per call.</summary>
-    public void Process(Span<float> frames)
+    /// steps (the processor's 32 frames): levels move once per call. The frames are 64-bit; the
+    /// room's own paths are float (its tail sits far below anything their precision could touch).</summary>
+    public void Process(Span<double> frames)
     {
         var roomChanging = !ReferenceEquals(_room, _roomTarget);
         if (_wet == 0 && (roomChanging || _mixTarget == 0))
@@ -202,7 +206,7 @@ public sealed class Reverb
         for (var i = 0; i + 1 < frames.Length; i += 2)
         {
             // Send: mono, without the deep bass and the top.
-            double x = (frames[i] + frames[i + 1]) * 0.5f;
+            var x = (frames[i] + frames[i + 1]) * 0.5;
             var h = _hb0 * x + _h1;
             _h1 = _hb1 * x - _ha1 * h + _h2;
             _h2 = _hb2 * x - _ha2 * h;
@@ -249,8 +253,8 @@ public sealed class Reverb
             }
 
             loudest = Math.Max(loudest, Math.Abs((float)x));
-            frames[i] += gain * left;
-            frames[i + 1] += gain * right;
+            frames[i] += (double)gain * left;
+            frames[i + 1] += (double)gain * right;
             gain += slope;
         }
 
