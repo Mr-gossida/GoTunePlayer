@@ -1,0 +1,163 @@
+<UserControl x:Class="TuneSync.App.Views.SignalPathPanel"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             Width="372">
+    <!-- 소리 경로: the playing song's way from the file to the device (SignalPathViewModel).
+         Laid out like the now-playing card: the cover's tint under a veil, a soft shadow. -->
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="Visible"/>
+
+        <!-- One step: a ring with its icon on a line running down to the next, its title (with a
+             바뀜 / 그대로 tag), what it does now, and the details; a shortcut to its settings
+             shows on hover. A step the player isn't doing is one dim line. -->
+        <DataTemplate x:Key="StepTemplate">
+            <Grid x:Name="Row" Background="Transparent">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="30"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <!-- the line down to the next step -->
+                <Rectangle x:Name="Line" Grid.Column="0" Width="1" HorizontalAlignment="Center" Margin="0,30,0,0"
+                           Fill="{DynamicResource PlayerTrackBrush}"/>
+                <Border x:Name="Ring" Grid.Column="0" Width="30" Height="30" CornerRadius="15" VerticalAlignment="Top" Margin="0,6,0,0"
+                        BorderThickness="1" BorderBrush="{DynamicResource PlayerTrackBrush}" Background="{DynamicResource PlayerTintBrush}">
+                    <ui:SymbolIcon x:Name="Icon" Symbol="{Binding Icon}" FontSize="15" Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
+                </Border>
+
+                <Grid Grid.Column="1" Margin="12,7,0,12">
+                    <StackPanel x:Name="Body">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock x:Name="Title" Text="{Binding Title}" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center"
+                                       Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                            <Border x:Name="TagPill" CornerRadius="8" Padding="7,0,7,1" Margin="7,1,0,0" VerticalAlignment="Center" Visibility="Collapsed">
+                                <TextBlock x:Name="TagText" Text="{Binding Tag}" FontSize="10.5" FontWeight="SemiBold"/>
+                            </Border>
+                        </StackPanel>
+                        <TextBlock x:Name="Main" Text="{Binding Main}" FontSize="13" Margin="0,2,0,0" TextWrapping="Wrap"
+                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                        <TextBlock Text="{Binding Sub}" FontSize="11.5" Margin="0,2,0,0" TextWrapping="Wrap" LineHeight="17"
+                                   Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                   Visibility="{Binding HasSub, Converter={StaticResource Visible}}"/>
+                    </StackPanel>
+                    <ui:Button x:Name="Go" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,-3,-4,0" Padding="7,2"
+                               Appearance="Transparent" BorderThickness="0" FontSize="11.5" Opacity="0"
+                               Command="{Binding Action}" Visibility="{Binding HasAction, Converter={StaticResource Visible}}"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}">
+                        <TextBlock>
+                            <Run Text="{Binding ActionLabel, Mode=OneWay}"/><Run Text=" ›"/>
+                        </TextBlock>
+                    </ui:Button>
+                </Grid>
+            </Grid>
+            <DataTemplate.Triggers>
+                <DataTrigger Binding="{Binding IsLast}" Value="True">
+                    <Setter TargetName="Line" Property="Visibility" Value="Collapsed"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding IsChanged}" Value="True">
+                    <Setter TargetName="Ring" Property="BorderBrush" Value="{DynamicResource PlayerAccentBrush}"/>
+                    <Setter TargetName="Icon" Property="Foreground" Value="{DynamicResource PlayerAccentBrush}"/>
+                    <Setter TargetName="TagPill" Property="Visibility" Value="Visible"/>
+                    <Setter TargetName="TagPill" Property="BorderThickness" Value="1"/>
+                    <Setter TargetName="TagPill" Property="BorderBrush" Value="{DynamicResource PlayerAccentBrush}"/>
+                    <Setter TargetName="TagText" Property="Foreground" Value="{DynamicResource PlayerAccentBrush}"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding IsPure}" Value="True">
+                    <Setter TargetName="Ring" Property="BorderBrush" Value="{DynamicResource SystemFillColorSuccessBrush}"/>
+                    <Setter TargetName="Icon" Property="Foreground" Value="{DynamicResource SystemFillColorSuccessBrush}"/>
+                    <Setter TargetName="TagPill" Property="Visibility" Value="Visible"/>
+                    <Setter TargetName="TagPill" Property="BorderThickness" Value="1"/>
+                    <Setter TargetName="TagPill" Property="BorderBrush" Value="{DynamicResource SystemFillColorSuccessBrush}"/>
+                    <Setter TargetName="TagText" Property="Foreground" Value="{DynamicResource SystemFillColorSuccessBrush}"/>
+                </DataTrigger>
+                <!-- not doing it now: a small dot on the line and one dim line of text -->
+                <DataTrigger Binding="{Binding IsSkipped}" Value="True">
+                    <Setter TargetName="Ring" Property="Height" Value="20"/>
+                    <Setter TargetName="Ring" Property="Margin" Value="0,2,0,0"/>
+                    <Setter TargetName="Ring" Property="BorderThickness" Value="0"/>
+                    <Setter TargetName="Icon" Property="FontSize" Value="12"/>
+                    <Setter TargetName="Icon" Property="Opacity" Value="0.6"/>
+                    <Setter TargetName="Line" Property="Margin" Value="0,22,0,0"/>
+                    <Setter TargetName="Title" Property="FontWeight" Value="Normal"/>
+                    <Setter TargetName="Title" Property="FontSize" Value="12"/>
+                    <Setter TargetName="Title" Property="Foreground" Value="{DynamicResource TextFillColorTertiaryBrush}"/>
+                    <Setter TargetName="Main" Property="Visibility" Value="Collapsed"/>
+                    <Setter TargetName="Body" Property="Margin" Value="0,-3,0,-6"/>
+                </DataTrigger>
+                <Trigger SourceName="Row" Property="IsMouseOver" Value="True">
+                    <Setter TargetName="Go" Property="Opacity" Value="1"/>
+                </Trigger>
+            </DataTemplate.Triggers>
+        </DataTemplate>
+    </UserControl.Resources>
+
+    <Border Margin="12" CornerRadius="12" Background="{DynamicResource PlayerTintBrush}"
+            BorderThickness="1" BorderBrush="{DynamicResource PlayerTrackBrush}">
+        <Border.Effect>
+            <DropShadowEffect BlurRadius="24" ShadowDepth="4" Opacity="0.45" Color="Black"/>
+        </Border.Effect>
+        <Border CornerRadius="12" Background="{DynamicResource PlayerVeilBrush}">
+            <DockPanel>
+                <!-- title -->
+                <Grid DockPanel.Dock="Top" Margin="18,14,10,10">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <ui:SymbolIcon Symbol="PlugConnected24" FontSize="16" Margin="0,0,8,0" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                        <TextBlock Text="소리 경로" FontSize="15" FontWeight="SemiBold" Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                    </StackPanel>
+                    <ui:Button HorizontalAlignment="Right" Appearance="Transparent" BorderThickness="0" Padding="6" ToolTip="닫기 (Esc)"
+                               Icon="{ui:SymbolIcon Dismiss16}" Click="Close_Click" AutomationProperties.Name="소리 경로 닫기"/>
+                </Grid>
+                <Rectangle DockPanel.Dock="Top" Height="1" Fill="{DynamicResource PlayerTrackBrush}"/>
+
+                <!-- processing precision and glitches -->
+                <Grid DockPanel.Dock="Bottom" Margin="16,4,16,16" Visibility="{Binding HasFooter, Converter={StaticResource Visible}}">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition/>
+                        <ColumnDefinition Width="8"/>
+                        <ColumnDefinition/>
+                    </Grid.ColumnDefinitions>
+                    <Border CornerRadius="8" Padding="11,7" Background="{DynamicResource PlayerPanelBrush}"
+                            ToolTip="음색 조절·볼륨·샘플 변환을 계산하는 정밀도">
+                        <StackPanel>
+                            <TextBlock Text="처리 정밀도" FontSize="10.5" Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
+                            <TextBlock Text="{Binding Precision}" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                        </StackPanel>
+                    </Border>
+                    <Border Grid.Column="2" CornerRadius="8" Padding="11,7" Background="{DynamicResource PlayerPanelBrush}"
+                            ToolTip="장치에 보낼 소리가 제때 준비되지 못해 끊긴 횟수 (이 곡에서)">
+                        <StackPanel>
+                            <TextBlock Text="끊김" FontSize="10.5" Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
+                            <TextBlock Text="{Binding Underruns}" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                        </StackPanel>
+                    </Border>
+                </Grid>
+
+                <ScrollViewer MaxHeight="600" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Focusable="False">
+                    <StackPanel Margin="16,14,16,6">
+                        <!-- the verdict: 원음 그대로, or how many places change the sound -->
+                        <Border CornerRadius="10" Padding="12,10" Background="{DynamicResource PlayerPanelBrush}" Margin="0,0,0,10">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Grid Width="28" Height="28" VerticalAlignment="Top" Margin="0,1,12,0">
+                                    <Ellipse x:Name="MarkBack" Opacity="0.18" Fill="{DynamicResource PlayerAccentBrush}"/>
+                                    <TextBlock x:Name="MarkText" Text="{Binding VerdictMark}" FontSize="13" FontWeight="Bold"
+                                               HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="{DynamicResource PlayerAccentBrush}"/>
+                                </Grid>
+                                <StackPanel Grid.Column="1">
+                                    <TextBlock Text="{Binding VerdictTitle}" FontSize="13.5" FontWeight="SemiBold" TextWrapping="Wrap"
+                                               Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                                    <TextBlock Text="{Binding VerdictText}" FontSize="12" Margin="0,2,0,0" TextWrapping="Wrap"
+                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+                        <ItemsControl ItemsSource="{Binding Steps}" ItemTemplate="{StaticResource StepTemplate}" Focusable="False"/>
+                    </StackPanel>
+                </ScrollViewer>
+            </DockPanel>
+        </Border>
+    </Border>
+</UserControl>

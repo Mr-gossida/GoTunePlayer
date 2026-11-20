@@ -47,7 +47,7 @@ public partial class ShellWindow
     private void NowPlayingCard_Closed(object? sender, EventArgs e) => _cardClosedAt = DateTime.UtcNow;
 
     /// <summary>The shortcuts that fit this song: no album/artist search without the tag, no
-    /// lyrics editor without lyrics, no Explorer for a song on a server.</summary>
+    /// Explorer for a song on a server.</summary>
     private void FillCard()
     {
         if (_playback.CurrentFile is not { } file) return;
@@ -56,11 +56,6 @@ public partial class ShellWindow
         CardArtistButton.Content = $"같은 아티스트 곡 찾기 · {file.Artist}";
         CardArtistButton.Visibility = string.IsNullOrWhiteSpace(file.Artist) ? Visibility.Collapsed : Visibility.Visible;
         CardDetails.Visibility = string.IsNullOrWhiteSpace(_playback.NowPlayingDetails) ? Visibility.Collapsed : Visibility.Visible;
-
-        var synced = _playback.HasSyncedLyrics;
-        CardLyricsButton.Content = synced ? "싱크 편집" : "싱크 가사 만들기";
-        CardLyricsButton.Icon = new SymbolIcon { Symbol = synced ? SymbolRegular.Edit24 : SymbolRegular.Sparkle24 };
-        CardLyricsButton.Visibility = synced || _playback.HasPlainLyricsOnly ? Visibility.Visible : Visibility.Collapsed;
 
         CardFolderButton.Visibility = RemotePath.IsRemote(file.Path) ? Visibility.Collapsed : Visibility.Visible;
     }
@@ -78,9 +73,8 @@ public partial class ShellWindow
 
     private void CardFindArtist_Click(object sender, RoutedEventArgs e) => FromCard(f => Player.SearchQueue(f.Artist ?? ""));
 
-    private void CardLyrics_Click(object sender, RoutedEventArgs e) => FromCard(_ => Player.OpenLyricsSync());
-
-    private void CardTagManager_Click(object sender, RoutedEventArgs e) => FromCard(ShowInTagManager);
+    /// <summary>This one song in the single-song editor (as the queue's 태그 편집), not 태그 관리.</summary>
+    private void CardEditTags_Click(object sender, RoutedEventArgs e) => FromCard(f => Views.SongEditorView.Open(this, [f]));
 
     private void CardFolder_Click(object sender, RoutedEventArgs e) => FromCard(f => PlayView.RevealInExplorer(f.Path));
 

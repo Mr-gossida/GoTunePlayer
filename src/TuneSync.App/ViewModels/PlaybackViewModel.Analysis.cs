@@ -48,6 +48,10 @@ public sealed partial class PlaybackViewModel
 
     public bool HasQualityBadge => QualityBadge.Length > 0;
 
+    /// <summary>What the playing file is (null until read, or when it can't be).</summary>
+    [ObservableProperty]
+    private AudioQuality? _currentQuality;
+
     /// <summary>Why a lossy song shows 16bit (it isn't in the file); null otherwise.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(QualityToolTip))]
@@ -64,6 +68,7 @@ public sealed partial class PlaybackViewModel
         QualityText = System.IO.Path.GetExtension(file.Path).TrimStart('.').ToUpperInvariant();
         QualityBadge = "";
         QualityNote = null;
+        CurrentQuality = null;
         AudioQuality? quality;
         try
         {
@@ -76,6 +81,7 @@ public sealed partial class PlaybackViewModel
         if (version != _qualityVersion || quality is null) return;
         QualityText = quality.Summary;
         QualityBadge = quality.Badge ?? "";
+        CurrentQuality = quality;
         QualityNote = quality.BitsAssumed
             ? $"{quality.Format} 같은 손실 압축 파일에는 비트 깊이가 저장되지 않아, 흔히 쓰는 16bit로 표시합니다. (GoTune은 32bit 부동소수점으로 디코딩합니다.)"
             : null;

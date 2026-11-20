@@ -132,6 +132,7 @@ public sealed class TonePlayer : IDisposable
     private MMDeviceEnumerator? _enumerator;
     private MMDevice? _device;
     private int _sharedDeviceBits;
+    private volatile string? _deviceName;
     private AudioClient? _client;
     private AudioRenderClient? _render;
     private string? _deviceId;
@@ -159,6 +160,8 @@ public sealed class TonePlayer : IDisposable
     private volatile string _layoutName = "스테레오";
     private ResampleFilter _resampleFilter;
     private int _sourceBits;
+    private int _sourceChannels;
+    private string? _decoderName;
     private ChannelLayout? _layout;
     private SampleWriter? _writer;
     private IResampler? _resampler;
@@ -282,6 +285,42 @@ public sealed class TonePlayer : IDisposable
                 conversion, detail, dsd, equalizer, _hardwareVolume, _layoutName, note)
             {
                 DeviceBits = _exclusiveOpen ? 0 : _sharedDeviceBits,
+            };
+        }
+    }
+
+    /// <summary>Every step the sound takes from the file to the device right now, for the
+    /// 소리 경로 panel (null until the device is open).</summary>
+    public SignalPath? Signal
+    {
+        get
+        {
+            if (Info is not { } info) return null;
+            var writer = _writer;
+            var toneOn = info.Path is not (OutputPath.BitPerfect or OutputPath.DoP) && !ReferenceEquals(_config, ToneConfig.Neutral);
+            return new SignalPath
+            {
+                Output = info,
+                Decoder = _decoderName ?? "",
+                DecodesToFloat = !_dop && !IsDsd,
+                SourceBits = _sourceBits,
+                SourceRate = _sampleRate,
+                SourceChannels = _sourceChannels,
+                DsdRate = _dsdRate,
+                DsdName = _dsdName,
+                Tone = toneOn ? _config : null,
+                Volume = _volume,
+                Muted = _muted,
+                HardwareVolume = _hardwareVolume,
+                Resampling = _resampling,
+                OutputRate = _outRate,
+                ResampleFilter = _resampling || _remastering ? _resampleFilterName : null,
+                Exclusive = _exclusiveOpen,
+                WritesFloat = writer?.IsFloat ?? false,
+                WriteBits = writer?.Bits ?? 0,
+                Dither = writer is { Dithers: true } ? writer.NoiseShaping ? "TPDF 디더 + 노이즈 셰이핑" : "TPDF 디더" : null,
+                DeviceName = _deviceName,
+                Underruns = Underruns,
             };
         }
     }
@@ -467,6 +506,8 @@ public sealed class TonePlayer : IDisposable
             _sampleRate = decoder.SampleRate;
             _sourceBits = decoder.SourceBits;
             _converted = decoder.IsConverted;
+            _sourceChannels = decoder.Channels;
+            _decoderName = decoder is MfDecoder ? "Windows Media Foundation" : "GoTune DSD 리더";
             _duration = decoder.Duration;
             _ringCapacity = (int)(_sampleRate * RingSeconds);
             _ring = new float[_ringCapacity * 2];
@@ -1028,6 +1069,7 @@ public sealed class TonePlayer : IDisposable
         _enumerator ??= new MMDeviceEnumerator();
         _device = OutputDevices.Open(_enumerator, output.DeviceId) ?? throw new InvalidOperationException("No playback device.");
         _deviceId = _device.ID;
+        _deviceName = NameOf(_device);
         var deviceChannels = SafeMixChannels(_device);
         var layout = ChannelLayout.Channels(output.Layout) <= deviceChannels ? output.Layout : SpeakerLayout.Stereo;
         var channels = ChannelLayout.Channels(layout);
@@ -1075,6 +1117,7 @@ public sealed class TonePlayer : IDisposable
                 CloseDevice();
                 _device = OutputDevices.Open(_enumerator, output.DeviceId) ?? throw new InvalidOperationException("No playback device.");
                 _deviceId = _device.ID;
+                _deviceName = NameOf(_device);
             }
         }
 
@@ -1119,6 +1162,7 @@ public sealed class TonePlayer : IDisposable
             CloseDevice();
             _device = OutputDevices.Open(_enumerator, output.DeviceId) ?? throw new InvalidOperationException("No playback device.");
             _deviceId = _device.ID;
+            _deviceName = NameOf(_device);
         }
 
         if (_dop) throw new DopUnavailableException("shared");
@@ -1153,6 +1197,12 @@ public sealed class TonePlayer : IDisposable
     };
 
     // Each MMDevice.AudioClient is a new COM object of its own, let go of here.
+    private static string? NameOf(MMDevice device)
+    {
+        try { return device.FriendlyName; }
+        catch (COMException) { return null; }
+    }
+
     private static int SafeMixChannels(MMDevice device)
     {
         try { using var client = device.AudioClient; return client.MixFormat.Channels; }

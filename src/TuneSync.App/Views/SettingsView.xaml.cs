@@ -51,6 +51,13 @@ public partial class SettingsView : Page
         ShowCategory(category);
     }
 
+    /// <summary>Opens on a category (e.g. "Sound" for 음향 from the 소리 경로 panel).</summary>
+    public void SelectCategory(string category)
+    {
+        if (NavList.Items.OfType<ListBoxItem>().FirstOrDefault(i => Equals(i.Tag, category)) is { } item)
+            NavList.SelectedItem = item;
+    }
+
     private void ShowCategory(string category)
     {
         foreach (var panel in CategoryPanels)

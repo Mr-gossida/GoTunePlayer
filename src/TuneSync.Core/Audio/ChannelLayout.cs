@@ -134,6 +134,14 @@ public sealed class SampleWriter
     /// <summary>Whether 16-bit noise shaping is in use.</summary>
     public bool NoiseShaping => _shape;
 
+    /// <summary>Bits of sound written per sample (24 in a 32-bit slot counts as 24).</summary>
+    public int Bits => _bits;
+
+    public bool IsFloat => _float;
+
+    /// <summary>Whether the last bit gets dither (processed sound to integer samples).</summary>
+    public bool Dithers => _dither && !_float;
+
     private static int ToInt(double sample, double scale, int max) =>
         (int)Math.Clamp(Math.Round(sample * scale), -max - 1, max);
 

@@ -37,6 +37,10 @@ public sealed partial class PlaybackViewModel
 
     public bool HasOutputBadges => OutputBadges.Count > 0;
 
+    /// <summary>The way the sound takes now, step by step (소리 경로); null while nothing plays
+    /// through the app's own player.</summary>
+    public Core.Audio.SignalPath? SignalPath => _player is Audio.ToneEngine engine && CurrentFile is not null ? engine.Signal : null;
+
     /// <summary>The song goes out bit-perfect: the equalizer and the volume are left out.</summary>
     public bool IsBitPerfect => _player is Audio.ToneEngine engine && engine.IsBitPerfect;
 

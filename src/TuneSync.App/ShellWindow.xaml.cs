@@ -85,6 +85,7 @@ public partial class ShellWindow : FluentWindow
             e.Handled = true;
             return;
         }
+        if (CloseSignalPathOnEscape(e)) return;
         if (e.Key == System.Windows.Input.Key.Escape && NowPlayingCard.IsOpen)
         {
             NowPlayingCard.IsOpen = false;
