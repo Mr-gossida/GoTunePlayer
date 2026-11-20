@@ -17,6 +17,9 @@ public sealed class NetworkLibrary : IDisposable
     private readonly AppSettings _settings;
     private readonly ConcurrentDictionary<string, IRemoteClient> _clients = new();
 
+    /// <summary>"Location|new key" already warned about (see <see cref="WarnIdentityChanged"/>).</summary>
+    private readonly ConcurrentDictionary<string, byte> _identityWarnings = new();
+
     public NetworkLibrary(AppSettings settings)
     {
         _settings = settings;
@@ -52,7 +55,76 @@ public sealed class NetworkLibrary : IDisposable
         if (_clients.TryGetValue(sourceId, out var existing)) return existing;
         if (Find(sourceId) is not { } source || source.Kind == RemoteKind.Smb) return null;
         var client = RemoteClientFactory.Create(source, CredentialStore.Load(sourceId));
+        if (client is IServerIdentityCheck check)
+        {
+            check.IdentityLearned += identity => OnUiThread(() => KeepLearned(sourceId, identity));
+            check.IdentityRejected += identity => OnUiThread(() => WarnIdentityChanged(sourceId, identity));
+        }
         return _clients.GetOrAdd(sourceId, client);
+    }
+
+    // --- who the servers are: SSH host keys and self-signed certificates, trusted on first use ---
+
+    /// <summary>A location connected for the first time since server keys/certificates are checked:
+    /// what its server showed is kept, so a different one is noticed from now on.</summary>
+    private void KeepLearned(string sourceId, ServerIdentity identity)
+    {
+        if (Find(sourceId) is not { } source) return;
+        var pinned = identity.IsCertificate ? source.CertificateThumbprint : source.HostKeyFingerprint;
+        if (pinned is not null) return; // trusted meanwhile in the setup window
+        Pin(source, identity);
+        AppSettingsStore.Save(_settings);
+    }
+
+    /// <summary>The setup window's "새 키 신뢰" on a saved location: kept right away (even if no folder
+    /// is added afterwards), and its client reconnects with it.</summary>
+    public void Trust(string sourceId, ServerIdentity identity)
+    {
+        if (Find(sourceId) is not { } source) return;
+        Pin(source, identity);
+        if (_clients.TryRemove(sourceId, out var old)) old.Dispose();
+        // a key warned about before and showing up again later is worth a warning again
+        foreach (var warned in _identityWarnings.Keys.Where(k => k.StartsWith(sourceId + "|", StringComparison.Ordinal)))
+            _identityWarnings.TryRemove(warned, out _);
+        AppSettingsStore.Save(_settings);
+    }
+
+    private static void Pin(RemoteSource source, ServerIdentity identity)
+    {
+        if (identity.IsCertificate)
+        {
+            source.CertificateThumbprint = identity.Fingerprint;
+        }
+        else
+        {
+            source.HostKeyFingerprint = identity.Fingerprint;
+            source.HostKeyAlgorithm = identity.Algorithm;
+        }
+    }
+
+    /// <summary>A scan, a check or playback was refused because the server showed another key or
+    /// certificate. Nothing asks in the background; this says why it stopped, what the server showed
+    /// and where to trust it - once per location and new key, as scans and reconnect checks keep trying.</summary>
+    private void WarnIdentityChanged(string sourceId, ServerIdentity presented)
+    {
+        if (!_identityWarnings.TryAdd($"{sourceId}|{presented.Fingerprint}", 0)) return;
+        var name = Find(sourceId)?.Name ?? "네트워크 위치";
+        if (presented.IsCertificate)
+            Toast.Warning($"'{name}'의 인증서가 바뀌어 연결을 막았습니다",
+                "인증서를 새로 발급했거나 NAS를 다시 설치했다면 설정 › 라이브러리 › 네트워크 위치에서 이 위치의 '폴더 추가'로 다시 연결해 새 인증서를 확인해 주세요. "
+                + $"그런 적이 없다면 누군가 연결을 가로채고 있을 수 있습니다. (새 인증서 SHA-256: {presented.DisplayFingerprint})");
+        else
+            Toast.Warning($"'{name}'의 SSH 키가 바뀌어 연결을 막았습니다",
+                "서버를 다시 설치했거나 SSH 키를 바꿨다면 설정 › 라이브러리 › 네트워크 위치에서 이 위치의 '폴더 추가'로 다시 연결해 새 키를 확인해 주세요. "
+                + $"그런 적이 없다면 누군가 연결을 가로채고 있을 수 있습니다. (새 키: {presented.Algorithm} {presented.DisplayFingerprint})");
+    }
+
+    /// <summary>Settings are changed and saved on the UI thread, like every other settings change;
+    /// clients report from their connection threads.</summary>
+    private static void OnUiThread(Action action)
+    {
+        if (System.Windows.Application.Current?.Dispatcher is { } dispatcher) dispatcher.BeginInvoke(action);
+        else action();
     }
 
     /// <summary>Tries the connection with these details (nothing is saved).</summary>
@@ -67,7 +139,7 @@ public sealed class NetworkLibrary : IDisposable
         await client.TestAsync(ct);
     }
 
-    /// <summary>A client for browsing while setting a location up (before it's saved).</summary>
+    /// <summary>A client for trying and browsing a location while setting it up (before it's saved).</summary>
     public static IRemoteClient CreateClient(RemoteSource source, string password) => RemoteClientFactory.Create(source, password);
 
     public void Save(RemoteSource source, string password)
@@ -81,6 +153,9 @@ public sealed class NetworkLibrary : IDisposable
             existing.Port = source.Port;
             existing.UserName = source.UserName;
             existing.AcceptAnyCertificate = source.AcceptAnyCertificate;
+            existing.CertificateThumbprint = source.CertificateThumbprint;
+            existing.HostKeyFingerprint = source.HostKeyFingerprint;
+            existing.HostKeyAlgorithm = source.HostKeyAlgorithm;
         }
         else
         {

@@ -468,9 +468,19 @@ public sealed partial class TagEditorViewModel : ObservableObject
 
     private int _coverVersion;
 
+    /// <summary>The selection the big cover was last loaded for: while a new cover for the same
+    /// songs decodes, the one shown stays up rather than flickering.</summary>
+    private int _coverSelection = -1;
+
+    /// <summary>The big cover is decoded no larger than this: it's shown at up to 340 px (a little
+    /// more on a high-DPI screen).</summary>
+    private const int CoverDecodeSize = 800;
+
     private void LoadCover()
     {
         var version = ++_coverVersion;
+        var sameSongs = _coverSelection == _selectionVersion;
+        _coverSelection = _selectionVersion;
         RefreshCandidateList();
         CoverTiles.Clear();
         OnPropertyChanged(nameof(ShowCoverPlaceholder));
@@ -481,39 +491,64 @@ public sealed partial class TagEditorViewModel : ObservableObject
             var file = _selection[0];
             if (file.PendingCover is { } pending)
             {
-                CoverImage = pending.Length > 0 ? ImageHelper.ToBitmapImage(pending) : null;
+                if (pending.Length == 0)
+                {
+                    CoverImage = null;
+                    CoverInfo = "커버를 지웁니다 (저장 전)";
+                    return;
+                }
+                if (!sameSongs)
+                {
+                    CoverImage = file.CoverThumbnail;
+                    CoverInfo = "불러오는 중…";
+                }
                 var picked = CoverCandidates.FirstOrDefault(c => c.IsSelected && !c.IsOriginal);
-                CoverInfo = pending.Length == 0 ? "커버를 지웁니다 (저장 전)"
-                    : picked?.Candidate is { } found
-                        ? $"{(picked.IsRecommended ? "추천 커버" : "새 커버")} · {Dimensions(CoverImage)} · {found.Source} · 일치 {found.ScorePercent}%"
-                        : $"새 커버 · {Dimensions(CoverImage)} (저장 전)";
+                _ = ShowPendingAsync();
                 return;
+
+                async Task ShowPendingAsync()
+                {
+                    var (cover, _) = await DecodeCoverAsync(() => pending);
+                    if (version != _coverVersion) return;
+                    CoverImage = cover?.Image;
+                    var size = cover is null ? "" : $" · {cover.SizeText}";
+                    CoverInfo = picked?.Candidate is { } found
+                        ? $"{(picked.IsRecommended ? "추천 커버" : "새 커버")}{size} · {found.Source} · 일치 {found.ScorePercent}%"
+                        : $"새 커버{size} (저장 전)";
+                }
             }
             CoverImage = file.CoverThumbnail;
             CoverInfo = file.HasCover ? "불러오는 중…" : "커버 없음";
             if (!file.HasCover) return;
-            _ = Task.Run(() =>
+            _ = ShowEmbeddedAsync();
+            return;
+
+            async Task ShowEmbeddedAsync()
             {
-                try { return CoverArtService.GetCover(file.Path); } catch { return null; }
-            }).ContinueWith(t =>
-            {
+                var (cover, length) = await DecodeCoverAsync(() => CoverArtService.GetCover(file.Path));
                 if (version != _coverVersion) return;
-                var image = ImageHelper.ToBitmapImage(t.Result);
-                if (image is null) { CoverInfo = "커버를 읽지 못했습니다"; return; }
-                CoverImage = image;
-                CoverInfo = $"{Dimensions(image)} · {(t.Result!.Length / 1024d):0} KB";
-            }, TaskScheduler.FromCurrentSynchronizationContext());
+                if (cover is null) { CoverInfo = "커버를 읽지 못했습니다"; return; }
+                CoverImage = cover.Image;
+                CoverInfo = $"{cover.SizeText} · {length / 1024d:0} KB";
+            }
         }
         else if (_selection.Count > 1)
         {
-            CoverImage = null;
             if (IsCoverPending)
             {
                 var pending = _selection.First(f => f.PendingCover is not null).PendingCover!;
-                CoverImage = pending.Length > 0 ? ImageHelper.ToBitmapImage(pending) : null;
                 CoverInfo = pending.Length > 0 ? $"{_selection.Count}곡 모두 이 커버로 바뀝니다 (저장 전)" : $"{_selection.Count}곡의 커버를 지웁니다 (저장 전)";
+                if (pending.Length == 0 || !sameSongs) CoverImage = null;
+                if (pending.Length > 0) _ = ShowSharedAsync();
                 return;
+
+                async Task ShowSharedAsync()
+                {
+                    var (cover, _) = await DecodeCoverAsync(() => pending);
+                    if (version == _coverVersion) CoverImage = cover?.Image;
+                }
             }
+            CoverImage = null;
             foreach (var cover in DistinctCovers(6)) CoverTiles.Add(cover);
             OnPropertyChanged(nameof(ShowCoverPlaceholder));
             var groups = _selection.Where(f => f.HasCover).GroupBy(f => CoverKey(f)).Count();
@@ -532,7 +567,16 @@ public sealed partial class TagEditorViewModel : ObservableObject
         }
     }
 
-    private static string Dimensions(BitmapSource? image) => image is null ? "" : $"{image.PixelWidth}×{image.PixelHeight}";
+    /// <summary>Reads and decodes a cover for the big picture off the UI thread: a 3000px scan
+    /// decoded whole costs ~36 MB and a moment of the UI each time, and a file's picture can claim
+    /// to be 20000px across. The cover is null when there's none or it can't be shown; the length
+    /// is its size in bytes.</summary>
+    private static Task<(ImageHelper.DisplayImage? Cover, int Length)> DecodeCoverAsync(Func<byte[]?> read) => Task.Run(() =>
+    {
+        byte[]? bytes;
+        try { bytes = read(); } catch { bytes = null; }
+        return (ImageHelper.ToDisplayImage(bytes, CoverDecodeSize), bytes?.Length ?? 0);
+    });
 
     private static string CoverKey(LibraryFileViewModel file) =>
         file.Model.ThumbnailBytes is { } bytes ? Convert.ToHexString(System.Security.Cryptography.SHA1.HashData(bytes)) : "";
@@ -582,6 +626,11 @@ public sealed partial class TagEditorViewModel : ObservableObject
         catch (Exception ex)
         {
             Toast.Error("이미지를 열지 못했습니다", ex.Message);
+            return;
+        }
+        if (ImageHelper.TryGetPixelSize(bytes, out var width, out var height) && width > 0 && height > 0 && !ImageHelper.IsSensibleSize(width, height))
+        {
+            Toast.Warning("이미지가 너무 큽니다", $"{width}×{height} 이미지는 커버로 쓸 수 없습니다. 더 작은 이미지를 선택하세요.");
             return;
         }
         if (ImageHelper.ToBitmapImage(bytes, 64) is null)

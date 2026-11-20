@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Windows.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 
@@ -43,7 +42,7 @@ public sealed partial class SleepTimerViewModel : ObservableObject
 
     public void Start(TimeSpan after)
     {
-        CancelWindowsShutdown();
+        if (!CancelWindowsShutdown()) return;
         _deadline = DateTime.Now + after;
         IsShuttingDown = false;
         IsActive = true;
@@ -55,8 +54,8 @@ public sealed partial class SleepTimerViewModel : ObservableObject
     public void Cancel()
     {
         var wasShuttingDown = IsShuttingDown;
+        if (!CancelWindowsShutdown()) return;
         _tick.Stop();
-        CancelWindowsShutdown();
         IsActive = false;
         IsShuttingDown = false;
         RemainingText = "";
@@ -82,37 +81,23 @@ public sealed partial class SleepTimerViewModel : ObservableObject
         if (_playback.IsPlaying) _playback.TogglePlayPauseCommand.Execute(null);
         _playback.SaveSession();
         IsShuttingDown = true;
-        try
+        if (SystemTools.RunShutdown($"/s /t {(int)WindowsWarning.TotalSeconds} /c \"GoTune 예약 종료: 1분 뒤 PC가 종료됩니다.\"",
+                "PC를 종료하지 못했습니다"))
         {
-            Process.Start(new ProcessStartInfo("shutdown.exe",
-                $"/s /t {(int)WindowsWarning.TotalSeconds} /c \"GoTune 예약 종료: 1분 뒤 PC가 종료됩니다.\"")
-            {
-                CreateNoWindow = true,
-                UseShellExecute = false,
-            });
             Toast.Warning("1분 뒤 PC가 종료됩니다", "취소하려면 예약 종료 버튼을 누르세요.");
+            return;
         }
-        catch (Exception ex)
-        {
-            _tick.Stop();
-            IsActive = false;
-            IsShuttingDown = false;
-            Toast.Error("PC를 종료하지 못했습니다", ex.Message);
-        }
+        _tick.Stop();
+        IsActive = false;
+        IsShuttingDown = false;
     }
 
-    private void CancelWindowsShutdown()
-    {
-        if (!IsShuttingDown) return;
-        try
-        {
-            Process.Start(new ProcessStartInfo("shutdown.exe", "/a") { CreateNoWindow = true, UseShellExecute = false })?.WaitForExit(3000);
-        }
-        catch
-        {
-            // nothing scheduled with Windows (anymore) - fine
-        }
-    }
+    /// <summary>Calls off the shutdown already handed to Windows, if there is one. Not waited for:
+    /// a new one is at least a minute away. False when shutdown.exe couldn't be started - the PC
+    /// still shuts down, so the timer is left as it is (still offering to cancel) and a toast
+    /// says why, instead of claiming the shutdown was called off.</summary>
+    private bool CancelWindowsShutdown() =>
+        !IsShuttingDown || SystemTools.RunShutdown("/a", "PC 종료를 취소하지 못했습니다");
 
     public static string Describe(TimeSpan span) =>
         span.TotalMinutes < 60 ? $"{(int)span.TotalMinutes}분"

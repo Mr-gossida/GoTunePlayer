@@ -47,6 +47,35 @@ public class TagServiceTests
         }
     }
 
+    // Auto-fill hands Write the whole TrackTags with one field changed. TrackTags holds only the
+    // first artist/genre and the year, so the fields it didn't change must stay as the file has them.
+    [Theory]
+    [InlineData("sample.mp3")]
+    [InlineData("sample.flac")]
+    [InlineData("sample.m4a")]
+    public void Write_LeavesUnchangedFieldsAsTheFileHasThem(string fixtureName)
+    {
+        var path = TestFixtures.CopyFixture(fixtureName);
+        try
+        {
+            NativeTags.Write(path, ["아이유", "성시경"], ["K-Pop", "발라드"], "2017-05-12");
+            var tags = TagService.Read(path);
+            tags.Album = "Palette";
+
+            TagService.Write(tags);
+
+            var read = NativeTags.Read(path);
+            Assert.Equal("Palette", TagService.Read(path).Album);
+            Assert.Equal(["아이유", "성시경"], read.Artists);
+            Assert.Equal(["K-Pop", "발라드"], read.Genres);
+            Assert.Equal("2017-05-12", read.Date);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
     [Theory]
     [InlineData("sample.mp3")]
     [InlineData("sample.flac")]

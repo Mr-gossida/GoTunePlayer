@@ -69,6 +69,7 @@ public sealed partial class LyricsSyncViewModel : ObservableObject, IDisposable
     private readonly AppSettings _settings;
     private LyricsSyncEngine? _engine;
     private CancellationTokenSource? _work;
+    private bool _disposed;
 
     public LyricsSyncViewModel(PlaybackViewModel playback, LibraryViewModel library, Network.NetworkLibrary network,
         AppSettings settings, LibraryFileViewModel file, string lyrics)
@@ -195,14 +196,15 @@ public sealed partial class LyricsSyncViewModel : ObservableObject, IDisposable
                 "새로 맞추기"))
             return;
 
-        _work = new CancellationTokenSource();
-        var ct = _work.Token;
+        var ct = BeginWork();
         IsSyncing = true;
         Progress = 0;
         try
         {
             Status = "노래를 준비하는 중…";
-            var audio = File.IsRemote ? await _network.Cache.CompletedPathAsync(File.Path) : File.Path;
+            // Cancelling stops the waiting; the download itself goes on (the cache keeps it).
+            var audio = File.IsRemote ? await _network.Cache.CompletedPathAsync(File.Path).WaitAsync(ct) : File.Path;
+            ct.ThrowIfCancellationRequested();
             var sung = Lines.Where(l => !l.IsGap).ToList();
             var plain = string.Join("\n", sung.Select(l => l.Text));
             _engine ??= new LyricsSyncEngine(LyricsSyncOptions.From(_settings));
@@ -309,7 +311,7 @@ public sealed partial class LyricsSyncViewModel : ObservableObject, IDisposable
 
     private async Task<bool> DownloadModelAsync()
     {
-        _work = new CancellationTokenSource();
+        var ct = BeginWork();
         IsDownloading = true;
         try
         {
@@ -320,7 +322,7 @@ public sealed partial class LyricsSyncViewModel : ObservableObject, IDisposable
                 {
                     Progress = p;
                     Status = $"보컬 분리 모델을 받는 중… {(int)(p * 100)}% ({p * 64:0}/{VocalModelStore.DisplaySize})";
-                }), _work.Token);
+                }), ct);
             }
             if (!WhisperModelStore.IsDownloaded)
             {
@@ -329,7 +331,7 @@ public sealed partial class LyricsSyncViewModel : ObservableObject, IDisposable
                 {
                     Progress = p;
                     Status = $"음성 인식 모델을 받는 중… {(int)(p * 100)}% ({p * 190:0}/{WhisperModelStore.DisplaySize})";
-                }), _work.Token);
+                }), ct);
             }
             OnPropertyChanged(nameof(NeedsModel));
             return true;
@@ -354,6 +356,15 @@ public sealed partial class LyricsSyncViewModel : ObservableObject, IDisposable
 
     [RelayCommand]
     private void CancelWork() => _work?.Cancel();
+
+    /// <summary>A fresh cancellation for the next job - cancelled already once the window has
+    /// closed (a download that finished just then mustn't start a sync no one will see).</summary>
+    private CancellationToken BeginWork()
+    {
+        _work = new CancellationTokenSource();
+        if (_disposed) _work.Cancel();
+        return _work.Token;
+    }
 
     // ---- listening and tapping ----
 
@@ -527,7 +538,17 @@ public sealed partial class LyricsSyncViewModel : ObservableObject, IDisposable
 
     public void Dispose()
     {
+        _disposed = true;
         _work?.Cancel();
-        _engine?.Dispose();
+        var engine = _engine;
+        _engine = null;
+        if (engine is null) return;
+        // Cancelling doesn't stop a sync at once: until the piece it's on is done it's still in
+        // ONNX Runtime or whisper.cpp, and freeing their models under them crashes the app. Freed
+        // once the sync (model download and song preparation included) has ended.
+        if (AutoSyncCommand.ExecutionTask is { IsCompleted: false } running)
+            _ = running.ContinueWith(_ => engine.Dispose(), CancellationToken.None, TaskContinuationOptions.None, TaskScheduler.Default);
+        else
+            engine.Dispose();
     }
 }

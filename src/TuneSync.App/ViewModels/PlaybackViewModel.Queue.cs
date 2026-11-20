@@ -13,7 +13,9 @@ namespace TuneSync.App.ViewModels;
 // with "play next".
 public sealed partial class PlaybackViewModel
 {
-    private readonly List<LibraryFileViewModel> _shuffleBag = [];
+    /// <summary>The songs played in this shuffle round, by path (so a rescan, which rebuilds the
+    /// rows, doesn't end the round).</summary>
+    private readonly HashSet<string> _shufflePlayed = new(StringComparer.OrdinalIgnoreCase);
     /// <summary>Songs played before the current one, newest last; "이전" walks back through it.</summary>
     private readonly LinkedList<LibraryFileViewModel> _history = new();
     private const int HistoryLimit = 500;
@@ -138,7 +140,7 @@ public sealed partial class PlaybackViewModel
 
     partial void OnIsShuffleChanged(bool value)
     {
-        _shuffleBag.Clear(); // a fresh shuffle each time it's turned on
+        _shufflePlayed.Clear(); // a fresh shuffle each time it's turned on
         _settings.Shuffle = value;
         AppSettingsStore.Save(_settings);
     }
@@ -170,7 +172,6 @@ public sealed partial class PlaybackViewModel
     {
         var leaving = files.ToHashSet();
         foreach (var file in files.Where(f => f.IsUpNext)) CancelUpNext(file);
-        _shuffleBag.RemoveAll(leaving.Contains);
         if (CurrentFile is not { } current || !leaving.Contains(current)) return;
         var list = CurrentList();
         var index = list.IndexOf(current);
@@ -184,7 +185,7 @@ public sealed partial class PlaybackViewModel
         var files = CurrentList();
         if (files.Count == 0) return;
 
-        var currentIndex = CurrentFile is null ? -1 : files.IndexOf(CurrentFile);
+        var currentIndex = IndexOfCurrent(files);
         var anchor = _removedCurrentIndex;
         _removedCurrentIndex = -1;
         if (currentIndex < 0 && anchor >= 0)
@@ -198,25 +199,29 @@ public sealed partial class PlaybackViewModel
         PlayFile(files[nextIndex]);
     }
 
-    /// <summary>Shuffle draws from a "bag" holding every track once, so nothing repeats until the
-    /// whole list has played. Null when the bag is spent and shouldn't be refilled.</summary>
+    /// <summary>Shuffle plays every track of the list once, in random order, before any plays
+    /// again. Null when the round is over and shouldn't start again (repeat off).</summary>
     private LibraryFileViewModel? NextShuffled(bool refillWhenEmpty)
     {
         var files = CurrentList();
         if (files.Count == 0) return null;
 
-        var visible = files.ToHashSet();
-        _shuffleBag.RemoveAll(f => !visible.Contains(f));
-        if (_shuffleBag.Count == 0)
+        // The playing track is part of the round, also when it was picked by hand or before
+        // shuffle was turned on: a round goes on from whatever plays, not only from "다음".
+        var playing = PlayingPath;
+        if (playing is not null) _shufflePlayed.Add(playing);
+        var left = files.Where(f => !_shufflePlayed.Contains(f.Path)).ToList();
+        if (left.Count == 0)
         {
+            // Every track has played: the round is over. A new round leaves out the track
+            // playing now, so it doesn't come straight back.
+            _shufflePlayed.Clear();
             if (!refillWhenEmpty) return null;
-            _shuffleBag.AddRange(files.Where(f => f != CurrentFile).OrderBy(_ => Random.Shared.Next()));
-            if (_shuffleBag.Count == 0) return CurrentFile; // a one-track list
+            if (playing is not null) _shufflePlayed.Add(playing);
+            left = files.Where(f => !_shufflePlayed.Contains(f.Path)).ToList();
+            if (left.Count == 0) return files[0]; // a one-track list: that track again
         }
-
-        var next = _shuffleBag[^1];
-        _shuffleBag.RemoveAt(_shuffleBag.Count - 1);
-        return next;
+        return left[Random.Shared.Next(left.Count)];
     }
 
     /// <summary>End of a track: obeys repeat (one: replay, all: wrap around, off: stop after the
@@ -248,12 +253,88 @@ public sealed partial class PlaybackViewModel
         }
 
         var files = CurrentList();
-        var index = CurrentFile is null ? -1 : files.IndexOf(CurrentFile);
+        var index = IndexOfCurrent(files);
+        if (_library.IsScanning && (index < 0 || index == files.Count - 1))
+        {
+            // A rescan is still bringing the songs back: this one's row, or the ones after it, may
+            // not be there yet. Stop meanwhile and go on once the list is whole again, rather than
+            // stop for good or start over from the top.
+            Stop();
+            _advanceAfterScan = true;
+            return;
+        }
         if (index >= 0 && index < files.Count - 1)
             PlayFile(files[index + 1]);
         else if (Repeat == RepeatMode.All && files.Count > 0)
             PlayFile(files[0]);
         else
             Stop();
+    }
+
+    /// <summary>A track ended while a rescan was rebuilding the list: the next one is picked when
+    /// the scan is over. Anything picked, stopped or sought meanwhile calls it off.</summary>
+    private bool _advanceAfterScan;
+
+    /// <summary>Where the playing track is in <paramref name="files"/>: its own row, or else the
+    /// row of the same file (a row from before a rescan, or the file was renamed while playing).</summary>
+    private int IndexOfCurrent(List<LibraryFileViewModel> files)
+    {
+        if (CurrentFile is not { } current) return -1;
+        var index = files.IndexOf(current);
+        if (index >= 0) return index;
+        var path = PlayingPath;
+        return files.FindIndex(f => string.Equals(f.Path, path, StringComparison.OrdinalIgnoreCase));
+    }
+
+    // --- a rescan builds a new row for every song: what playback holds moves over to them ---
+
+    /// <summary>A scan added a batch of rows. Rows playback still holds from before a rescan - the
+    /// playing track, the songs reserved with "다음에 재생", the play history - are swapped for the
+    /// new rows of the same files, so the queue goes on from where it was (rather than stopping or
+    /// starting over from the top when the track ends) and keeps its marks.</summary>
+    private void OnFilesAdded(IReadOnlyList<LibraryFileViewModel> added)
+    {
+        var byPath = new Dictionary<string, LibraryFileViewModel>(StringComparer.OrdinalIgnoreCase);
+        foreach (var row in added) byPath.TryAdd(row.Path, row);
+        HashSet<LibraryFileViewModel>? present = null;
+
+        // The new row for one held: only when the list doesn't have the held one anymore (a file
+        // can be in the list twice - added on its own and inside a folder).
+        LibraryFileViewModel? NewRowFor(LibraryFileViewModel held, string path)
+        {
+            if (!byPath.TryGetValue(path, out var row) || ReferenceEquals(row, held)) return null;
+            present ??= new HashSet<LibraryFileViewModel>(_library.Files);
+            return present.Contains(held) ? null : row;
+        }
+
+        if (CurrentFile is { } current && PlayingPath is { } playing && NewRowFor(current, playing) is { } now)
+            RelinkCurrent(now);
+
+        var reserved = false;
+        for (var i = 0; i < _upNext.Count; i++)
+        {
+            if (NewRowFor(_upNext[i], _upNext[i].Path) is not { } row) continue;
+            _upNext[i] = row;
+            reserved = true;
+        }
+        if (reserved) RenumberUpNext(); // the new rows show their place in it
+
+        for (var node = _history.First; node is not null; node = node.Next)
+            if (NewRowFor(node.Value, node.Value.Path) is { } row) node.Value = row;
+    }
+
+    /// <summary>A scan has finished: reserved songs that didn't come back with it are dropped, so
+    /// the numbers on the others count only what will play, and a track that ended during the
+    /// scan moves on now.</summary>
+    private void OnScanFinished()
+    {
+        if (_upNext.Count > 0)
+        {
+            var present = _library.Files.ToHashSet();
+            if (_upNext.RemoveAll(f => !present.Contains(f)) > 0) RenumberUpNext();
+        }
+        if (!_advanceAfterScan) return;
+        _advanceAfterScan = false;
+        AdvanceOrStop();
     }
 }

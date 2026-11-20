@@ -84,20 +84,26 @@ public static class TagService
     }
 
     /// <summary>Copies the text tags onto an open file (saved by the caller), so several edits
-    /// can share one save - for a network file that's one upload instead of several.</summary>
+    /// can share one save - for a network file that's one upload instead of several.
+    /// Only the fields that differ from what the file holds are written: <see cref="TrackTags"/>
+    /// keeps just the first artist/genre/... and the year, so writing an unchanged field back would
+    /// drop its other values and cut a full date ("2017-05-12") down to the year.</summary>
     public static void ApplyTo(TagLib.File file, TrackTags tags)
     {
         var t = file.Tag;
-        t.Title = tags.Title;
-        t.Performers = string.IsNullOrEmpty(tags.Artist) ? [] : [tags.Artist];
-        t.AlbumArtists = string.IsNullOrEmpty(tags.AlbumArtist) ? [] : [tags.AlbumArtist];
-        t.Album = tags.Album;
-        t.Composers = string.IsNullOrEmpty(tags.Composer) ? [] : [tags.Composer];
-        t.Genres = string.IsNullOrEmpty(tags.Genre) ? [] : [tags.Genre];
-        t.Track = tags.Track;
-        t.Disc = tags.Disc;
-        t.Year = tags.Year;
+        var now = ReadTags(file, tags.Path);
+        if (now.Title != tags.Title) t.Title = tags.Title;
+        if (now.Artist != tags.Artist) t.Performers = Values(tags.Artist);
+        if (now.AlbumArtist != tags.AlbumArtist) t.AlbumArtists = Values(tags.AlbumArtist);
+        if (now.Album != tags.Album) t.Album = tags.Album;
+        if (now.Composer != tags.Composer) t.Composers = Values(tags.Composer);
+        if (now.Genre != tags.Genre) t.Genres = Values(tags.Genre);
+        if (now.Track != tags.Track) t.Track = tags.Track;
+        if (now.Disc != tags.Disc) t.Disc = tags.Disc;
+        if (now.Year != tags.Year) t.Year = tags.Year;
     }
+
+    private static string[] Values(string value) => string.IsNullOrEmpty(value) ? [] : [value];
 
     public static TimeSpan ReadDuration(string path)
     {

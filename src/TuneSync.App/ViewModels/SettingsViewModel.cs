@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.IO;
 using System.Reflection;
 using System.Windows;
@@ -183,11 +182,7 @@ public sealed partial class SettingsViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private static void OpenCacheFolder()
-    {
-        Directory.CreateDirectory(Network.StreamingCache.Folder);
-        Process.Start(new ProcessStartInfo("explorer.exe", $"\"{Network.StreamingCache.Folder}\"") { UseShellExecute = true });
-    }
+    private static void OpenCacheFolder() => SystemTools.OpenFolder(Network.StreamingCache.Folder, create: true);
 
     // --- start with Windows ---
 
@@ -465,9 +460,5 @@ public sealed partial class SettingsViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private static void OpenDataFolder()
-    {
-        Directory.CreateDirectory(DataFolder);
-        Process.Start(new ProcessStartInfo("explorer.exe", $"\"{DataFolder}\"") { UseShellExecute = true });
-    }
+    private static void OpenDataFolder() => SystemTools.OpenFolder(DataFolder, create: true);
 }

@@ -32,7 +32,7 @@ public static class MediaLibraryScanner
         [EnumeratorCancellation] CancellationToken ct = default)
     {
         var files = await Task.Run(() => EnumerateAudioFileInfos(rootFolder, includeSubfolders), ct);
-        await foreach (var item in ScanIndexedAsync(files, index, ct))
+        await foreach (var item in ScanIndexedAsync(files, index, StringComparer.OrdinalIgnoreCase, ct))
             yield return item;
     }
 
@@ -49,19 +49,21 @@ public static class MediaLibraryScanner
             .Where(f => f.Exists)
             .Select(f => (f.FullName, f.Length, f.LastWriteTimeUtc))
             .ToList(), ct);
-        await foreach (var item in ScanIndexedAsync(files, index, ct))
+        await foreach (var item in ScanIndexedAsync(files, index, StringComparer.OrdinalIgnoreCase, ct))
             yield return item;
     }
 
     /// <summary>Known songs first (from the index, instantly), then the new or changed ones read
-    /// from disk - and remembered for next time.</summary>
+    /// from disk - and remembered for next time. A song listed twice (same path by
+    /// <paramref name="pathComparer"/>) is taken once.</summary>
     private static async IAsyncEnumerable<LibraryFile> ScanIndexedAsync(
         List<(string Path, long Size, DateTime Modified)> files,
         LibraryIndex index,
+        StringComparer pathComparer,
         [EnumeratorCancellation] CancellationToken ct)
     {
         var toRead = new List<string>();
-        var stamps = new Dictionary<string, (long Size, DateTime Modified)>(StringComparer.OrdinalIgnoreCase);
+        var stamps = new Dictionary<string, (long Size, DateTime Modified)>(pathComparer);
         foreach (var (path, size, modified) in files)
         {
             if (!stamps.TryAdd(path, (size, modified))) continue;
@@ -197,6 +199,10 @@ public static class MediaLibraryScanner
 
     // --- network sources (WebDAV / FTP / SFTP) ---
 
+    /// <summary>How many folders deep a network scan goes below the chosen one: far more than any
+    /// music library needs, but it ends a link loop on the server that keeps making new paths.</summary>
+    private const int MaxRemoteDepth = 32;
+
     /// <summary>Walks a remote folder (and its subfolders) and reads each song's tags over the
     /// network - only the few hundred KB that hold them. Songs already in <paramref name="index"/>
     /// with the same size and date are taken from it without touching the server again.</summary>
@@ -208,18 +214,23 @@ public static class MediaLibraryScanner
         LibraryIndex index,
         [EnumeratorCancellation] CancellationToken ct = default)
     {
-        var files = new List<RemoteEntry>();
-        var pending = new Queue<string>([folder]);
+        var files = new List<(string Path, long Size, DateTime Modified)>();
+        // Each folder is listed once. A server may report a folder inside itself (in its own
+        // case, as a relative href), a parent, or two folders inside each other; walking those
+        // again would repeat their songs or never end. Case counts here: on most servers
+        // /Music/live and /Music/Live are two folders.
+        var listed = new HashSet<string>(StringComparer.Ordinal) { FolderKey(folder) };
+        var pending = new Queue<(string Path, int Depth)>([(folder, 0)]);
         while (pending.Count > 0)
         {
             ct.ThrowIfCancellationRequested();
-            var current = pending.Dequeue();
+            var (current, depth) = pending.Dequeue();
             IReadOnlyList<RemoteEntry> entries;
             try
             {
                 entries = await client.ListAsync(current, ct);
             }
-            catch (Exception) when (current != folder)
+            catch (Exception) when (depth > 0)
             {
                 continue; // an unreadable subfolder shouldn't sink the whole scan
             }
@@ -227,30 +238,37 @@ public static class MediaLibraryScanner
             {
                 if (entry.IsDirectory)
                 {
-                    if (includeSubfolders && !entry.Name.StartsWith('.') && !entry.Name.StartsWith('@')) pending.Enqueue(entry.Path);
+                    if (includeSubfolders && depth < MaxRemoteDepth && !entry.Name.StartsWith('.') && !entry.Name.StartsWith('@')
+                        && !IsSelfOrParent(entry.Path, current) && listed.Add(FolderKey(entry.Path)))
+                        pending.Enqueue((entry.Path, depth + 1));
                 }
                 else if (TagService.IsSupported(entry.Name))
                 {
-                    files.Add(entry);
+                    var path = RemotePath.Build(sourceId, entry.Path);
+                    // With its date: the streaming cache then notices, without asking the server, a
+                    // cached copy that the server has replaced since (another PC, another app).
+                    Remote.RemoteFiles.RememberSize(path, entry.Size, entry.Modified);
+                    files.Add((path, entry.Size, entry.Modified));
                 }
             }
         }
 
-        var toRead = new List<string>();
-        foreach (var entry in files)
-        {
-            var path = RemotePath.Build(sourceId, entry.Path);
-            Remote.RemoteFiles.RememberSize(path, entry.Size);
-            if (index.TryGet(path, entry.Size, entry.Modified) is { } known) yield return known;
-            else toRead.Add(path);
-        }
-
-        var stamps = files.ToDictionary(f => RemotePath.Build(sourceId, f.Path), f => (f.Size, f.Modified));
-        await foreach (var item in ScanFilesAsync(toRead, ct))
-        {
-            if (stamps.TryGetValue(item.Path, out var stamp)) index.Put(item, stamp.Size, stamp.Modified);
+        // Remote paths are case-sensitive: a.mp3 and A.mp3 can be two songs.
+        await foreach (var item in ScanIndexedAsync(files, index, StringComparer.Ordinal, ct))
             yield return item;
-        }
+    }
+
+    /// <summary>One spelling per remote folder: a leading slash and no trailing one.</summary>
+    private static string FolderKey(string path) => "/" + path.Trim('/');
+
+    /// <summary>Whether <paramref name="entry"/>, listed as a subfolder of <paramref name="folder"/>,
+    /// is really that folder or one above it (the root included) - an odd href can say so. Case is
+    /// ignored: a server that ignores it may spell the folder its own way.</summary>
+    private static bool IsSelfOrParent(string entry, string folder)
+    {
+        var e = FolderKey(entry);
+        var f = FolderKey(folder);
+        return e == "/" || f.Equals(e, StringComparison.OrdinalIgnoreCase) || f.StartsWith(e + "/", StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>A single song registered directly from a remote source.</summary>

@@ -242,6 +242,18 @@ public sealed partial class LibraryFileViewModel : ObservableObject
         NotifyPending();
     }
 
+    /// <summary>Takes over the unsaved edits of <paramref name="old"/>, the row of the same file
+    /// that a rescan replaced with this one (with one notification, however many there are). A
+    /// tag edit that the file now already has stops being an edit.</summary>
+    public void TakePendingFrom(LibraryFileViewModel old)
+    {
+        foreach (var (field, value) in old._pendingTags)
+            if (value != Original(field)) _pendingTags[field] = value;
+        if (old.PendingCover is { } cover) PendingCover = cover;
+        if (old.PendingLyrics is { } lyrics) PendingLyrics = lyrics;
+        if (HasPendingChanges) NotifyPending();
+    }
+
     private void NotifyPending()
     {
         OnPropertyChanged(nameof(HasPendingChanges));

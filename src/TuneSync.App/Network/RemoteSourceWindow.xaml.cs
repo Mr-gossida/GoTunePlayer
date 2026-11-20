@@ -54,6 +54,7 @@ public partial class RemoteSourceWindow : FluentWindow
         TuneSync.Core.Models.RemoteSource? start = null)
     {
         var window = new RemoteSourceWindow(network.Sources, start) { Owner = owner };
+        window._viewModel.SavedServerTrusted += network.Trust;
         if (window.ShowDialog() != true || window.Result is not { } result) return null;
         network.Save(result.Source, result.Password);
         return result.Folder;
@@ -64,6 +65,7 @@ public partial class RemoteSourceWindow : FluentWindow
     public static TuneSync.Core.Models.RemoteSource? AddLocation(Window? owner, NetworkLibrary network)
     {
         var window = new RemoteSourceWindow(network.Sources, saveOnly: true) { Owner = owner };
+        window._viewModel.SavedServerTrusted += network.Trust;
         if (window.ShowDialog() != true || window.Result is not { } result) return null;
         network.Save(result.Source, result.Password);
         return result.Source;

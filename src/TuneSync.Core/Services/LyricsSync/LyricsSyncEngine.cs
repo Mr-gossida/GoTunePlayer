@@ -1,3 +1,6 @@
+using Microsoft.ML.OnnxRuntime;
+using Whisper.net;
+
 namespace TuneSync.Core.Services.LyricsSync;
 
 /// <summary>Plain lyrics in, timed lines out: decode the song, let Whisper listen to it, then line
@@ -23,9 +26,11 @@ namespace TuneSync.Core.Services.LyricsSync;
 public sealed class LyricsSyncEngine : IDisposable
 {
     private readonly WhisperTranscriber _transcriber;
+    private readonly string _modelPath;
     private readonly string? _vocalModelPath;
     private readonly LyricsSyncOptions _options;
     private VocalSeparator? _separator;
+    private volatile bool _disposed;
 
     public LyricsSyncEngine() : this(LyricsSyncOptions.Default) { }
 
@@ -37,6 +42,7 @@ public sealed class LyricsSyncEngine : IDisposable
     {
         _options = options ?? LyricsSyncOptions.Default;
         _transcriber = new WhisperTranscriber(modelPath, _options);
+        _modelPath = modelPath;
         _vocalModelPath = vocalModelPath;
     }
 
@@ -95,20 +101,31 @@ public sealed class LyricsSyncEngine : IDisposable
         var language = LanguageOf(lines);
         var passes = Passes(vocals is not null);
         int done = 0, gaps = 0;
-        var aligned = await SyncAsync(lines, duration, voice, passes, pass =>
+        List<AlignedLine> aligned;
+        try
         {
-            var index = done++;
-            progress?.Report(new(Stage.Listening, 0, index, pass));
-            return Task.Run(() => _transcriber.TranscribeAsync(pass.Source == Source.Vocals ? vocals! : song, language,
-                pass.Hinted ? Prompt(lines) : null,
-                new Progress<int>(p => progress?.Report(new(Stage.Listening, p / 100.0, index, pass))), ct, windows), ct);
-        }, gap =>
+            aligned = await SyncAsync(lines, duration, voice, passes, pass =>
+            {
+                var index = done++;
+                progress?.Report(new(Stage.Listening, 0, index, pass));
+                return Task.Run(() => _transcriber.TranscribeAsync(pass.Source == Source.Vocals ? vocals! : song, language,
+                    pass.Hinted ? Prompt(lines) : null,
+                    new Progress<int>(p => progress?.Report(new(Stage.Listening, p / 100.0, index, pass))), ct, windows), ct);
+            }, gap =>
+            {
+                var index = gaps++;
+                progress?.Report(new(Stage.Listening, 0, index, default, true));
+                return Task.Run(() => _transcriber.TranscribeAsync(gap.Source == Source.Vocals ? vocals! : song, language, gap.Prompt,
+                    new Progress<int>(p => progress?.Report(new(Stage.Listening, p / 100.0, index, default, true))), ct, Pieces(gap)), ct);
+            });
+        }
+        catch (WhisperModelLoadException ex)
         {
-            var index = gaps++;
-            progress?.Report(new(Stage.Listening, 0, index, default, true));
-            return Task.Run(() => _transcriber.TranscribeAsync(gap.Source == Source.Vocals ? vocals! : song, language, gap.Prompt,
-                new Progress<int>(p => progress?.Report(new(Stage.Listening, p / 100.0, index, default, true))), ct, Pieces(gap)), ct);
-        });
+            // whisper.cpp couldn't read the model even on the CPU: the file is damaged, though
+            // the right size. Deleted, the next sync downloads it again.
+            if (!WhisperModelStore.Discard(_modelPath)) throw;
+            throw new InvalidDataException("음성 인식 모델 파일을 읽지 못해 지웠습니다. 자동으로 맞추기를 다시 누르면 새로 받습니다.", ex);
+        }
         progress?.Report(new(Stage.Aligning, 1));
         return aligned;
     }
@@ -124,10 +141,37 @@ public sealed class LyricsSyncEngine : IDisposable
     /// <summary>The singing alone, at the 16 kHz speech recognition expects.</summary>
     public float[] SeparateVocals(string audioPath, IProgress<double>? progress, CancellationToken ct)
     {
-        _separator ??= new VocalSeparator(_vocalModelPath!, _options.UseGpu, _options.Threads);
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        if (_separator is null)
+        {
+            var separator = OpenSeparator();
+            // Disposed while the model was opening: nothing else would free it.
+            if (_disposed)
+            {
+                separator.Dispose();
+                throw new ObjectDisposedException(nameof(LyricsSyncEngine));
+            }
+            _separator = separator;
+        }
         var (left, right) = AudioDecoder.ReadStereo(audioPath, VocalSeparator.SampleRate, ct);
         var vocals = _separator.Separate(left, right, progress, ct);
         return AudioDecoder.Resample(vocals, VocalSeparator.SampleRate, AudioDecoder.SampleRate);
+    }
+
+    private VocalSeparator OpenSeparator()
+    {
+        try
+        {
+            return new VocalSeparator(_vocalModelPath!, _options.UseGpu, _options.Threads);
+        }
+        catch (OnnxRuntimeException ex)
+        {
+            // ONNX Runtime couldn't read the model even on the CPU (the graphics card is tried
+            // first and given up quietly): the file is damaged, though the right size. Deleted,
+            // the next sync downloads it again.
+            if (!VocalModelStore.Discard(_vocalModelPath!)) throw;
+            throw new InvalidDataException("보컬 분리 모델 파일을 읽지 못해 지웠습니다. 자동으로 맞추기를 다시 누르면 새로 받습니다.", ex);
+        }
     }
 
     /// <summary>One more listen, to a stretch of the song where no pass heard the lines: with
@@ -290,8 +334,11 @@ public sealed class LyricsSyncEngine : IDisposable
         return prompt.Length <= 300 ? prompt : prompt[..300];
     }
 
+    /// <summary>Frees the models. Not while a sync runs: cancel it and wait for it to end first
+    /// (ONNX Runtime and whisper.cpp don't expect their models freed while they're working).</summary>
     public void Dispose()
     {
+        _disposed = true;
         _transcriber.Dispose();
         _separator?.Dispose();
     }

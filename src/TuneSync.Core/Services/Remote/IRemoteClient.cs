@@ -14,6 +14,22 @@ public interface IRemoteClient : IDisposable
 
     long GetSize(string path);
 
+    /// <summary>The file as the server lists it right now - above all its size and date - or null
+    /// when it isn't there. Blocking; called off the UI thread. Edits use it to make sure the cached
+    /// copy they change is still the server's version. This default lists the file's folder and
+    /// picks the file out; a client that can ask about one file directly may override it, as long
+    /// as it reports the same size and date as its folder listing does (the two are compared).</summary>
+    RemoteEntry? Stat(string path)
+    {
+        var trimmed = path.TrimEnd('/');
+        var slash = trimmed.LastIndexOf('/');
+        var folder = slash > 0 ? trimmed[..slash] : "/";
+        var name = trimmed[(slash + 1)..];
+        // Listed on a pool thread, so a listing that awaits never needs the thread blocked here.
+        var entries = Task.Run(() => ListAsync(folder, CancellationToken.None)).GetAwaiter().GetResult();
+        return entries.FirstOrDefault(e => !e.IsDirectory && string.Equals(e.Name, name, StringComparison.Ordinal));
+    }
+
     /// <summary>A forward-only stream of the file from <paramref name="offset"/>.</summary>
     Stream OpenRead(string path, long offset);
 

@@ -29,8 +29,23 @@ public sealed class RemoteSource
 
     public string UserName { get; set; } = "";
 
-    /// <summary>For self-signed certificates on home NAS boxes (WebDAV over https, FTPS).</summary>
+    /// <summary>For self-signed certificates on home NAS boxes (WebDAV over https, FTPS): a certificate
+    /// that fails the normal checks is accepted, but only the one trusted on the first connection
+    /// (<see cref="CertificateThumbprint"/>). The name is older than that rule; settings files use it.</summary>
     public bool AcceptAnyCertificate { get; set; }
+
+    /// <summary>WebDAV/FTPS with <see cref="AcceptAnyCertificate"/>: the SHA-256 (hex) of the
+    /// certificate seen on the first connection. A certificate failing the normal checks is accepted
+    /// only if it is this one; certificates that pass the checks need none. Null until then.</summary>
+    public string? CertificateThumbprint { get; set; }
+
+    /// <summary>SFTP: the server's host key trusted on the first connection - its SHA-256 as ssh prints
+    /// it after "SHA256:". A server showing another key is refused until the user trusts it.</summary>
+    public string? HostKeyFingerprint { get; set; }
+
+    /// <summary>SFTP: that key's algorithm (ssh-ed25519, rsa-sha2-512...). It is asked for first, so a
+    /// server with keys of several kinds keeps showing the trusted one.</summary>
+    public string? HostKeyAlgorithm { get; set; }
 
     public int EffectivePort => Port > 0 ? Port : Kind switch
     {

@@ -1,39 +1,83 @@
 namespace TuneSync.Core.Services.LyricsSync;
 
-/// <summary>Downloads a model file: to a .part file, renamed once it's complete and the size
-/// it should be.</summary>
-internal static class ModelDownload
+/// <summary>Downloads a model file over HTTPS to a .part file next to it, moved into place only
+/// once it has arrived whole and exactly the size it should be. A server that announces or sends
+/// another size, a broken connection, a full disk or cancelling leave nothing behind, so a
+/// half-written or different file is never loaded.
+///
+/// The size is all that's checked: the publishers' SHA-256 hashes of the models aren't pinned
+/// here yet.</summary>
+public static class ModelDownload
 {
     /// <param name="progress">0..1.</param>
     public static async Task ToFileAsync(string url, string path, long expectedBytes, IProgress<double>? progress, CancellationToken ct)
     {
-        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        var part = path + ".part";
         using var http = new HttpClient { Timeout = TimeSpan.FromMinutes(30) };
         http.DefaultRequestHeaders.UserAgent.ParseAdd("GoTunePlayer/1.0");
-        using var response = await http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct);
-        response.EnsureSuccessStatusCode();
-        var total = response.Content.Headers.ContentLength ?? expectedBytes;
+        await ToFileAsync(http, url, path, expectedBytes, progress, ct);
+    }
 
-        await using (var input = await response.Content.ReadAsStreamAsync(ct))
-        await using (var output = new FileStream(part, FileMode.Create, FileAccess.Write, FileShare.None, 1 << 16, useAsync: true))
+    /// <summary>The same with a given client (tests).</summary>
+    public static async Task ToFileAsync(HttpClient http, string url, string path, long expectedBytes, IProgress<double>? progress, CancellationToken ct)
+    {
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || uri.Scheme != Uri.UriSchemeHttps)
+            throw new ArgumentException("Models are only downloaded over HTTPS.", nameof(url));
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        var part = path + ".part";
+        try
         {
-            var buffer = new byte[1 << 16];
-            long done = 0;
-            int read;
-            while ((read = await input.ReadAsync(buffer, ct)) > 0)
+            using var response = await http.GetAsync(uri, HttpCompletionOption.ResponseHeadersRead, ct);
+            response.EnsureSuccessStatusCode();
+            // The download is sent on to a CDN. .NET doesn't follow a redirect from HTTPS down to
+            // HTTP, but where it ended up is checked all the same.
+            if (response.RequestMessage?.RequestUri is { } final && final.Scheme != Uri.UriSchemeHttps) throw NotTheModel();
+            // Another size: the file was changed where it's published (or this isn't it). Said
+            // now rather than after the whole download.
+            if (response.Content.Headers.ContentLength is { } length && length != expectedBytes) throw NotTheModel();
+
+            await using (var input = await response.Content.ReadAsStreamAsync(ct))
+            await using (var output = new FileStream(part, FileMode.Create, FileAccess.Write, FileShare.None, 1 << 16, useAsync: true))
             {
-                await output.WriteAsync(buffer.AsMemory(0, read), ct);
-                done += read;
-                progress?.Report((double)done / total);
+                var buffer = new byte[1 << 16];
+                long done = 0;
+                int read;
+                while ((read = await input.ReadAsync(buffer, ct)) > 0)
+                {
+                    done += read;
+                    // More than the model: stop at once (a server that never stops mustn't fill the disk).
+                    if (done > expectedBytes) throw NotTheModel();
+                    await output.WriteAsync(buffer.AsMemory(0, read), ct);
+                    progress?.Report((double)done / expectedBytes);
+                }
+                if (done != expectedBytes) throw new IOException("모델 파일을 끝까지 받지 못했습니다. 다시 시도해 주세요.");
             }
+            File.Move(part, path, overwrite: true);
         }
-
-        if (new FileInfo(part).Length != expectedBytes)
+        catch
         {
-            File.Delete(part);
-            throw new IOException("모델 파일을 끝까지 받지 못했습니다. 다시 시도해 주세요.");
+            // The next try would overwrite it, but until then it takes up to 190 MB.
+            try { File.Delete(part); } catch { /* still open elsewhere: left for the next try */ }
+            throw;
         }
-        File.Move(part, path, overwrite: true);
+    }
+
+    private static IOException NotTheModel() =>
+        new("모델 파일이 예상과 다릅니다. 배포처에서 파일이 바뀌었거나 손상되었을 수 있습니다.");
+
+    /// <summary>Deletes <paramref name="ownPath"/> (a model that turned out unreadable) when
+    /// <paramref name="path"/> is that file; anything else - a model given by path, as the
+    /// benchmark does - is left alone. True when it was deleted.</summary>
+    internal static bool Discard(string path, string ownPath)
+    {
+        if (!string.Equals(Path.GetFullPath(path), Path.GetFullPath(ownPath), StringComparison.OrdinalIgnoreCase)) return false;
+        try
+        {
+            File.Delete(ownPath);
+            return true;
+        }
+        catch (Exception)
+        {
+            return false;
+        }
     }
 }

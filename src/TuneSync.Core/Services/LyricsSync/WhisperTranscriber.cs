@@ -22,6 +22,7 @@ public sealed class WhisperTranscriber(string modelPath, LyricsSyncOptions optio
     private const int WindowSeconds = 30;
 
     private WhisperFactory? _factory;
+    private volatile bool _disposed;
 
     public WhisperTranscriber(string modelPath) : this(modelPath, LyricsSyncOptions.Default) { }
 
@@ -62,7 +63,19 @@ public sealed class WhisperTranscriber(string modelPath, LyricsSyncOptions optio
         IProgress<int>? progress, CancellationToken ct, IReadOnlyList<(double Start, double End)>? windows = null)
     {
         WatchLog();
-        _factory ??= WhisperFactory.FromPath(modelPath, new WhisperFactoryOptions { UseGpu = options.UseGpu });
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        if (_factory is null)
+        {
+            var factory = Open(modelPath, options.UseGpu);
+            // Disposed while the model was being read: nothing else would free it.
+            if (_disposed)
+            {
+                factory.Dispose();
+                throw new ObjectDisposedException(nameof(WhisperTranscriber));
+            }
+            _factory = factory;
+        }
+        // After the model is read: a try on the graphics card that gave up mustn't count.
         _deviceKnown = false;
         var builder = _factory.CreateBuilder()
             .WithThreads(options.Threads)
@@ -92,7 +105,10 @@ public sealed class WhisperTranscriber(string modelPath, LyricsSyncOptions optio
             // Whisper won't take less than a second: a short piece is padded with silence.
             var piece = new float[Math.Max(length, AudioDecoder.SampleRate + AudioDecoder.SampleRate / 10)];
             samples.AsSpan(offset, length).CopyTo(piece);
-            using var processor = builder.Build();
+            // Cancelled, ProcessAsync throws at once while whisper.cpp still runs on its own
+            // thread until it next checks: DisposeAsync waits for that, so this returns only once
+            // nothing runs on the model any more (and it can be freed).
+            await using var processor = builder.Build();
             await foreach (var segment in processor.ProcessAsync(piece, ct))
             {
                 var text = segment.Text.Trim();
@@ -117,5 +133,38 @@ public sealed class WhisperTranscriber(string modelPath, LyricsSyncOptions optio
 
     private const double TypicalCharSeconds = 0.22;
 
-    public void Dispose() => _factory?.Dispose();
+    /// <summary>Reads the model: on the graphics card first when asked, then on the CPU. The card
+    /// may have no room for it, and whisper.cpp says no more than that it couldn't load the
+    /// model; when the CPU can't either, the file itself is at fault
+    /// (<see cref="WhisperModelLoadException"/>).</summary>
+    private static WhisperFactory Open(string modelPath, bool useGpu)
+    {
+        if (useGpu)
+        {
+            try { return Load(modelPath, true); }
+            catch (WhisperModelLoadException) { /* the CPU tells whether the file is at fault */ }
+        }
+        return Load(modelPath, false);
+    }
+
+    private static WhisperFactory Load(string modelPath, bool useGpu)
+    {
+        var factory = WhisperFactory.FromPath(modelPath, new WhisperFactoryOptions { UseGpu = useGpu });
+        try
+        {
+            factory.CreateBuilder(); // the model is read on first use
+            return factory;
+        }
+        catch
+        {
+            factory.Dispose();
+            throw;
+        }
+    }
+
+    public void Dispose()
+    {
+        _disposed = true;
+        _factory?.Dispose();
+    }
 }

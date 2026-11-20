@@ -272,6 +272,117 @@ public class CoverSearchServiceTests
     }
 }
 
+public class CoverDownloadTests
+{
+    private static readonly byte[] Jpeg = [0xFF, 0xD8, 0xFF, 0xE0, 1, 2, 3, 4, 5, 6];
+
+    /// <summary>Answers every request the same way, and remembers what was asked for.</summary>
+    private sealed class Server(Func<HttpContent> body) : HttpMessageHandler
+    {
+        public List<string> Asked { get; } = [];
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
+        {
+            lock (Asked) Asked.Add(request.RequestUri!.AbsoluteUri);
+            return Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.OK) { Content = body() });
+        }
+    }
+
+    /// <summary>A JPEG that never ends (and has no length, like a chunked answer).</summary>
+    private sealed class EndlessImage : Stream
+    {
+        public long Sent { get; private set; }
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => throw new NotSupportedException();
+        public override long Position { get => Sent; set => throw new NotSupportedException(); }
+        public override void Flush() { }
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+
+        public override int Read(byte[] buffer, int offset, int count)
+        {
+            Array.Clear(buffer, offset, count);
+            if (Sent == 0 && count >= 4) Jpeg.AsSpan(0, 4).CopyTo(buffer.AsSpan(offset));
+            Sent += count;
+            return count;
+        }
+    }
+
+    /// <summary>A body that stops coming (a connection that died without closing).</summary>
+    private sealed class StalledBody : Stream
+    {
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => throw new NotSupportedException();
+        public override long Position { get => 0; set => throw new NotSupportedException(); }
+        public override void Flush() { }
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+        public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+
+        public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken ct = default)
+        {
+            await Task.Delay(Timeout.Infinite, ct);
+            return 0;
+        }
+
+        public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken ct) =>
+            ReadAsync(buffer.AsMemory(offset, count), ct).AsTask();
+    }
+
+    private static CoverCandidate Candidate(string thumbnail, params string[] full) => new()
+    {
+        Source = "Fake", Title = "Song", Artist = "Band", Album = "Album", Kind = CoverReleaseKind.Album,
+        ThumbnailUrl = thumbnail, FullUrls = full, MaxSize = 1000,
+    };
+
+    [Fact]
+    public async Task ImagesComeOnlyOverHttps()
+    {
+        var server = new Server(() => new ByteArrayContent(Jpeg));
+        using var service = new CoverSearchService([], new HttpClient(server));
+
+        Assert.Equal(Jpeg, await service.GetThumbnailAsync(Candidate("https://img.example/a.jpg")));
+        // A plain http address is asked for over https, never in the clear.
+        Assert.Equal(Jpeg, await service.GetThumbnailAsync(Candidate("http://img.example/b.jpg")));
+        Assert.Null(await service.GetThumbnailAsync(Candidate("http://img.example:8080/c.jpg")));
+        Assert.Null(await service.GetThumbnailAsync(Candidate("ftp://img.example/d.jpg")));
+        Assert.Null(await service.GetThumbnailAsync(Candidate("file:///C:/Windows/win.ini")));
+
+        Assert.Equal(["https://img.example/a.jpg", "https://img.example/b.jpg"], server.Asked);
+    }
+
+    [Fact]
+    public async Task ABodyPastTheLimitIsDropped_EvenWithoutALength()
+    {
+        var endless = new EndlessImage();
+        var server = new Server(() => new StreamContent(endless));
+        using var service = new CoverSearchService([], new HttpClient(server));
+
+        Assert.Null(await service.GetFullAsync(Candidate("https://img.example/t.jpg", "https://img.example/full.jpg")));
+        Assert.InRange(endless.Sent, 1, 21 * 1024 * 1024); // stopped at about 20 MB
+    }
+
+    [Fact]
+    public async Task ABodyThatStallsTimesOut_AndFreesItsDownloadSlot()
+    {
+        var stalled = new Server(() => new StreamContent(new StalledBody()));
+        using var service = new CoverSearchService([], new HttpClient(stalled)) { DownloadTimeout = TimeSpan.FromMilliseconds(200) };
+
+        // More stalls than there are download slots: each gives up instead of holding its slot.
+        var downloads = Enumerable.Range(0, 6).Select(i => service.GetThumbnailAsync(Candidate($"https://img.example/{i}.jpg")));
+        var results = await Task.WhenAll(downloads).WaitAsync(TimeSpan.FromSeconds(20));
+
+        Assert.All(results, Assert.Null);
+        Assert.Equal(6, stalled.Asked.Count);
+    }
+}
+
 public class AutoFillCoverSearchTests
 {
     private sealed class FakeCoverSearch(params (double Score, byte[]? Bytes)[] hits) : ICoverSearchService

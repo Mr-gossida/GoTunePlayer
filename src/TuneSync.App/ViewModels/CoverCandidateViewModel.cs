@@ -98,8 +98,9 @@ public sealed partial class CoverCandidateViewModel : ObservableObject
         {
             var bytes = await Task.Run(() => service.GetFullAsync(candidate, ct), ct);
             if (bytes is null) return null;
-            var size = await Task.Run(() => ImageHelper.ToBitmapImage(bytes) is { } img ? $"{img.PixelWidth}×{img.PixelHeight}" : null);
-            if (size is null) return null; // not an image WPF can show
+            // Decoded small: this only makes sure WPF can show it, and reads the size it's stored at.
+            var size = await Task.Run(() => ImageHelper.ToDisplayImage(bytes, 64)?.SizeText);
+            if (size is null) return null; // not an image WPF can show (or absurdly large)
             FullBytes = bytes;
             FullSize = size;
             SizeText = size;

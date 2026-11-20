@@ -170,8 +170,13 @@
                 <TextBlock Text="표시 이름 (선택)" Style="{StaticResource FieldLabel}"/>
                 <ui:TextBox Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}" PlaceholderText="예: 거실 NAS" Icon="{ui:SymbolIcon Tag24}"/>
 
-                <CheckBox Content="인증서 확인 안 함 (자체 서명 인증서를 쓰는 NAS)" Margin="0,16,0,0" IsChecked="{Binding AcceptAnyCertificate}"
+                <CheckBox Content="처음 받은 인증서를 신뢰 (자체 서명 인증서를 쓰는 NAS)" Margin="0,16,0,0" IsChecked="{Binding AcceptAnyCertificate}"
                           Visibility="{Binding ShowCertificateOption, Converter={StaticResource BoolToVisibility}}"/>
+                <!-- Trust on first use: what it accepts, and why the first connection should be made at home -->
+                <TextBlock Text="자체 서명 인증서도 받아들이되, 처음 받은 인증서를 기억해 두고 다음부터는 그 인증서일 때만 연결합니다. 인증서가 바뀌면 연결을 막고 알려 드리니, 처음 연결은 집 안처럼 믿을 수 있는 네트워크에서 하세요."
+                           FontSize="12" TextWrapping="Wrap" Margin="28,4,0,0" app:KeepWords.IsEnabled="True"
+                           Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                           Visibility="{Binding ShowCertificateOption, Converter={StaticResource BoolToVisibility}}"/>
             </StackPanel>
         </ScrollViewer>
 

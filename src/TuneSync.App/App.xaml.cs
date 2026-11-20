@@ -60,11 +60,7 @@ public partial class App : Application
         if (window is null) return;
         if (!window.IsVisible) window.Show();
         if (window.WindowState == WindowState.Minimized) window.WindowState = WindowState.Normal;
-        window.Activate();
-        // Activate alone may only flash the taskbar button when another app has the focus.
-        window.Topmost = true;
-        window.Topmost = false;
-        window.Focus();
+        ShellWindow.BringUp(window);
     }
 
     protected override void OnStartup(StartupEventArgs e)

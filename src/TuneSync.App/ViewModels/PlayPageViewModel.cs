@@ -81,7 +81,8 @@ public sealed partial class PlayPageViewModel : ObservableObject
             Toast.Error("가사를 찾지 못했습니다", ex.Message);
             return;
         }
-        if (cts.IsCancellationRequested || file != Playback.CurrentFile) return;
+        // (Its row may have been rebuilt by a rescan meanwhile: still the same song.)
+        if (cts.IsCancellationRequested || !Playback.IsCurrentSong(file)) return;
 
         if (result?.BestLyrics is not { } text)
         {
@@ -90,12 +91,13 @@ public sealed partial class PlayPageViewModel : ObservableObject
         }
 
         _found = result;
-        _foundFor = file;
+        _foundFor = Playback.CurrentFile;
         var synced = !string.IsNullOrWhiteSpace(result.SyncedLyrics);
         FoundSummary = $"{(synced ? "싱크 가사" : "일반 가사")} · {result.ArtistName} - {result.TrackName}";
+        // Only the start is looked at for the preview (the whole text is what gets saved).
         var lines = synced
-            ? LrcParser.Parse(text).Select(l => l.Text)
-            : LrcParser.SplitLines(text);
+            ? LyricsLimits.Parse(text).Select(l => l.Text)
+            : LyricsLimits.SplitLines(text);
         FoundPreview = string.Join("\n", lines.Where(l => l.Length > 0).Take(6));
         FindState = LyricsFindState.Found;
     }
@@ -106,6 +108,7 @@ public sealed partial class PlayPageViewModel : ObservableObject
     private async Task SaveFoundLyricsAsync()
     {
         if (_found?.BestLyrics is not { } text || _foundFor is not { } file || IsSaving) return;
+        if (Playback.IsCurrentSong(file)) file = Playback.CurrentFile!; // its row now, if a rescan replaced it meanwhile
         var synced = !string.IsNullOrWhiteSpace(_found.SyncedLyrics);
         IsSaving = true;
         var resume = await Playback.ReleaseIfPlayingAsync([file.Path]);

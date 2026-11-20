@@ -6,11 +6,12 @@ namespace TuneSync.Core.Services.Remote;
 
 /// <summary>FTP and FTPS (explicit TLS). An FTP connection can do one transfer at a time, so a
 /// small pool of connections serves the scanner, the player and edits side by side.</summary>
-public sealed class FtpRemoteClient : IRemoteClient
+public sealed class FtpRemoteClient : IRemoteClient, IServerIdentityCheck
 {
     private const int MaxConnections = 4;
     private readonly RemoteSource _source;
     private readonly string _password;
+    private readonly ServerPin _certificate;
     private readonly ConcurrentBag<FtpClient> _idle = [];
     private readonly SemaphoreSlim _slots = new(MaxConnections, MaxConnections);
 
@@ -18,23 +19,51 @@ public sealed class FtpRemoteClient : IRemoteClient
     {
         _source = source;
         _password = password;
+        _certificate = new ServerPin(source.CertificateThumbprint, isCertificate: true);
+    }
+
+    public event Action<ServerIdentity>? IdentityLearned
+    {
+        add => _certificate.Learned += value;
+        remove => _certificate.Learned -= value;
+    }
+
+    public event Action<ServerIdentity>? IdentityRejected
+    {
+        add => _certificate.Rejected += value;
+        remove => _certificate.Rejected -= value;
     }
 
     private FtpClient Rent()
     {
         _slots.Wait();
+        ServerIdentity? refused = null;
         try
         {
             if (_idle.TryTake(out var client) && client.IsConnected) return client;
             client?.Dispose();
             client = new FtpClient(_source.Address.Trim(), _source.UserName, _password, _source.EffectivePort);
             client.Config.EncryptionMode = _source.Kind == RemoteKind.Ftps ? FtpEncryptionMode.Explicit : FtpEncryptionMode.None;
-            client.Config.ValidateAnyCertificate = _source.AcceptAnyCertificate;
+            // A certificate that fails the normal checks (a NAS's self-signed one) is accepted only if
+            // it is the one trusted on the first connection: accepting any would send the password to
+            // whoever answers in between. Data connections are checked the same way.
+            if (_source.Kind == RemoteKind.Ftps && _source.AcceptAnyCertificate)
+                client.ValidateCertificate += (_, e) =>
+                {
+                    e.Accept = _certificate.CheckCertificate(e.Certificate, e.PolicyErrors, out var presented);
+                    if (presented is not null) refused = presented;
+                };
             client.Config.DataConnectionType = FtpDataConnectionType.AutoPassive;
             client.Config.ConnectTimeout = 15000;
             client.Encoding = System.Text.Encoding.UTF8;
             client.Connect();
+            _certificate.Confirm();
             return client;
+        }
+        catch (Exception ex) when (refused is not null)
+        {
+            _slots.Release();
+            throw new ServerIdentityChangedException(refused, ex);
         }
         catch
         {

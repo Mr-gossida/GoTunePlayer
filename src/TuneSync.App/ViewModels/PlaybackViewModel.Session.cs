@@ -102,7 +102,7 @@ public sealed partial class PlaybackViewModel
     /// <summary>Remembers the loaded song and position for next time (called on close).</summary>
     public void SaveSession()
     {
-        _settings.LastFilePath = CurrentFile?.Path;
+        _settings.LastFilePath = PlayingPath; // where it is now, also when it was renamed while playing
         _settings.LastPositionSeconds = CurrentFile is null ? 0 : CurrentOrShownPosition().TotalSeconds;
         AppSettingsStore.Save(_settings);
     }

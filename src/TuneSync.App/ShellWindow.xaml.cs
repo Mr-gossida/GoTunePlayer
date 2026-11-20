@@ -229,9 +229,11 @@ public partial class ShellWindow : FluentWindow
             return;
         }
 
-        // Unsaved tag edits: ask before they're lost.
+        // Unsaved tag edits: ask before they're lost. (During a rescan, edits wait for their song's
+        // new row and aren't in the editor's count yet.)
         var editor = _services.GetService<TagEditorViewModel>();
-        if (!_discardConfirmed && editor is { HasPending: true })
+        var unsaved = (editor?.PendingFileCount ?? 0) + (_services.GetService<LibraryViewModel>()?.PendingEditsInScan ?? 0);
+        if (!_discardConfirmed && unsaved > 0)
         {
             e.Cancel = true;
             Dispatcher.BeginInvoke(async () =>
@@ -240,7 +242,7 @@ public partial class ShellWindow : FluentWindow
                 if (WindowState == WindowState.Minimized) WindowState = WindowState.Normal;
                 Activate();
                 if (!await Dialogs.ConfirmAsync("저장하지 않은 태그 변경",
-                        $"저장하지 않은 변경 내용이 {editor.PendingFileCount}곡 있습니다. 저장하지 않고 닫을까요?", "저장하지 않고 닫기"))
+                        $"저장하지 않은 변경 내용이 {unsaved}곡 있습니다. 저장하지 않고 닫을까요?", "저장하지 않고 닫기"))
                 {
                     _exitRequested = false; // stays open; the close button goes back to what it's set to
                     return;

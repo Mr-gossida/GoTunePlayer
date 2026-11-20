@@ -14,7 +14,9 @@ public static class RemoteFiles
     public static Func<string, IRemoteClient?>? ClientFor { get; set; }
 
     /// <summary>A complete local copy of a remote file, downloading it if needed (the app's
-    /// streaming cache). Blocking; called off the UI thread.</summary>
+    /// streaming cache). Blocking; called off the UI thread. It must be the version the server
+    /// holds now: the edit is uploaded over the server's file, and one made on an older copy would
+    /// undo whatever was changed there since.</summary>
     public static Func<string, string>? LocalCopyOf { get; set; }
 
     /// <summary>Told after a local copy was edited and uploaded (so the cache keeps it).</summary>
@@ -24,10 +26,21 @@ public static class RemoteFiles
     /// matches the server and must be fetched again.</summary>
     public static Action<string>? Discarded { get; set; }
 
-    private static readonly ConcurrentDictionary<string, long> Sizes = new(StringComparer.Ordinal);
+    private static readonly ConcurrentDictionary<string, RemoteVersion> Seen = new(StringComparer.Ordinal);
 
-    /// <summary>Sizes are known from folder listings; remembering them saves a round trip per file.</summary>
-    public static void RememberSize(string path, long size) => Sizes[path] = size;
+    /// <summary>Sizes are known from folder listings; remembering them saves a round trip per file.
+    /// (A date known from before is kept while the size stays the same.)</summary>
+    public static void RememberSize(string path, long size) =>
+        Seen.AddOrUpdate(path, new RemoteVersion(size, default),
+            (_, seen) => seen.Size == size ? seen : new RemoteVersion(size, default));
+
+    /// <summary>The size and date a folder listing gives. With the date, the streaming cache knows
+    /// which version a song it fetches is, and notices a copy the server has replaced since -
+    /// without asking the server.</summary>
+    public static void RememberSize(string path, long size, DateTime modified) => Seen[path] = new RemoteVersion(size, modified);
+
+    /// <summary>What the server was last seen to hold for a file (folder listings, reads, uploads), if known.</summary>
+    public static RemoteVersion? LastSeen(string path) => Seen.TryGetValue(path, out var seen) ? seen : null;
 
     public static IRemoteClient Client(string path, out string remotePath)
     {
@@ -40,7 +53,9 @@ public static class RemoteFiles
     {
         if (!RemotePath.IsRemote(path)) return TagLib.File.Create(path);
         var client = Client(path, out var remotePath);
-        if (!Sizes.TryGetValue(path, out var size)) Sizes[path] = size = client.GetSize(remotePath);
+        long size;
+        if (Seen.TryGetValue(path, out var seen)) size = seen.Size;
+        else RememberSize(path, size = client.GetSize(remotePath));
         return TagLib.File.Create(new Abstraction(path, new RemoteReadStream(client, remotePath, size)));
     }
 
@@ -87,11 +102,13 @@ public static class RemoteFiles
         }
         catch
         {
-            Sizes.TryRemove(path, out _);
+            Seen.TryRemove(path, out _);
             Discarded?.Invoke(path);
             throw;
         }
-        Sizes[path] = new FileInfo(copy).Length;
+        // The upload gave the file a new date, not known until the server is asked again (the
+        // cache does that, told below).
+        Seen[path] = new RemoteVersion(new FileInfo(copy).Length, default);
         Uploaded?.Invoke(path, copy);
     }
 

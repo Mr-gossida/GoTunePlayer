@@ -12,6 +12,9 @@ namespace TuneSync.App.Network;
 /// outside this computer can connect to it.</summary>
 public sealed class LocalStreamServer : IDisposable
 {
+    /// <summary>How long a connection may take to send its request: the player sends it at once.</summary>
+    private static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(10);
+
     private readonly TcpListener _listener = new(IPAddress.Loopback, 0);
     private readonly ConcurrentDictionary<string, CacheItem> _published = new();
     private readonly CancellationTokenSource _stop = new();
@@ -46,18 +49,26 @@ public sealed class LocalStreamServer : IDisposable
             {
                 return;
             }
-            _ = Task.Run(() => Serve(client));
+            _ = Task.Run(() => ServeAsync(client));
         }
     }
 
-    private void Serve(TcpClient client)
+    private async Task ServeAsync(TcpClient client)
     {
         using var _ = client;
         try
         {
             client.NoDelay = true;
             using var network = client.GetStream();
-            var request = ReadHeaders(network);
+            // Waiting for the request held a worker thread, with no time limit: any program on this
+            // PC (in any user's session) could tie up the app's background work - tag reads, network,
+            // analysis - just by connecting and sending nothing. Now the wait holds no thread and ends.
+            (string Method, string Target, Dictionary<string, string> Headers)? request;
+            using (var timeout = CancellationTokenSource.CreateLinkedTokenSource(_stop.Token))
+            {
+                timeout.CancelAfter(RequestTimeout);
+                request = await ReadHeadersAsync(network, timeout.Token);
+            }
             if (request is null) return;
 
             var (method, target, headers) = request.Value;
@@ -126,17 +137,17 @@ public sealed class LocalStreamServer : IDisposable
         }
         catch
         {
-            // the player closed the connection (seek, next song) - normal
+            // the player closed the connection (seek, next song) - normal; or no request came in time
         }
     }
 
-    private static (string Method, string Target, Dictionary<string, string> Headers)? ReadHeaders(NetworkStream stream)
+    private static async Task<(string Method, string Target, Dictionary<string, string> Headers)?> ReadHeadersAsync(NetworkStream stream, CancellationToken ct)
     {
         var bytes = new List<byte>(1024);
         var one = new byte[1];
         while (bytes.Count < 16384)
         {
-            if (stream.Read(one, 0, 1) <= 0) return null;
+            if (await stream.ReadAsync(one, ct) <= 0) return null;
             bytes.Add(one[0]);
             var c = bytes.Count;
             if (c >= 4 && bytes[c - 4] == '\r' && bytes[c - 3] == '\n' && bytes[c - 2] == '\r' && bytes[c - 1] == '\n') break;

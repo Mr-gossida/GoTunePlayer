@@ -51,6 +51,11 @@ public sealed class CoverSearchService : ICoverSearchService, IDisposable
         _http = http;
     }
 
+    /// <summary>How long one image may take, its body included: the client's own timeout ends
+    /// with the headers, and a connection that stalls halfway (after sleep, a dropped Wi-Fi)
+    /// would otherwise hold one of the four download slots for good.</summary>
+    public TimeSpan DownloadTimeout { get; init; } = TimeSpan.FromSeconds(30);
+
     public async Task<CoverSearchResult> SearchAsync(CoverQuery query, IProgress<CoverSearchProgress>? progress = null, CancellationToken ct = default)
     {
         var done = 0;
@@ -97,22 +102,53 @@ public sealed class CoverSearchService : ICoverSearchService, IDisposable
 
     private async Task<byte[]?> DownloadAsync(string url, CancellationToken ct)
     {
+        if (SecureUri(url) is not { } uri) return null;
         await _downloads.WaitAsync(ct);
         try
         {
-            using var resp = await _http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct);
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            timeout.CancelAfter(DownloadTimeout);
+            using var resp = await _http.GetAsync(uri, HttpCompletionOption.ResponseHeadersRead, timeout.Token);
             if (!resp.IsSuccessStatusCode || resp.Content.Headers.ContentLength > MaxImageBytes) return null;
-            var bytes = await resp.Content.ReadAsByteArrayAsync(ct);
-            return IsImage(bytes) ? bytes : null;
+            var bytes = await ReadAtMostAsync(resp.Content, MaxImageBytes, timeout.Token);
+            return bytes is not null && IsImage(bytes) ? bytes : null;
         }
         catch (Exception) when (!ct.IsCancellationRequested)
         {
-            return null; // a missing picture just drops that tile
+            return null; // a missing picture just drops that tile (so does one too slow or too big)
         }
         finally
         {
             _downloads.Release();
         }
+    }
+
+    /// <summary>Images only come over HTTPS: their addresses are taken from the sources' answers,
+    /// and a picture sent in the clear could be swapped on the way. A plain http address is asked
+    /// for over https (all three sources serve that); anything else is refused.</summary>
+    private static Uri? SecureUri(string url)
+    {
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri)) return null;
+        if (uri.Scheme == Uri.UriSchemeHttps) return uri;
+        return uri.Scheme == Uri.UriSchemeHttp && uri.IsDefaultPort
+            ? new UriBuilder(uri) { Scheme = Uri.UriSchemeHttps, Port = -1 }.Uri
+            : null;
+    }
+
+    /// <summary>The body, or null once it runs past <paramref name="max"/> bytes: the length a
+    /// server announces can't be relied on (a chunked answer has none).</summary>
+    private static async Task<byte[]?> ReadAtMostAsync(HttpContent content, long max, CancellationToken ct)
+    {
+        await using var stream = await content.ReadAsStreamAsync(ct);
+        using var body = new MemoryStream();
+        var buffer = new byte[81920];
+        int read;
+        while ((read = await stream.ReadAsync(buffer, ct)) > 0)
+        {
+            if (body.Length + read > max) return null;
+            body.Write(buffer, 0, read);
+        }
+        return body.ToArray();
     }
 
     /// <summary>JPEG or PNG - what tags can embed (and not an HTML error page).</summary>

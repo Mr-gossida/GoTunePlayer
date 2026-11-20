@@ -153,6 +153,27 @@ public class RemoteFilesTests : IDisposable
         Assert.Equal("원격 제목", TagService.Read(serverCopy).Title);
         Assert.Equal("[00:01.00]원격 가사", TagService.ReadLyrics(serverCopy));
         Assert.Equal(path, uploadedNotice);
+        // The server's file is known by its new size; its new date only once the server is asked.
+        Assert.Equal(new RemoteVersion(client.Files["/Music/sample.mp3"].Length, default), RemoteFiles.LastSeen(path));
+    }
+
+    [Fact]
+    public void AnEdit_IsNeitherMadeNorUploaded_WithoutACurrentCopy()
+    {
+        var client = new FakeClient();
+        var original = Asset("sample.mp3");
+        client.Files["/Music/sample.mp3"] = original;
+        RemoteFiles.ClientFor = _ => client;
+        // What the streaming cache does when it can't get the version the server holds now.
+        RemoteFiles.LocalCopyOf = _ => throw new IOException("서버의 파일을 온전히 받아오지 못했습니다. 잠시 뒤 다시 시도해 주세요.");
+        var edited = false;
+        var path = RemotePath.Build("src", "/Music/sample.mp3");
+
+        var error = Assert.Throws<IOException>(() => RemoteFiles.Edit(path, _ => edited = true));
+
+        Assert.StartsWith("서버의 파일을 온전히", error.Message);
+        Assert.False(edited);
+        Assert.Same(original, client.Files["/Music/sample.mp3"]);
     }
 
     [Fact]

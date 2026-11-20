@@ -89,7 +89,9 @@ public sealed partial class PlaybackViewModel
     public string? SyncedLyricsText { get; private set; }
 
     /// <summary>Reads the song's lyrics off the UI thread: the library lives on a network share,
-    /// and a slow read there used to freeze the whole window right as a song started.</summary>
+    /// and a slow read there used to freeze the whole window right as a song started. The lines
+    /// are worked out there too, and only as many as are worth showing (<see cref="LyricsLimits"/>):
+    /// a tag can hold megabytes, and every line shown becomes elements on the screen.</summary>
     private async void LoadLyrics(LibraryFileViewModel file)
     {
         var version = ++_lyricsVersion;
@@ -103,26 +105,26 @@ public sealed partial class PlaybackViewModel
         _isLoadingLyrics = true;
         OnPropertyChanged(nameof(HasNoLyrics)); // not "no lyrics" yet - still reading
 
-        string? lyrics;
+        (string? Text, List<LyricsLine> Synced, List<string> Plain) read;
         try
         {
-            lyrics = await Task.Run(() => TagService.ReadLyrics(PlayablePath.ResolveForReading(file.Path)));
+            read = await Task.Run(() => ReadLyricsLines(file.Path));
         }
         catch
         {
-            lyrics = null;
+            read = (null, [], []);
         }
         if (version != _lyricsVersion) return; // another song (or reload) took over meanwhile
         _isLoadingLyrics = false;
 
+        var lyrics = read.Text;
         if (!string.IsNullOrWhiteSpace(lyrics))
         {
-            var parsed = LrcParser.Parse(lyrics);
+            var parsed = read.Synced;
             if (parsed.Count > 0)
             {
-                foreach (var line in parsed)
-                    LyricsLines.Add(new LyricsLineViewModel(line.Time, line.Text));
-                SyncedLyricsText = lyrics;
+                _lyricsLines.AddRange(parsed.Select(line => new LyricsLineViewModel(line.Time, line.Text)).ToList());
+                SyncedLyricsText = lyrics; // all of it, not just what's shown: 싱크 편집 saves it back
                 HasSyncedLyrics = true;
                 // Worth an intro only when there's real time before the first line.
                 var sung = parsed.Where(l => !string.IsNullOrWhiteSpace(l.Text)).ToList();
@@ -135,8 +137,8 @@ public sealed partial class PlaybackViewModel
             }
             else
             {
-                PlainLyrics = lyrics;
-                PlainLyricsLines = LrcParser.SplitLines(lyrics); // any line-break style (some files use a lone CR)
+                PlainLyrics = lyrics; // all of it, like the synced text
+                PlainLyricsLines = read.Plain;
             }
         }
 
@@ -148,6 +150,16 @@ public sealed partial class PlaybackViewModel
         OnPropertyChanged(nameof(HasNoLyrics));
         ShowPosition(position);
         RaiseLyricTexts();
+    }
+
+    /// <summary>The song's lyrics as stored, and the lines of them to show: the synced ones, or
+    /// else the plain text's lines (in any line-break style - some files use a lone CR).</summary>
+    private static (string? Text, List<LyricsLine> Synced, List<string> Plain) ReadLyricsLines(string path)
+    {
+        var text = TagService.ReadLyrics(PlayablePath.ResolveForReading(path));
+        if (string.IsNullOrWhiteSpace(text)) return (text, [], []);
+        var synced = LyricsLimits.Parse(text);
+        return (text, synced, synced.Count > 0 ? [] : LyricsLimits.SplitLines(text));
     }
 
     /// <summary>True when the file has lyrics but they carry no LRC timestamps, so the plain-text

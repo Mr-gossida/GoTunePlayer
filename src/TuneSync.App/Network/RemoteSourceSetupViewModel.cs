@@ -55,8 +55,18 @@ public sealed partial class RemoteSourceSetupViewModel : ObservableObject, IDisp
     /// as long as it is still that location (see <see cref="SourceId"/>).</summary>
     private RemoteSource? _existing;
 
-    /// <summary>Raised when a saved password was filled in (the window shows it in its PasswordBox).</summary>
+    /// <summary>The saved location's password as it was filled in: it belongs to that location and is
+    /// never sent to another one (see <see cref="ConnectAsync"/>).</summary>
+    private string? _loadedPassword;
+
+    /// <summary>Raised when the password was filled in or cleared here (the window mirrors it in its
+    /// PasswordBox).</summary>
     public event EventHandler? PasswordLoaded;
+
+    /// <summary>Raised when the user trusted a server's new key or certificate, once for each saved
+    /// location on that server (its id, what was trusted): kept right away, even if no folder is added
+    /// afterwards.</summary>
+    public event Action<string, ServerIdentity>? SavedServerTrusted;
 
     public static string IconFor(RemoteKind kind) => kind switch
     {
@@ -82,6 +92,7 @@ public sealed partial class RemoteSourceSetupViewModel : ObservableObject, IDisp
         AcceptAnyCertificate = s.AcceptAnyCertificate;
         try { Password = CredentialStore.Load(s.Id); } catch { Password = ""; }
         _existing = s;
+        _loadedPassword = Password;
         PasswordLoaded?.Invoke(this, EventArgs.Empty);
         await ConnectAsync();
     }
@@ -247,16 +258,21 @@ public sealed partial class RemoteSourceSetupViewModel : ObservableObject, IDisp
         return SavedSources.Select(o => o.Source).FirstOrDefault(Same)?.Id ?? Guid.NewGuid().ToString("N");
     }
 
-    public RemoteSource BuildSource() => new()
+    public RemoteSource BuildSource()
     {
-        Id = SourceId(),
-        Name = DisplayName,
-        Kind = Kind,
-        Address = Address.Trim(),
-        Port = Port is > 0 and < 65536 ? (int)Port.Value : 0,
-        UserName = UserName.Trim(),
-        AcceptAnyCertificate = AcceptAnyCertificate,
-    };
+        var source = new RemoteSource
+        {
+            Id = SourceId(),
+            Name = DisplayName,
+            Kind = Kind,
+            Address = Address.Trim(),
+            Port = Port is > 0 and < 65536 ? (int)Port.Value : 0,
+            UserName = UserName.Trim(),
+            AcceptAnyCertificate = AcceptAnyCertificate,
+        };
+        ApplyTrust(source);
+        return source;
+    }
 
     [RelayCommand]
     private async Task ConnectAsync()
@@ -267,23 +283,144 @@ public sealed partial class RemoteSourceSetupViewModel : ObservableObject, IDisp
             ErrorText = "주소를 입력해 주세요.";
             return;
         }
+        // The saved location's password is still filled in (shown as dots), but the kind, address or
+        // user name now make this another location: that server must not be sent it. A password typed
+        // in by the user goes ahead.
+        if (_existing is not null && _loadedPassword is { Length: > 0 } loaded && Password == loaded && SourceId() != _existing.Id)
+        {
+            _loadedPassword = null;
+            Password = "";
+            PasswordLoaded?.Invoke(this, EventArgs.Empty);
+            ErrorText = "다른 위치입니다. 이 위치의 비밀번호를 입력해 주세요.";
+            return;
+        }
 
         var source = BuildSource();
+        ServerIdentityChangedException? changed = null;
         await RunBusyAsync("연결하는 중…", async ct =>
         {
-            await NetworkLibrary.TestAsync(source, Password, ct);
+            IRemoteClient? client = null;
+            try
+            {
+                if (source.Kind == RemoteKind.Smb)
+                {
+                    await NetworkLibrary.TestAsync(source, Password, ct);
+                }
+                else
+                {
+                    // The client that is tested also browses, so both talk to the server whose key or
+                    // certificate was checked here (and learned, the first time).
+                    client = NetworkLibrary.CreateClient(source, Password);
+                    if (client is IServerIdentityCheck check) check.IdentityLearned += identity => Keep(source, identity);
+                    await client.TestAsync(ct);
+                }
+            }
+            catch (ServerIdentityChangedException ex) when (!ct.IsCancellationRequested)
+            {
+                client?.Dispose();
+                changed = ex; // asked about below, once the busy state is over
+                return;
+            }
+            catch
+            {
+                client?.Dispose();
+                throw;
+            }
+
             if (SaveOnly)
             {
-                // it answers: keep the location, pick folders later
+                // it answers: keep the location (with what its server was trusted by), pick folders later
+                client?.Dispose();
+                ApplyTrust(source);
                 Result = (source, Password, null);
                 Finished?.Invoke(this, EventArgs.Empty);
                 return;
             }
             _browser?.Dispose();
-            _browser = Kind == RemoteKind.Smb ? null : NetworkLibrary.CreateClient(source, Password);
+            _browser = client;
             Step = 1;
             await LoadFolderAsync(RootFolder, ct);
         });
+
+        if (changed is null) return;
+        if (await TrustChangedAsync(source, changed.Presented)) await ConnectAsync();
+        else ErrorText = changed.Message;
+    }
+
+    // --- who the server is: its SSH key or self-signed certificate, trusted on first use ---
+
+    /// <summary>The key/certificate trusted for one server (<see cref="ServerKey"/>) in this window:
+    /// learned on its first connection, or trusted again by the user.</summary>
+    private sealed record TrustedServer(string Server, string? HostKeyFingerprint, string? HostKeyAlgorithm, string? CertificateThumbprint);
+
+    private TrustedServer? _trust;
+
+    /// <summary>The server a location talks to: kind, address and port. A key or certificate belongs to
+    /// the server, whatever the user name; another address is another server and trusts nothing yet.</summary>
+    private static string ServerKey(RemoteSource s) => $"{s.Kind}|{s.Address.Trim().TrimEnd('/', '\\')}|{s.EffectivePort}";
+
+    private static bool SameServer(RemoteSource a, RemoteSource b) =>
+        string.Equals(ServerKey(a), ServerKey(b), StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>What is trusted for this location's server: what this window learned or was told to
+    /// trust, otherwise what a saved location on the same server trusts (the one being reused first).</summary>
+    private TrustedServer? TrustFor(RemoteSource source)
+    {
+        if (_trust is { } trust && string.Equals(trust.Server, ServerKey(source), StringComparison.OrdinalIgnoreCase)) return trust;
+        var saved = _existing is not null && SameServer(_existing, source)
+            ? _existing
+            : SavedSources.Select(o => o.Source).FirstOrDefault(s => SameServer(s, source));
+        return saved is null ? null : new TrustedServer(ServerKey(saved), saved.HostKeyFingerprint, saved.HostKeyAlgorithm, saved.CertificateThumbprint);
+    }
+
+    private void ApplyTrust(RemoteSource source)
+    {
+        var trust = TrustFor(source);
+        source.HostKeyFingerprint = trust?.HostKeyFingerprint;
+        source.HostKeyAlgorithm = trust?.HostKeyAlgorithm;
+        source.CertificateThumbprint = trust?.CertificateThumbprint;
+    }
+
+    /// <summary>Trusts <paramref name="identity"/> for this location's server from now on (it is saved
+    /// with the location).</summary>
+    private void Keep(RemoteSource source, ServerIdentity identity)
+    {
+        var trust = TrustFor(source) ?? new TrustedServer(ServerKey(source), null, null, null);
+        _trust = identity.IsCertificate
+            ? trust with { CertificateThumbprint = identity.Fingerprint }
+            : trust with { HostKeyFingerprint = identity.Fingerprint, HostKeyAlgorithm = identity.Algorithm };
+    }
+
+    /// <summary>The server answered with another key or certificate than the one trusted for it. That is
+    /// expected after reinstalling the NAS or renewing its certificate - and also what someone in between
+    /// would look like - so the user decides, seeing the new fingerprint. Trusted: kept for this server,
+    /// and for the saved locations on it right away.</summary>
+    private async Task<bool> TrustChangedAsync(RemoteSource source, ServerIdentity presented)
+    {
+        // The fingerprint gets a line of its own: it has no spaces to wrap at, and with "SHA256:" in
+        // front an SSH one is wider than the dialog.
+        var confirmed = presented.IsCertificate
+            ? await Dialogs.ConfirmAsync("서버 인증서가 바뀌었습니다",
+                $"'{source.Name}'이(가) 이전에 신뢰한 인증서와 다른 인증서를 보냈습니다.\n\n"
+                + "인증서를 새로 발급했거나 갱신했다면(Let's Encrypt 등), 또는 NAS를 다시 설치했다면 정상입니다. "
+                + "그런 적이 없다면 누군가 연결을 가로채고 있을 수 있으니 신뢰하지 마세요. 신뢰하면 이 서버에 비밀번호를 보냅니다.\n\n"
+                + $"발급 대상: {presented.Subject}\n"
+                + (presented.ValidUntil is { } until ? $"만료: {until:yyyy-MM-dd}\n" : "")
+                + $"SHA-256 지문:\n{presented.DisplayFingerprint}",
+                "새 인증서 신뢰")
+            : await Dialogs.ConfirmAsync("서버의 SSH 키가 바뀌었습니다",
+                $"'{source.Name}'이(가) 이전에 신뢰한 SSH 키와 다른 키를 보냈습니다.\n\n"
+                + "서버(NAS)를 다시 설치했거나 SSH 키를 새로 만들었다면 정상입니다. "
+                + "그런 적이 없다면 누군가 연결을 가로채고 있을 수 있으니 신뢰하지 마세요. 신뢰하면 이 서버에 비밀번호를 보냅니다.\n\n"
+                + $"새 키 종류: {presented.Algorithm}\nSHA256 지문:\n{presented.Fingerprint}",
+                "새 키 신뢰");
+        if (!confirmed) return false;
+
+        Keep(source, presented);
+        // the key or certificate is the server's, whatever the user name a location signs in with
+        foreach (var saved in SavedSources.Select(o => o.Source).Where(s => SameServer(s, source)))
+            SavedServerTrusted?.Invoke(saved.Id, presented);
+        return true;
     }
 
     [RelayCommand]
@@ -382,10 +519,13 @@ public sealed partial class RemoteSourceSetupViewModel : ObservableObject, IDisp
         }
     }
 
+    private const string UntrustedCertificate =
+        "인증서를 신뢰할 수 없습니다. 자체 서명 인증서를 쓰는 NAS라면 '처음 받은 인증서를 신뢰'를 켜 주세요.";
+
     private static string Friendly(Exception ex) => ex switch
     {
-        System.Net.Http.HttpRequestException { InnerException: System.Security.Authentication.AuthenticationException }
-            => "인증서를 신뢰할 수 없습니다. 자체 서명 인증서를 쓰는 NAS라면 '인증서 확인 안 함'을 켜 주세요.",
+        System.Net.Http.HttpRequestException { InnerException: System.Security.Authentication.AuthenticationException } => UntrustedCertificate,
+        System.Security.Authentication.AuthenticationException => UntrustedCertificate, // FTPS
         System.Net.Http.HttpRequestException => "서버에 연결할 수 없습니다. 주소를 확인해 주세요.",
         System.Net.Sockets.SocketException => "서버에 연결할 수 없습니다. 주소와 포트를 확인해 주세요.",
         Renci.SshNet.Common.SshConnectionException => "SSH 연결이 끊겼습니다. 주소와 포트를 확인해 주세요.",

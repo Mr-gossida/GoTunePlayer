@@ -52,6 +52,80 @@ public class TagEditServiceTests
         }
     }
 
+    // The editor shows only the first artist/genre and the year, so saving one field must leave the
+    // others as the file has them: writing them back would keep one value and cut the date to "2017".
+    [Theory]
+    [InlineData("sample.flac")]
+    [InlineData("sample.mp3")]
+    [InlineData("sample.m4a")]
+    public void Saving_the_title_keeps_every_artist_and_genre_and_the_full_date(string fixture)
+    {
+        var path = TestFixtures.CopyFixture(fixture);
+        try
+        {
+            NativeTags.Write(path, ["아이유", "성시경"], ["K-Pop", "발라드"], "2017-05-12");
+            var file = new LibraryFile { Path = path, Tags = TagService.Read(path) };
+            var originalTitle = file.Tags.Title;
+            Assert.Equal("아이유", file.Tags.Artist);
+            Assert.Equal(2017u, file.Tags.Year);
+
+            var undo = TagEditService.Write(file, TagFields.Apply(file.Tags, new Dictionary<TagField, string>
+            {
+                [TagField.Title] = "새 제목",
+            }), null, null);
+
+            var saved = NativeTags.Read(path);
+            Assert.Equal("새 제목", saved.Title);
+            Assert.Equal(["아이유", "성시경"], saved.Artists);
+            Assert.Equal(["K-Pop", "발라드"], saved.Genres);
+            Assert.Equal("2017-05-12", saved.Date);
+
+            TagEditService.Undo(undo);
+
+            var restored = NativeTags.Read(path);
+            Assert.Equal(originalTitle, TagService.Read(path).Title);
+            Assert.Equal(["아이유", "성시경"], restored.Artists);
+            Assert.Equal(["K-Pop", "발라드"], restored.Genres);
+            Assert.Equal("2017-05-12", restored.Date);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Theory]
+    [InlineData("sample.flac")]
+    [InlineData("sample.mp3")]
+    [InlineData("sample.m4a")]
+    public void Undoing_an_artist_edit_puts_every_artist_back(string fixture)
+    {
+        var path = TestFixtures.CopyFixture(fixture);
+        try
+        {
+            NativeTags.Write(path, ["아이유", "성시경"], ["K-Pop", "발라드"], "2017-05-12");
+            var file = new LibraryFile { Path = path, Tags = TagService.Read(path) };
+
+            var undo = TagEditService.Write(file, TagFields.Apply(file.Tags, new Dictionary<TagField, string>
+            {
+                [TagField.Artist] = "태연",
+            }), null, null);
+            Assert.Equal(["태연"], NativeTags.Read(path).Artists);
+
+            TagEditService.Undo(undo);
+
+            var restored = NativeTags.Read(path);
+            Assert.Equal(["아이유", "성시경"], restored.Artists);
+            Assert.Equal(["K-Pop", "발라드"], restored.Genres);
+            Assert.Equal("2017-05-12", restored.Date);
+            Assert.Equal("아이유", file.Tags.Artist);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
     [Fact]
     public void Empty_cover_and_lyrics_remove_them()
     {

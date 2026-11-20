@@ -4,12 +4,70 @@ using System.Windows.Media.Imaging;
 namespace TuneSync.App;
 
 /// <summary>Turns raw image bytes into a frozen, cross-thread-safe WPF BitmapImage. TuneSync.Core
-/// stays WPF-free, so this conversion lives here rather than in a Core service.</summary>
+/// stays WPF-free, so this conversion lives here rather than in a Core service.
+///
+/// Covers come from files and from the internet, so their size is read from the header first and
+/// an absurd one is refused before anything is decoded: a picture that claims 20000×20000 takes
+/// a few MB in a file but 1.6 GB and seconds to decode.</summary>
 public static class ImageHelper
 {
+    /// <summary>The widest or tallest image decoded (real covers are a few thousand pixels).</summary>
+    public const int MaxSide = 10000;
+
+    /// <summary>The most pixels an image decoded may have: 50 MP, 200 MB decoded.</summary>
+    public const long MaxPixels = 50_000_000;
+
     public static BitmapImage? ToBitmapImage(byte[]? bytes, int decodePixelWidth = 0)
     {
         if (bytes is null || bytes.Length == 0) return null;
+        if (!TryGetPixelSize(bytes, out var width, out var height) || !IsSensibleSize(width, height)) return null;
+        return Decode(bytes, decodePixelWidth, 0);
+    }
+
+    /// <summary>An image decoded to be shown, and the size it's stored at (the bitmap's own is
+    /// the reduced one).</summary>
+    public sealed record DisplayImage(BitmapImage Image, int PixelWidth, int PixelHeight)
+    {
+        public string SizeText => $"{PixelWidth}×{PixelHeight}";
+    }
+
+    /// <summary>Decodes <paramref name="bytes"/> with its longer side at most
+    /// <paramref name="maxSide"/> pixels (a smaller image keeps its size); null when it isn't an
+    /// image WPF reads or claims an absurd size. Any thread; the bitmap is frozen.</summary>
+    public static DisplayImage? ToDisplayImage(byte[]? bytes, int maxSide)
+    {
+        if (bytes is null || bytes.Length == 0) return null;
+        if (!TryGetPixelSize(bytes, out var width, out var height) || !IsSensibleSize(width, height)) return null;
+        var image = width >= height
+            ? Decode(bytes, width > maxSide ? maxSide : 0, 0)
+            : Decode(bytes, 0, height > maxSide ? maxSide : 0);
+        return image is null ? null : new DisplayImage(image, width, height);
+    }
+
+    /// <summary>The size an image is stored at, read from its header without decoding it.</summary>
+    public static bool TryGetPixelSize(byte[] bytes, out int width, out int height)
+    {
+        width = height = 0;
+        try
+        {
+            using var ms = new MemoryStream(bytes, writable: false);
+            var decoder = BitmapDecoder.Create(ms, BitmapCreateOptions.DelayCreation | BitmapCreateOptions.IgnoreColorProfile, BitmapCacheOption.None);
+            if (decoder.Frames.Count == 0) return false;
+            var frame = decoder.Frames[0];
+            (width, height) = (frame.PixelWidth, frame.PixelHeight);
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    public static bool IsSensibleSize(int width, int height) =>
+        width > 0 && height > 0 && width <= MaxSide && height <= MaxSide && (long)width * height <= MaxPixels;
+
+    private static BitmapImage? Decode(byte[] bytes, int decodePixelWidth, int decodePixelHeight)
+    {
         try
         {
             var image = new BitmapImage();
@@ -19,6 +77,7 @@ public static class ImageHelper
             image.StreamSource = ms;
             // Decoding straight to the size it's shown at keeps a 3000px scan from costing ~36 MB.
             if (decodePixelWidth > 0) image.DecodePixelWidth = decodePixelWidth;
+            else if (decodePixelHeight > 0) image.DecodePixelHeight = decodePixelHeight;
             image.EndInit();
             image.Freeze();
             return image;

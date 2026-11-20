@@ -26,11 +26,40 @@ public sealed partial class PlaybackViewModel : ObservableObject, IDisposable
     private DateTime _seekStartedAt;
     private TimeSpan _preSeekPosition;
 
-    public ObservableCollection<LyricsLineViewModel> LyricsLines { get; } = [];
+    /// <summary>The synced lines; a song's lines go in with one change notification, not one per line.</summary>
+    private readonly BulkObservableCollection<LyricsLineViewModel> _lyricsLines = [];
 
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(NowPlayingTitle), nameof(NowPlayingSubtitle), nameof(NowPlayingDetails), nameof(HasCurrentFile))]
+    public ObservableCollection<LyricsLineViewModel> LyricsLines => _lyricsLines;
+
     private LibraryFileViewModel? _currentFile;
+
+    /// <summary>The song the player has loaded. Written out rather than generated so a rescan can
+    /// hand it over to the new row of the same file without announcing a new song (see
+    /// <see cref="RelinkCurrent"/>).</summary>
+    public LibraryFileViewModel? CurrentFile
+    {
+        get => _currentFile;
+        set
+        {
+            if (ReferenceEquals(_currentFile, value)) return;
+            OnPropertyChanging();
+            var old = _currentFile;
+            _currentFile = value;
+            OnCurrentFileChanged(old, value);
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(NowPlayingTitle));
+            OnPropertyChanged(nameof(NowPlayingSubtitle));
+            OnPropertyChanged(nameof(NowPlayingDetails));
+            OnPropertyChanged(nameof(HasCurrentFile));
+        }
+    }
+
+    /// <summary>Where the player has the current song open: the row's path, unless the file was
+    /// renamed or moved while playing (its row keeps the old path until a rescan replaces it).</summary>
+    private string? _playingPath;
+
+    /// <summary>The file the player has loaded, where it is now; null when nothing is loaded.</summary>
+    public string? PlayingPath => CurrentFile is { } file ? _playingPath ?? file.Path : null;
 
     private int _openVersion;
     private (TimeSpan Position, bool Play)? _pendingRestore;
@@ -151,6 +180,11 @@ public sealed partial class PlaybackViewModel : ObservableObject, IDisposable
             OnPropertyChanged(nameof(OutputDescription));
         };
         library.FilesRemoving += OnFilesRemoving;
+        library.FilesAdded += OnFilesAdded;
+        library.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(LibraryViewModel.IsScanning) && !library.IsScanning) OnScanFinished();
+        };
         LibraryFileViewModel.ArtistFirst = settings.QueueArtistFirst;
         PickSeekLook();
         PickSpectrumLook();
@@ -194,6 +228,12 @@ public sealed partial class PlaybackViewModel : ObservableObject, IDisposable
 
     public bool HasCurrentFile => CurrentFile is not null;
 
+    /// <summary>Whether <paramref name="file"/> is the song loaded: its row, or a row of the same
+    /// file from before a rescan (playback moves over to the new row without changing the song).</summary>
+    public bool IsCurrentSong(LibraryFileViewModel file) =>
+        CurrentFile is { } current
+        && (ReferenceEquals(current, file) || string.Equals(current.Path, file.Path, StringComparison.OrdinalIgnoreCase));
+
     /// <summary>Windows Media keeps the playing file open, which blocks writing its tags or
     /// renaming/moving it ("being used by another process"). If the playing file is among
     /// <paramref name="paths"/>, this closes it and returns a callback that reopens it - at its
@@ -209,23 +249,28 @@ public sealed partial class PlaybackViewModel : ObservableObject, IDisposable
 
     public async Task<Action<string?>?> ReleaseIfPlayingAsync(IEnumerable<string> paths)
     {
-        if (CurrentFile is not { } file
-            || !paths.Contains(file.Path, StringComparer.OrdinalIgnoreCase)) return null;
+        // The file the player has open - after a rename the row still says the old path.
+        if (PlayingPath is not { } playing || !paths.Contains(playing, StringComparer.OrdinalIgnoreCase)) return null;
 
         var position = _seekTarget ?? _player.Position;
         var wasPlaying = IsPlaying;
-        _openVersion++; // cancel any open still in flight
+        var released = ++_openVersion; // cancel any open still in flight
         _isReleased = true; // keep showing the old position instead of the closed player's 0:00
         _player.Close();
         IsPlaying = false;
         PlayablePath.DeleteLastCopy();
         await Task.Delay(400); // Close is asynchronous; give Windows Media time to drop its file handle
 
-        return newPath => Reopen(newPath ?? file.Path, position, wasPlaying);
+        // No new path: it stayed where it was. Nothing to reopen once another song was picked meanwhile.
+        return newPath =>
+        {
+            if (_openVersion == released) Reopen(newPath ?? playing, position, wasPlaying);
+        };
     }
 
     private async void Reopen(string path, TimeSpan position, bool play)
     {
+        _playingPath = path;
         var version = ++_openVersion;
         string resolved;
         try
@@ -317,7 +362,8 @@ public sealed partial class PlaybackViewModel : ObservableObject, IDisposable
         {
             RememberPlayed(previous);
         }
-        _shuffleBag.Remove(file); // picked by hand or by shuffle - either way it has now played
+        _shufflePlayed.Add(file.Path); // picked by hand or by shuffle - either way it has now played
+        _advanceAfterScan = false;
         if (file.UpNextOrder > 0) CancelUpNext(file);
 
         var version = ++_openVersion;
@@ -329,6 +375,7 @@ public sealed partial class PlaybackViewModel : ObservableObject, IDisposable
         _player.Close();
         IsPlaying = false;
         ResetTimeline();
+        _playingPath = file.Path;
         CurrentFile = file;
         LoadLyrics(file);
         LoadWaveform(file.Path);
@@ -379,7 +426,7 @@ public sealed partial class PlaybackViewModel : ObservableObject, IDisposable
         DurationText = FormatTime(TimeSpan.FromSeconds(DurationSeconds));
     }
 
-    partial void OnCurrentFileChanged(LibraryFileViewModel? oldValue, LibraryFileViewModel? newValue)
+    private void OnCurrentFileChanged(LibraryFileViewModel? oldValue, LibraryFileViewModel? newValue)
     {
         if (oldValue is not null)
         {
@@ -391,6 +438,20 @@ public sealed partial class PlaybackViewModel : ObservableObject, IDisposable
             newValue.PropertyChanged += CurrentFile_PropertyChanged;
             newValue.IsNowPlaying = true;
         }
+    }
+
+    /// <summary>A rescan rebuilt the playing song's row: the new row takes over (the queue's mark,
+    /// its cover updates) without announcing a new song, so nothing restarts - the lyrics, the
+    /// visuals and the 플레이 page carry on as they were.</summary>
+    private void RelinkCurrent(LibraryFileViewModel row)
+    {
+        var old = _currentFile;
+        _currentFile = row;
+        OnCurrentFileChanged(old, row);
+        // The details come from the new row now (the file may have been retagged meanwhile).
+        OnPropertyChanged(nameof(NowPlayingTitle));
+        OnPropertyChanged(nameof(NowPlayingSubtitle));
+        OnPropertyChanged(nameof(NowPlayingDetails));
     }
 
     /// <summary>Clears position/duration so a new (or failed) track never shows the previous
@@ -424,6 +485,7 @@ public sealed partial class PlaybackViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private void TogglePlayPause()
     {
+        _advanceAfterScan = false; // the user decides now
         if (CurrentFile is null)
         {
             // Nothing loaded yet - start from the top of the current list, like a media player.
@@ -448,6 +510,7 @@ public sealed partial class PlaybackViewModel : ObservableObject, IDisposable
     private void Stop()
     {
         _player.Stop();
+        _advanceAfterScan = false;
         _isReleased = false;
         IsPlaying = false;
         _seekTarget = null;
@@ -507,6 +570,7 @@ public sealed partial class PlaybackViewModel : ObservableObject, IDisposable
     private void ApplySeek(TimeSpan target)
     {
         if (CurrentFile is null) return;
+        _advanceAfterScan = false; // listening to this one again
         _preSeekPosition = _player.Position;
         _player.Position = target;
         _seekTarget = target;

@@ -1,6 +1,5 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
-using System.Diagnostics;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using TuneSync.Core.Audio;
@@ -442,9 +441,5 @@ public sealed partial class OutputViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private static void OpenWindowsSound()
-    {
-        try { Process.Start(new ProcessStartInfo("control.exe", "mmsys.cpl") { UseShellExecute = true }); }
-        catch { /* Windows' sound settings unavailable */ }
-    }
+    private static void OpenWindowsSound() => SystemTools.OpenSoundSettings();
 }

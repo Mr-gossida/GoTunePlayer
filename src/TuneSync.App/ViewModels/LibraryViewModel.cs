@@ -114,6 +114,11 @@ public sealed partial class LibraryViewModel : ObservableObject
     /// <summary>Raised before songs leave the list, so playback can let go of them.</summary>
     public event Action<IReadOnlyList<LibraryFileViewModel>>? FilesRemoving;
 
+    /// <summary>Raised after a scan put a batch of rows in the list. A rescan builds a new row for
+    /// every song, including the ones that were there before, so whoever holds an old row (the
+    /// playing song, "다음에 재생") can move over to the new row of the same file.</summary>
+    public event Action<IReadOnlyList<LibraryFileViewModel>>? FilesAdded;
+
     private static string SourcePath(LibraryFolderViewModel source) =>
         source.Entry.IsRemote ? RemotePath.Build(source.Entry.RemoteSourceId!, source.Path) : source.Path;
 
@@ -774,6 +779,36 @@ public sealed partial class LibraryViewModel : ObservableObject
     /// <summary>Songs read last time, reused while unchanged (local and network-share folders).</summary>
     private readonly LibraryIndex _index = new(AppDataFolder.Combine("library-index.json"));
 
+    /// <summary>Rows with unsaved tag edits that a rescan replaced, by path, until the new row of
+    /// the same file arrives (the edits live only on the rows). Kept across a scan that a newer
+    /// one replaced before it got to them.</summary>
+    private readonly Dictionary<string, LibraryFileViewModel> _carriedEdits = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Songs whose unsaved edits wait for a rescan to bring their rows back. The tag
+    /// editor doesn't count them meanwhile, so whoever asks before they're lost (closing the app)
+    /// should.</summary>
+    public int PendingEditsInScan => _carriedEdits.Count;
+
+    /// <summary>Hands the unsaved edits waiting in <see cref="_carriedEdits"/> to the new rows of
+    /// the same files. On the UI thread: taking them over updates the tag editor.</summary>
+    private void CarryEdits(IReadOnlyList<LibraryFileViewModel> rows)
+    {
+        if (_carriedEdits.Count == 0) return;
+        foreach (var row in rows)
+            if (_carriedEdits.Remove(row.Path, out var old)) row.TakePendingFrom(old);
+    }
+
+    /// <summary>After a scan that read everything: edits whose song didn't come back can't be
+    /// kept - say so rather than lose them silently.</summary>
+    private void ReportUncarriedEdits()
+    {
+        if (_carriedEdits.Count == 0) return;
+        var count = _carriedEdits.Count;
+        _carriedEdits.Clear();
+        Toast.Warning("저장하지 않은 변경 내용이 사라졌습니다",
+            $"태그 변경을 저장하지 않은 {count}곡을 다시 불러온 목록에서 찾지 못했습니다. 파일이 옮겨졌거나 지금 접근할 수 없는 위치에 있을 수 있습니다.");
+    }
+
     [RelayCommand]
     private async Task RescanAsync()
     {
@@ -781,6 +816,9 @@ public sealed partial class LibraryViewModel : ObservableObject
         var cts = new CancellationTokenSource();
         _scanCts = cts;
 
+        // Every row is about to be rebuilt: unsaved edits wait for the new row of the same file.
+        foreach (var file in Files)
+            if (file.HasPendingChanges) _carriedEdits[file.Path] = file;
         Files.Clear();
         IsScanning = true;
         StatusText = "스캔 중...";
@@ -810,7 +848,9 @@ public sealed partial class LibraryViewModel : ObservableObject
             pending.Clear();
             var models = await Task.Run(() => batch.Select(f => new LibraryFileViewModel(f)).ToList());
             if (cts.IsCancellationRequested) return;
+            CarryEdits(models);
             Files.AddRange(models);
+            FilesAdded?.Invoke(models);
             StatusText = $"스캔 중... ({count}개)";
         }
 
@@ -895,6 +935,7 @@ public sealed partial class LibraryViewModel : ObservableObject
                 if (unreachable > 0 && count > 0)
                     Toast.Warning("일부 항목에 접근할 수 없습니다",
                         $"{unreachable}개 폴더/파일을 읽지 못했습니다. 네트워크 드라이브나 외장 디스크 연결을 확인해 주세요.");
+                ReportUncarriedEdits();
             }
         }
         catch (OperationCanceledException)

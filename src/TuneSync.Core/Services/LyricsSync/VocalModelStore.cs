@@ -16,4 +16,8 @@ public static class VocalModelStore
     /// <summary>Downloads the model. Progress is 0..1.</summary>
     public static Task DownloadAsync(IProgress<double>? progress, CancellationToken ct) =>
         ModelDownload.ToFileAsync(Url, ModelPath, ExpectedBytes, progress, ct);
+
+    /// <summary>Deletes the model when <paramref name="path"/> is it and it couldn't be read (see
+    /// <see cref="WhisperModelStore.Discard"/>).</summary>
+    internal static bool Discard(string path) => ModelDownload.Discard(path, ModelPath);
 }

@@ -9,6 +9,15 @@ public static class AudioDecoder
 {
     public const int SampleRate = 16000;
 
+    /// <summary>The longest song read: the sync holds a song in memory several times over (as
+    /// 44.1 kHz stereo while separating the vocals), so a recording of hours - or a file made to
+    /// look like one - would take gigabytes.</summary>
+    public static readonly TimeSpan MaxDuration = TimeSpan.FromMinutes(30);
+
+    /// <summary>Room is made up front for a song as long as its header says, up to this: a header
+    /// can claim days (an MP3's frame count is just a number in it).</summary>
+    private const double PresizeSeconds = 15 * 60;
+
     public static float[] ReadMono16k(string path, CancellationToken ct = default)
     {
         using var reader = Audio.AudioFiles.Open(path);
@@ -16,12 +25,14 @@ public static class AudioDecoder
         if (source.WaveFormat.Channels > 1) source = new MonoMix(source);
         if (source.WaveFormat.SampleRate != SampleRate) source = new WdlResamplingSampleProvider(source, SampleRate);
 
-        var samples = new List<float>((int)Math.Min(int.MaxValue / 2, reader.Duration.TotalSeconds * SampleRate + SampleRate));
+        var samples = new List<float>(Capacity(reader.Duration, SampleRate));
+        var max = MaxSamples(SampleRate);
         var buffer = new float[SampleRate];
         int read;
         while ((read = source.Read(buffer, 0, buffer.Length)) > 0)
         {
             ct.ThrowIfCancellationRequested();
+            if (samples.Count + read > max) throw TooLong();
             for (var i = 0; i < read; i++) samples.Add(buffer[i]);
         }
         return [.. samples];
@@ -36,13 +47,15 @@ public static class AudioDecoder
         var channels = source.WaveFormat.Channels;
         if (source.WaveFormat.SampleRate != sampleRate) source = new WdlResamplingSampleProvider(source, sampleRate);
 
-        var capacity = (int)Math.Min(int.MaxValue / 2, reader.Duration.TotalSeconds * sampleRate + sampleRate);
+        var capacity = Capacity(reader.Duration, sampleRate);
         List<float> left = new(capacity), right = new(capacity);
+        var max = MaxSamples(sampleRate);
         var buffer = new float[sampleRate / 10 * channels];
         int read;
         while ((read = source.Read(buffer, 0, buffer.Length)) > 0)
         {
             ct.ThrowIfCancellationRequested();
+            if (left.Count + read / channels > max) throw TooLong();
             for (var i = 0; i + channels <= read; i += channels)
             {
                 left.Add(buffer[i]);
@@ -51,6 +64,14 @@ public static class AudioDecoder
         }
         return ([.. left], [.. right]);
     }
+
+    private static int Capacity(TimeSpan claimed, int sampleRate) =>
+        (int)(Math.Clamp(claimed.TotalSeconds, 0, PresizeSeconds) * sampleRate) + sampleRate;
+
+    private static long MaxSamples(int sampleRate) => (long)(MaxDuration.TotalSeconds * sampleRate);
+
+    private static NotSupportedException TooLong() =>
+        new($"곡이 너무 깁니다. 자동으로 맞추기는 {MaxDuration.TotalMinutes:0}분 이하의 곡만 할 수 있습니다.");
 
     /// <summary>One channel of sound at another sample rate.</summary>
     public static float[] Resample(float[] samples, int from, int to)

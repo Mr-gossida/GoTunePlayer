@@ -1,6 +1,5 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
-using System.Diagnostics;
 using System.IO;
 using System.Windows.Data;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -534,8 +533,7 @@ public sealed partial class MergeViewModel : ObservableObject
             Toast.Info("격리 폴더가 없습니다", "아직 격리된 파일이 없습니다.");
             return;
         }
-        try { Process.Start(new ProcessStartInfo("explorer.exe", $"\"{path}\"") { UseShellExecute = true }); }
-        catch (Exception ex) { Toast.Error("폴더를 열지 못했습니다", ex.Message); }
+        SystemTools.OpenFolder(path);
     }
 
     [RelayCommand]

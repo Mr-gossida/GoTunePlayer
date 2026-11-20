@@ -122,12 +122,19 @@ public partial class ShellWindow
         UpdateTray();
     }
 
-    private static void BringUp(Window window)
+    /// <summary>Activates the window and lifts it above the others (also when GoTune is started
+    /// again while running, see App).</summary>
+    internal static void BringUp(Window window)
     {
         window.Activate();
-        // Activate alone may only flash the taskbar button when another app has the focus.
-        window.Topmost = true;
-        window.Topmost = false;
+        // Activate alone may only flash the taskbar button when another app has the focus, so
+        // the window flips its always-on-top state and back, which raises it (a pinned mini
+        // player to the top of the other always-on-top windows). Through SetCurrentValue:
+        // assigning Topmost would replace the mini player's binding to 항상 위에 표시 for good,
+        // and its pin button would do nothing until the app restarted.
+        var topmost = window.Topmost;
+        window.SetCurrentValue(Window.TopmostProperty, !topmost);
+        window.SetCurrentValue(Window.TopmostProperty, topmost);
         window.Focus();
     }
 
@@ -176,9 +183,12 @@ public partial class ShellWindow
         Item("열기", SymbolRegular.Open24, ShowFullFromTray).FontWeight = FontWeights.SemiBold;
         Item("미니 플레이어", SymbolRegular.PictureInPictureEnter24, () =>
         {
-            if (_settings.PlayerMode == PlayerMode.Full) EnterLastMiniMode();
-            else RestoreFromTray();
-            if (_mini is not null) BringUp(_mini);
+            if (_settings.PlayerMode == PlayerMode.Full)
+            {
+                EnterLastMiniMode();
+                if (_mini is not null) BringUp(_mini);
+            }
+            else RestoreFromTray(); // brings the mini player up itself
         });
         _trayHud = Item("HUD 표시", SymbolRegular.Board24, () => Hud.Toggle());
         _trayHudClickThrough = Item("HUD 마우스 통과 켜기", SymbolRegular.CursorClick24, () => Hud.ClickThrough = !Hud.ClickThrough);
