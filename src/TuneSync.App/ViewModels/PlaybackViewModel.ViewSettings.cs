@@ -77,11 +77,10 @@ public sealed partial class PlaybackViewModel
     [ObservableProperty]
     private SeekBarStyle _seekLook;
 
-    /// <summary>The seek bar looks in the order the settings list them (임의 last).</summary>
+    /// <summary>The seek bar looks in the order the settings list them (없음, 랜덤, then the looks).</summary>
     public static readonly SeekBarStyle[] SeekBarStyleOrder =
-        [SeekBarStyle.Wave, SeekBarStyle.Flame, SeekBarStyle.Neon, SeekBarStyle.Bars, SeekBarStyle.Fountain, SeekBarStyle.Rain, SeekBarStyle.Aurora,
-         SeekBarStyle.Sparkle, SeekBarStyle.Fireworks, SeekBarStyle.Fireflies, SeekBarStyle.Electric, SeekBarStyle.Petals, SeekBarStyle.Notes,
-         SeekBarStyle.Random, SeekBarStyle.None];
+        [SeekBarStyle.None, SeekBarStyle.Random, SeekBarStyle.Wave, SeekBarStyle.Flame, SeekBarStyle.Neon, SeekBarStyle.Bars, SeekBarStyle.Fountain, SeekBarStyle.Rain, SeekBarStyle.Aurora,
+         SeekBarStyle.Sparkle, SeekBarStyle.Fireworks, SeekBarStyle.Fireflies, SeekBarStyle.Electric, SeekBarStyle.Petals, SeekBarStyle.Notes];
 
     private void PickSeekLook()
     {
@@ -90,9 +89,7 @@ public sealed partial class PlaybackViewModel
             SeekLook = SeekBarStyle;
             return;
         }
-        // A different one from the last song's, so the change shows.
-        var choices = SeekBarStyleOrder.Where(l => l is not (SeekBarStyle.Random or SeekBarStyle.None) && l != SeekLook).ToArray();
-        SeekLook = choices[Random.Shared.Next(choices.Length)];
+        SeekLook = PickFrom(RandomSeekLooks, _settings.SeekBarRandomExcluded, SeekLook);
     }
 
     public static string SeekBarStyleName(SeekBarStyle style) => style switch
@@ -135,9 +132,40 @@ public sealed partial class PlaybackViewModel
     /// <summary>The spectrum looks in the order the settings list them and a click cycles through.</summary>
     public static readonly SpectrumStyle[] SpectrumStyleOrder =
     [
-        SpectrumStyle.Off, SpectrumStyle.Led, SpectrumStyle.Bars, SpectrumStyle.Wave, SpectrumStyle.Mirror, SpectrumStyle.Dots,
-        SpectrumStyle.Neon, SpectrumStyle.Rainbow, SpectrumStyle.Reflect, SpectrumStyle.Pins, SpectrumStyle.Scope, SpectrumStyle.Random,
+        SpectrumStyle.Off, SpectrumStyle.Random, SpectrumStyle.Led, SpectrumStyle.Bars, SpectrumStyle.Wave, SpectrumStyle.Mirror, SpectrumStyle.Dots,
+        SpectrumStyle.Neon, SpectrumStyle.Rainbow, SpectrumStyle.Reflect, SpectrumStyle.Pins, SpectrumStyle.Scope,
     ];
+
+    /// <summary>The seek bar looks 랜덤 can pick from (all but 랜덤 and 없음).</summary>
+    public static readonly SeekBarStyle[] RandomSeekLooks =
+        [.. SeekBarStyleOrder.Where(l => l is not (SeekBarStyle.Random or SeekBarStyle.None))];
+
+    /// <summary>The background effects 랜덤 can pick from.</summary>
+    public static readonly BackgroundEffect[] RandomBackgrounds =
+        [BackgroundEffect.Aurora, BackgroundEffect.Caustics, BackgroundEffect.Bokeh, BackgroundEffect.Nebula, BackgroundEffect.Lava, BackgroundEffect.CoverGradient];
+
+    /// <summary>랜덤's pick: one of <paramref name="all"/> not left out in 설정 (all of them when
+    /// every one is), and a different one from <paramref name="now"/> when there's a choice, so
+    /// the change shows.</summary>
+    private static T PickFrom<T>(IReadOnlyList<T> all, ICollection<T> excluded, T now)
+    {
+        var pool = all.Where(l => !excluded.Contains(l)).ToArray();
+        if (pool.Length == 0) pool = [.. all];
+        var fresh = pool.Where(l => !EqualityComparer<T>.Default.Equals(l, now)).ToArray();
+        var from = fresh.Length > 0 ? fresh : pool;
+        return from[Random.Shared.Next(from.Length)];
+    }
+
+    /// <summary>A background effect for 랜덤 (picked each time the stage opens).</summary>
+    public BackgroundEffect PickRandomBackground(BackgroundEffect now) => PickFrom(RandomBackgrounds, _settings.BackgroundRandomExcluded, now);
+
+    /// <summary>설정 changed which looks 랜덤 may pick: a look that just left the pool is
+    /// swapped for one still in it.</summary>
+    public void RandomPoolChanged()
+    {
+        if (SeekBarStyle == SeekBarStyle.Random && _settings.SeekBarRandomExcluded.Contains(SeekLook)) PickSeekLook();
+        if (SpectrumStyle == SpectrumStyle.Random && _settings.SpectrumRandomExcluded.Contains(SpectrumLook)) PickSpectrumLook();
+    }
 
     private static readonly SpectrumStyle[] RandomLooks =
         [.. SpectrumStyleOrder.Where(s => s is not SpectrumStyle.Off and not SpectrumStyle.Random)];
@@ -149,12 +177,10 @@ public sealed partial class PlaybackViewModel
             SpectrumLook = SpectrumStyle;
             return;
         }
-        // A different one from what's showing, so a new song (or the click) visibly changes it.
-        var choices = RandomLooks.Where(l => l != SpectrumLook).ToArray();
-        SpectrumLook = choices[Random.Shared.Next(choices.Length)];
+        SpectrumLook = PickFrom(RandomLooks, _settings.SpectrumRandomExcluded, SpectrumLook);
     }
 
-    /// <summary>Clicking the spectrum steps through <see cref="SpectrumStyleOrder"/>, back to 없음 after 랜덤.</summary>
+    /// <summary>Clicking the spectrum steps through <see cref="SpectrumStyleOrder"/> (없음, 랜덤, the looks), back to 없음 after the last.</summary>
     public void CycleSpectrumStyle()
     {
         var all = SpectrumStyleOrder;

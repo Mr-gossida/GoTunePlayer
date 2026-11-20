@@ -142,6 +142,27 @@
             </Setter>
         </Style>
 
+        <!-- The file's type before the duration in queue rows (FLAC, MP3...): lossless formats in
+             the accent color, the rest quietly outlined. A fixed least width keeps the durations
+             lined up. -->
+        <Style x:Key="FormatBadge" TargetType="Border">
+            <Setter Property="CornerRadius" Value="4"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="4,0,4,1"/>
+            <Setter Property="MinWidth" Value="36"/>
+            <Setter Property="Margin" Value="0,0,8,0"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource ControlStrongStrokeColorDefaultBrush}"/>
+            <Setter Property="TextElement.Foreground" Value="{DynamicResource TextFillColorTertiaryBrush}"/>
+            <Setter Property="ToolTip" Value="{Binding FormatToolTip}"/>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsLosslessFormat}" Value="True">
+                    <Setter Property="BorderBrush" Value="{DynamicResource PlayerAccentBrush}"/>
+                    <Setter Property="TextElement.Foreground" Value="{DynamicResource PlayerAccentBrush}"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
         <!-- Dense rows (촘촘한 목록): one line per song, no cover. -->
         <Style x:Key="QueueCompactItemStyle" TargetType="ListBoxItem" BasedOn="{StaticResource QueueItemStyle}">
             <Setter Property="Padding" Value="8,3"/>
@@ -170,6 +191,9 @@
                     <Border CornerRadius="7" Padding="5,0" Margin="0,0,6,0" Background="{DynamicResource PlayerAccentBrush}" ToolTip="다음에 재생할 곡"
                             Visibility="{Binding IsUpNext, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}">
                         <TextBlock FontSize="10" FontWeight="SemiBold" Text="{Binding UpNextOrder}" Foreground="{DynamicResource PlayerOnAccentBrush}"/>
+                    </Border>
+                    <Border Style="{StaticResource FormatBadge}" MinWidth="32" Margin="0,0,7,0">
+                        <TextBlock Text="{Binding FormatBadge}" FontSize="8.5" FontWeight="SemiBold" HorizontalAlignment="Center"/>
                     </Border>
                     <TextBlock Text="{Binding DurationText}" FontSize="11" Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
                 </StackPanel>
@@ -976,6 +1000,9 @@
                                         <TextBlock FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource PlayerOnAccentBrush}">
                                             <Run Text="다음"/><Run Text=" "/><Run Text="{Binding UpNextOrder, Mode=OneWay}"/>
                                         </TextBlock>
+                                    </Border>
+                                    <Border Style="{StaticResource FormatBadge}">
+                                        <TextBlock Text="{Binding FormatBadge}" FontSize="9" FontWeight="SemiBold" HorizontalAlignment="Center"/>
                                     </Border>
                                     <TextBlock Text="{Binding DurationText}" FontSize="12" VerticalAlignment="Center"
                                                Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>

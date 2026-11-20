@@ -82,6 +82,16 @@ public sealed class AppSettings
     /// <summary>What plays along on the seek bar.</summary>
     public SeekBarStyle SeekBarStyle { get; set; } = SeekBarStyle.Wave;
 
+    /// <summary>Seek bar looks 랜덤 doesn't pick (unchecked in 설정). Kept as the ones left out,
+    /// so a look added later is in the pool from the start.</summary>
+    public List<SeekBarStyle> SeekBarRandomExcluded { get; set; } = [];
+
+    /// <summary>Spectrum looks 랜덤 doesn't pick.</summary>
+    public List<SpectrumStyle> SpectrumRandomExcluded { get; set; } = [];
+
+    /// <summary>Background effects 랜덤 doesn't pick.</summary>
+    public List<BackgroundEffect> BackgroundRandomExcluded { get; set; } = [];
+
     /// <summary>The spectrum analyzer's look (under the song info and on the screen saver).</summary>
     public SpectrumStyle SpectrumStyle { get; set; } = SpectrumStyle.Led;
 

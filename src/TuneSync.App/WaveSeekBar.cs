@@ -1154,15 +1154,17 @@ public sealed partial class WaveSeekBar : FrameworkElement
             var t = Math.Clamp(star.Age / star.Life, 0, 1);
             var glow = t < 0.08 ? t / 0.08 : Math.Pow(1 - (t - 0.08) / 0.92, 2);
             if (glow <= 0.02) continue;
-            // (the whiteness in quarters, so the colors - and their brushes - are few)
-            var color = Mix(tint, Colors.White, 0.55 + 0.4 * Math.Round(star.Hue * 4) / 4);
+            // each flash a soft color of its own: a hue picked round the wheel from the cover's
+            // (Vy, in twelve steps), washed toward white (in thirds) - so the colors, and their
+            // brushes, stay few
+            var color = Mix(Shift(tint, star.Vy * 30, 1.0), Colors.White, 0.08 + 0.2 * Math.Round(star.Hue * 3) / 3);
             double x = star.X, y = star.Y;
             var r = star.Size;
 
             // halo
-            dc.DrawEllipse(Solid(Color.FromArgb((byte)(45 * glow), color.R, color.G, color.B)), null,
+            dc.DrawEllipse(Solid(Color.FromArgb((byte)(60 * glow), color.R, color.G, color.B)), null,
                 new Point(x, y), r * 1.9 * (0.6 + 0.4 * glow), r * 1.9 * (0.6 + 0.4 * glow));
-            dc.DrawEllipse(Solid(Color.FromArgb((byte)(90 * glow), color.R, color.G, color.B)), null,
+            dc.DrawEllipse(Solid(Color.FromArgb((byte)(120 * glow), color.R, color.G, color.B)), null,
                 new Point(x, y), r * 0.9, r * 0.9);
 
             // four long, thin rays that shrink back as it fades, turned at the flash's own angle
@@ -1215,14 +1217,16 @@ public sealed partial class WaveSeekBar : FrameworkElement
             var delay = beat ? -Random.Shared.NextDouble() * 0.12 : 0;
             // each camera's flash at an angle of its own (the rays repeat every quarter turn)
             var angle = Random.Shared.NextDouble() * Math.PI / 2;
-            AddFlash(x, y, size, delay, angle);
-            // now and then a camera fires twice in quick succession
-            if (Random.Shared.NextDouble() < 0.18) AddFlash(x, y, size * 0.85, delay - 0.12 - Random.Shared.NextDouble() * 0.06, angle);
+            var tone = Random.Shared.Next(12);
+            AddFlash(x, y, size, delay, angle, tone);
+            // now and then a camera fires twice in quick succession (the same flash, the same color)
+            if (Random.Shared.NextDouble() < 0.18) AddFlash(x, y, size * 0.85, delay - 0.12 - Random.Shared.NextDouble() * 0.06, angle, tone);
         }
     }
 
-    /// <summary>Queues a flash; its angle is kept in Vx (flashes don't move).</summary>
-    private void AddFlash(double x, double y, double size, double delay, double angle)
+    /// <summary>Queues a flash; its angle is kept in Vx and its color's step round the wheel in
+    /// Vy (flashes don't move).</summary>
+    private void AddFlash(double x, double y, double size, double delay, double angle, int tone)
     {
         if (_stars.Count >= 44) return;
         _stars.Add(new Spark
@@ -1230,6 +1234,7 @@ public sealed partial class WaveSeekBar : FrameworkElement
             X = x,
             Y = y,
             Vx = angle,
+            Vy = tone,
             Age = delay,
             Life = 0.22 + Random.Shared.NextDouble() * 0.25,
             Size = size,

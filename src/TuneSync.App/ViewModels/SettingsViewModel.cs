@@ -27,6 +27,10 @@ public sealed partial class SettingsViewModel : ObservableObject
         _network = network;
         Playback = playback;
         Library = playback.Library;
+        playback.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(PlaybackViewModel.BackgroundEffect)) OnPropertyChanged(nameof(IsBackgroundRandom));
+        };
         _theme = settings.Theme;
         _quarantineFolderName = settings.MergeQuarantineFolderName;
         _screenSaverEnabled = settings.ScreenSaverEnabled;
@@ -246,7 +250,50 @@ public sealed partial class SettingsViewModel : ObservableObject
         {
             Playback.SeekBarStyle = value;
             OnPropertyChanged();
+            OnPropertyChanged(nameof(IsSeekBarRandom));
         }
+    }
+
+    // ---- 랜덤's pools: with 랜덤 chosen, which looks it may pick (checkboxes under the card) ----
+
+    public bool IsSeekBarRandom => SeekBarStyle == SeekBarStyle.Random;
+    public bool IsSpectrumRandom => SpectrumStyle == SpectrumStyle.Random;
+    public bool IsBackgroundRandom => Playback.BackgroundEffect == BackgroundEffect.Random;
+
+    private IReadOnlyList<RandomPoolItem>? _seekBarRandomPool, _spectrumRandomPool, _backgroundRandomPool;
+
+    public IReadOnlyList<RandomPoolItem> SeekBarRandomPool => _seekBarRandomPool ??=
+        Pool(PlaybackViewModel.RandomSeekLooks, PlaybackViewModel.SeekBarStyleName, _settings.SeekBarRandomExcluded);
+
+    public IReadOnlyList<RandomPoolItem> SpectrumRandomPool => _spectrumRandomPool ??=
+        Pool(PlaybackViewModel.SpectrumStyleOrder.Where(s => s is not (SpectrumStyle.Off or SpectrumStyle.Random)).ToArray(),
+            PlaybackViewModel.SpectrumStyleName, _settings.SpectrumRandomExcluded);
+
+    public IReadOnlyList<RandomPoolItem> BackgroundRandomPool => _backgroundRandomPool ??=
+        Pool(PlaybackViewModel.RandomBackgrounds, b => BackgroundEffectOptions.First(o => o.Value == b).Label, _settings.BackgroundRandomExcluded);
+
+    /// <summary>The checkboxes for one pool; ticking one saves which are left out.</summary>
+    private IReadOnlyList<RandomPoolItem> Pool<T>(IReadOnlyList<T> all, Func<T, string> name, List<T> excluded) where T : notnull
+    {
+        var items = new List<RandomPoolItem>();
+        foreach (var look in all)
+            items.Add(new RandomPoolItem(look, name(look), !excluded.Contains(look), () =>
+            {
+                excluded.Clear();
+                excluded.AddRange(items.Where(i => !i.IsChecked).Select(i => (T)i.Value));
+                AppSettingsStore.Save(_settings);
+                Playback.RandomPoolChanged();
+            }));
+        return items;
+    }
+
+    /// <summary>The pool's "모두 선택" button: checks every look (or, all checked already, clears them).</summary>
+    [RelayCommand]
+    private void CheckAll(IReadOnlyList<RandomPoolItem>? pool)
+    {
+        if (pool is null) return;
+        var all = !pool.All(i => i.IsChecked); // all checked already: the button clears them instead
+        foreach (var item in pool) item.IsChecked = all;
     }
 
     public IReadOnlyList<Choice<SpectrumStyle>> SpectrumStyleOptions { get; } =
@@ -259,6 +306,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         {
             Playback.SpectrumStyle = value;
             OnPropertyChanged();
+            OnPropertyChanged(nameof(IsSpectrumRandom));
         }
     }
 
@@ -371,13 +419,13 @@ public sealed partial class SettingsViewModel : ObservableObject
     /// <summary>설정 › 화면 보호기 › 배경 효과: which light (bound to Playback.BackgroundEffect).</summary>
     public IReadOnlyList<Choice<BackgroundEffect>> BackgroundEffectOptions { get; } =
     [
+        new(BackgroundEffect.Random, "랜덤 (열 때마다)"),
         new(BackgroundEffect.Aurora, "오로라"),
         new(BackgroundEffect.Caustics, "물빛"),
         new(BackgroundEffect.Bokeh, "빛망울"),
         new(BackgroundEffect.Nebula, "성운"),
         new(BackgroundEffect.Lava, "라바 램프"),
         new(BackgroundEffect.CoverGradient, "커버 색 그라데이션"),
-        new(BackgroundEffect.Random, "랜덤 (열 때마다)"),
     ];
 
     /// <summary>설정 › 화면 보호기 › 배경 효과: how it moves (bound to Playback.AuroraMode).</summary>

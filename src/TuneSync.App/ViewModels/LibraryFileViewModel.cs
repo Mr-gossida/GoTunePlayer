@@ -148,6 +148,25 @@ public sealed partial class LibraryFileViewModel : ObservableObject
     public string ArtistGroup => string.IsNullOrWhiteSpace(Artist) ? "(알 수 없는 아티스트)" : Artist;
     public string AlbumGroup => string.IsNullOrWhiteSpace(Album) ? "(알 수 없는 앨범)" : Album;
 
+    /// <summary>The queue's format badge: the file's type as people know it ("FLAC", "MP3",
+    /// DSF/DFF as "DSD"), from its extension - nothing is read for it.</summary>
+    public string FormatBadge => _format ??= System.IO.Path.GetExtension(Path).TrimStart('.').ToLowerInvariant() switch
+    {
+        "dsf" or "dff" => "DSD",
+        "aif" or "aiff" => "AIFF",
+        "wv" => "WV",
+        "" => "?",
+        var other => other.ToUpperInvariant(),
+    };
+
+    private string? _format;
+
+    /// <summary>A format that is always lossless (the badge is drawn in the accent color). An
+    /// M4A may hold either AAC or ALAC, so it isn't counted - telling would mean opening it.</summary>
+    public bool IsLosslessFormat => FormatBadge is "FLAC" or "WAV" or "AIFF" or "APE" or "WV" or "DSD" or "TAK";
+
+    public string FormatToolTip => IsLosslessFormat ? $"{FormatBadge} · 무손실" : FormatBadge is "M4A" ? "M4A (AAC 또는 ALAC)" : $"{FormatBadge} · 손실 압축";
+
     public string DurationText => Model.Duration.TotalHours >= 1
         ? Model.Duration.ToString(@"h\:mm\:ss")
         : Model.Duration.ToString(@"mm\:ss");
