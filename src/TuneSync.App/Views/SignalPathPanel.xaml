@@ -9,7 +9,7 @@
         <BooleanToVisibilityConverter x:Key="Visible"/>
 
         <!-- One step: a ring with its icon on a line running down to the next, its title (with a
-             바뀜 / 그대로 tag), what it does now, and the details; a shortcut to its settings
+             변경 / 원음 tag), what it does now, and the details; a shortcut to its settings
              shows on hover. A step the player isn't doing is one dim line. -->
         <DataTemplate x:Key="StepTemplate">
             <Grid x:Name="Row" Background="Transparent">
@@ -117,14 +117,14 @@
                         <ColumnDefinition/>
                     </Grid.ColumnDefinitions>
                     <Border CornerRadius="8" Padding="11,7" Background="{DynamicResource PlayerPanelBrush}"
-                            ToolTip="음색 조절·볼륨·샘플 변환을 계산하는 정밀도">
+                            ToolTip="음색 조절, 볼륨, 샘플 변환을 계산하는 정밀도">
                         <StackPanel>
                             <TextBlock Text="처리 정밀도" FontSize="10.5" Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
                             <TextBlock Text="{Binding Precision}" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
                         </StackPanel>
                     </Border>
                     <Border Grid.Column="2" CornerRadius="8" Padding="11,7" Background="{DynamicResource PlayerPanelBrush}"
-                            ToolTip="장치에 보낼 소리가 제때 준비되지 못해 끊긴 횟수 (이 곡에서)">
+                            ToolTip="이 곡을 재생하는 동안 소리가 끊긴 횟수">
                         <StackPanel>
                             <TextBlock Text="끊김" FontSize="10.5" Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
                             <TextBlock Text="{Binding Underruns}" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>

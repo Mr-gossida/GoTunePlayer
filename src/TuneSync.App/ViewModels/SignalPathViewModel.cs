@@ -12,9 +12,9 @@ public enum SignalStepState
 {
     /// <summary>A step the sound passes through without being changed by it.</summary>
     Neutral,
-    /// <summary>The sound is changed here (shown in the accent color, "바뀜").</summary>
+    /// <summary>The sound is changed here (shown in the accent color, "변경").</summary>
     Changed,
-    /// <summary>The sound is kept exactly as the file has it (bit-perfect / DoP: "그대로").</summary>
+    /// <summary>The sound is kept exactly as the file has it (bit-perfect / DoP: "원음").</summary>
     Pure,
     /// <summary>A step the player isn't doing now: one dim line.</summary>
     Skipped,
@@ -29,7 +29,7 @@ public sealed record SignalStep(SymbolRegular Icon, string Title, string Main, s
     public bool IsSkipped => State == SignalStepState.Skipped;
     public bool HasSub => !string.IsNullOrEmpty(Sub);
     public bool HasAction => Action is not null;
-    public string? Tag => State switch { SignalStepState.Changed => "바뀜", SignalStepState.Pure => "그대로", _ => null };
+    public string? Tag => State switch { SignalStepState.Changed => "변경", SignalStepState.Pure => "원음", _ => null };
 
     /// <summary>The last step draws no line down to a next one.</summary>
     public bool IsLast { get; init; }
@@ -79,7 +79,7 @@ public sealed partial class SignalPathViewModel : ObservableObject
         var steps = new List<SignalStep>();
         if (path is null)
         {
-            SetVerdict("재생 중인 곡 없음", "곡을 재생하면 소리가 지나는 길을 보여 드립니다.", "·", pure: false);
+            SetVerdict("재생 중인 곡 없음", "곡을 재생하면 소리가 어떤 과정을 거쳐 나오는지 보여 드립니다.", "·", pure: false);
             Fill(steps);
             HasFooter = false;
             return;
@@ -88,13 +88,13 @@ public sealed partial class SignalPathViewModel : ObservableObject
         {
             if (bypassed)
             {
-                SetVerdict("Windows 플레이어로 재생 중", "GoTune 재생기가 열 수 없는 형식이라, 이퀄라이저와 출력 설정을 거치지 않습니다.", "!", pure: false);
+                SetVerdict("Windows 플레이어로 재생 중", "GoTune이 직접 열 수 없는 형식이라 Windows 기본 플레이어로 재생합니다. 이퀄라이저와 출력 설정은 적용되지 않습니다.", "!", pure: false);
                 steps.Add(FileStep(path, quality, null, pure: false));
-                steps.Add(new(SymbolRegular.Headphones24, "출력", "Windows 기본 장치", "Windows 미디어 플레이어가 직접 재생", SignalStepState.Neutral));
+                steps.Add(new(SymbolRegular.Headphones24, "출력", "Windows 기본 장치", "Windows 기본 플레이어가 직접 출력", SignalStepState.Neutral));
             }
             else
             {
-                SetVerdict("장치를 여는 중…", "곡이 재생되기 시작하면 경로가 나타납니다.", "·", pure: false);
+                SetVerdict("장치를 여는 중…", "재생이 시작되면 경로를 보여 드립니다.", "·", pure: false);
             }
             Fill(steps);
             HasFooter = false;
@@ -112,20 +112,20 @@ public sealed partial class SignalPathViewModel : ObservableObject
 
         // 2. decoding
         if (signal.DsdRate > 0 && output.Path == OutputPath.DoP)
-            steps.Add(new(SymbolRegular.DeveloperBoard24, "디코더", signal.Decoder, "DSD 비트를 그대로 읽음", SignalStepState.Pure));
+            steps.Add(new(SymbolRegular.DeveloperBoard24, "디코더", signal.Decoder, "DSD 데이터를 변환 없이 그대로 읽음", SignalStepState.Pure));
         else if (signal.DsdRate > 0)
         {
             changed.Add("DSD → PCM 변환");
             steps.Add(new(SymbolRegular.DeveloperBoard24, "디코더", signal.Decoder,
-                $"{signal.DsdName} → PCM {Khz(signal.SourceRate)}로 변환 · 32bit 부동소수점", SignalStepState.Changed));
+                $"{signal.DsdName}를 PCM {Khz(signal.SourceRate)}로 변환 (32bit 부동소수점)", SignalStepState.Changed));
         }
         else
         {
             var sub = pure
-                ? signal.SourceBits > 0 ? $"원본 {signal.SourceBits}bit을 그대로 풀어냄" : "디코딩한 소리 그대로"
+                ? signal.SourceBits > 0 ? $"원본 {signal.SourceBits}bit 그대로 디코딩" : "디코딩한 신호 그대로"
                 : signal.SourceBits is > 0 and <= 24
-                    ? $"32bit 부동소수점으로 풀어냄 · 원본 {signal.SourceBits}bit은 손실 없이 담김"
-                    : "32bit 부동소수점으로 풀어냄";
+                    ? $"32bit 부동소수점으로 디코딩 · 원본 {signal.SourceBits}bit 정보는 손실 없음"
+                    : "32bit 부동소수점으로 디코딩";
             steps.Add(new(SymbolRegular.DeveloperBoard24, "디코더", signal.Decoder, sub, pure ? SignalStepState.Pure : SignalStepState.Neutral));
         }
 
@@ -137,7 +137,7 @@ public sealed partial class SignalPathViewModel : ObservableObject
         }
         else
         {
-            var why = pure ? "음색 조절 건너뜀 · 원음 그대로 보내는 중" : "음색 조절 꺼짐";
+            var why = pure ? "음색 조절 안 함 (원음 출력 중)" : "음색 조절 꺼짐";
             steps.Add(new(SymbolRegular.DeviceEq24, why, "", null, SignalStepState.Skipped, "이퀄라이저", eq));
         }
 
@@ -145,17 +145,17 @@ public sealed partial class SignalPathViewModel : ObservableObject
         if (signal.HardwareVolume)
         {
             steps.Add(new(SymbolRegular.Speaker224, "볼륨", signal.Muted ? "장치 볼륨 · 음소거" : $"장치 볼륨 {Percent(signal.Volume)}",
-                "하드웨어 볼륨 — 장치가 직접 조절해 샘플은 그대로", pure ? SignalStepState.Pure : SignalStepState.Neutral));
+                "장치에서 직접 조절 · 신호는 그대로", pure ? SignalStepState.Pure : SignalStepState.Neutral));
         }
         else if (signal.Muted || signal.Volume < 0.9995)
         {
             changed.Add(signal.Muted ? "음소거" : $"볼륨 {Percent(signal.Volume)}");
             steps.Add(new(SymbolRegular.Speaker224, "볼륨", signal.Muted ? "GoTune 볼륨 · 음소거" : $"GoTune 볼륨 {Percent(signal.Volume)}",
-                "소프트웨어 볼륨 — 샘플 크기를 줄여서 조절", SignalStepState.Changed));
+                "GoTune이 신호 크기를 줄여 조절", SignalStepState.Changed));
         }
         else
         {
-            steps.Add(new(SymbolRegular.Speaker224, "볼륨", "GoTune 볼륨 100%", "크기를 바꾸지 않음", pure ? SignalStepState.Pure : SignalStepState.Neutral));
+            steps.Add(new(SymbolRegular.Speaker224, "볼륨", "GoTune 볼륨 100%", "신호 크기 변화 없음", pure ? SignalStepState.Pure : SignalStepState.Neutral));
         }
 
         // 5. sample-rate conversion
@@ -171,7 +171,7 @@ public sealed partial class SignalPathViewModel : ObservableObject
             changed.Add(up ? "업샘플링" : "샘플 속도 변환");
             steps.Add(new(SymbolRegular.ArrowSwap24, "샘플 변환",
                 $"{(up ? "업샘플링" : "샘플 속도 변환")} {Khz(signal.SourceRate).Replace("kHz", "")} → {Khz(signal.OutputRate)}",
-                $"{signal.ResampleFilter}{(up ? whole ? $" · 정수배 ×{signal.OutputRate / signal.SourceRate}" : " · 정수배가 아닌 변환" : "")}",
+                $"{signal.ResampleFilter}{(up ? whole ? $" · 정수배 (×{signal.OutputRate / signal.SourceRate})" : " · 비정수배 변환" : "")}",
                 SignalStepState.Changed, "출력 설정", settings));
         }
         else
@@ -188,14 +188,12 @@ public sealed partial class SignalPathViewModel : ObservableObject
         if (pure)
         {
             var dop = output.Path == OutputPath.DoP;
-            var level = !signal.HardwareVolume && (signal.Muted || signal.Volume < 0.9995);
             SetVerdict(dop ? "원음 그대로 (DoP)" : "원음 그대로",
-                dop ? "DSD를 PCM으로 바꾸지 않고 DAC에 그대로 보냅니다." : "파일의 소리를 한 비트도 바꾸지 않고 장치로 보냅니다.", "✓", pure: true);
-            if (level) VerdictText += " (볼륨이 100%일 때)";
+                dop ? "DSD를 PCM으로 바꾸지 않고 DAC로 그대로 보냅니다." : "파일의 신호를 한 비트도 바꾸지 않고 장치로 보냅니다.", "✓", pure: true);
         }
         else if (changed.Count == 0)
         {
-            SetVerdict("소리를 바꾸는 단계 없음", "음색 조절·볼륨·샘플 변환 없이 장치 형식으로만 옮겨 보냅니다.", "✓", pure: true);
+            SetVerdict("소리를 바꾸는 단계 없음", "음색 조절, 볼륨, 샘플 변환 없이 장치가 받는 형식으로만 바꿔 보냅니다.", "✓", pure: true);
         }
         else
         {
@@ -216,7 +214,7 @@ public sealed partial class SignalPathViewModel : ObservableObject
         if (signal is { DsdRate: > 0 }) sub = "1비트 DSD";
         else if (quality is { } q)
         {
-            sub = q.IsHiRes ? "무손실 · Hi-Res" : q.IsLossless ? "무손실" : "손실 압축 — 파일에 비트 깊이가 없어 16bit로 표기";
+            sub = q.IsHiRes ? "무손실 · Hi-Res" : q.IsLossless ? "무손실" : "손실 압축 · 비트 깊이 정보가 없어 16bit로 표시";
             if (q.Channels == 2) sub += " · 스테레오";
         }
         return new(SymbolRegular.MusicNote224, "파일", main, sub, pure ? SignalStepState.Pure : SignalStepState.Neutral);
@@ -225,19 +223,19 @@ public sealed partial class SignalPathViewModel : ObservableObject
     private SignalStep OutputStep(SignalPath signal, List<string> changed, IRelayCommand settings)
     {
         var output = signal.Output;
-        var layout = output.Layout != "스테레오" ? $" · {output.Layout} 스피커로 나눔" : "";
+        var layout = output.Layout != "스테레오" ? $" · {output.Layout}로 분배" : "";
         string main, sub;
         var state = SignalStepState.Neutral;
         switch (output.Path)
         {
             case OutputPath.DoP:
                 main = $"DoP · {output.Dsd}";
-                sub = $"독점 모드 · {signal.WriteBits}bit {Khz(signal.OutputRate)} 안에 DSD를 담아 DAC로";
+                sub = $"독점 모드 · DSD를 {signal.WriteBits}bit {Khz(signal.OutputRate)} PCM에 담아 전송";
                 state = SignalStepState.Pure;
                 break;
             case OutputPath.BitPerfect:
                 main = $"비트퍼펙트 · 독점 모드 · {output.Bits}bit · {Khz(output.Rate)}";
-                sub = "Windows 믹서를 거치지 않음";
+                sub = "Windows 믹서 거치지 않음";
                 state = SignalStepState.Pure;
                 break;
             case OutputPath.Remaster:
@@ -246,13 +244,13 @@ public sealed partial class SignalPathViewModel : ObservableObject
                 break;
             case OutputPath.Exclusive:
                 main = $"독점 모드 · {output.Bits}bit · {Khz(output.Rate)}";
-                sub = (signal.Dither is { } dither ? $"{output.Bits}bit 정수로 옮길 때 {dither} · " : signal.WritesFloat ? "32bit 부동소수점 그대로 · " : "")
-                      + "Windows 믹서를 거치지 않음";
+                sub = (signal.Dither is { } dither ? $"{output.Bits}bit로 바꿀 때 {dither} 적용 · " : signal.WritesFloat ? "32bit 부동소수점 그대로 · " : "")
+                      + "Windows 믹서 거치지 않음";
                 break;
             default:
                 changed.Add("Windows 믹서");
                 main = $"공유 모드 · {Khz(output.Rate)}";
-                sub = "Windows 믹서를 거쳐 다른 앱 소리와 섞임 · 32bit 부동소수점으로 전달";
+                sub = "32bit 부동소수점으로 Windows 믹서에 전달 · 다른 앱 소리와 함께 출력";
                 state = SignalStepState.Changed;
                 break;
         }
@@ -268,10 +266,10 @@ public sealed partial class SignalPathViewModel : ObservableObject
         var sub = output.Path switch
         {
             OutputPath.Shared => output.DeviceBits > 0
-                ? $"Windows 기본 형식 {output.DeviceBits}bit · {Khz(output.Rate)}로 재생"
-                : $"Windows 소리 설정의 기본 형식으로 재생 · {Khz(output.Rate)}",
-            OutputPath.DoP or OutputPath.Remaster => $"{output.Dsd} ({output.Rate / 1e6:0.0}MHz)를 DAC가 풀어냄",
-            _ => $"{output.Bits}bit · {Khz(output.Rate)}를 그대로 받음",
+                ? $"Windows 기본 형식: {output.DeviceBits}bit · {Khz(output.Rate)}"
+                : $"Windows 소리 설정의 기본 형식으로 출력 · {Khz(output.Rate)}",
+            OutputPath.DoP or OutputPath.Remaster => $"DAC에서 {output.Dsd} ({output.Rate / 1e6:0.0}MHz)로 재생",
+            _ => $"{output.Bits}bit · {Khz(output.Rate)}로 재생",
         };
         return new(SymbolRegular.Headphones24, "장치", name, sub, pure ? SignalStepState.Pure : SignalStepState.Neutral);
     }
@@ -301,7 +299,7 @@ public sealed partial class SignalPathViewModel : ObservableObject
         if (Math.Abs(config.Balance) > 0.005)
             parts.Add($"밸런스 {(config.Balance < 0 ? "왼쪽" : "오른쪽")} {Math.Round(Math.Abs(config.Balance) * 100)}%");
         if (config.ReverbMix > 0) parts.Add($"리버브 {config.ReverbRoom.Name} {Math.Round(config.ReverbMix * 100)}%");
-        parts.Add(config.Limiter ? "리미터 켬" : "리미터 끔");
+        parts.Add(config.Limiter ? "리미터 켜짐" : "리미터 꺼짐");
         return line1 + "\n" + string.Join(" · ", parts);
     }
 

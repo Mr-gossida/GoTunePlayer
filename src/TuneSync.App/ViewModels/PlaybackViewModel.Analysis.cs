@@ -38,7 +38,6 @@ public sealed partial class PlaybackViewModel
     private int _qualityVersion;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(QualityToolTip))]
     private string _qualityText = "";
 
     /// <summary>"Hi-Res", "Lossless", or empty for lossy formats.</summary>
@@ -54,11 +53,8 @@ public sealed partial class PlaybackViewModel
 
     /// <summary>Why a lossy song shows 16bit (it isn't in the file); null otherwise.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(QualityToolTip))]
     private string? _qualityNote;
 
-    /// <summary>For the player bar, where the line may be cut short: all of it, and the note.</summary>
-    public string? QualityToolTip => QualityText.Length == 0 ? null : QualityNote is null ? QualityText : $"{QualityText}\n{QualityNote}";
 
     /// <summary>Read off the UI thread (it opens the file); a placeholder from the extension
     /// shows meanwhile so the line never flickers empty.</summary>
