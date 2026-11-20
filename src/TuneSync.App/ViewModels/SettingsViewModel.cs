@@ -36,6 +36,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         _screenSaverEnabled = settings.ScreenSaverEnabled;
         _screenSaverMinutes = settings.ScreenSaverMinutes;
         _screenSaverExit = settings.ScreenSaverExit;
+        _screenSaverSameLook = settings.ScreenSaverSameLook;
         _minimizeToMini = settings.MinimizeToMini;
         _closeAction = settings.CloseAction;
         _lyricsSyncUseGpu = settings.LyricsSyncUseGpu;
@@ -435,6 +436,22 @@ public sealed partial class SettingsViewModel : ObservableObject
         new(AuroraMode.Saver, "절전 (천천히 움직임)"),
         new(AuroraMode.Off, "끄기"),
     ];
+
+    [ObservableProperty]
+    private bool _screenSaverSameLook;
+
+    /// <summary>설정 › 화면 보호기 › 여러 모니터의 배경 (only shown while the background is 랜덤).</summary>
+    public IReadOnlyList<Choice<bool>> ScreenSaverSameLookOptions { get; } =
+    [
+        new(true, "모두 같게"),
+        new(false, "모니터마다 다르게"),
+    ];
+
+    partial void OnScreenSaverSameLookChanged(bool value)
+    {
+        _settings.ScreenSaverSameLook = value;
+        AppSettingsStore.Save(_settings);
+    }
 
     public IReadOnlyList<Choice<ScreenSaverExit>> ScreenSaverExitOptions { get; } =
     [

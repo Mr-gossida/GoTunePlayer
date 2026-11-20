@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Data;
 using System.Windows.Media;
 using TuneSync.App.ViewModels;
 
@@ -63,7 +64,7 @@ public partial class SettingsView : Page
         foreach (var panel in CategoryPanels)
         {
             panel.Visibility = Equals(panel.Tag, category) ? Visibility.Visible : Visibility.Collapsed;
-            foreach (UIElement child in panel.Children) child.Visibility = Visibility.Visible;
+            foreach (UIElement child in panel.Children) ShowChild(child);
         }
         NoMatch.Visibility = Visibility.Collapsed;
         ContentScroller.ScrollToTop();
@@ -86,8 +87,16 @@ public partial class SettingsView : Page
         foreach (var panel in CategoryPanels)
         {
             var found = false;
+            var lastMatch = false;
             foreach (UIElement child in panel.Children)
             {
+                if (IsBoundVisibility(child))
+                {
+                    // a 랜덤 pool under a card: shown with its card, and only while 랜덤 is chosen
+                    if (lastMatch) ShowChild(child);
+                    else child.SetCurrentValue(VisibilityProperty, Visibility.Collapsed);
+                    continue;
+                }
                 if (child is not FrameworkElement { Tag: string keywords } card)
                 {
                     // the category's title and lead line stay as headings; group headings go
@@ -97,6 +106,7 @@ public partial class SettingsView : Page
                 var text = $"{keywords} {card.ToolTip as string} {CardTitle(card)}";
                 var match = words.All(w => text.Contains(w, StringComparison.CurrentCultureIgnoreCase));
                 card.Visibility = match ? Visibility.Visible : Visibility.Collapsed;
+                lastMatch = match;
                 found |= match;
             }
             panel.Visibility = found ? Visibility.Visible : Visibility.Collapsed;
@@ -104,6 +114,17 @@ public partial class SettingsView : Page
         }
         NoMatch.Visibility = any ? Visibility.Collapsed : Visibility.Visible;
         ContentScroller.ScrollToTop();
+    }
+
+    // Some children (the 랜덤 pools) bind their Visibility to the view model. Assigning Visibility
+    // would replace that binding for good, so those get their bound value re-read instead.
+    private static bool IsBoundVisibility(UIElement child) =>
+        BindingOperations.GetBindingExpression(child, VisibilityProperty) is not null;
+
+    private static void ShowChild(UIElement child)
+    {
+        if (BindingOperations.GetBindingExpression(child, VisibilityProperty) is { } binding) binding.UpdateTarget();
+        else child.Visibility = Visibility.Visible;
     }
 
     /// <summary>A card's own title (the first line of its header).</summary>

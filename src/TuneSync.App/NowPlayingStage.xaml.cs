@@ -299,13 +299,17 @@ public partial class NowPlayingStage : UserControl
         AuroraLight.Span = span;
     }
 
+    /// <summary>Set by the screen saver while it's open when all its screens should show the same
+    /// effect for 랜덤 (설정 › 화면 보호기 › 여러 모니터의 배경); null lets each stage pick its own.</summary>
+    public static BackgroundEffect? SharedRandomLook { get; set; }
+
     /// <summary>The background effect chosen (for 임의, one picked when the stage opens).</summary>
     private void ApplyLook()
     {
         var look = _playback.BackgroundEffect;
         if (look == BackgroundEffect.Random)
         {
-            look = _playback.PickRandomBackground(AuroraLight.Look);
+            look = SharedRandomLook ?? _playback.PickRandomBackground(AuroraLight.Look);
         }
         AuroraLight.Look = look;
     }

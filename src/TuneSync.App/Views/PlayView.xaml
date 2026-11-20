@@ -566,11 +566,16 @@
                     <!-- Margin (half the viewport above and below, so any line can sit in the middle)
                          is set from code in the same layout pass as a resize: a binding updated it
                          a frame late, which made the lines shake while the window was resized. -->
-                    <ItemsControl x:Name="LyricsItems" ItemsSource="{Binding LyricsLines}">
+                    <!-- One tooltip for all the lines (Background so the gaps between lines count too):
+                         a tooltip per line closed and reopened a popup window for every line the
+                         pointer crossed once one had shown, and sweeping the pointer over the lyrics
+                         dropped the app's frame rate. -->
+                    <ItemsControl x:Name="LyricsItems" ItemsSource="{Binding LyricsLines}" Background="Transparent"
+                                  ToolTip="클릭하면 이 위치부터 재생합니다">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
                                 <Border Padding="14,3" Margin="0,2" CornerRadius="8" Cursor="Hand"
-                                        ToolTip="클릭하면 이 위치부터 재생합니다" MouseLeftButtonUp="LyricLine_Click">
+                                        MouseLeftButtonUp="LyricLine_Click">
                                     <Border.Style>
                                         <Style TargetType="Border">
                                             <Setter Property="Background" Value="Transparent"/>

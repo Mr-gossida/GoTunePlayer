@@ -18,6 +18,7 @@ public static class ScreenSaver
     private static AppSettings? _settings;
     private static List<ScreenSaverWindow>? _windows;
     private static DispatcherTimer? _watch;
+    private static BackgroundEffect _lastSharedLook = BackgroundEffect.Random;
 
     public static void Start(IServiceProvider services)
     {
@@ -36,6 +37,9 @@ public static class ScreenSaver
     {
         if (_windows is not null || _playback is null) return;
         NowPlayingStage.NewAuroraSession();
+        // 랜덤 background: one pick for every monitor unless the user wants each to differ.
+        _lastSharedLook = _playback.PickRandomBackground(_lastSharedLook);
+        NowPlayingStage.SharedRandomLook = _settings?.ScreenSaverSameLook != false ? _lastSharedLook : null;
         ScreenSaverWindow.EscapeOnly = _settings?.ScreenSaverExit == ScreenSaverExit.EscapeKey;
         var player = ActiveWindow();
         var monitors = Monitors();
@@ -86,6 +90,7 @@ public static class ScreenSaver
                 foreach (var other in open.ToList()) other.Dismiss();
                 if (open.Count > 0) return;
                 _windows = null;
+                NowPlayingStage.SharedRandomLook = null;
                 ActiveWindow()?.Activate();
             };
             window.ShowActivated = false;

@@ -159,6 +159,10 @@ public sealed class AppSettings
     /// <summary>How the screen saver is left: any input (default), or only the Esc key.</summary>
     public ScreenSaverExit ScreenSaverExit { get; set; } = ScreenSaverExit.AnyInput;
 
+    /// <summary>With the background effect on 랜덤 and several monitors: every screen of the
+    /// screen saver shows the same picked effect (one light across them), or each picks its own.</summary>
+    public bool ScreenSaverSameLook { get; set; } = true;
+
     /// <summary>"싱크 가사 만들기" uses the graphics card when there's one (about four times
     /// faster, and the CPU stays free); off, it runs on the CPU only.</summary>
     public bool LyricsSyncUseGpu { get; set; } = true;
