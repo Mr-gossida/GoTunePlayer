@@ -115,7 +115,7 @@
 
                     <UniformGrid Columns="2" Margin="-3,10,-3,0">
                         <ui:Button Content="커버 찾기" Icon="{ui:SymbolIcon Search24}" Margin="3" HorizontalAlignment="Stretch" Click="SearchCover_Click"
-                                   ToolTip="온라인에서 앨범 커버를 찾아 추천 커버를 넣고, 다른 후보는 '커버 후보'에 보여 줍니다"/>
+                                   ToolTip="온라인에서 앨범 커버를 찾아 추천 커버를 넣고, 다른 후보는 '커버' 탭에 보여 줍니다"/>
                         <ui:Button Content="파일 선택" Icon="{ui:SymbolIcon Image24}" Margin="3" HorizontalAlignment="Stretch" Command="{Binding PickCoverCommand}"
                                    ToolTip="이미지 파일을 골라 커버로 사용합니다"/>
                         <ui:Button Content="붙여넣기" Icon="{ui:SymbolIcon ClipboardPaste24}" Margin="3" HorizontalAlignment="Stretch" Command="{Binding PasteCoverCommand}"
@@ -184,7 +184,7 @@
                         <StackPanel Orientation="Horizontal">
                             <RadioButton GroupName="SongTabs" Style="{StaticResource PanelTab}" Content="정보"
                                          IsChecked="{Binding Tab, Converter={StaticResource EnumToBooleanConverter}, ConverterParameter=Tags}"/>
-                            <RadioButton GroupName="SongTabs" Style="{StaticResource PanelTab}" Content="커버 후보" Tag="{Binding HasCoverCandidates}"
+                            <RadioButton GroupName="SongTabs" Style="{StaticResource PanelTab}" Content="커버" Tag="{Binding HasCoverCandidates}"
                                          IsChecked="{Binding Tab, Converter={StaticResource EnumToBooleanConverter}, ConverterParameter=Cover}"/>
                             <RadioButton GroupName="SongTabs" Style="{StaticResource PanelTab}" Content="가사" Tag="{Binding IsLyricsPending}"
                                          IsChecked="{Binding Tab, Converter={StaticResource EnumToBooleanConverter}, ConverterParameter=Lyrics}"/>
