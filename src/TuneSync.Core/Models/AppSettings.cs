@@ -312,7 +312,7 @@ public enum SeekBarStyle
     Fireworks,
     /// <summary>Fireflies wandering over the played part, blinking.</summary>
     Fireflies,
-    /// <summary>The played line as a crackling electric arc, forking on the beats.</summary>
+    /// <summary>The played line discharging like a Tesla coil: forking arcs all along it, arcs jumping along it on the beats.</summary>
     Electric,
     /// <summary>Petals drifting down over the played part, tumbling as they fall.</summary>
     Petals,

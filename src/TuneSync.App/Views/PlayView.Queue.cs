@@ -14,7 +14,11 @@ public partial class PlayView
     /// <summary>The ▶ shown over a queue row's thumbnail on hover.</summary>
     private void PlayItem_Click(object sender, MouseButtonEventArgs e)
     {
-        if (sender is not System.Windows.FrameworkElement { DataContext: LibraryFileViewModel file }) return;
+        if (sender is not System.Windows.FrameworkElement { DataContext: LibraryFileViewModel file } button) return;
+        // In the queue, only a click that was pressed on this ▶ too: clicking a folded group's
+        // heading unfolds it and brings it to the top, so the list moves under the pointer and
+        // the button comes up over a song's ▶ - which played that song.
+        if (PlaylistBox.IsAncestorOf(button) && !PressedOn(button)) return;
         PlaylistBox.SelectedItem = file;
         _viewModel.Playback.PlayFile(file);
         e.Handled = true;

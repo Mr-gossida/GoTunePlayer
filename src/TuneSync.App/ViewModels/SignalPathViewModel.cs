@@ -219,7 +219,7 @@ public sealed partial class SignalPathViewModel : ObservableObject
         if (signal is { DsdRate: > 0 }) sub = "1비트 DSD";
         else if (quality is { } q)
         {
-            sub = q.IsHiRes ? "무손실 · Hi-Res" : q.IsLossless ? "무손실" : "손실 압축 · 비트 깊이 정보가 없어 16bit로 표시";
+            sub = q.IsHiRes ? "무손실 · Hi-Res" : q.IsLossless ? "무손실" : "손실 압축";
             if (q.Channels == 2) sub += " · 스테레오";
         }
         return new(SymbolRegular.MusicNote224, "파일", main, sub, pure ? SignalStepState.Pure : SignalStepState.Neutral);

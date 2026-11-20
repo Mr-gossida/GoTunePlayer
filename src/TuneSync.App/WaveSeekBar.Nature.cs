@@ -5,7 +5,7 @@ using TuneSync.Core.Models;
 
 namespace TuneSync.App;
 
-// The seek bar looks added after the first ten: 반딧불, 전류, 꽃잎 and 음표. Each is particles
+// The seek bar looks added after the first ten: 반딧불, 테슬라 코일, 꽃잎 and 음표. Each is particles
 // over the played part, moved in UpdateNature and drawn by its own Draw method; brushes and pens
 // come from the kept sets in WaveSeekBar.cs (Solid, SolidPen), so a frame makes none of its own.
 public sealed partial class WaveSeekBar
@@ -127,79 +127,136 @@ public sealed partial class WaveSeekBar
         }
     }
 
-    // ---- 전류 ----
+    // ---- 테슬라 코일 ----
 
-    /// <summary>The played line as a live electric arc: it crackles - a new jagged path every
-    /// frame - jumping higher the louder the music, with a fainter second arc beside it. Forks
-    /// leap off it on the beats (and now and then in between), flicker and are gone. Pausing
-    /// calms it to a still, glowing wire.</summary>
-    private void DrawElectric(DrawingContext dc, double mid, double thumbX, Color accent)
+    /// <summary>The played line as a charged wire, discharging all along it like a Tesla coil:
+    /// arcs of lightning crackle off it at random spots into the air above and below - jagged,
+    /// forking into thinner branches, each lasting a few frames and redrawn on every frame so
+    /// they flicker - and on a beat, bright arcs jump from one spot on the line to another.
+    /// Louder music: more, longer, brighter arcs. The light is the cover's color leaning toward
+    /// a coil's violet, white-hot at the core. Paused, the wire goes quiet.
+    /// (In a bolt: X - where on the line it starts; Vx, Vy - where it reaches, from there;
+    /// Size 1 for an arc that lands back on the line; Hue - how bright.)</summary>
+    private void DrawElectric(DrawingContext dc, double mid, double thumbX, Color cool, Color accent, Color warm)
     {
-        var glow = Shift(accent, -12, 1.2);
-        var length = thumbX - Left;
-        var reach = Math.Max(0, mid - 2);
-        var amplitude = Math.Min(reach, _activity * (0.6 + Loud(0.4, 3.6, _level) + 3.5 * _flash));
-        var calm = SmoothStep(Math.Min(1, length / 40)); // it doesn't spark right at the start
+        DrawPlayedLine(dc, mid, thumbX, cool, accent, warm);
+        var glow = Mix(accent, Color.FromRgb(0xB8, 0xA4, 0xFF), 0.55);
+        var top = -NatureOverflow;
+        var bottom = ActualHeight + NatureOverflow;
 
-        var arc = Arc(mid, thumbX, amplitude * calm, 5);
-        var faint = Arc(mid, thumbX, amplitude * calm * 1.3, 7);
-        dc.DrawGeometry(null, RoundPen(Color.FromArgb(0x55, glow.R, glow.G, glow.B), 6), arc);
-        dc.DrawGeometry(null, RoundPen(Color.FromArgb(0x80, glow.R, glow.G, glow.B), 1), faint);
-        dc.DrawGeometry(null, RoundPen(Color.FromArgb(0xE0, glow.R, glow.G, glow.B), 2.2), arc);
-        dc.DrawGeometry(null, RoundPen(Color.FromArgb(0xF0, 0xFF, 0xFF, 0xFF), 0.9), arc);
+        // the wire's own faint charge glow
+        if (_activity > 0.05)
+        {
+            var charge = (0.5 + 0.5 * Energy + 0.5 * _flash) * _activity;
+            dc.DrawLine(SolidPen(Color.FromArgb((byte)(0x30 * Math.Min(1, charge)), glow.R, glow.G, glow.B), 7), new Point(Left, mid), new Point(thumbX, mid));
+        }
 
         foreach (var bolt in _bolts)
         {
-            if (bolt.X > thumbX) continue;
-            var fade = 1 - bolt.Age / bolt.Life;
-            var fork = new StreamGeometry();
-            using (var g = fork.Open())
+            if (bolt.X > thumbX - 2) continue; // the song jumped back past it
+            var fade = (1 - bolt.Age / bolt.Life) * (0.7 + 0.3 * Random.Shared.NextDouble());
+            if (fade <= 0.04) continue;
+            var start = new Point(bolt.X, mid);
+            var arc = bolt.Size > 0;
+
+            var trunk = new StreamGeometry();
+            var forks = new StreamGeometry();
+            Point end;
+            using (var t = trunk.Open())
+            using (var f = forks.Open())
             {
-                // a crooked line away from the arc, its kinks redrawn every frame
-                var p = new Point(bolt.X, mid);
-                g.BeginFigure(p, false, false);
-                for (var k = 1; k <= 4; k++)
+                List<Point> path;
+                if (arc)
                 {
-                    p = new Point(p.X + bolt.Vx * bolt.Size / 4 + (Random.Shared.NextDouble() - 0.5) * 4,
-                                  mid + bolt.Vy * bolt.Size * k / 4);
-                    g.LineTo(p, true, false);
+                    // from one spot on the line up (or down) and over, back onto the line
+                    end = new Point(Math.Clamp(bolt.X + bolt.Vx, Left, thumbX - 2), mid);
+                    var apex = new Point((start.X + end.X) / 2 + (Random.Shared.NextDouble() - 0.5) * Math.Abs(bolt.Vx) * 0.3,
+                                         Math.Clamp(mid + bolt.Vy, top, bottom));
+                    path = Jagged(start, apex, 0.25, top, bottom);
+                    path.AddRange(Jagged(apex, end, 0.25, top, bottom).Skip(1));
+                }
+                else
+                {
+                    end = new Point(Math.Clamp(bolt.X + bolt.Vx, Left, thumbX), Math.Clamp(mid + bolt.Vy, top, bottom));
+                    path = Jagged(start, end, 0.3, top, bottom);
+                }
+                Polyline(t, path);
+                // forks off the trunk, now and then a fork off a fork
+                var span = (end - start).Length + Math.Abs(bolt.Vy);
+                for (var i = 2; i < path.Count - 2; i++)
+                {
+                    if (Random.Shared.NextDouble() > (arc ? 0.1 : 0.08)) continue;
+                    var from = path[i];
+                    var along = path[i + 1] - path[i - 1];
+                    if (along.Length < 0.01) continue;
+                    along.Normalize();
+                    var turn = (Random.Shared.NextDouble() < 0.5 ? -1 : 1) * (0.5 + Random.Shared.NextDouble() * 0.7);
+                    var dir = new Vector(along.X * Math.Cos(turn) - along.Y * Math.Sin(turn), along.X * Math.Sin(turn) + along.Y * Math.Cos(turn));
+                    var reach = span * (0.12 + Random.Shared.NextDouble() * 0.22);
+                    var forkPath = Jagged(from, from + dir * reach, 0.3, top, bottom);
+                    Polyline(f, forkPath);
+                    if (forkPath.Count > 4 && Random.Shared.NextDouble() < 0.35)
+                    {
+                        var at = forkPath[forkPath.Count / 2];
+                        var twig = new Vector(dir.X * 0.6 - dir.Y * 0.8 * turn, dir.Y * 0.6 + dir.X * 0.8 * turn);
+                        Polyline(f, Jagged(at, at + twig * reach * 0.45, 0.32, top, bottom));
+                    }
                 }
             }
-            fork.Freeze();
-            dc.DrawGeometry(null, RoundPen(Color.FromArgb((byte)(0x50 * fade), glow.R, glow.G, glow.B), 3.5), fork);
-            dc.DrawGeometry(null, RoundPen(Color.FromArgb((byte)(0xE0 * fade), 0xF4, 0xFB, 0xFF), 0.9), fork);
+            trunk.Freeze();
+            forks.Freeze();
+
+            var bright = fade * (0.7 + 0.3 * bolt.Hue);
+            dc.DrawGeometry(null, RoundPen(Color.FromArgb((byte)(0x30 * bright), glow.R, glow.G, glow.B), arc ? 7 : 5), trunk);
+            dc.DrawGeometry(null, RoundPen(Color.FromArgb((byte)(0x26 * bright), glow.R, glow.G, glow.B), 3), forks);
+            dc.DrawGeometry(null, RoundPen(Color.FromArgb((byte)(0xB0 * bright), glow.R, glow.G, glow.B), arc ? 2.2 : 1.6), trunk);
+            dc.DrawGeometry(null, RoundPen(Color.FromArgb((byte)(0x90 * bright), glow.R, glow.G, glow.B), 0.9), forks);
+            dc.DrawGeometry(null, RoundPen(Color.FromArgb((byte)(0xF0 * bright), 0xFF, 0xFF, 0xFF), arc ? 1 : 0.7), trunk);
+            // where an arc leaves the wire (and where it lands), a white-hot spot
+            var hot = Solid(Color.FromArgb((byte)(0x90 * bright), 0xFF, 0xFF, 0xFF));
+            dc.DrawEllipse(hot, null, start, arc ? 2.6 : 1.8, arc ? 2.6 : 1.8);
+            if (arc) dc.DrawEllipse(hot, null, end, 2.6, 2.6);
         }
     }
 
-    /// <summary>A jagged path along the line from the start to the thumb, pinned at both ends.</summary>
-    private StreamGeometry Arc(double mid, double thumbX, double amplitude, double step)
+    /// <summary>A lightning path from <paramref name="a"/> to <paramref name="b"/>: the straight
+    /// line, its middle pushed sideways at random, then the middles of the halves, and so on -
+    /// jagged at every scale, like the real thing. Kept between <paramref name="top"/> and
+    /// <paramref name="bottom"/>.</summary>
+    private static List<Point> Jagged(Point a, Point b, double roughness, double top, double bottom)
     {
-        var arc = new StreamGeometry();
-        using (var g = arc.Open())
+        var points = new List<Point>(34) { a, new Point(b.X, Math.Clamp(b.Y, top, bottom)) };
+        for (var pass = 0; pass < 5; pass++)
         {
-            g.BeginFigure(new Point(Left, mid), false, false);
-            if (amplitude < 0.15)
+            var next = new List<Point>(points.Count * 2);
+            var longest = 0.0;
+            for (var i = 0; i < points.Count - 1; i++)
             {
-                g.LineTo(new Point(thumbX, mid), true, false);
+                var p = points[i];
+                var q = points[i + 1];
+                next.Add(p);
+                var d = q - p;
+                var length = d.Length;
+                longest = Math.Max(longest, length);
+                if (length < 3) continue;
+                var across = new Vector(-d.Y / length, d.X / length);
+                var m = p + d / 2 + across * ((Random.Shared.NextDouble() * 2 - 1) * length * roughness);
+                // past the edge: bounced back in (cut off at it, the arcs ran flat along it)
+                var y = m.Y < top ? top + (top - m.Y) * 0.6 : m.Y > bottom ? bottom - (m.Y - bottom) * 0.6 : m.Y;
+                next.Add(new Point(m.X, Math.Clamp(y, top, bottom)));
             }
-            else
-            {
-                var n = Math.Max(2, (int)((thumbX - Left) / step));
-                var previous = 0.0;
-                for (var i = 1; i < n; i++)
-                {
-                    var x = Left + (thumbX - Left) * i / n;
-                    // half follows the last kink, half jumps: jagged, not noise
-                    var y = previous * 0.45 + (Random.Shared.NextDouble() * 2 - 1) * 0.55;
-                    previous = y;
-                    var ends = Math.Min(1, Math.Min(x - Left, thumbX - x) / 10);
-                    g.LineTo(new Point(x, mid + y * amplitude * ends), true, false);
-                }
-                g.LineTo(new Point(thumbX, mid), true, false);
-            }
+            next.Add(points[^1]);
+            points = next;
+            if (longest < 6) break;
         }
-        arc.Freeze();
-        return arc;
+        return points;
+    }
+
+    private static void Polyline(StreamGeometryContext g, List<Point> points)
+    {
+        if (points.Count < 2) return;
+        g.BeginFigure(points[0], false, false);
+        g.PolyLineTo(points.GetRange(1, points.Count - 1), true, true);
     }
 
     private void UpdateBolts(double dt, bool beat)
@@ -213,20 +270,49 @@ public sealed partial class WaveSeekBar
         }
         if (!Spawning(SeekBarStyle.Electric)) return;
         var thumbX = PlayedX;
-        if (thumbX - Left < 30) return;
+        var room = thumbX - Left;
+        if (room < 24) return;
         var energy = Energy;
-        var count = (beat ? 1 + (int)(4 * energy) : 0) + (Random.Shared.NextDouble() < dt * (0.6 + 5 * energy) ? 1 : 0);
-        var reach = ActualHeight / 2 + 3;
-        for (var n = 0; n < count && _bolts.Count < 10; n++)
+        var height = ActualHeight;
+        double Spot() => Left + 4 + Random.Shared.NextDouble() * (room - 8);
+
+        // arcs off the wire at random spots all along it - more and longer the louder it is
+        // (and more of them on a longer played part)
+        var rate = (8 + 52 * energy) * Math.Clamp(room / 300, 0.4, 1.6);
+        var count = (int)(rate * dt) + (Random.Shared.NextDouble() < rate * dt % 1 ? 1 : 0);
+        for (var n = 0; n < count && _bolts.Count < 22; n++)
         {
+            // up or down, leaning one way or the other
+            var up = Random.Shared.NextDouble() < 0.5 ? -1 : 1;
+            var reach = 8 + Random.Shared.NextDouble() * (12 + 30 * energy);
             _bolts.Add(new Spark
             {
-                X = Left + 10 + Random.Shared.NextDouble() * (thumbX - Left - 20),
-                Vx = (Random.Shared.NextDouble() - 0.5) * 1.6,  // how far it leans along the bar, per step
-                Vy = Random.Shared.NextDouble() < 0.5 ? -1 : 1, // up or down
-                Size = reach * (0.55 + 0.45 * Random.Shared.NextDouble()) * (0.7 + 0.4 * energy),
-                Life = 0.08 + Random.Shared.NextDouble() * 0.14,
+                X = Spot(),
+                Vx = (Random.Shared.NextDouble() - 0.5) * reach * 1.6,
+                Vy = up * Math.Min(reach, height * (0.55 + 0.6 * energy)),
+                Life = 0.05 + Random.Shared.NextDouble() * 0.09,
+                Hue = Random.Shared.NextDouble(),
             });
+        }
+
+        // a beat: bright arcs jumping from one spot on the wire to another
+        if (beat)
+        {
+            var arcs = 1 + (int)(3 * energy);
+            for (var n = 0; n < arcs && _bolts.Count < 28; n++)
+            {
+                var span = Math.Min(room - 8, 30 + Random.Shared.NextDouble() * (40 + 140 * energy));
+                var from = Left + 4 + Random.Shared.NextDouble() * Math.Max(0, room - 8 - span);
+                _bolts.Add(new Spark
+                {
+                    X = from,
+                    Vx = span,
+                    Vy = (Random.Shared.NextDouble() < 0.5 ? -1 : 1) * height * (0.3 + 0.35 * Random.Shared.NextDouble() + 0.3 * energy),
+                    Size = 1,
+                    Life = 0.12 + Random.Shared.NextDouble() * 0.1,
+                    Hue = 0.6 + 0.4 * Random.Shared.NextDouble(),
+                });
+            }
         }
     }
 

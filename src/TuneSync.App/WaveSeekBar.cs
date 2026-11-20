@@ -244,7 +244,7 @@ public sealed partial class WaveSeekBar : FrameworkElement
             }
             else if (Look == SeekBarStyle.Electric)
             {
-                DrawElectric(dc, mid, thumbX, accent);
+                DrawElectric(dc, mid, thumbX, cool, accent, warm);
             }
             else if (Look == SeekBarStyle.Petals)
             {

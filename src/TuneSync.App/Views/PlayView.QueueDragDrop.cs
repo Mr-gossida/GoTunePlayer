@@ -21,8 +21,19 @@ public partial class PlayView
     private LibraryFileViewModel? SongAt(object? source) =>
         FindAncestor<ListBoxItem>(source as System.Windows.DependencyObject)?.DataContext as LibraryFileViewModel;
 
+    /// <summary>Where the last press in the queue landed (for clicks that act on release).</summary>
+    private System.Windows.DependencyObject? _pressedOn;
+
+    /// <summary>The last press in the queue was on <paramref name="element"/> (or inside it).</summary>
+    private bool PressedOn(System.Windows.FrameworkElement element) =>
+        _pressedOn is System.Windows.Media.Visual pressed && (ReferenceEquals(pressed, element) || element.IsAncestorOf(pressed));
+
     private void PlaylistBox_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
+        // (text runs aren't visuals: their element stands for them)
+        var pressed = e.OriginalSource as System.Windows.DependencyObject;
+        while (pressed is System.Windows.FrameworkContentElement content) pressed = content.Parent;
+        _pressedOn = pressed;
         // a group's heading: its own handler folds the group (GroupHeading_PreviewMouseLeftButtonDown)
         if (IsInGroupHeading(e.OriginalSource as System.Windows.DependencyObject)) return;
         _dragStart = e.GetPosition(PlaylistBox);

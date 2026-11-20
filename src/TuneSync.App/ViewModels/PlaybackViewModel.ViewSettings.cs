@@ -109,7 +109,7 @@ public sealed partial class PlaybackViewModel
         SeekBarStyle.None => "없음",
         SeekBarStyle.Fireworks => "불꽃놀이",
         SeekBarStyle.Fireflies => "반딧불",
-        SeekBarStyle.Electric => "전류",
+        SeekBarStyle.Electric => "테슬라 코일",
         SeekBarStyle.Petals => "꽃잎",
         SeekBarStyle.Notes => "음표",
         _ => style.ToString(),
