@@ -485,24 +485,20 @@ public sealed class WaveSeekBar : FrameworkElement
         foreach (var rocket in _rockets)
         {
             var tint = Mix(Tint(rocket.Hue), Colors.White, 0.5);
-            var trail = new LinearGradientBrush(Color.FromArgb(0, tint.R, tint.G, tint.B), Color.FromArgb(0xC0, tint.R, tint.G, tint.B),
-                new Point(0, rocket.Y + 7), new Point(0, rocket.Y)) { MappingMode = BrushMappingMode.Absolute };
-            trail.Freeze();
-            dc.DrawLine(new Pen(trail, 1.2), new Point(rocket.X, rocket.Y + 7), new Point(rocket.X, rocket.Y));
+            DrawStreak(dc, new Point(rocket.X, rocket.Y + 7), new Point(rocket.X, rocket.Y),
+                Color.FromArgb(0xC0, tint.R, tint.G, tint.B), 1.2, roundHead: false);
             dc.DrawEllipse(Brushes.White, null, new Point(rocket.X, rocket.Y), 1.1, 1.1);
         }
         foreach (var ember in _embers)
         {
             var left = Math.Clamp(ember.Life / 0.35, 0, 1);       // fades out over its last moments
             var twinkle = ember.Age > 0.4 ? 0.65 + 0.35 * Math.Sin(ember.Age * 40 + ember.Hue * 50) : 1;
-            var tint = Mix(Tint(ember.Hue), Colors.White, Math.Max(0, 0.6 - ember.Age * 1.5)); // white-hot at first
+            // white-hot at first (in steps of a tenth, so the colors - and their brushes - are few)
+            var tint = Mix(Tint(ember.Hue), Colors.White, Math.Round(Math.Max(0, 0.6 - ember.Age * 1.5) * 10) / 10);
             var a = (byte)(255 * left * twinkle);
             // a short streak along its flight
             var tail = new Point(ember.X - ember.Vx * 0.035, ember.Y - ember.Vy * 0.035);
-            var streak = new LinearGradientBrush(Color.FromArgb(0, tint.R, tint.G, tint.B), Color.FromArgb(a, tint.R, tint.G, tint.B),
-                tail, new Point(ember.X, ember.Y)) { MappingMode = BrushMappingMode.Absolute };
-            streak.Freeze();
-            dc.DrawLine(new Pen(streak, ember.Size) { EndLineCap = PenLineCap.Round }, tail, new Point(ember.X, ember.Y));
+            DrawStreak(dc, tail, new Point(ember.X, ember.Y), Color.FromArgb(a, tint.R, tint.G, tint.B), ember.Size);
         }
     }
 
@@ -599,25 +595,32 @@ public sealed class WaveSeekBar : FrameworkElement
         var strength = Math.Min(1, _activity * Loud(0.2, 0.8, _level) + 0.6 * _flash);
         if (strength > 0.05)
         {
-            var glow = new RadialGradientBrush(Color.FromArgb((byte)(120 * strength), warm.R, warm.G, warm.B), Color.FromArgb(0, warm.R, warm.G, warm.B));
+            // mapped in pixels: a brush mapped to the ellipse's own box, whose size changes every
+            // frame, is rebuilt by the GPU every frame (CLAUDE.md: per-frame drawing)
+            var center = new Point(thumbX, mid - 1);
+            double rx = 9 + 5 * strength, ry = 4 + 3 * strength;
+            var glow = new RadialGradientBrush(Color.FromArgb((byte)(120 * strength), warm.R, warm.G, warm.B), Color.FromArgb(0, warm.R, warm.G, warm.B))
+            {
+                MappingMode = BrushMappingMode.Absolute,
+                Center = center,
+                GradientOrigin = center,
+                RadiusX = rx,
+                RadiusY = ry,
+            };
             glow.Freeze();
-            dc.DrawEllipse(glow, null, new Point(thumbX, mid - 1), 9 + 5 * strength, 4 + 3 * strength);
+            dc.DrawEllipse(glow, null, center, rx, ry);
         }
 
         foreach (var drop in _jets)
         {
-            var tint = Mix(drop.Life < 0.5 ? accent : warm, Colors.White, 0.35 + 0.3 * drop.Life);
+            // each drop's own tint (in sixths, so the colors - and their brushes - are few)
+            var tint = Mix(drop.Life < 0.5 ? accent : warm, Colors.White, 0.35 + 0.3 * Math.Round(drop.Life * 6) / 6);
             // fades as it nears the line again, and in its first moment
             var fade = Math.Clamp((mid - drop.Y) / 6, 0, 1) * Math.Min(1, drop.Age / 0.05);
             if (fade <= 0.02) continue;
-            var tailX = drop.X - drop.Vx * 0.03;
-            var tailY = drop.Y - drop.Vy * 0.03;
-            var streak = new LinearGradientBrush(Color.FromArgb(0, tint.R, tint.G, tint.B), Color.FromArgb((byte)(200 * fade), tint.R, tint.G, tint.B),
-                new Point(tailX, tailY), new Point(drop.X, drop.Y)) { MappingMode = BrushMappingMode.Absolute };
-            streak.Freeze();
-            dc.DrawLine(new Pen(streak, drop.Size) { StartLineCap = PenLineCap.Round, EndLineCap = PenLineCap.Round },
-                new Point(tailX, tailY), new Point(drop.X, drop.Y));
-            dc.DrawEllipse(new SolidColorBrush(Color.FromArgb((byte)(235 * fade), 0xFF, 0xFF, 0xFF)), null,
+            var tail = new Point(drop.X - drop.Vx * 0.03, drop.Y - drop.Vy * 0.03);
+            DrawStreak(dc, tail, new Point(drop.X, drop.Y), Color.FromArgb((byte)(200 * fade), tint.R, tint.G, tint.B), drop.Size);
+            dc.DrawEllipse(Solid(Color.FromArgb((byte)(235 * fade), 0xFF, 0xFF, 0xFF)), null,
                 new Point(drop.X, drop.Y), drop.Size * 0.55, drop.Size * 0.55);
         }
     }
@@ -723,16 +726,15 @@ public sealed class WaveSeekBar : FrameworkElement
             if (p < 0.3)
             {
                 // The moment of impact: a small bright spot on the line.
-                var flash = new SolidColorBrush(Color.FromArgb((byte)(230 * (1 - p / 0.3)), 0xFF, 0xFF, 0xFF));
-                dc.DrawEllipse(flash, null, new Point(splash.X, mid), 2.2, 1.6);
+                dc.DrawEllipse(Solid(Color.FromArgb((byte)(230 * (1 - p / 0.3)), 0xFF, 0xFF, 0xFF)), null, new Point(splash.X, mid), 2.2, 1.6);
             }
             var rx = 1.5 + splash.Size * grow;
-            dc.DrawEllipse(null, new Pen(new SolidColorBrush(Color.FromArgb((byte)(255 * alpha), ringColor.R, ringColor.G, ringColor.B)), 1.1),
+            dc.DrawEllipse(null, SolidPen(Color.FromArgb((byte)(255 * alpha), ringColor.R, ringColor.G, ringColor.B), 1.1),
                 new Point(splash.X, mid), rx, rx * 0.32);
             if (p > 0.18)
             {
                 var inner = rx * 0.55;
-                dc.DrawEllipse(null, new Pen(new SolidColorBrush(Color.FromArgb((byte)(150 * alpha), ringColor.R, ringColor.G, ringColor.B)), 0.9),
+                dc.DrawEllipse(null, SolidPen(Color.FromArgb((byte)(150 * alpha), ringColor.R, ringColor.G, ringColor.B), 0.9),
                     new Point(splash.X, mid), inner, inner * 0.32);
             }
         }
@@ -740,7 +742,7 @@ public sealed class WaveSeekBar : FrameworkElement
         foreach (var drop in _droplets)
         {
             var a = (byte)(220 * Math.Clamp(drop.Life / 0.15, 0, 1));
-            dc.DrawEllipse(new SolidColorBrush(Color.FromArgb(a, 0xFF, 0xFF, 0xFF)), null, new Point(drop.X, drop.Y), drop.Size, drop.Size);
+            dc.DrawEllipse(Solid(Color.FromArgb(a, 0xFF, 0xFF, 0xFF)), null, new Point(drop.X, drop.Y), drop.Size, drop.Size);
         }
 
         foreach (var drop in _drops)
@@ -748,10 +750,7 @@ public sealed class WaveSeekBar : FrameworkElement
             var tint = Mix(drop.Life < 0.5 ? cool : accent, Colors.White, 0.55);
             var length = 3 + drop.Vy * 0.065;
             var top = new Point(drop.X - drop.Vx / drop.Vy * length, drop.Y - length);
-            var streak = new LinearGradientBrush(Color.FromArgb(0, tint.R, tint.G, tint.B), Color.FromArgb(0xE0, tint.R, tint.G, tint.B),
-                new Point(0, top.Y), new Point(0, drop.Y)) { MappingMode = BrushMappingMode.Absolute };
-            streak.Freeze();
-            dc.DrawLine(new Pen(streak, drop.Size) { StartLineCap = PenLineCap.Round, EndLineCap = PenLineCap.Round }, top, new Point(drop.X, drop.Y));
+            DrawStreak(dc, top, new Point(drop.X, drop.Y), Color.FromArgb(0xE0, tint.R, tint.G, tint.B), drop.Size);
         }
     }
 
@@ -832,6 +831,75 @@ public sealed class WaveSeekBar : FrameworkElement
     /// <summary><paramref name="a"/> moved toward <paramref name="b"/> by <paramref name="t"/> (0..1).</summary>
     private static Color Mix(Color a, Color b, double t) => Color.FromRgb(
         (byte)(a.R + (b.R - a.R) * t), (byte)(a.G + (b.G - a.G) * t), (byte)(a.B + (b.B - a.B) * t));
+
+    // ---- 입자 그리기 ----
+    // A brush and a pen made for every particle in every frame (a couple of hundred of them, 30
+    // times a second) had the GPU realize a new gradient for each, each time (CLAUDE.md:
+    // per-frame drawing). Brushes and pens are kept instead, one per color - the alpha in steps of
+    // 1/15, which a fade at 30 fps doesn't show - and a streak is a rectangle over a brush drawn
+    // once, laid along the streak by a transform.
+
+    /// <summary>How many brushes (or pens) of each kind are kept before starting afresh (the cover's
+    /// colors change with every song).</summary>
+    private const int MaxKept = 1024;
+
+    private readonly Dictionary<uint, Brush> _streakBrushes = [];
+    private readonly Dictionary<uint, Brush> _solidBrushes = [];
+    private readonly Dictionary<(uint Color, double Thickness), Pen> _solidPens = [];
+
+    private static Color Stepped(Color color) =>
+        Color.FromArgb((byte)(Math.Round(color.A / 17.0) * 17), color.R, color.G, color.B);
+
+    private static uint ColorKey(Color color) => (uint)(color.A << 24 | color.R << 16 | color.G << 8 | color.B);
+
+    private static T Kept<TKey, T>(Dictionary<TKey, T> kept, TKey key, Func<T> make) where TKey : notnull where T : Freezable
+    {
+        if (kept.TryGetValue(key, out var value)) return value;
+        if (kept.Count >= MaxKept) kept.Clear();
+        value = make();
+        value.Freeze();
+        return kept[key] = value;
+    }
+
+    private Brush Solid(Color color)
+    {
+        color = Stepped(color);
+        return Kept(_solidBrushes, ColorKey(color), () => new SolidColorBrush(color));
+    }
+
+    private Pen SolidPen(Color color, double thickness)
+    {
+        var brush = Solid(color);
+        return Kept(_solidPens, (ColorKey(Stepped(color)), thickness), () => new Pen(brush, thickness));
+    }
+
+    /// <summary>A streak <paramref name="width"/> across, clear at <paramref name="tail"/> and
+    /// <paramref name="color"/> at <paramref name="head"/> - rounded there unless
+    /// <paramref name="roundHead"/> is false.</summary>
+    private void DrawStreak(DrawingContext dc, Point tail, Point head, Color color, double width, bool roundHead = true)
+    {
+        color = Stepped(color);
+        if (color.A == 0) return;
+        var along = head - tail;
+        var length = along.Length;
+        if (length > 0.05)
+        {
+            // clear at x = -1, the color at x = 0
+            var brush = Kept(_streakBrushes, ColorKey(color), () => new LinearGradientBrush(
+                Color.FromArgb(0, color.R, color.G, color.B), color, new Point(-1, 0), new Point(0, 0))
+            {
+                MappingMode = BrushMappingMode.Absolute,
+            });
+            // x runs along the streak (-1 at the tail, 0 at the head), y across it in pixels
+            var across = new Vector(-along.Y, along.X) / length;
+            var place = new MatrixTransform(along.X, along.Y, across.X, across.Y, head.X, head.Y);
+            place.Freeze();
+            dc.PushTransform(place);
+            dc.DrawRectangle(brush, null, new Rect(-1, -width / 2, 1, width));
+            dc.Pop();
+        }
+        if (roundHead) dc.DrawEllipse(Solid(color), null, head, width / 2, width / 2);
+    }
 
     // ---- 오로라 ----
 

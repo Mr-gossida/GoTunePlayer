@@ -40,13 +40,26 @@ public static class CoverArtService
             ? "image/png"
             : "image/jpeg";
 
+    /// <summary>The picture in <paramref name="stream"/>, read only as far as its size, or null when
+    /// that size is absurd (<see cref="ImageLimits"/>). GDI+'s usual check of the image data
+    /// decodes all of it - before its size could be looked at. The stream must stay open while the
+    /// picture is used (its pixels are read from it then).</summary>
+    private static Image? Open(MemoryStream stream)
+    {
+        var image = Image.FromStream(stream, useEmbeddedColorManagement: false, validateImageData: false);
+        if (ImageLimits.IsSensibleSize(image.Width, image.Height)) return image;
+        image.Dispose();
+        return null;
+    }
+
     public static BitmapImageBytes? GetThumbnail(byte[]? imageBytes, int size = 160)
     {
         if (imageBytes is null || imageBytes.Length == 0) return null;
         try
         {
             using var ms = new MemoryStream(imageBytes);
-            using var src = Image.FromStream(ms);
+            using var src = Open(ms);
+            if (src is null) return null;
             using var thumb = new Bitmap(size, size, PixelFormat.Format24bppRgb);
             using (var g = Graphics.FromImage(thumb))
             using (var edges = new ImageAttributes())
@@ -76,7 +89,8 @@ public static class CoverArtService
         try
         {
             using var ms = new MemoryStream(imageBytes);
-            using var src = Image.FromStream(ms);
+            using var src = Open(ms);
+            if (src is null) return null;
             using var thumb = new Bitmap(16, 16, PixelFormat.Format24bppRgb);
             using (var g = Graphics.FromImage(thumb))
                 g.DrawImage(src, 0, 0, 16, 16);
@@ -127,7 +141,8 @@ public static class CoverArtService
     private static Bitmap? ToThumb24(byte[] imageBytes)
     {
         using var ms = new MemoryStream(imageBytes);
-        using var src = Image.FromStream(ms);
+        using var src = Open(ms);
+        if (src is null) return null;
         var thumb = new Bitmap(24, 24, PixelFormat.Format24bppRgb);
         using var g = Graphics.FromImage(thumb);
         g.DrawImage(src, 0, 0, 24, 24);

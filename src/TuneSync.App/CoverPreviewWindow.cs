@@ -4,7 +4,6 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Media.Effects;
-using System.Windows.Media.Imaging;
 
 namespace TuneSync.App;
 
@@ -37,6 +36,7 @@ public sealed class CoverPreviewWindow : Window
 
         // Each cover gets an equal share of the width, and most of the height.
         var size = Math.Max(160, Math.Min(bounds.Height * 0.72, (bounds.Width * 0.86 - (items.Count - 1) * 72) / items.Count));
+        var pixels = (int)Math.Ceiling(size * VisualTreeHelper.GetDpi(owner).DpiScaleX);
         var row = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
         for (var i = 0; i < items.Count; i++)
         {
@@ -49,7 +49,7 @@ public sealed class CoverPreviewWindow : Window
                     VerticalAlignment = VerticalAlignment.Center,
                     Foreground = new SolidColorBrush(Color.FromArgb(0x99, 0xFF, 0xFF, 0xFF)),
                 });
-            row.Children.Add(Panel(items[i], size, highlight: items.Count > 1 && i == items.Count - 1));
+            row.Children.Add(Panel(items[i], size, pixels, highlight: items.Count > 1 && i == items.Count - 1));
         }
 
         var close = new Wpf.Ui.Controls.Button
@@ -91,7 +91,8 @@ public sealed class CoverPreviewWindow : Window
         new CoverPreviewWindow(owner, items).ShowDialog();
     }
 
-    private static FrameworkElement Panel(CoverPreviewItem item, double size, bool highlight)
+    /// <summary>One cover, <paramref name="size"/> wide on screen (<paramref name="pixels"/> device pixels).</summary>
+    private static FrameworkElement Panel(CoverPreviewItem item, double size, int pixels, bool highlight)
     {
         var image = new Image { Stretch = Stretch.Uniform, Width = size, Height = size };
         RenderOptions.SetBitmapScalingMode(image, BitmapScalingMode.HighQuality);
@@ -133,12 +134,15 @@ public sealed class CoverPreviewWindow : Window
         {
             byte[]? bytes = null;
             try { bytes = await item.Load(); } catch { /* shown as "불러오지 못함" */ }
+            // decoded off the UI thread, no bigger than it's shown: a 3000 px scan at full size
+            // is ~36 MB and a moment's freeze
+            var shown = bytes is { Length: > 0 } ? await Task.Run(() => ImageHelper.ToDisplayImage(bytes, pixels)) : null;
             spinner.Visibility = Visibility.Collapsed;
-            if (bytes is { Length: > 0 } && ImageHelper.ToBitmapImage(bytes) is BitmapSource bitmap)
+            if (bytes is not null && shown is not null)
             {
-                image.Source = bitmap;
+                image.Source = shown.Image;
                 var kind = TuneSync.Core.Services.CoverArtService.MimeTypeOf(bytes) == "image/png" ? "PNG" : "JPEG";
-                info.Text = $"{bitmap.PixelWidth}×{bitmap.PixelHeight} · {kind} · {bytes.Length / 1024d:0} KB";
+                info.Text = $"{shown.SizeText} · {kind} · {bytes.Length / 1024d:0} KB";
             }
             else
             {

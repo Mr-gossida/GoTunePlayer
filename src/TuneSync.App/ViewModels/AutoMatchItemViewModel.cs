@@ -17,7 +17,9 @@ public sealed partial class AutoMatchItemViewModel : ObservableObject
     {
         Proposal = proposal;
         _isSelected = proposal.HasAnyProposal;
-        ProposedCover = ImageHelper.ToBitmapImage(proposal.ProposedCoverBytes);
+        // shown 52 px wide (104 on a high-DPI screen): a found cover is about 1200 px, and every
+        // result kept it decoded at full size - megabytes each, decoded on the UI thread
+        ProposedCover = ImageHelper.ToBitmapImage(proposal.ProposedCoverBytes, decodePixelWidth: 104);
         CurrentCover = ImageHelper.ToBitmapImage(proposal.File.ThumbnailBytes);
         (LyricsLabel, LyricsPreview) = DescribeLyrics(proposal.ProposedLyrics);
 

@@ -163,6 +163,7 @@ public sealed class TonePlayer : IDisposable
     // Hardware volume (exclusive mode): the device's own volume control, and what Windows had it
     // at before, to put back when GoTune lets go.
     private AudioEndpointVolume? _endpointVolume;
+    private string? _heldDeviceId;
     private float _savedLevel;
     private bool _savedMute;
     private volatile bool _hardwareVolume, _volumeDirty;
@@ -1141,15 +1142,16 @@ public sealed class TonePlayer : IDisposable
         _ => "스테레오",
     };
 
+    // Each MMDevice.AudioClient is a new COM object of its own, let go of here.
     private static int SafeMixChannels(MMDevice device)
     {
-        try { return device.AudioClient.MixFormat.Channels; }
+        try { using var client = device.AudioClient; return client.MixFormat.Channels; }
         catch (COMException) { return 2; }
     }
 
     private static int SafeMixRate(MMDevice device)
     {
-        try { return device.AudioClient.MixFormat.SampleRate; }
+        try { using var client = device.AudioClient; return client.MixFormat.SampleRate; }
         catch (COMException) { return 0; }
     }
 
@@ -1162,8 +1164,10 @@ public sealed class TonePlayer : IDisposable
             var volume = _device!.AudioEndpointVolume;
             if (((int)volume.HardwareSupport & 1) == 0) return false; // ENDPOINT_HARDWARE_SUPPORT_VOLUME
             _endpointVolume = volume;
-            _savedLevel = volume.MasterVolumeLevelScalar;
-            _savedMute = volume.Mute;
+            // what to put back: Windows' level now - or the one a run that ended without putting
+            // it back (a crash) wrote down, else that run's turned-down level would stick
+            _heldDeviceId = _device.ID;
+            (_savedLevel, _savedMute) = HeldVolume.Default.Take(_heldDeviceId, new(volume.MasterVolumeLevelScalar, volume.Mute));
             _hardwareVolume = true;
             ApplyVolume();
             SetHardwareVolume();
@@ -1197,18 +1201,22 @@ public sealed class TonePlayer : IDisposable
     {
         if (!_hardwareVolume) return;
         _hardwareVolume = false;
+        var putBack = false;
         try
         {
             if (_endpointVolume is { } volume)
             {
                 volume.MasterVolumeLevelScalar = _savedLevel;
                 volume.Mute = _savedMute;
+                putBack = true;
             }
         }
         catch (Exception)
         {
-            // unplugged: nothing to put back
+            // unplugged: the level stays written down, put back once the device is there again
         }
+        if (_heldDeviceId is { } id) HeldVolume.Default.Release(id, putBack);
+        _heldDeviceId = null;
         _endpointVolume = null;
         ApplyVolume(); // the samples carry the volume again
     }

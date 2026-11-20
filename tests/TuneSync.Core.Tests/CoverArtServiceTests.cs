@@ -41,6 +41,21 @@ public class CoverArtServiceTests
     }
 
     [Fact]
+    public void GetThumbnail_RefusesAnAbsurdSize_BeforeDecodingIt()
+    {
+        // wider than any cover (one row, so it stays small here; 20000×20000 would take 1.6 GB)
+        static byte[] Png(int width, int height)
+        {
+            using var bitmap = new System.Drawing.Bitmap(width, height);
+            using var stream = new MemoryStream();
+            bitmap.Save(stream, System.Drawing.Imaging.ImageFormat.Png);
+            return stream.ToArray();
+        }
+        Assert.Null(CoverArtService.GetThumbnail(Png(ImageLimits.MaxSide + 1, 1)));
+        Assert.NotNull(CoverArtService.GetThumbnail(Png(ImageLimits.MaxSide, 1)));
+    }
+
+    [Fact]
     public void GetThumbnail_ReturnsNull_ForNullOrEmptyInput()
     {
         Assert.Null(CoverArtService.GetThumbnail(null));

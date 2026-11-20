@@ -8,6 +8,17 @@ namespace TuneSync.Core.Audio.Dsd;
 /// the top bit of each byte), whatever order the file keeps them in.</summary>
 public sealed class DsdFile : IDisposable
 {
+    /// <summary>Well above any DSD rate in use (DSD1024 of the 48 kHz family): a higher one is a
+    /// damaged header.</summary>
+    private const int MaxSampleRate = 1024 * 48000;
+
+    /// <summary>DSF's block is 4096 bytes per channel; a header claiming far more is damaged (and
+    /// the buffer for it would be huge).</summary>
+    private const int MaxBlockSize = 1 << 20;
+
+    /// <summary>The most kept of a DIIN title or artist.</summary>
+    private const int MaxText = 4096;
+
     private readonly FileStream _stream;
     private readonly bool _dsf;
     private readonly bool _lsbFirst;
@@ -58,11 +69,15 @@ public sealed class DsdFile : IDisposable
                 _lsbFirst = ReadLittle32() == 1;
                 var samples = ReadLittle64();
                 _blockSize = (int)ReadLittle32();
+                if (fmtSize < 12 || fmtSize - 12 > _stream.Length - fmtStart) throw Bad("bad fmt chunk");
                 _stream.Position = fmtStart + fmtSize - 12;
                 if (ReadId() != "data") throw Bad("no data chunk");
                 var dataSize = ReadLittle64() - 12;
                 _dataOffset = _stream.Position;
-                Length = Math.Min((long)Math.Ceiling(samples / 8.0), dataSize / Math.Max(1, Channels));
+                // a cut-short file plays what it has; sizes below nothing count as nothing (a
+                // negative length would make every seek throw)
+                var stored = Math.Clamp(dataSize, 0, _stream.Length - _dataOffset);
+                Length = Math.Clamp((long)Math.Ceiling(samples / 8.0), 0, stored / Math.Max(1, Channels));
             }
             else if (id == "FRM8")
             {
@@ -74,23 +89,24 @@ public sealed class DsdFile : IDisposable
                     var chunk = ReadId();
                     var size = ReadBig64();
                     var start = _stream.Position;
+                    var end = ChunkEnd(size, _stream.Length);
                     switch (chunk)
                     {
                         case "PROP":
-                            ReadProperties(start + size);
+                            ReadProperties(end);
                             break;
                         case "DSD ":
                             _dataOffset = start;
-                            Length = size / Math.Max(1, Channels);
+                            Length = (end - start) / Math.Max(1, Channels);
                             found = true;
                             break;
                         case "DST ":
                             throw new NotSupportedException("DST-compressed DSDIFF isn't supported.");
                         case "DIIN":
-                            ReadInfo(start + size);
+                            ReadInfo(end);
                             break;
                     }
-                    if (!found) _stream.Position = start + size + (size & 1);
+                    if (!found) _stream.Position = end + (size & 1);
                 }
                 if (!found) throw Bad("no sound");
                 _lsbFirst = false;
@@ -99,8 +115,8 @@ public sealed class DsdFile : IDisposable
             {
                 throw Bad("not a DSF or DSDIFF file");
             }
-            if (Channels is < 1 or > 8 || SampleRate < 2_000_000 || SampleRate % 8 != 0) throw Bad("unsupported layout");
-            if (_dsf && _blockSize <= 0) throw Bad("bad block size");
+            if (Channels is < 1 or > 8 || SampleRate is < 2_000_000 or > MaxSampleRate || SampleRate % 8 != 0) throw Bad("unsupported layout");
+            if (_dsf && _blockSize is <= 0 or > MaxBlockSize) throw Bad("bad block size");
         }
         catch
         {
@@ -109,14 +125,25 @@ public sealed class DsdFile : IDisposable
         }
     }
 
-    private void ReadProperties(long end)
+    /// <summary>Where the chunk whose body starts here ends: never before its start - a negative
+    /// size would send the reader back over chunks it has read, round and round (a damaged or
+    /// crafted file, met while scanning the library) - and never past <paramref name="limit"/>
+    /// (the end of what holds it: a cut-short file, or a size made up to be huge).</summary>
+    private long ChunkEnd(long size, long limit)
+    {
+        if (size < 0) throw Bad("bad chunk size");
+        var start = _stream.Position;
+        return start + Math.Min(size, Math.Max(0, limit - start));
+    }
+
+    private void ReadProperties(long limit)
     {
         if (ReadId() != "SND ") return;
-        while (_stream.Position + 12 <= end)
+        while (_stream.Position + 12 <= limit)
         {
             var chunk = ReadId();
             var size = ReadBig64();
-            var start = _stream.Position;
+            var end = ChunkEnd(size, limit);
             switch (chunk)
             {
                 case "FS  ":
@@ -129,27 +156,29 @@ public sealed class DsdFile : IDisposable
                     if (ReadId() != "DSD ") throw new NotSupportedException("Compressed DSDIFF isn't supported.");
                     break;
             }
-            _stream.Position = start + size + (size & 1);
+            _stream.Position = end + (size & 1);
         }
     }
 
-    private void ReadInfo(long end)
+    private void ReadInfo(long limit)
     {
-        while (_stream.Position + 12 <= end)
+        while (_stream.Position + 12 <= limit)
         {
             var chunk = ReadId();
             var size = ReadBig64();
             var start = _stream.Position;
-            if (chunk is "DITI" or "DIAR" && size > 4)
+            var end = ChunkEnd(size, limit);
+            if (chunk is "DITI" or "DIAR" && end - start > 4)
             {
-                var count = (int)Math.Min(ReadBig32(), size - 4);
+                // the text's own count can claim more than its chunk holds
+                var count = (int)Math.Min(Math.Min(ReadBig32(), end - start - 4), MaxText);
                 var bytes = new byte[count];
                 _stream.ReadExactly(bytes);
                 var text = Encoding.Latin1.GetString(bytes).TrimEnd('\0', ' ');
                 if (chunk == "DITI") Title = text;
                 else Artist = text;
             }
-            _stream.Position = start + size + (size & 1);
+            _stream.Position = end + (size & 1);
         }
     }
 

@@ -171,4 +171,115 @@ public class DsdFileTests(ITestOutputHelper log)
         log.WriteLine($"remastered 1 kHz at -6 dBFS came back at {level:0.00} dB");
         Assert.InRange(level, -6.1, -5.9);
     }
+
+    [Theory]
+    [InlineData("form")]
+    [InlineData("prop")]
+    [InlineData("diin")]
+    public async Task Dff_NegativeChunkSize_IsRefusedNotGoneRoundIn(string where)
+    {
+        // a size of -12 points back at the chunk's own header: the reader went round and round
+        var junk = Chunk("JUNK", -12);
+        var path = WriteDffOf(
+            inProp: where == "prop" ? junk : [],
+            beforeSound: where switch { "form" => junk, "diin" => Chunk("DIIN", null, junk), _ => [] });
+        try
+        {
+            var opening = Task.Run(() => new DsdFile(path).Dispose());
+            Assert.Same(opening, await Task.WhenAny(opening, Task.Delay(TimeSpan.FromSeconds(10))));
+            await Assert.ThrowsAsync<InvalidDataException>(() => opening);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void Dff_ClaimingMoreThanItHas_OpensWithWhatIsThere()
+    {
+        // the title's chunk and its count claim 2 GB (the reader made room for all of it), and the
+        // sound chunk claims a megabyte where the file has 2000 bytes (a cut-short copy)
+        var title = Chunk("DIIN", null, Chunk("DITI", int.MaxValue, Big(int.MaxValue, 4), Id("Test Title")));
+        var path = WriteDffOf(inProp: [], beforeSound: title, soundSize: 1_000_000);
+        try
+        {
+            using var file = new DsdFile(path);
+            Assert.Equal("Test Title", file.Title);
+            Assert.Equal(1000, file.Length);
+            byte[][] channels = [new byte[4096], new byte[4096]];
+            Assert.Equal(1000, file.Read(channels, 4096));
+            Assert.Equal(0, file.Read(channels, 4096));
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void Dsf_DamagedHeader_IsRefusedOrEmpty()
+    {
+        var path = WriteDsf(new byte[100], new byte[100]);
+        try
+        {
+            // a 2 GB block (the buffer for all channels' blocks overflowed) and a rate above any DSD's
+            Patch(path, 72, BitConverter.GetBytes(int.MaxValue));
+            Assert.Throws<InvalidDataException>(() => new DsdFile(path));
+            Patch(path, 72, BitConverter.GetBytes(4096));
+            Patch(path, 56, BitConverter.GetBytes(int.MaxValue - 7));
+            Assert.Throws<InvalidDataException>(() => new DsdFile(path));
+            Patch(path, 56, BitConverter.GetBytes(Rate));
+
+            // a negative sample count: an empty song (seeking in it threw)
+            Patch(path, 64, BitConverter.GetBytes(-800L));
+            using var file = new DsdFile(path);
+            Assert.Equal(0, file.Length);
+            file.Seek(1000);
+            Assert.Equal(0, file.Read([new byte[16], new byte[16]], 16));
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    private static byte[] Id(string id) => System.Text.Encoding.ASCII.GetBytes(id);
+
+    /// <summary>The low <paramref name="bytes"/> bytes of <paramref name="value"/>, highest first.</summary>
+    private static byte[] Big(long value, int bytes)
+    {
+        var b = BitConverter.GetBytes(value)[..bytes];
+        Array.Reverse(b);
+        return b;
+    }
+
+    /// <summary>A DSDIFF chunk: its id, its size (the body's length unless given) and its body.</summary>
+    private static byte[] Chunk(string id, long? size, params byte[][] body)
+    {
+        var content = body.SelectMany(b => b).ToArray();
+        return [.. Id(id), .. Big(size ?? content.Length, 8), .. content];
+    }
+
+    /// <summary>A stereo DSDIFF file of 2000 bytes of DSD silence, with <paramref name="inProp"/>
+    /// after the rate in PROP and <paramref name="beforeSound"/> just before the sound chunk.</summary>
+    private static string WriteDffOf(byte[] inProp, byte[] beforeSound, long? soundSize = null)
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"gotune-test-{Guid.NewGuid():N}.dff");
+        var prop = Chunk("PROP", null, Id("SND "),
+            Chunk("FS  ", null, Big(Rate, 4)),
+            inProp,
+            Chunk("CHNL", null, Big(2, 2), Id("SLFT"), Id("SRGT")),
+            Chunk("CMPR", null, Id("DSD "), new byte[2]));
+        var sound = Chunk("DSD ", soundSize, Enumerable.Repeat((byte)0x69, 2000).ToArray());
+        File.WriteAllBytes(path, Chunk("FRM8", null, Id("DSD "), prop, beforeSound, sound));
+        return path;
+    }
+
+    private static void Patch(string path, long offset, byte[] bytes)
+    {
+        using var stream = File.OpenWrite(path);
+        stream.Position = offset;
+        stream.Write(bytes);
+    }
 }

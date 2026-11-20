@@ -628,7 +628,7 @@ public sealed partial class TagEditorViewModel : ObservableObject
             Toast.Error("이미지를 열지 못했습니다", ex.Message);
             return;
         }
-        if (ImageHelper.TryGetPixelSize(bytes, out var width, out var height) && width > 0 && height > 0 && !ImageHelper.IsSensibleSize(width, height))
+        if (ImageHelper.TryGetPixelSize(bytes, out var width, out var height) && width > 0 && height > 0 && !ImageLimits.IsSensibleSize(width, height))
         {
             Toast.Warning("이미지가 너무 큽니다", $"{width}×{height} 이미지는 커버로 쓸 수 없습니다. 더 작은 이미지를 선택하세요.");
             return;

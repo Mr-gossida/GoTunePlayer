@@ -1,5 +1,6 @@
 using System.IO;
 using System.Windows.Media.Imaging;
+using TuneSync.Core.Services;
 
 namespace TuneSync.App;
 
@@ -7,20 +8,13 @@ namespace TuneSync.App;
 /// stays WPF-free, so this conversion lives here rather than in a Core service.
 ///
 /// Covers come from files and from the internet, so their size is read from the header first and
-/// an absurd one is refused before anything is decoded: a picture that claims 20000×20000 takes
-/// a few MB in a file but 1.6 GB and seconds to decode.</summary>
+/// an absurd one is refused before anything is decoded (<see cref="ImageLimits"/>).</summary>
 public static class ImageHelper
 {
-    /// <summary>The widest or tallest image decoded (real covers are a few thousand pixels).</summary>
-    public const int MaxSide = 10000;
-
-    /// <summary>The most pixels an image decoded may have: 50 MP, 200 MB decoded.</summary>
-    public const long MaxPixels = 50_000_000;
-
     public static BitmapImage? ToBitmapImage(byte[]? bytes, int decodePixelWidth = 0)
     {
         if (bytes is null || bytes.Length == 0) return null;
-        if (!TryGetPixelSize(bytes, out var width, out var height) || !IsSensibleSize(width, height)) return null;
+        if (!TryGetPixelSize(bytes, out var width, out var height) || !ImageLimits.IsSensibleSize(width, height)) return null;
         return Decode(bytes, decodePixelWidth, 0);
     }
 
@@ -37,7 +31,7 @@ public static class ImageHelper
     public static DisplayImage? ToDisplayImage(byte[]? bytes, int maxSide)
     {
         if (bytes is null || bytes.Length == 0) return null;
-        if (!TryGetPixelSize(bytes, out var width, out var height) || !IsSensibleSize(width, height)) return null;
+        if (!TryGetPixelSize(bytes, out var width, out var height) || !ImageLimits.IsSensibleSize(width, height)) return null;
         var image = width >= height
             ? Decode(bytes, width > maxSide ? maxSide : 0, 0)
             : Decode(bytes, 0, height > maxSide ? maxSide : 0);
@@ -62,9 +56,6 @@ public static class ImageHelper
             return false;
         }
     }
-
-    public static bool IsSensibleSize(int width, int height) =>
-        width > 0 && height > 0 && width <= MaxSide && height <= MaxSide && (long)width * height <= MaxPixels;
 
     private static BitmapImage? Decode(byte[] bytes, int decodePixelWidth, int decodePixelHeight)
     {
