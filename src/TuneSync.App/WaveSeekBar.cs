@@ -51,6 +51,7 @@ public sealed class WaveSeekBar : FrameworkElement
         _splashes.Clear();
         _droplets.Clear();
         _jets.Clear();
+        _spouts.Clear();
         _rockets.Clear();
         _embers.Clear();
         UpdateAnimationState();
@@ -583,23 +584,37 @@ public sealed class WaveSeekBar : FrameworkElement
     /// 0..1 that picks the tint.</summary>
     private readonly List<Spark> _jets = [];
 
-    /// <summary>A fountain show along the played part: a row of jets, evenly spaced, each throwing
-    /// droplets that arc over and fall back onto the line, swaying up and down in rhythms of their
-    /// own. Louder music throws more water, higher; each beat sends every jet up at once. The
-    /// water takes the cover's colors, lightened, with a short streak behind each drop.</summary>
+    /// <summary>Jets that are spouting. X: where on the line; Age, Life: how long it has run and
+    /// how long it runs; Size: how strong it is (1 = normal).</summary>
+    private readonly List<Spark> _spouts = [];
+
+    /// <summary>How far along its short life a jet is, as its strength: it surges up, holds, then
+    /// dies down to nothing.</summary>
+    private static double SpoutEnvelope(Spark s)
+    {
+        var t = Math.Clamp(s.Age / s.Life, 0, 1);
+        return Math.Min(1, t / 0.18) * Math.Clamp((1 - t) / 0.4, 0, 1);
+    }
+
+    /// <summary>A fountain show along the played part: jets spring up at random spots, throw
+    /// droplets that arc over and fall back onto the line, then die down and vanish while new ones
+    /// spring up elsewhere. Louder music: more jets, higher and fuller; each beat sets off a few at
+    /// once. The water takes the cover's colors, lightened, with a short streak behind each drop.</summary>
     private void DrawFountain(DrawingContext dc, double mid, double thumbX, double room, Color cool, Color accent, Color warm)
     {
         DrawPlayedLine(dc, mid, thumbX, cool, accent, warm);
 
-        // a soft glow where the jet leaves the line
+        // a soft glow where each jet leaves the line
         var strength = Math.Min(1, _activity * Loud(0.2, 0.8, _level) + 0.6 * _flash);
-        if (strength > 0.05)
+        foreach (var spout in _spouts)
         {
+            var s = strength * SpoutEnvelope(spout);
+            if (s <= 0.05) continue;
             // mapped in pixels: a brush mapped to the ellipse's own box, whose size changes every
             // frame, is rebuilt by the GPU every frame (CLAUDE.md: per-frame drawing)
-            var center = new Point(thumbX, mid - 1);
-            double rx = 9 + 5 * strength, ry = 4 + 3 * strength;
-            var glow = new RadialGradientBrush(Color.FromArgb((byte)(120 * strength), warm.R, warm.G, warm.B), Color.FromArgb(0, warm.R, warm.G, warm.B))
+            var center = new Point(spout.X, mid - 1);
+            double rx = 7 + 5 * s, ry = 3 + 3 * s;
+            var glow = new RadialGradientBrush(Color.FromArgb((byte)(120 * s), warm.R, warm.G, warm.B), Color.FromArgb(0, warm.R, warm.G, warm.B))
             {
                 MappingMode = BrushMappingMode.Absolute,
                 Center = center,
@@ -638,32 +653,67 @@ public sealed class WaveSeekBar : FrameworkElement
             if (d.Y > mid + 1 && d.Vy > 0) _jets.RemoveAt(i);
             else _jets[i] = d;
         }
+        var thumbX = Left + (Right - Left) * Math.Clamp(CurrentPosition() / Maximum, 0, 1);
+        // Jets run out on their own; one left past the thumb (after seeking back) goes at once.
+        for (var i = _spouts.Count - 1; i >= 0; i--)
+        {
+            var s = _spouts[i];
+            s.Age += dt;
+            if (s.Age >= s.Life || s.X > thumbX - 4) _spouts.RemoveAt(i);
+            else _spouts[i] = s;
+        }
         if (Look != SeekBarStyle.Fountain || !IsPlaying || _activity < 0.3 || Maximum <= 0) return;
 
-        var thumbX = Left + (Right - Left) * Math.Clamp(CurrentPosition() / Maximum, 0, 1);
         if (thumbX - Left < 16) return;
         var room = mid - 2 + FountainOverflow;
         var loud = Loud(0, 1, _level);
 
-        // A row of jets along the played part, like a fountain show: one every FountainSpacing
-        // pixels (fixed spots on the bar, so they don't wander; a new one joins as the thumb
-        // passes), each rising and falling in a rhythm of its own. Louder music: every jet
-        // higher and fuller; a beat: all of them shoot up at once.
+        // New jets spring up at random spots along the played part: now and then when quiet,
+        // often when loud, and a few at once on a beat (those start strong).
+        var births = (Random.Shared.NextDouble() < dt * Loud(1.2, 5, _level) ? 1 : 0) + (beat ? 1 + (int)(loud * 2.5) : 0);
+        for (var n = 0; n < births && _spouts.Count < MaxSpouts; n++)
+            SpawnSpout(thumbX, strong: beat);
+
+        // Each jet throws water while it lives, more and higher at its peak.
         var lift = Math.Pow(Math.Clamp(loud, 0, 1.1), 1.2);
-        var rate = dt * Loud(9, 26, _level);
-        for (var x = Left + FountainSpacing / 2; x < thumbX - 6; x += FountainSpacing)
+        foreach (var spout in _spouts)
         {
-            var k = (x - Left) / FountainSpacing;
-            var sway = 0.72 + 0.28 * Math.Sin(_phase * 1.15 + k * 1.9);
-            var height = room * (0.3 + 0.7 * lift) * sway;
-            var count = (Random.Shared.NextDouble() < rate - Math.Floor(rate) ? 1 : 0) + (int)rate + (beat ? 2 + (int)(loud * 3) : 0);
+            var env = SpoutEnvelope(spout);
+            if (env <= 0.02) continue;
+            var height = room * (0.3 + 0.7 * lift) * spout.Size * (0.35 + 0.65 * env);
+            var rate = dt * Loud(9, 26, _level) * env;
+            var count = (Random.Shared.NextDouble() < rate - Math.Floor(rate) ? 1 : 0) + (int)rate;
             for (var n = 0; n < count; n++)
-                Throw(x, mid, beat && n >= count - 2 ? height * 1.25 : height, spread: 14, size: 0.85);
+                Throw(spout.X, mid, height, spread: 14, size: 0.85);
         }
     }
 
-    /// <summary>Pixels between two jets of the fountain.</summary>
-    private const double FountainSpacing = 46;
+    /// <summary>The most jets spouting at once.</summary>
+    private const int MaxSpouts = 7;
+
+    /// <summary>Starts a jet at a random spot on the played part, not right on top of another one.</summary>
+    private void SpawnSpout(double thumbX, bool strong)
+    {
+        var span = thumbX - Left - 12;
+        if (span <= 0) return;
+        for (var attempt = 0; attempt < 6; attempt++)
+        {
+            var x = Left + 6 + Random.Shared.NextDouble() * span;
+            var clear = true;
+            foreach (var s in _spouts)
+                if (Math.Abs(s.X - x) < 18) { clear = false; break; }
+            if (!clear) continue;
+            _spouts.Add(new Spark
+            {
+                X = x,
+                Life = 0.7 + Random.Shared.NextDouble() * 1.1,
+                Size = strong ? 1.05 + 0.2 * Random.Shared.NextDouble() : 0.7 + 0.35 * Random.Shared.NextDouble(),
+                // a beat's jet is up at once instead of surging up
+                Age = strong ? 0.1 : 0,
+            });
+            return;
+        }
+    }
 
     /// <summary>One droplet from <paramref name="x"/>, to reach about <paramref name="height"/> pixels up.</summary>
     private void Throw(double x, double mid, double height, double spread, double size)
@@ -999,30 +1049,47 @@ public sealed class WaveSeekBar : FrameworkElement
 
     private readonly List<Spark> _stars = [];
 
-    /// <summary>Little four-pointed stars that twinkle as they drift up off the played line.</summary>
+    /// <summary>Camera flashes, like photographers' flashes along a red carpet: each one pops on
+    /// the spot - a white-hot core, a halo and four long rays - and dies away in a moment, while
+    /// others pop elsewhere. X, Y: where; Age, Life: how long since it popped (below 0: waiting to
+    /// pop), and how long it lasts; Size: how big; Hue: how much of the cover's color it carries.</summary>
     private void DrawStars(DrawingContext dc, Color tint)
     {
         foreach (var star in _stars)
         {
-            // Fade in, twinkle, fade out.
-            var age = star.Age;
-            // fading out before they drift up past the bar's own area (into the controls above)
-            var fade = Math.Min(1, age / 0.25) * Math.Clamp(star.Life / 0.5, 0, 1) * Math.Clamp((star.Y + 1) / 7, 0, 1);
-            var twinkle = 0.6 + 0.4 * Math.Sin(age * 9 + star.X);
-            var s = star.Size * (0.7 + 0.3 * twinkle);
-            var color = Color.FromArgb((byte)(255 * fade * twinkle),
-                (byte)((tint.R + 255 * 2) / 3), (byte)((tint.G + 255 * 2) / 3), (byte)((tint.B + 255 * 2) / 3));
+            if (star.Age < 0) continue;
+            // a near-instant pop, then a quick fall-off (squared, like a real flash)
+            var t = Math.Clamp(star.Age / star.Life, 0, 1);
+            var glow = t < 0.08 ? t / 0.08 : Math.Pow(1 - (t - 0.08) / 0.92, 2);
+            if (glow <= 0.02) continue;
+            // (the whiteness in quarters, so the colors - and their brushes - are few)
+            var color = Mix(tint, Colors.White, 0.55 + 0.4 * Math.Round(star.Hue * 4) / 4);
+            double x = star.X, y = star.Y;
+            var r = star.Size;
+
+            // halo
+            dc.DrawEllipse(Solid(Color.FromArgb((byte)(45 * glow), color.R, color.G, color.B)), null,
+                new Point(x, y), r * 1.9 * (0.6 + 0.4 * glow), r * 1.9 * (0.6 + 0.4 * glow));
+            dc.DrawEllipse(Solid(Color.FromArgb((byte)(90 * glow), color.R, color.G, color.B)), null,
+                new Point(x, y), r * 0.9, r * 0.9);
+
+            // four long, thin rays that shrink back as it fades
+            var s = r * (1.2 + 2.0 * glow);
+            var w = r * 0.16;
             var shape = new StreamGeometry();
             using (var g = shape.Open())
             {
-                double x = star.X, y = star.Y, w = s * 0.22;
                 g.BeginFigure(new Point(x, y - s), true, true);
                 g.PolyLineTo([
                     new Point(x + w, y - w), new Point(x + s, y), new Point(x + w, y + w), new Point(x, y + s),
                     new Point(x - w, y + w), new Point(x - s, y), new Point(x - w, y - w)], false, false);
             }
             shape.Freeze();
-            dc.DrawGeometry(new SolidColorBrush(color), null, shape);
+            dc.DrawGeometry(Solid(Color.FromArgb((byte)(255 * glow), color.R, color.G, color.B)), null, shape);
+
+            // white-hot core
+            dc.DrawEllipse(Solid(Color.FromArgb((byte)(255 * glow), 0xFF, 0xFF, 0xFF)), null,
+                new Point(x, y), r * 0.38, r * 0.38);
         }
     }
 
@@ -1031,35 +1098,45 @@ public sealed class WaveSeekBar : FrameworkElement
         for (var i = _stars.Count - 1; i >= 0; i--)
         {
             var s = _stars[i];
-            s.Y += s.Vy * dt;
             s.Age += dt;
-            s.Life -= dt;
-            if (s.Life <= 0) _stars.RemoveAt(i);
+            if (s.Age >= s.Life) _stars.RemoveAt(i);
             else _stars[i] = s;
         }
         if (Look != SeekBarStyle.Sparkle || !IsPlaying || _activity < 0.3 || Maximum <= 0) return;
 
-        var mid = ActualHeight / 2;
+        var height = ActualHeight;
         var thumbX = Left + (Right - Left) * Math.Clamp(CurrentPosition() / Maximum, 0, 1);
         if (thumbX - Left < 20) return;
-        // Quiet: a few small, dim stars close to the line. Loud: many more, bigger, rising higher
-        // and faster - and every beat a shower of them. (The loudness is curved so the two ends
-        // look clearly different, not just a little busier.)
+        // Quiet: a flash here and there. Loud: a constant crackle of them, bigger - and every
+        // beat a volley at once, all over the played part. (The loudness is curved so the two
+        // ends look clearly different, not just a little busier.)
         var energy = Math.Pow(Math.Clamp(Loud(0, 1, _level), 0, 1.2), 1.6);
-        var count = (beat ? 2 + (int)(6 * energy) : 0) + (Random.Shared.NextDouble() < dt * (1 + 22 * energy) ? 1 : 0);
-        for (var n = 0; n < count && _stars.Count < 44; n++)
+        var count = (beat ? 2 + (int)(5 * energy) : 0) + (Random.Shared.NextDouble() < dt * (2 + 20 * energy) ? 1 : 0);
+        for (var n = 0; n < count && _stars.Count < 40; n++)
         {
-            // Anywhere along the played part, more toward the thumb (beats: around it).
-            var back = Math.Pow(Random.Shared.NextDouble(), beat ? 2.4 : 1.4) * (thumbX - Left - 6);
-            _stars.Add(new Spark
-            {
-                X = thumbX - 4 - back,
-                Y = mid - 2 - Random.Shared.NextDouble() * (mid - 2) * (0.35 + 0.65 * energy),
-                Vy = -(3 + Random.Shared.NextDouble() * 7 + 20 * energy),
-                Life = 0.7 + Random.Shared.NextDouble() * 0.8 + 0.5 * energy,
-                Size = (1.0 + Random.Shared.NextDouble() * 0.9 + 2.2 * energy + (beat ? 1.0 : 0)) * EffectScale,
-            });
+            var x = Left + 4 + Random.Shared.NextDouble() * (thumbX - Left - 8);
+            var y = 2 + Random.Shared.NextDouble() * Math.Max(0, height - 4);
+            var size = (0.9 + Random.Shared.NextDouble() * 0.8 + 1.4 * energy + (beat ? 0.5 : 0)) * EffectScale;
+            // a volley's flashes go off a split second apart, not all in the same frame
+            var delay = beat ? -Random.Shared.NextDouble() * 0.12 : 0;
+            AddFlash(x, y, size, delay);
+            // now and then a camera fires twice in quick succession
+            if (Random.Shared.NextDouble() < 0.18) AddFlash(x, y, size * 0.85, delay - 0.12 - Random.Shared.NextDouble() * 0.06);
         }
+    }
+
+    private void AddFlash(double x, double y, double size, double delay)
+    {
+        if (_stars.Count >= 44) return;
+        _stars.Add(new Spark
+        {
+            X = x,
+            Y = y,
+            Age = delay,
+            Life = 0.22 + Random.Shared.NextDouble() * 0.25,
+            Size = size,
+            Hue = Random.Shared.NextDouble(),
+        });
     }
 
     /// <summary>How far above the strip the flames may reach (they're drawn outside the bar).</summary>
@@ -1338,7 +1415,7 @@ public sealed class WaveSeekBar : FrameworkElement
 
     private void UpdateAnimationState()
     {
-        if (IsLoaded && OnScreen.Check(this) && (IsPlaying || _activity > 0.002 || _ripples.Count > 0 || _sparks.Count > 0 || _licks.Count > 0 || _stars.Count > 0 || _drops.Count > 0 || _splashes.Count > 0 || _droplets.Count > 0 || _jets.Count > 0 || _rockets.Count > 0 || _embers.Count > 0)
+        if (IsLoaded && OnScreen.Check(this) && (IsPlaying || _activity > 0.002 || _ripples.Count > 0 || _sparks.Count > 0 || _licks.Count > 0 || _stars.Count > 0 || _drops.Count > 0 || _splashes.Count > 0 || _droplets.Count > 0 || _jets.Count > 0 || _spouts.Count > 0 || _rockets.Count > 0 || _embers.Count > 0)
             && Look != SeekBarStyle.None) StartAnimating();
     }
 
@@ -1407,7 +1484,7 @@ public sealed class WaveSeekBar : FrameworkElement
             else _ripples[i] = (distance + dt * 150, strength);
         }
 
-        if (!IsPlaying && _activity < 0.002 && _ripples.Count == 0 && _sparks.Count == 0 && _licks.Count == 0 && _stars.Count == 0 && _drops.Count == 0 && _splashes.Count == 0 && _droplets.Count == 0 && _jets.Count == 0 && _rockets.Count == 0 && _embers.Count == 0)
+        if (!IsPlaying && _activity < 0.002 && _ripples.Count == 0 && _sparks.Count == 0 && _licks.Count == 0 && _stars.Count == 0 && _drops.Count == 0 && _splashes.Count == 0 && _droplets.Count == 0 && _jets.Count == 0 && _spouts.Count == 0 && _rockets.Count == 0 && _embers.Count == 0)
         {
             _activity = 0;
             _level = 0;
