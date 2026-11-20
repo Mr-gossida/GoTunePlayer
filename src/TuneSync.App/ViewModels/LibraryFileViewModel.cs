@@ -61,8 +61,21 @@ public sealed partial class LibraryFileViewModel : ObservableObject
     private string? _groupHeader;
 
     /// <summary>The group this row belongs to (every row, not just the first); null without
-    /// grouping. For the queue's pinned heading.</summary>
+    /// grouping. For the queue's pinned heading. (Folders as a tree: the song's own folder.)</summary>
     public string? GroupName { get; set; }
+
+    /// <summary>What the pinned heading calls that group (a folder's own name).</summary>
+    public string? GroupLabel { get; set; }
+
+    /// <summary>The headings drawn above this row: one for a group starting here, or with
+    /// folders as a tree every folder level that starts here (a folder and its first subfolder
+    /// both start at the same song); null for a row in the middle of its group.</summary>
+    [ObservableProperty]
+    private IReadOnlyList<GroupHeading>? _headings;
+
+    /// <summary>How far the song is set in under its folder headings (folders as a tree).</summary>
+    [ObservableProperty]
+    private System.Windows.Thickness _rowIndent = new(0, 1, 12, 1);
 
     /// <summary>How many songs the group starting here has.</summary>
     [ObservableProperty]

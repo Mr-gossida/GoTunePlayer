@@ -397,12 +397,20 @@ public sealed partial class LibraryViewModel : ObservableObject
     /// follows) is: group by group, then the chosen sort inside each group.</summary>
     private void ApplyPlaylistOrder()
     {
+        _chains.Clear(); // the library's folders may have changed since
         Func<LibraryFileViewModel, string>? group = PlaylistGroup switch
         {
             PlaylistGroupKey.Folder => f => f.Folder,
             PlaylistGroupKey.Artist => f => f.ArtistGroup,
             PlaylistGroupKey.Album => f => f.AlbumGroup,
             _ => null,
+        };
+        Comparison<LibraryFileViewModel>? groupOrder = PlaylistGroup switch
+        {
+            // as a tree: a folder's own songs, then its subfolders, level by level
+            PlaylistGroupKey.Folder => (a, b) => CompareChains(ChainOf(a), ChainOf(b)),
+            PlaylistGroupKey.None => null,
+            _ => (a, b) => StringComparer.CurrentCultureIgnoreCase.Compare(group!(a), group!(b)),
         };
         var text = StringComparer.CurrentCultureIgnoreCase;
         Comparison<LibraryFileViewModel> sort = PlaylistSort switch
@@ -432,7 +440,7 @@ public sealed partial class LibraryViewModel : ObservableObject
             PlaylistView.SortDescriptions.Clear();
             // A comparer rather than SortDescriptions: those read every property by reflection on
             // every comparison, which made re-sorting a 1,200-song library take seconds.
-            PlaylistView.CustomSort = new PlaylistOrder(group, sort, PlaylistSortDescending);
+            PlaylistView.CustomSort = new PlaylistOrder(groupOrder, sort, PlaylistSortDescending);
         }
         ScheduleGroupHeaders();
     }
@@ -461,6 +469,8 @@ public sealed partial class LibraryViewModel : ObservableObject
             foreach (var row in rows)
             {
                 row.GroupHeader = null;
+                SetHeadings(row, null);
+                row.RowIndent = FlatIndent;
                 row.GroupName = null;
                 row.IsGroupFolded = false;
                 foldsChanged |= row.IsFoldedAway;
@@ -470,6 +480,12 @@ public sealed partial class LibraryViewModel : ObservableObject
             if (foldsChanged) PlaylistView.Refresh();
             return;
         }
+        if (PlaylistGroup == PlaylistGroupKey.Folder)
+        {
+            UpdateFolderTree(rows);
+            return;
+        }
+        var groupIcon = PlaylistGroup == PlaylistGroupKey.Artist ? Wpf.Ui.Controls.SymbolRegular.Person24 : Wpf.Ui.Controls.SymbolRegular.MusicNote224;
         var names = StringComparer.CurrentCultureIgnoreCase;
         var counts = new Dictionary<string, int>(names);
         foreach (var row in rows)
@@ -485,8 +501,11 @@ public sealed partial class LibraryViewModel : ObservableObject
             var starts = previous is null || !names.Equals(name, previous);
             row.GroupHeader = starts ? name : null;
             row.GroupName = name;
+            row.GroupLabel = name;
             row.GroupCount = counts[name];
             var folded = _foldingAllowed && _foldedGroups.Contains(name);
+            SetHeadings(row, starts ? [new GroupHeading(name, name, 0, counts[name], folded, groupIcon)] : null);
+            row.RowIndent = FlatIndent;
             row.IsGroupFolded = folded;
             var away = folded && !starts;
             foldsChanged |= row.IsFoldedAway != away;
@@ -529,9 +548,168 @@ public sealed partial class LibraryViewModel : ObservableObject
     /// True when something was unfolded.</summary>
     public bool UnfoldGroupOf(LibraryFileViewModel song)
     {
-        if (!song.IsFoldedAway || song.GroupName is not { } group || !_foldedGroups.Remove(group)) return false;
-        UpdateGroupHeaders();
-        return true;
+        if (!song.IsFoldedAway && !song.IsGroupFolded) return false;
+        var removed = false;
+        if (PlaylistGroup == PlaylistGroupKey.Folder)
+        {
+            // every folded folder above it, down to its own
+            foreach (var node in ChainOf(song)) removed |= _foldedGroups.Remove(node.Key);
+        }
+        else if (song.GroupName is { } group)
+        {
+            removed = _foldedGroups.Remove(group);
+        }
+        if (removed) UpdateGroupHeaders();
+        return removed;
+    }
+
+    // ---- folders as a tree (그룹 › 폴더별) ----
+
+    /// <summary>A folder level of the tree: <see cref="Key"/> tells it apart (the whole path),
+    /// <see cref="Name"/> is what its heading says.</summary>
+    private sealed record FolderNode(string Key, string Name, int Depth);
+
+    /// <summary>Each folder's levels, worked out once per refresh (the sort reads them thousands
+    /// of times).</summary>
+    private readonly Dictionary<string, FolderNode[]> _chains = new(StringComparer.OrdinalIgnoreCase);
+
+    private static readonly Thickness FlatIndent = new(0, 1, 12, 1);
+
+    /// <summary>How far each level is set in.</summary>
+    private const double TreeStep = 16;
+
+    /// <summary>The folder levels a song sits under: the library folder it was added from (its
+    /// heading the folder's own name, like 알송's ETC), then each subfolder down to the song's
+    /// own. A song added on its own, or from outside every library folder, sits under its
+    /// folder alone; a network song under its server, then the folders on it.</summary>
+    private FolderNode[] ChainOf(LibraryFileViewModel song)
+    {
+        var folder = song.Folder;
+        if (_chains.TryGetValue(folder, out var chain)) return chain;
+
+        var names = new List<string>();
+        string rootKey;
+        if (RemotePath.TryParse(song.Path, out var sourceId, out var remotePath))
+        {
+            rootKey = "remote:" + sourceId;
+            names.Add(LibraryFileViewModel.RemoteSourceName?.Invoke(sourceId) ?? "네트워크");
+            var dir = remotePath[..Math.Max(0, remotePath.LastIndexOf('/'))];
+            names.AddRange(dir.Split('/', StringSplitOptions.RemoveEmptyEntries));
+        }
+        else
+        {
+            var dir = folder.TrimEnd('\\', '/');
+            string? root = null;
+            foreach (var source in Folders)
+            {
+                if (source.IsFile || source.Entry.IsRemote) continue;
+                var path = source.Path.TrimEnd('\\', '/');
+                if ((dir.Equals(path, StringComparison.OrdinalIgnoreCase) || dir.StartsWith(path + "\\", StringComparison.OrdinalIgnoreCase))
+                    && (root is null || path.Length > root.Length))
+                    root = path;
+            }
+            root ??= dir;
+            rootKey = root;
+            names.Add(LeafName(root));
+            names.AddRange(dir[root.Length..].Split('\\', StringSplitOptions.RemoveEmptyEntries));
+        }
+
+        chain = new FolderNode[names.Count];
+        var key = rootKey;
+        for (var i = 0; i < names.Count; i++)
+        {
+            if (i > 0) key += "\\" + names[i];
+            chain[i] = new FolderNode(key, names[i], i);
+        }
+        _chains[folder] = chain;
+        return chain;
+    }
+
+    /// <summary>A folder's own name: its last part (a share's root \\NAS\Music reads "Music",
+    /// a drive D: names itself).</summary>
+    private static string LeafName(string path)
+    {
+        var parts = path.Split(['\\', '/'], StringSplitOptions.RemoveEmptyEntries);
+        return parts.Length > 0 ? parts[^1] : path;
+    }
+
+    /// <summary>Tree order: level by level by name; a folder's own songs before its subfolders.</summary>
+    private static int CompareChains(FolderNode[] a, FolderNode[] b)
+    {
+        if (ReferenceEquals(a, b)) return 0;
+        var names = StringComparer.CurrentCultureIgnoreCase;
+        for (var i = 0; i < Math.Min(a.Length, b.Length); i++)
+        {
+            if (string.Equals(a[i].Key, b[i].Key, StringComparison.OrdinalIgnoreCase)) continue;
+            var byName = names.Compare(a[i].Name, b[i].Name);
+            return byName != 0 ? byName : string.Compare(a[i].Key, b[i].Key, StringComparison.OrdinalIgnoreCase);
+        }
+        return a.Length.CompareTo(b.Length);
+    }
+
+    /// <summary>The headings of the folder tree: above each song, a heading for every folder
+    /// level that starts there, set in by its depth; the songs set in under their own folder.
+    /// A folded level shows its heading alone - everything under it, subfolders too, is left out.</summary>
+    private void UpdateFolderTree(List<LibraryFileViewModel> rows)
+    {
+        var counts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        foreach (var row in rows)
+            foreach (var node in ChainOf(row))
+                counts[node.Key] = counts.TryGetValue(node.Key, out var n) ? n + 1 : 1;
+
+        var foldsChanged = false;
+        _foldedAwayCount = 0;
+        FolderNode[]? previous = null;
+        var headings = new List<GroupHeading>();
+        foreach (var row in rows)
+        {
+            var chain = ChainOf(row);
+            // the levels this song shares with the one before; the rest start here
+            var common = 0;
+            if (previous is not null)
+                while (common < Math.Min(chain.Length, previous.Length)
+                       && string.Equals(chain[common].Key, previous[common].Key, StringComparison.OrdinalIgnoreCase))
+                    common++;
+            previous = chain;
+
+            // the highest folded level above (or at) this song's folder
+            var foldAt = -1;
+            if (_foldingAllowed)
+                for (var i = 0; i < chain.Length && foldAt < 0; i++)
+                    if (_foldedGroups.Contains(chain[i].Key)) foldAt = i;
+
+            var last = foldAt >= 0 ? foldAt : chain.Length - 1;
+            var away = foldAt >= 0 && common > foldAt; // inside a folded level, not its first song
+            headings.Clear();
+            if (!away)
+                for (var i = common; i <= last; i++)
+                {
+                    var folded = _foldingAllowed && _foldedGroups.Contains(chain[i].Key);
+                    headings.Add(new GroupHeading(chain[i].Key, chain[i].Name, i, counts[chain[i].Key], folded,
+                        folded ? Wpf.Ui.Controls.SymbolRegular.Folder24 : Wpf.Ui.Controls.SymbolRegular.FolderOpen24));
+                }
+
+            var own = chain[^1];
+            row.GroupName = own.Key;
+            row.GroupLabel = own.Name;
+            row.GroupCount = counts[own.Key];
+            row.GroupHeader = headings.Count > 0 ? headings[^1].Name : null;
+            SetHeadings(row, headings.Count > 0 ? [.. headings] : null);
+            row.RowIndent = new Thickness(TreeStep * own.Depth, 1, 12, 1);
+            row.IsGroupFolded = foldAt >= 0 && !away;
+            foldsChanged |= row.IsFoldedAway != away;
+            row.IsFoldedAway = away;
+            if (away) _foldedAwayCount++;
+        }
+        if (foldsChanged) PlaylistView.Refresh();
+    }
+
+    /// <summary>Sets a row's headings only when they differ (a new list re-draws them).</summary>
+    private static void SetHeadings(LibraryFileViewModel row, IReadOnlyList<GroupHeading>? headings)
+    {
+        var now = row.Headings;
+        if (now is null ? headings is null : headings is not null && now.SequenceEqual(headings)) return;
+        row.Headings = headings;
     }
 
     /// <summary>Every song of the queue in its order, folded groups included: what playback,
@@ -546,7 +724,7 @@ public sealed partial class LibraryViewModel : ObservableObject
 
     /// <summary>The queue order: by group (ascending - the order groups are listed in), then the
     /// chosen key in the chosen direction, then file name.</summary>
-    private sealed class PlaylistOrder(Func<LibraryFileViewModel, string>? group, Comparison<LibraryFileViewModel> sort, bool descending)
+    private sealed class PlaylistOrder(Comparison<LibraryFileViewModel>? group, Comparison<LibraryFileViewModel> sort, bool descending)
         : System.Collections.IComparer
     {
         public int Compare(object? x, object? y)
@@ -554,7 +732,7 @@ public sealed partial class LibraryViewModel : ObservableObject
             if (x is not LibraryFileViewModel a || y is not LibraryFileViewModel b) return 0;
             if (group is not null)
             {
-                var byGroup = StringComparer.CurrentCultureIgnoreCase.Compare(group(a), group(b));
+                var byGroup = group(a, b);
                 if (byGroup != 0) return byGroup;
             }
             var byKey = sort(a, b);

@@ -34,8 +34,8 @@ public partial class PlayView
         e.Handled = true;
         _dragSong = null;
         _clickToSelect = null;
-        if (e.ClickCount > 1 || (sender as FrameworkElement)?.DataContext is not LibraryFileViewModel { GroupName: { } group }) return;
-        ToggleFold(group);
+        if (e.ClickCount > 1 || (sender as FrameworkElement)?.DataContext is not GroupHeading heading) return;
+        ToggleFold(heading.Key);
     }
 
     private void ToggleFold(string group)
@@ -44,7 +44,7 @@ public partial class PlayView
         library.ToggleGroupFold(group);
         // Keep the eye on that group: its heading at the top of the list.
         var heading = library.PlaylistView.Cast<LibraryFileViewModel>()
-            .FirstOrDefault(r => r.GroupHeader is not null && string.Equals(r.GroupName, group, StringComparison.CurrentCultureIgnoreCase));
+            .FirstOrDefault(r => r.Headings?.Any(h => string.Equals(h.Key, group, StringComparison.CurrentCultureIgnoreCase)) == true);
         if (heading is null) return;
         Dispatcher.BeginInvoke(() =>
         {
@@ -103,7 +103,7 @@ public partial class PlayView
 
         // At a group's first row with its heading fully in view: that heading says it already.
         static bool HasHeading(ListBoxItem item) =>
-            item.Template?.FindName("GroupHeading", item) is System.Windows.FrameworkElement { IsVisible: true };
+            item.Template?.FindName("GroupHeadings", item) is System.Windows.FrameworkElement { IsVisible: true };
         if (first.Row.GroupHeader is not null && HasHeading(first.Item) && first.Top >= -1)
         {
             Hide();
@@ -116,7 +116,7 @@ public partial class PlayView
         if (next.Item is not null && next.Top < StickyHeight) shift = Math.Max(-StickyHeight, next.Top - StickyHeight);
 
         _stickyGroup = group;
-        StickyGroupName.Text = new Converters.PathLeafConverter().Convert(group, typeof(string), null!, System.Globalization.CultureInfo.CurrentCulture) as string ?? group;
+        StickyGroupName.Text = first.Row.GroupLabel ?? group;
         StickyGroupCount.Text = $"{first.Row.GroupCount}곡";
         StickyShift.Y = shift;
         StickyGroup.Visibility = System.Windows.Visibility.Visible;

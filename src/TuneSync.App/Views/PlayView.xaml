@@ -41,32 +41,54 @@
                 <Setter.Value>
                     <ControlTemplate TargetType="ListBoxItem">
                         <StackPanel>
-                            <!-- Group heading above a group's first song (LibraryViewModel.UpdateGroupHeaders).
+                            <!-- Group headings above a group's first song (LibraryViewModel.UpdateGroupHeaders):
+                                 one for an artist/album group; with folders, every folder level that
+                                 starts at this song, set in by its depth like a tree (알송's list).
                                  Not WPF grouping, which built every row up front. A click folds or
-                                 unfolds the group (PlayView.QueueStickyGroup.cs). -->
-                            <Grid x:Name="GroupHeading" Margin="6,14,18,4" Background="Transparent" Cursor="Hand"
-                                  ToolTip="클릭하면 이 그룹을 접거나 펼칩니다"
-                                  PreviewMouseLeftButtonDown="GroupHeading_PreviewMouseLeftButtonDown">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="Auto"/>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-                                <ui:SymbolIcon Grid.Column="0" Margin="0,0,6,0" FontSize="14"
-                                               Symbol="{Binding DataContext.PlaylistGroup, RelativeSource={RelativeSource AncestorType=ListBox}, Converter={StaticResource GroupIconConverter}}"
-                                               Foreground="{DynamicResource PlayerAccentBrush}"/>
-                                <TextBlock Grid.Column="1" Text="{Binding GroupHeader, Converter={StaticResource PathLeafConverter}}"
-                                           FontWeight="SemiBold" TextTrimming="CharacterEllipsis"
-                                           Foreground="{DynamicResource PlayerAccentBrush}"/>
-                                <TextBlock Grid.Column="2" Margin="8,0,0,0" FontSize="12" Foreground="{DynamicResource TextFillColorTertiaryBrush}">
-                                    <Run Text="{Binding GroupCount, Mode=OneWay}"/><Run Text="곡"/>
-                                </TextBlock>
-                                <ui:SymbolIcon x:Name="FoldChevron" Grid.Column="3" Symbol="ChevronDown24" FontSize="12" Margin="6,0,0,0"
-                                               RenderTransformOrigin="0.5,0.5" Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
-                            </Grid>
+                                 unfolds that level (PlayView.QueueStickyGroup.cs). -->
+                            <ItemsControl x:Name="GroupHeadings" ItemsSource="{Binding Headings}" Focusable="False">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Grid x:Name="GroupHeading" Margin="{Binding Indent}" Background="Transparent" Cursor="Hand"
+                                              ToolTip="클릭하면 접거나 펼칩니다"
+                                              PreviewMouseLeftButtonDown="GroupHeading_PreviewMouseLeftButtonDown">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <ui:SymbolIcon Grid.Column="0" Margin="0,0,6,0" FontSize="14" Symbol="{Binding Icon}"
+                                                           Foreground="{DynamicResource PlayerAccentBrush}"/>
+                                            <TextBlock x:Name="HeadingName" Grid.Column="1" Text="{Binding Name}" ToolTip="{Binding Key}"
+                                                       FontWeight="SemiBold" TextTrimming="CharacterEllipsis"
+                                                       Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                                            <TextBlock Grid.Column="2" Margin="8,0,0,0" FontSize="12" Foreground="{DynamicResource TextFillColorTertiaryBrush}">
+                                                <Run Text="{Binding Count, Mode=OneWay}"/><Run Text="곡"/>
+                                            </TextBlock>
+                                            <ui:SymbolIcon x:Name="FoldChevron" Grid.Column="3" Symbol="ChevronDown24" FontSize="12" Margin="6,0,0,0"
+                                                           RenderTransformOrigin="0.5,0.5" Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
+                                        </Grid>
+                                        <DataTemplate.Triggers>
+                                            <DataTrigger Binding="{Binding IsTop}" Value="True">
+                                                <Setter TargetName="HeadingName" Property="Foreground" Value="{DynamicResource PlayerAccentBrush}"/>
+                                            </DataTrigger>
+                                            <!-- Folded: its chevron points right. -->
+                                            <DataTrigger Binding="{Binding IsFolded}" Value="True">
+                                                <Setter TargetName="FoldChevron" Property="RenderTransform">
+                                                    <Setter.Value><RotateTransform Angle="-90"/></Setter.Value>
+                                                </Setter>
+                                            </DataTrigger>
+                                            <Trigger SourceName="GroupHeading" Property="IsMouseOver" Value="True">
+                                                <Setter TargetName="FoldChevron" Property="Foreground" Value="{DynamicResource PlayerAccentBrush}"/>
+                                            </Trigger>
+                                        </DataTemplate.Triggers>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
                             <!-- Right margin: room for the overlay scrollbar, so it never covers the durations. -->
-                            <Grid x:Name="RowArea" Margin="0,1,12,1">
+                            <!-- set in under its folder in the folder tree (RowIndent) -->
+                            <Grid x:Name="RowArea" Margin="{Binding RowIndent}">
                                 <!-- the search's current hit: tinted in the accent color with a bar at the left -->
                                 <Border x:Name="HitFill" CornerRadius="6" Background="{DynamicResource PlayerAccentBrush}" Opacity="0" IsHitTestVisible="False"/>
                                 <Border x:Name="Bd" Background="Transparent" CornerRadius="6" Padding="{TemplateBinding Padding}">
@@ -77,19 +99,13 @@
                             </Grid>
                         </StackPanel>
                         <ControlTemplate.Triggers>
-                            <DataTrigger Binding="{Binding GroupHeader}" Value="{x:Null}">
-                                <Setter TargetName="GroupHeading" Property="Visibility" Value="Collapsed"/>
+                            <DataTrigger Binding="{Binding Headings}" Value="{x:Null}">
+                                <Setter TargetName="GroupHeadings" Property="Visibility" Value="Collapsed"/>
                             </DataTrigger>
-                            <!-- Folded: the heading alone, its chevron pointing right. -->
+                            <!-- Folded: the headings alone. -->
                             <DataTrigger Binding="{Binding IsGroupFolded}" Value="True">
                                 <Setter TargetName="RowArea" Property="Visibility" Value="Collapsed"/>
-                                <Setter TargetName="FoldChevron" Property="RenderTransform">
-                                    <Setter.Value><RotateTransform Angle="-90"/></Setter.Value>
-                                </Setter>
                             </DataTrigger>
-                            <Trigger SourceName="GroupHeading" Property="IsMouseOver" Value="True">
-                                <Setter TargetName="FoldChevron" Property="Foreground" Value="{DynamicResource PlayerAccentBrush}"/>
-                            </Trigger>
                             <Trigger SourceName="Bd" Property="IsMouseOver" Value="True">
                                 <Setter TargetName="Bd" Property="Background" Value="{DynamicResource PlayerHoverBrush}"/>
                             </Trigger>
