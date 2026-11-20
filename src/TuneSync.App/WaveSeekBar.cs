@@ -953,59 +953,101 @@ public sealed class WaveSeekBar : FrameworkElement
 
     // ---- 오로라 ----
 
-    /// <summary>How far above the strip the aurora may hang.</summary>
     /// <summary>How far above the strip the aurora may hang: not at all - reaching up past the bar
     /// it ran under the playback controls above it and looked cut off.</summary>
     private const double AuroraOverflow = 0;
 
-    /// <summary>A curtain of northern lights hanging over the played part: its top edge billows in
-    /// slow folds, its colors run through the cover's hues along the bar, and it is brightest at
-    /// the line and fades upward. Fine vertical rays drift and glimmer inside it. It rises with
-    /// the music and flares brighter and taller on each beat.</summary>
+    /// <summary>Northern lights filling the strip over the played part, above and below the line.
+    /// Like a real aurora it is a hanging curtain: a bright lower hem that sways up and down in slow
+    /// waves, folds that drift sideways along the top edge, and fine vertical rays whose brightness
+    /// ripples along the curtain in travelling pulses. A dimmer second curtain hangs behind, higher
+    /// and out of step, for depth. Colors run through the cover's hues along the bar, shading to a
+    /// neighboring hue toward the top. It rises with the music and flares on each beat.</summary>
     private void DrawAurora(DrawingContext dc, double mid, double thumbX, double room, double fadeIn, Color cool, Color accent, Color warm)
     {
         var t = _phase;
         var lift = _activity * Loud(0.22, 0.78, _level) + 0.4 * EffectScale * _flash;
-        double HeightAt(double x)
+        var top = Math.Max(1, mid - room);
+        var bottom = Math.Max(mid + 1, ActualHeight - 1);
+        var below = bottom - mid;
+        // how full the curtain hangs: quiet - a thin band; loud - the whole strip
+        var fill = fadeIn * Math.Min(1.1, lift * 1.25);
+
+        double Envelope(double x) => SmoothStep(Math.Min(1, (x - Left) / 36)) * SmoothStep(Math.Clamp((thumbX - x) / 18, 0, 1));
+        // the hem: below the line, swaying up and down in long slow waves
+        double HemAt(double x, double phase, double raise)
         {
-            var envelope = SmoothStep(Math.Min(1, (x - Left) / 36)) * SmoothStep(Math.Min(1, (thumbX - x) / 18));
-            var folds = 0.6 + 0.28 * Math.Sin(x * 0.031 - t * 0.8) + 0.14 * Math.Sin(x * 0.083 + t * 1.7);
-            return Math.Min(room, 1.15 * room * fadeIn * envelope * lift * folds);
+            var sway = 0.5 + 0.28 * Math.Sin(x * 0.026 - t * 0.55 + phase) + 0.17 * Math.Sin(x * 0.069 + t * 1.2 + phase * 1.7)
+                       + 0.05 * Math.Sin(x * 0.19 - t * 2.3 + phase);
+            return Math.Clamp(mid + below * (sway * (0.45 + 0.55 * Math.Min(1, fill)) - raise), top + 2, bottom);
+        }
+        // the top edge: folds that drift sideways, the curtain taller where they bunch up
+        double TopAt(double x, double hem, double phase)
+        {
+            var folds = 0.6 + 0.26 * Math.Sin(x * 0.033 - t * 0.8 + phase) + 0.14 * Math.Sin(x * 0.091 + t * 1.8 + phase);
+            return hem - (hem - top) * Math.Min(1, (0.35 + 0.75 * fill) * Envelope(x) * folds * 1.25);
         }
 
-        var curtain = new StreamGeometry();
-        var rays = new[] { new StreamGeometry(), new StreamGeometry() };
-        using (var g = curtain.Open())
+        StreamGeometry Curtain(double phase, double raise)
         {
-            g.BeginFigure(new Point(Left, mid), true, true);
-            for (var x = Left; x <= thumbX; x += 3) g.LineTo(new Point(x, mid - HeightAt(x)), true, true);
-            g.LineTo(new Point(thumbX, mid), true, true);
+            var g = new StreamGeometry();
+            using (var c = g.Open())
+            {
+                c.BeginFigure(new Point(Left, HemAt(Left, phase, raise)), true, true);
+                for (var x = Left; x <= thumbX; x += 3) c.LineTo(new Point(x, TopAt(x, HemAt(x, phase, raise), phase)), true, true);
+                c.LineTo(new Point(thumbX, HemAt(thumbX, phase, raise)), true, true);
+                for (var x = thumbX - 3; x > Left; x -= 3) c.LineTo(new Point(x, HemAt(x, phase, raise)), true, true);
+            }
+            g.Freeze();
+            return g;
         }
-        using (StreamGeometryContext dim = rays[0].Open(), lit = rays[1].Open())
+
+        var back = Curtain(2.3, 0.15);
+        var front = Curtain(0, 0);
+
+        // Rays standing on the front curtain's hem, their brightness pulsing along it (the pulses
+        // travel, as the light does along a real curtain): three steps, the darkest not drawn.
+        var rays = new[] { new StreamGeometry(), new StreamGeometry() };
+        var hem = new StreamGeometry();
+        using (StreamGeometryContext dim = rays[0].Open(), lit = rays[1].Open(), line = hem.Open())
         {
+            line.BeginFigure(new Point(Left, HemAt(Left, 0, 0)), false, false);
+            for (var x = Left + 3; x <= thumbX; x += 3) line.LineTo(new Point(x, HemAt(x, 0, 0)), true, true);
             for (var j = 0; ; j++)
             {
-                var x = Left + 4 + j * 4.5 + 2.2 * Math.Sin(t * 0.55 + j * 0.9);
+                var x = Left + 3 + j * 3.6 + 1.6 * Math.Sin(t * 0.5 + j * 0.9);
                 if (x >= thumbX - 2) break;
-                var h = HeightAt(x) * (0.75 + 0.25 * Math.Sin(t * 1.1 + j * 1.7));
+                var foot = HemAt(x, 0, 0);
+                // nearly the curtain's full height, so they read as shafts of light, not bars
+                var h = (foot - TopAt(x, foot, 0)) * (0.85 + 0.15 * Math.Sin(t * 1.1 + j * 1.7));
                 if (h < 1.5) continue;
-                var glimmer = 0.5 + 0.5 * Math.Sin(t * 1.3 + j * 2.1);
-                var ctx = glimmer > 0.6 ? lit : dim;
-                ctx.BeginFigure(new Point(x - 0.6, mid), true, true);
-                ctx.PolyLineTo([new Point(x - 0.6, mid - h), new Point(x + 0.6, mid - h), new Point(x + 0.6, mid)], false, false);
+                var pulse = 0.5 + 0.35 * Math.Sin(j * 0.42 - t * 2.6) + 0.15 * Math.Sin(j * 1.9 + t * 4.3);
+                if (pulse < 0.42) continue;
+                var ctx = pulse > 0.72 ? lit : dim;
+                // wide at the hem, tapering upward
+                var foot2 = 0.8 + 0.5 * pulse;
+                ctx.BeginFigure(new Point(x - foot2, foot), true, true);
+                ctx.PolyLineTo([new Point(x - 0.2, foot - h), new Point(x + 0.2, foot - h), new Point(x + foot2, foot)], false, false);
             }
         }
-        curtain.Freeze();
         rays[0].Freeze();
         rays[1].Freeze();
+        hem.Freeze();
 
-        // Brightest at the line, gone at the top.
+        // Soft at the very bottom, strongest just above the hem, gone at the top.
         var mask = new LinearGradientBrush
         {
             MappingMode = BrushMappingMode.Absolute,
-            StartPoint = new Point(0, mid),
-            EndPoint = new Point(0, mid - room),
-            GradientStops = { new GradientStop(Color.FromArgb(0xFF, 0, 0, 0), 0), new GradientStop(Color.FromArgb(0x90, 0, 0, 0), 0.35), new GradientStop(Color.FromArgb(0x00, 0, 0, 0), 1) },
+            StartPoint = new Point(0, bottom),
+            EndPoint = new Point(0, top),
+            GradientStops =
+            {
+                new GradientStop(Color.FromArgb(0x80, 0, 0, 0), 0),
+                new GradientStop(Color.FromArgb(0xFF, 0, 0, 0), 0.18),
+                new GradientStop(Color.FromArgb(0xE0, 0, 0, 0), 0.55),
+                new GradientStop(Color.FromArgb(0x80, 0, 0, 0), 0.85),
+                new GradientStop(Color.FromArgb(0x10, 0, 0, 0), 1),
+            },
         };
         mask.Freeze();
         var hue = new LinearGradientBrush
@@ -1021,27 +1063,60 @@ public sealed class WaveSeekBar : FrameworkElement
             },
         };
         hue.Freeze();
-        var glimmer1 = AlongBar(thumbX, Color.FromArgb(0x18, 0xFF, 0xFF, 0xFF), Color.FromArgb(0x50, 0xFF, 0xFF, 0xFF));
-        var glimmer2 = AlongBar(thumbX, Color.FromArgb(0x30, 0xFF, 0xFF, 0xFF), Color.FromArgb((byte)(0x90 + 0x50 * _flash), 0xFF, 0xFF, 0xFF));
+        // toward the top the light shades to a neighboring hue, as a real aurora's upper fringe does
+        var fringeColor = Shift(accent, 70, 1.1);
+        var fringe = new LinearGradientBrush
+        {
+            MappingMode = BrushMappingMode.Absolute,
+            StartPoint = new Point(0, mid + below * 0.3),
+            EndPoint = new Point(0, top),
+            GradientStops =
+            {
+                new GradientStop(Color.FromArgb(0x00, fringeColor.R, fringeColor.G, fringeColor.B), 0),
+                new GradientStop(Color.FromArgb(0x80, fringeColor.R, fringeColor.G, fringeColor.B), 1),
+            },
+        };
+        fringe.Freeze();
+        var glimmer1 = AlongBar(thumbX, Color.FromArgb(0x10, 0xFF, 0xFF, 0xFF), Color.FromArgb(0x30, 0xFF, 0xFF, 0xFF));
+        var glimmer2 = AlongBar(thumbX, Color.FromArgb(0x20, 0xFF, 0xFF, 0xFF), Color.FromArgb((byte)(0x60 + 0x50 * _flash), 0xFF, 0xFF, 0xFF));
 
-        // A faint reflection below the line (half as tall, a third as bright), as on still water:
-        // the curtain looks full without reaching up any further.
-        dc.PushTransform(new ScaleTransform(1, -0.5, 0, mid));
-        dc.PushOpacity(0.32);
-        dc.PushOpacityMask(mask);
-        dc.DrawGeometry(hue, null, curtain);
-        dc.DrawGeometry(glimmer2, null, rays[1]);
-        dc.Pop();
-        dc.Pop();
-        dc.Pop();
+        // the hem glows softly (no hard edge), fading out at both ends of the curtain
+        var span = Math.Max(1, thumbX - Left);
+        var hemTint = Mix(accent, Colors.White, 0.35);
+        var hemAlpha = (byte)(255 * Math.Clamp(fill, 0, 1));
+        var hemBrush = new LinearGradientBrush
+        {
+            MappingMode = BrushMappingMode.Absolute,
+            StartPoint = new Point(Left, 0),
+            EndPoint = new Point(Left + span, 0),
+            GradientStops =
+            {
+                new GradientStop(Color.FromArgb(0, hemTint.R, hemTint.G, hemTint.B), 0),
+                new GradientStop(Color.FromArgb(hemAlpha, hemTint.R, hemTint.G, hemTint.B), Math.Min(0.5, 36 / span)),
+                new GradientStop(Color.FromArgb(hemAlpha, hemTint.R, hemTint.G, hemTint.B), Math.Max(0.5, 1 - 18 / span)),
+                new GradientStop(Color.FromArgb(0, hemTint.R, hemTint.G, hemTint.B), 1),
+            },
+        };
+        hemBrush.Freeze();
 
         dc.PushOpacityMask(mask);
-        dc.DrawGeometry(hue, null, curtain);
+        dc.PushOpacity(0.45);
+        dc.DrawGeometry(hue, null, back);
+        dc.DrawGeometry(fringe, null, back);
+        dc.Pop();
+        dc.DrawGeometry(hue, null, front);
+        dc.DrawGeometry(fringe, null, front);
         dc.DrawGeometry(glimmer1, null, rays[0]);
         dc.DrawGeometry(glimmer2, null, rays[1]);
+        dc.PushOpacity(0.18);
+        dc.DrawGeometry(null, new Pen(hemBrush, 4.5), hem);
+        dc.Pop();
+        dc.PushOpacity(0.3);
+        dc.DrawGeometry(null, new Pen(hemBrush, 2), hem);
+        dc.Pop();
         dc.Pop();
 
-        // The curtain's lower hem glows on the line.
+        // The played line, over the curtain.
         DrawPlayedLine(dc, mid, thumbX, cool, accent, warm);
     }
 
@@ -1073,16 +1148,18 @@ public sealed class WaveSeekBar : FrameworkElement
             dc.DrawEllipse(Solid(Color.FromArgb((byte)(90 * glow), color.R, color.G, color.B)), null,
                 new Point(x, y), r * 0.9, r * 0.9);
 
-            // four long, thin rays that shrink back as it fades
+            // four long, thin rays that shrink back as it fades, turned at the flash's own angle
             var s = r * (1.2 + 2.0 * glow);
             var w = r * 0.16;
+            double cos = Math.Cos(star.Vx), sin = Math.Sin(star.Vx);
+            Point At(double dx, double dy) => new(x + dx * cos - dy * sin, y + dx * sin + dy * cos);
             var shape = new StreamGeometry();
             using (var g = shape.Open())
             {
-                g.BeginFigure(new Point(x, y - s), true, true);
+                g.BeginFigure(At(0, -s), true, true);
                 g.PolyLineTo([
-                    new Point(x + w, y - w), new Point(x + s, y), new Point(x + w, y + w), new Point(x, y + s),
-                    new Point(x - w, y + w), new Point(x - s, y), new Point(x - w, y - w)], false, false);
+                    At(w, -w), At(s, 0), At(w, w), At(0, s),
+                    At(-w, w), At(-s, 0), At(-w, -w)], false, false);
             }
             shape.Freeze();
             dc.DrawGeometry(Solid(Color.FromArgb((byte)(255 * glow), color.R, color.G, color.B)), null, shape);
@@ -1119,19 +1196,23 @@ public sealed class WaveSeekBar : FrameworkElement
             var size = (0.9 + Random.Shared.NextDouble() * 0.8 + 1.4 * energy + (beat ? 0.5 : 0)) * EffectScale;
             // a volley's flashes go off a split second apart, not all in the same frame
             var delay = beat ? -Random.Shared.NextDouble() * 0.12 : 0;
-            AddFlash(x, y, size, delay);
+            // each camera's flash at an angle of its own (the rays repeat every quarter turn)
+            var angle = Random.Shared.NextDouble() * Math.PI / 2;
+            AddFlash(x, y, size, delay, angle);
             // now and then a camera fires twice in quick succession
-            if (Random.Shared.NextDouble() < 0.18) AddFlash(x, y, size * 0.85, delay - 0.12 - Random.Shared.NextDouble() * 0.06);
+            if (Random.Shared.NextDouble() < 0.18) AddFlash(x, y, size * 0.85, delay - 0.12 - Random.Shared.NextDouble() * 0.06, angle);
         }
     }
 
-    private void AddFlash(double x, double y, double size, double delay)
+    /// <summary>Queues a flash; its angle is kept in Vx (flashes don't move).</summary>
+    private void AddFlash(double x, double y, double size, double delay, double angle)
     {
         if (_stars.Count >= 44) return;
         _stars.Add(new Spark
         {
             X = x,
             Y = y,
+            Vx = angle,
             Age = delay,
             Life = 0.22 + Random.Shared.NextDouble() * 0.25,
             Size = size,
