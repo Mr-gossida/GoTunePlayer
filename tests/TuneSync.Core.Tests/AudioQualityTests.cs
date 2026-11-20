@@ -46,6 +46,6 @@ public class AudioQualityTests
     public void Summary_ReadsLikeAStreamingServiceLabel()
     {
         Assert.Equal("FLAC · 24bit · 96kHz · 2,304kbps", new AudioQuality("FLAC", 2304, 96000, 24, 2, true).Summary);
-        Assert.Equal("MP3 · 44.1kHz · 320kbps", new AudioQuality("MP3", 320, 44100, 0, 2, false).Summary);
+        Assert.Equal("MP3 · 16bit · 44.1kHz · 320kbps", new AudioQuality("MP3", 320, 44100, 0, 2, false).Summary);
     }
 }

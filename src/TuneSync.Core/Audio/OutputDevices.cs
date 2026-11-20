@@ -73,6 +73,10 @@ public static class OutputDevices
     /// and channels, but always 32-bit float, whatever the device's bits.)</summary>
     internal static readonly PropertyKey DeviceFormatKey = new(new Guid("f19f064d-082c-4e27-bc73-6882a1bb8e4c"), 0);
 
+    /// <summary>The bits Windows runs the device at in shared mode (소리 › 장치 속성 › 고급 › 기본
+    /// 형식); 0 when it can't be read.</summary>
+    internal static int SharedBits(MMDevice device) => SharedFormat(device)?.Bits ?? 0;
+
     /// <summary>The device's shared-mode format as Windows has it set, or null when it can't be read.</summary>
     private static (int Channels, int Rate, int Bits)? SharedFormat(MMDevice device)
     {

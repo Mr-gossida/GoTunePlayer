@@ -27,7 +27,7 @@
                         Visibility="{Binding HasQualityBadge, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}">
                     <TextBlock Text="{Binding QualityBadge}" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource PlayerAccentBrush}"/>
                 </Border>
-                <TextBlock Text="{Binding QualityText}" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                <TextBlock Text="{Binding QualityText}" ToolTip="{Binding QualityNote}" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
                            Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
             </StackPanel>
         </DataTemplate>

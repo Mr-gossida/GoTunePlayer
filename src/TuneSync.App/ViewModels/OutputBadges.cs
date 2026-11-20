@@ -40,6 +40,9 @@ public sealed record OutputBadge(string Text, OutputBadgeKind Kind, string ToolT
             badges.Add(new($"{info.Rate / 1e6:0.0}MHz", OutputBadgeKind.Detail, $"DSD 샘플 속도 {info.Rate / 1e6:0.0###}MHz (1비트)"));
         else if (info.Bits > 0)
             badges.Add(new($"{info.Bits}bit · {Khz(info.Rate)}", OutputBadgeKind.Detail, $"장치로 가는 형식: {info.Bits}비트 {Khz(info.Rate)}"));
+        else if (info.DeviceBits > 0)
+            badges.Add(new($"{info.DeviceBits}bit · {Khz(info.Rate)}", OutputBadgeKind.Detail,
+                $"Windows 믹서로 {Khz(info.Rate)}로 보내는 중 · 장치는 Windows 소리 설정의 기본 형식({info.DeviceBits}비트)으로 재생"));
         else
             badges.Add(new(Khz(info.Rate), OutputBadgeKind.Detail, $"Windows 믹서로 {Khz(info.Rate)}로 보내는 중 (장치 형식은 Windows 소리 설정을 따름)"));
 

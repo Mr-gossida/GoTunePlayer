@@ -183,7 +183,7 @@
                                                 Visibility="{Binding HasQualityBadge, Converter={StaticResource BoolToVisibility}}">
                                             <TextBlock Text="{Binding QualityBadge}" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource PlayerAccentBrush}"/>
                                         </Border>
-                                        <TextBlock Text="{Binding QualityText}" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                                        <TextBlock Text="{Binding QualityText}" ToolTip="{Binding QualityNote}" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
                                                    Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
                                     </StackPanel>
 
@@ -219,6 +219,19 @@
                                    TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
                         <TextBlock Text="{Binding NowPlayingSubtitle}" FontSize="12" Margin="0,2,0,0" TextTrimming="CharacterEllipsis"
                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                        <!-- What the file is (MP3 · 16bit · 44.1kHz · 320kbps), under it how it goes out. -->
+                        <TextBlock Text="{Binding QualityText}" ToolTip="{Binding QualityToolTip}" FontSize="11" Margin="0,1,0,0" TextTrimming="CharacterEllipsis"
+                                   Foreground="{DynamicResource TextFillColorTertiaryBrush}">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Style.Triggers>
+                                        <Trigger Property="Text" Value="">
+                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                        </Trigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
                         <!-- How the sound is going out ([Exclusive] [24bit · 176.4kHz] [Upsampling ×4] ...).
                              One row only: badges that don't fit drop out whole (they wrap into the
                              clipped second row) instead of being cut. -->

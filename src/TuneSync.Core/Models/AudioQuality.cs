@@ -22,6 +22,7 @@ public sealed record AudioQuality(string Format, int BitrateKbps, int SampleRate
                 return string.Join(" · ", parts);
             }
             if (BitsPerSample > 0) parts.Add($"{BitsPerSample}bit");
+            else if (BitsAssumed) parts.Add("16bit");
             if (SampleRate > 0) parts.Add((SampleRate / 1000.0).ToString("0.#", inv) + "kHz");
             if (BitrateKbps > 0) parts.Add(BitrateKbps.ToString("N0", inv) + "kbps");
             if (Channels is 1) parts.Add("모노");
@@ -29,6 +30,11 @@ public sealed record AudioQuality(string Format, int BitrateKbps, int SampleRate
             return string.Join(" · ", parts);
         }
     }
+
+    /// <summary>A lossy file (MP3, AAC...) stores no bit depth - its sound only exists once
+    /// decoded - so the summary shows 16bit for it, as players commonly do (Poweramp's decoder,
+    /// say): what it was almost always made from and what it is usually decoded to.</summary>
+    public bool BitsAssumed => BitsPerSample <= 0 && !IsLossless;
 
     /// <summary>"Hi-Res", "Lossless", or null for lossy formats.</summary>
     public string? Badge => IsHiRes ? "Hi-Res" : IsLossless ? "Lossless" : null;

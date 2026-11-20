@@ -61,7 +61,12 @@ public enum OutputPath
 /// <param name="Equalizer">The equalizer is shaping the sound.</param>
 /// <param name="Note">Why it isn't quite as the settings ask, when it isn't.</param>
 public sealed record OutputInfo(OutputPath Path, int Bits, int Rate, int SongRate, string? Conversion, string? ConversionDetail,
-    string? Dsd, bool Equalizer, bool HardwareVolume, string Layout, string? Note);
+    string? Dsd, bool Equalizer, bool HardwareVolume, string Layout, string? Note)
+{
+    /// <summary>Shared mode: the bits Windows runs the device at (its 기본 형식), which the
+    /// mixer's 32-bit float output is turned into; 0 when unknown or not shared.</summary>
+    public int DeviceBits { get; init; }
+}
 
 /// <summary>DoP can't go out the way the output is set now (not exclusive, the device won't take
 /// it, or it has no volume control of its own): the song has to be opened again as PCM.</summary>
@@ -126,6 +131,7 @@ public sealed class TonePlayer : IDisposable
     // The sound device (output thread only).
     private MMDeviceEnumerator? _enumerator;
     private MMDevice? _device;
+    private int _sharedDeviceBits;
     private AudioClient? _client;
     private AudioRenderClient? _render;
     private string? _deviceId;
@@ -273,7 +279,10 @@ public sealed class TonePlayer : IDisposable
             if (_bitPerfect && !IsBitPerfect) note = note is null ? "볼륨이 100%일 때 비트퍼펙트" : $"{note} — 볼륨이 100%일 때 비트퍼펙트";
             var equalizer = path is not (OutputPath.BitPerfect or OutputPath.DoP) && !ReferenceEquals(_config, ToneConfig.Neutral);
             return new OutputInfo(path, _exclusiveOpen ? _outBits : 0, dsdRate > 0 ? dsdRate : _outRate, _sampleRate,
-                conversion, detail, dsd, equalizer, _hardwareVolume, _layoutName, note);
+                conversion, detail, dsd, equalizer, _hardwareVolume, _layoutName, note)
+            {
+                DeviceBits = _exclusiveOpen ? 0 : _sharedDeviceBits,
+            };
         }
     }
 
@@ -1114,6 +1123,7 @@ public sealed class TonePlayer : IDisposable
 
         if (_dop) throw new DopUnavailableException("shared");
         _exclusiveOpen = false;
+        _sharedDeviceBits = OutputDevices.SharedBits(_device);
         // Upsampling in shared mode: GoTune converts to the rate Windows runs the device at, so
         // Windows' own converter has nothing left to do.
         var sharedRate = output.Upsampling != UpsampleMode.Off && SafeMixRate(_device) is > 0 and var mix ? mix : _sampleRate;

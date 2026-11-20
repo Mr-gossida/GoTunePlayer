@@ -38,6 +38,7 @@ public sealed partial class PlaybackViewModel
     private int _qualityVersion;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(QualityToolTip))]
     private string _qualityText = "";
 
     /// <summary>"Hi-Res", "Lossless", or empty for lossy formats.</summary>
@@ -47,6 +48,14 @@ public sealed partial class PlaybackViewModel
 
     public bool HasQualityBadge => QualityBadge.Length > 0;
 
+    /// <summary>Why a lossy song shows 16bit (it isn't in the file); null otherwise.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(QualityToolTip))]
+    private string? _qualityNote;
+
+    /// <summary>For the player bar, where the line may be cut short: all of it, and the note.</summary>
+    public string? QualityToolTip => QualityText.Length == 0 ? null : QualityNote is null ? QualityText : $"{QualityText}\n{QualityNote}";
+
     /// <summary>Read off the UI thread (it opens the file); a placeholder from the extension
     /// shows meanwhile so the line never flickers empty.</summary>
     private async void LoadQuality(LibraryFileViewModel file)
@@ -54,6 +63,7 @@ public sealed partial class PlaybackViewModel
         var version = ++_qualityVersion;
         QualityText = System.IO.Path.GetExtension(file.Path).TrimStart('.').ToUpperInvariant();
         QualityBadge = "";
+        QualityNote = null;
         AudioQuality? quality;
         try
         {
@@ -66,6 +76,9 @@ public sealed partial class PlaybackViewModel
         if (version != _qualityVersion || quality is null) return;
         QualityText = quality.Summary;
         QualityBadge = quality.Badge ?? "";
+        QualityNote = quality.BitsAssumed
+            ? $"{quality.Format} 같은 손실 압축 파일에는 비트 깊이가 저장되지 않아, 흔히 쓰는 16bit로 표시합니다. (GoTune은 32bit 부동소수점으로 디코딩합니다.)"
+            : null;
     }
 
     /// <summary>The playing track's real loudness over time (for the seek bar); null while it's
