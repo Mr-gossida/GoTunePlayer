@@ -355,6 +355,6 @@
             </StackPanel>
         </Border>
 
-        <ui:SnackbarPresenter x:Name="SnackbarPresenter" VerticalAlignment="Bottom"/>
+        <local:ToastHost x:Name="Toasts" Margin="12,0,12,12"/>
     </Grid>
 </ui:FluentWindow>

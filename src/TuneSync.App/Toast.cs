@@ -1,45 +1,41 @@
 using System.Linq;
 using System.Windows;
-using Wpf.Ui;
-using Wpf.Ui.Controls;
 
 namespace TuneSync.App;
 
-/// <summary>Non-blocking toast notifications (WPF-UI snackbars) for errors and notices, dismissed
-/// automatically. Each window registers its own presenter and a toast appears in whichever window
-/// is active (a tool window, or else the main player). Safe to call from any thread. Yes/no
-/// decisions before destructive actions still use <see cref="Dialogs"/>.</summary>
+/// <summary>Non-blocking toast notifications for errors and notices, dismissed automatically:
+/// small capsules drawn by <see cref="ToastHost"/>. Each window registers its own host and a
+/// toast appears in whichever window is active (a tool window, or else the main player). Safe to
+/// call from any thread. Yes/no decisions before destructive actions still use <see cref="Dialogs"/>.</summary>
 public static class Toast
 {
-    private static readonly Dictionary<Window, ISnackbarService> Services = [];
+    private static readonly Dictionary<Window, ToastHost> Hosts = [];
 
-    public static void Register(Window window, ISnackbarService service)
+    public static void Register(Window window, ToastHost host)
     {
-        Services[window] = service;
-        window.Closed += (_, _) => Services.Remove(window);
+        Hosts[window] = host;
+        window.Closed += (_, _) => Hosts.Remove(window);
     }
 
-    public static void Error(string title, string message) =>
-        Show(title, message, ControlAppearance.Danger, SymbolRegular.ErrorCircle24, seconds: 7);
+    public static void Error(string title, string message) => Show(ToastKind.Error, title, message, seconds: 7);
 
-    public static void Warning(string title, string message) =>
-        Show(title, message, ControlAppearance.Caution, SymbolRegular.Warning24, seconds: 6);
+    public static void Warning(string title, string message) => Show(ToastKind.Warning, title, message, seconds: 6);
 
-    public static void Success(string title, string message) =>
-        Show(title, message, ControlAppearance.Success, SymbolRegular.CheckmarkCircle24, seconds: 4);
+    public static void Success(string title, string message) => Show(ToastKind.Success, title, message, seconds: 4);
 
-    public static void Info(string title, string message) =>
-        Show(title, message, ControlAppearance.Info, SymbolRegular.Info24, seconds: 4);
+    public static void Info(string title, string message) => Show(ToastKind.Info, title, message, seconds: 4);
 
-    private static void Show(string title, string message, ControlAppearance appearance, SymbolRegular icon, int seconds)
+    private static void Show(ToastKind kind, string title, string message, int seconds)
     {
         if (Application.Current is not { } app) return;
         app.Dispatcher.BeginInvoke(() =>
         {
-            var target = Services.FirstOrDefault(s => s.Key.IsActive).Value
-                         ?? (app.MainWindow is { } main && Services.TryGetValue(main, out var mainService) ? mainService : null)
-                         ?? Services.Values.FirstOrDefault();
-            target?.Show(title, message, appearance, new SymbolIcon { Symbol = icon }, TimeSpan.FromSeconds(seconds));
+            var target = Hosts.FirstOrDefault(h => h.Key.IsActive).Value
+                         ?? (app.MainWindow is { } main && Hosts.TryGetValue(main, out var mainHost) ? mainHost : null)
+                         ?? Hosts.Values.FirstOrDefault();
+            // longer text stays a little longer, so it can be read to the end
+            var read = TimeSpan.FromSeconds(seconds + Math.Min(4, (title.Length + message.Length) / 40.0));
+            target?.Show(kind, title, message, read);
         });
     }
 }

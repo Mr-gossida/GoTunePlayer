@@ -368,6 +368,6 @@
         <Canvas x:Name="FocusFlyLayer" Grid.Row="1" Grid.RowSpan="2" IsHitTestVisible="False"/>
 
         <!-- Toast notifications (Toast.cs), floating just above the transport bar. -->
-        <ui:SnackbarPresenter x:Name="SnackbarPresenter" Grid.Row="1" VerticalAlignment="Bottom" Margin="20,0,20,12"/>
+        <local:ToastHost x:Name="Toasts" Grid.Row="1" Margin="20,0,20,12"/>
     </Grid>
 </ui:FluentWindow>

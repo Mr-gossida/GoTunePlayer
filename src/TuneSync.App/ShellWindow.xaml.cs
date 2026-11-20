@@ -33,9 +33,7 @@ public partial class ShellWindow : FluentWindow
         ThemeHelper.Apply(settings.Theme, this);
         Loaded += (_, _) => WatchHud();
 
-        var snackbar = new Wpf.Ui.SnackbarService();
-        snackbar.SetSnackbarPresenter(SnackbarPresenter);
-        Toast.Register(this, snackbar);
+        Toast.Register(this, Toasts);
 
         PlayerFrame.Navigate(services.GetRequiredService<PlayView>());
         TaskbarControls.Attach(this, playback, new("미니 플레이어로", TaskbarControls.SwitchIcon.ToMini, EnterLastMiniMode));

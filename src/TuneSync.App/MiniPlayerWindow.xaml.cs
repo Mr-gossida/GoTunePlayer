@@ -34,9 +34,7 @@ public partial class MiniPlayerWindow : FluentWindow
         playback.PropertyChanged += Playback_PropertyChanged;
         SizeChanged += (_, _) => KeepOnScreen();
 
-        var snackbar = new Wpf.Ui.SnackbarService();
-        snackbar.SetSnackbarPresenter(SnackbarPresenter);
-        Toast.Register(this, snackbar);
+        Toast.Register(this, Toasts);
     }
 
     public PlayerMode Mode => _mode;

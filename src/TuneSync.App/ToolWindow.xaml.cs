@@ -26,9 +26,7 @@ public partial class ToolWindow : FluentWindow
         MinWidth = Math.Min(width, 760);
         MinHeight = Math.Min(height, 520);
 
-        var snackbar = new Wpf.Ui.SnackbarService();
-        snackbar.SetSnackbarPresenter(SnackbarPresenter);
-        Toast.Register(this, snackbar);
+        Toast.Register(this, Toasts);
 
         ContentFrame.Navigate(page);
 
