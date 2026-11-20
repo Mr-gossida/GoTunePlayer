@@ -917,7 +917,7 @@
                             </Grid>
                             <!-- Only while the background effect is 랜덤 (재생 › 배경 효과): otherwise every screen shows that one effect anyway. -->
                             <Grid Margin="0,0,0,10" Visibility="{Binding IsBackgroundRandom, Converter={StaticResource BoolToVisibility}}"
-                                  ToolTip="배경 효과가 랜덤일 때, 모니터가 여러 대면 모든 화면에 같은 효과를 이어서 보여 줄지 화면마다 따로 고를지 정합니다">
+                                  ToolTip="배경 효과가 무작위일 때, 모니터가 여러 대면 모든 화면에 같은 효과를 이어서 보여 줄지 화면마다 따로 고를지 정합니다">
                                 <TextBlock Text="여러 모니터의 배경 효과" VerticalAlignment="Center"/>
                                 <ComboBox Width="200" HorizontalAlignment="Right" ItemsSource="{Binding ScreenSaverSameLookOptions}" DisplayMemberPath="Label"
                                           SelectedValuePath="Value" SelectedValue="{Binding ScreenSaverSameLook}" IsEnabled="{Binding ScreenSaverEnabled}"/>

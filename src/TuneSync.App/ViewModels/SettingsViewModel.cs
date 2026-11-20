@@ -420,7 +420,7 @@ public sealed partial class SettingsViewModel : ObservableObject
     /// <summary>설정 › 화면 보호기 › 배경 효과: which light (bound to Playback.BackgroundEffect).</summary>
     public IReadOnlyList<Choice<BackgroundEffect>> BackgroundEffectOptions { get; } =
     [
-        new(BackgroundEffect.Random, "랜덤 (열 때마다)"),
+        new(BackgroundEffect.Random, "무작위"),
         new(BackgroundEffect.Aurora, "오로라"),
         new(BackgroundEffect.Caustics, "물빛"),
         new(BackgroundEffect.Bokeh, "빛망울"),
