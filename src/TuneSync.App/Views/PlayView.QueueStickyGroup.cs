@@ -16,6 +16,15 @@ public partial class PlayView
 
     private string? _stickyGroup; // the group the pinned heading names
 
+    private long _headingClickAt; // when a heading was last clicked (Environment.TickCount64)
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern uint GetDoubleClickTime();
+
+    /// <summary>A heading was clicked just now - so recently that the next click makes a double
+    /// click with it, wherever that next click lands.</summary>
+    private bool WithinDoubleClickOfHeading() => Environment.TickCount64 - _headingClickAt <= GetDoubleClickTime();
+
     // --- folding a group: click its heading, pinned or in the list ---
 
     /// <summary>The pinned heading takes the click (it used to let it through to the song under
@@ -23,6 +32,7 @@ public partial class PlayView
     private void StickyGroup_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
         e.Handled = true;
+        _headingClickAt = Environment.TickCount64;
         if (e.ClickCount > 1 || _stickyGroup is not { } group) return;
         ToggleFold(group);
     }
@@ -32,6 +42,7 @@ public partial class PlayView
     private void GroupHeading_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
         e.Handled = true;
+        _headingClickAt = Environment.TickCount64;
         _dragSong = null;
         _clickToSelect = null;
         if (e.ClickCount > 1 || (sender as FrameworkElement)?.DataContext is not GroupHeading heading) return;

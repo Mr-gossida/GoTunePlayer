@@ -20,6 +20,9 @@
                 <!-- the line down to the next step -->
                 <Rectangle x:Name="Line" Grid.Column="0" Width="1" HorizontalAlignment="Center" Margin="0,30,0,0"
                            Fill="{DynamicResource PlayerTrackBrush}"/>
+                <!-- its arrowhead, just above the next step: the sound runs top to bottom -->
+                <Polygon x:Name="Arrow" Grid.Column="0" Points="0,0 7,0 3.5,5" HorizontalAlignment="Center" VerticalAlignment="Bottom"
+                         Margin="0,0,0,-2" Fill="{DynamicResource TextFillColorTertiaryBrush}"/>
                 <Border x:Name="Ring" Grid.Column="0" Width="30" Height="30" CornerRadius="15" VerticalAlignment="Top" Margin="0,6,0,0"
                         BorderThickness="1" BorderBrush="{DynamicResource PlayerTrackBrush}" Background="{DynamicResource PlayerTintBrush}">
                     <ui:SymbolIcon x:Name="Icon" Symbol="{Binding Icon}" FontSize="15" Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
@@ -30,9 +33,11 @@
                         <StackPanel Orientation="Horizontal">
                             <TextBlock x:Name="Title" Text="{Binding Title}" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center"
                                        Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
-                            <Border x:Name="TagPill" CornerRadius="8" Padding="7,0,7,1" Margin="7,1,0,0" VerticalAlignment="Center" Visibility="Collapsed">
-                                <TextBlock x:Name="TagText" Text="{Binding Tag}" FontSize="10.5" FontWeight="SemiBold"/>
-                            </Border>
+                            <!-- a mark, not a pill: an outlined tag read as a button -->
+                            <StackPanel x:Name="TagPill" Orientation="Horizontal" Margin="8,1,0,0" VerticalAlignment="Center" Visibility="Collapsed">
+                                <Ellipse x:Name="TagDot" Width="5" Height="5" Margin="0,1,4,0" VerticalAlignment="Center"/>
+                                <TextBlock x:Name="TagText" Text="{Binding Tag}" FontSize="11" VerticalAlignment="Center"/>
+                            </StackPanel>
                         </StackPanel>
                         <TextBlock x:Name="Main" Text="{Binding Main}" FontSize="13" Margin="0,2,0,0" TextWrapping="Wrap"
                                    Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
@@ -53,21 +58,20 @@
             <DataTemplate.Triggers>
                 <DataTrigger Binding="{Binding IsLast}" Value="True">
                     <Setter TargetName="Line" Property="Visibility" Value="Collapsed"/>
+                    <Setter TargetName="Arrow" Property="Visibility" Value="Collapsed"/>
                 </DataTrigger>
                 <DataTrigger Binding="{Binding IsChanged}" Value="True">
                     <Setter TargetName="Ring" Property="BorderBrush" Value="{DynamicResource PlayerAccentBrush}"/>
                     <Setter TargetName="Icon" Property="Foreground" Value="{DynamicResource PlayerAccentBrush}"/>
                     <Setter TargetName="TagPill" Property="Visibility" Value="Visible"/>
-                    <Setter TargetName="TagPill" Property="BorderThickness" Value="1"/>
-                    <Setter TargetName="TagPill" Property="BorderBrush" Value="{DynamicResource PlayerAccentBrush}"/>
+                    <Setter TargetName="TagDot" Property="Fill" Value="{DynamicResource PlayerAccentBrush}"/>
                     <Setter TargetName="TagText" Property="Foreground" Value="{DynamicResource PlayerAccentBrush}"/>
                 </DataTrigger>
                 <DataTrigger Binding="{Binding IsPure}" Value="True">
                     <Setter TargetName="Ring" Property="BorderBrush" Value="{DynamicResource SystemFillColorSuccessBrush}"/>
                     <Setter TargetName="Icon" Property="Foreground" Value="{DynamicResource SystemFillColorSuccessBrush}"/>
                     <Setter TargetName="TagPill" Property="Visibility" Value="Visible"/>
-                    <Setter TargetName="TagPill" Property="BorderThickness" Value="1"/>
-                    <Setter TargetName="TagPill" Property="BorderBrush" Value="{DynamicResource SystemFillColorSuccessBrush}"/>
+                    <Setter TargetName="TagDot" Property="Fill" Value="{DynamicResource SystemFillColorSuccessBrush}"/>
                     <Setter TargetName="TagText" Property="Foreground" Value="{DynamicResource SystemFillColorSuccessBrush}"/>
                 </DataTrigger>
                 <!-- not doing it now: a small dot on the line and one dim line of text -->
@@ -100,9 +104,13 @@
             <DockPanel>
                 <!-- title -->
                 <Grid DockPanel.Dock="Top" Margin="18,14,10,10">
-                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                        <ui:SymbolIcon Symbol="PlugConnected24" FontSize="16" Margin="0,0,8,0" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-                        <TextBlock Text="소리 경로" FontSize="15" FontWeight="SemiBold" Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                    <StackPanel VerticalAlignment="Center">
+                        <StackPanel Orientation="Horizontal">
+                            <ui:SymbolIcon Symbol="PlugConnected24" FontSize="16" Margin="0,0,8,0" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                            <TextBlock Text="소리 경로" FontSize="15" FontWeight="SemiBold" Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                        </StackPanel>
+                        <TextBlock Text="소리가 위에서 아래로, 파일에서 장치까지 흘러갑니다" FontSize="11.5" Margin="24,2,0,0"
+                                   Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
                     </StackPanel>
                     <ui:Button HorizontalAlignment="Right" Appearance="Transparent" BorderThickness="0" Padding="6" ToolTip="닫기 (Esc)"
                                Icon="{ui:SymbolIcon Dismiss16}" Click="Close_Click" AutomationProperties.Name="소리 경로 닫기"/>
@@ -134,8 +142,10 @@
 
                 <ScrollViewer MaxHeight="600" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Focusable="False">
                     <StackPanel Margin="16,14,16,6">
-                        <!-- the verdict: 원음 그대로, or how many places change the sound -->
-                        <Border CornerRadius="10" Padding="12,10" Background="{DynamicResource PlayerPanelBrush}" Margin="0,0,0,10">
+                        <!-- a note for when there's no chain to show (nothing playing, opening, Windows' player);
+                             while playing, the marks on the steps say where the sound is converted -->
+                        <Border CornerRadius="10" Padding="12,10" Background="{DynamicResource PlayerPanelBrush}" Margin="0,0,0,10"
+                                Visibility="{Binding HasVerdict, Converter={StaticResource Visible}}">
                             <Grid>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="Auto"/>

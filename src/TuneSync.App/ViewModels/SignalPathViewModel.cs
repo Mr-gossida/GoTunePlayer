@@ -12,9 +12,9 @@ public enum SignalStepState
 {
     /// <summary>A step the sound passes through without being changed by it.</summary>
     Neutral,
-    /// <summary>The sound is changed here (shown in the accent color, "변경").</summary>
+    /// <summary>The sound is changed here (shown in the accent color, "변환").</summary>
     Changed,
-    /// <summary>The sound is kept exactly as the file has it (bit-perfect / DoP: "원음").</summary>
+    /// <summary>The sound is kept exactly as the file has it (bit-perfect / DoP: "원음 유지").</summary>
     Pure,
     /// <summary>A step the player isn't doing now: one dim line.</summary>
     Skipped,
@@ -29,7 +29,7 @@ public sealed record SignalStep(SymbolRegular Icon, string Title, string Main, s
     public bool IsSkipped => State == SignalStepState.Skipped;
     public bool HasSub => !string.IsNullOrEmpty(Sub);
     public bool HasAction => Action is not null;
-    public string? Tag => State switch { SignalStepState.Changed => "변경", SignalStepState.Pure => "원음", _ => null };
+    public string? Tag => State switch { SignalStepState.Changed => "변환", SignalStepState.Pure => "원음 유지", _ => null };
 
     /// <summary>The last step draws no line down to a next one.</summary>
     public bool IsLast { get; init; }
@@ -59,6 +59,10 @@ public sealed partial class SignalPathViewModel : ObservableObject
     [ObservableProperty] private string _underruns = "";
     [ObservableProperty] private bool _hasFooter;
 
+    /// <summary>The note on top shows only when there's no chain of steps to read (nothing
+    /// playing, the device opening, Windows' player): while playing, the steps' marks say it.</summary>
+    [ObservableProperty] private bool _hasVerdict;
+
     /// <summary>Opens the equalizer (where the tone step's settings are).</summary>
     public Action? OpenEqualizer { get; set; }
 
@@ -76,6 +80,7 @@ public sealed partial class SignalPathViewModel : ObservableObject
     /// playing file, null when nothing plays).</summary>
     internal void Show(SignalPath? signal, AudioQuality? quality, string? path, bool bypassed)
     {
+        HasVerdict = path is null || signal is null;
         var steps = new List<SignalStep>();
         if (path is null)
         {

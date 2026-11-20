@@ -173,9 +173,12 @@ public partial class PlayView
 
     private void PlaylistBox_MouseDoubleClick(object sender, MouseButtonEventArgs e)
     {
-        // A double click on a group's heading folds it twice; it mustn't also play a song.
-        if (IsInGroupHeading(e.OriginalSource as System.Windows.DependencyObject)) return;
-        if (PlaylistBox.SelectedItem is LibraryFileViewModel file)
+        // A double click on a group's heading folds it twice; it mustn't also play a song. Nor
+        // when the first click folded or unfolded one: the list moves under the pointer (the
+        // heading is brought to the top), so the second click lands on some song row.
+        if (IsInGroupHeading(e.OriginalSource as System.Windows.DependencyObject) || WithinDoubleClickOfHeading()) return;
+        // only the song that was double-clicked (it is the one the first click selected)
+        if (PlaylistBox.SelectedItem is LibraryFileViewModel file && SongAt(e.OriginalSource) == file)
             _viewModel.Playback.PlayFile(file);
     }
 
