@@ -80,7 +80,8 @@ public sealed partial class PlaybackViewModel
     /// <summary>The seek bar looks in the order the settings list them (임의 last).</summary>
     public static readonly SeekBarStyle[] SeekBarStyleOrder =
         [SeekBarStyle.Wave, SeekBarStyle.Flame, SeekBarStyle.Neon, SeekBarStyle.Bars, SeekBarStyle.Fountain, SeekBarStyle.Rain, SeekBarStyle.Aurora,
-         SeekBarStyle.Sparkle, SeekBarStyle.Fireworks, SeekBarStyle.Random, SeekBarStyle.None];
+         SeekBarStyle.Sparkle, SeekBarStyle.Fireworks, SeekBarStyle.Fireflies, SeekBarStyle.Electric, SeekBarStyle.Petals, SeekBarStyle.Notes,
+         SeekBarStyle.Random, SeekBarStyle.None];
 
     private void PickSeekLook()
     {
@@ -107,6 +108,10 @@ public sealed partial class PlaybackViewModel
         SeekBarStyle.Random => "랜덤 (곡마다)",
         SeekBarStyle.None => "없음",
         SeekBarStyle.Fireworks => "불꽃놀이",
+        SeekBarStyle.Fireflies => "반딧불",
+        SeekBarStyle.Electric => "전류",
+        SeekBarStyle.Petals => "꽃잎",
+        SeekBarStyle.Notes => "음표",
         _ => style.ToString(),
     };
 
@@ -131,7 +136,7 @@ public sealed partial class PlaybackViewModel
     public static readonly SpectrumStyle[] SpectrumStyleOrder =
     [
         SpectrumStyle.Off, SpectrumStyle.Led, SpectrumStyle.Bars, SpectrumStyle.Wave, SpectrumStyle.Mirror, SpectrumStyle.Dots,
-        SpectrumStyle.Neon, SpectrumStyle.Rainbow, SpectrumStyle.Reflect, SpectrumStyle.Pins, SpectrumStyle.Random,
+        SpectrumStyle.Neon, SpectrumStyle.Rainbow, SpectrumStyle.Reflect, SpectrumStyle.Pins, SpectrumStyle.Scope, SpectrumStyle.Random,
     ];
 
     private static readonly SpectrumStyle[] RandomLooks =
@@ -168,6 +173,7 @@ public sealed partial class PlaybackViewModel
         SpectrumStyle.Rainbow => "무지개 막대",
         SpectrumStyle.Reflect => "반사 막대",
         SpectrumStyle.Pins => "핀",
+        SpectrumStyle.Scope => "오실로스코프",
         SpectrumStyle.Random => "랜덤 (곡마다)",
         _ => style.ToString(),
     };

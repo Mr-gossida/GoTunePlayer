@@ -142,6 +142,7 @@ public sealed class SpectrumView : FrameworkElement
         if (now == _lastFrame) return;
         var dt = _lastFrame == TimeSpan.Zero ? 1 / 60f : (float)Math.Min((now - _lastFrame).TotalSeconds, 0.1);
         _lastFrame = now;
+        _scopeTime += dt;
 
         var bars = BarCount;
         if (_level.Length != bars)
@@ -177,8 +178,10 @@ public sealed class SpectrumView : FrameworkElement
             if (_level[i] > 0.001f || _peak[i] > 0.001f) moving = true;
         }
 
-        // Nothing to draw and nothing falling: stop redrawing until there is.
+        // Nothing to draw and nothing falling: stop redrawing until there is. (The scope's
+        // afterglow still fades out after the trace has gone flat.)
         if (_label is not null) moving = true;
+        if (Look == SpectrumStyle.Scope && _trails.Count > 0) moving = true;
         if (!moving && _settled) return;
         _settled = !moving;
         InvalidateVisual();
@@ -231,6 +234,7 @@ public sealed class SpectrumView : FrameworkElement
                 case SpectrumStyle.Rainbow: DrawRainbow(dc, height); break;
                 case SpectrumStyle.Reflect: DrawReflect(dc, height, c); break;
                 case SpectrumStyle.Pins: DrawPins(dc, height, c); break;
+                case SpectrumStyle.Scope: DrawScope(dc, height, c); break;
             }
             return;
         }
@@ -407,6 +411,111 @@ public sealed class SpectrumView : FrameworkElement
         }
         line.Freeze();
         return line;
+    }
+
+    // ---- 오실로스코프 ----
+
+    private double _scopeTime;
+    private readonly List<StreamGeometry> _trails = [];
+    private const int TrailLength = 4;
+    private Pen? _scopeGrid;
+    private Pen?[] _trailPens = [];
+    private Color _scopeColor;
+
+    /// <summary>A trace across the strip like an oscilloscope's, with the green-screen phosphor's
+    /// afterglow: the last few traces linger, fainter each, behind the bright one. The song's
+    /// spectrum (not its samples, which aren't kept) drives it: each band is a wave of its own
+    /// pitch - low bands long and slow, high ones short and quick - at its loudness, and the sum is
+    /// the trace, so bass makes it heave and cymbals make it fizz. Flat and dim when quiet.</summary>
+    private void DrawScope(DrawingContext dc, double height, Color color)
+    {
+        var width = ActualWidth;
+        if (width < 4) return;
+        EnsureExtras(color, height);
+        if (_scopeGrid is null || color != _scopeColor)
+        {
+            _scopeColor = color;
+            var grid = new SolidColorBrush(Color.FromArgb(28, color.R, color.G, color.B));
+            grid.Freeze();
+            _scopeGrid = new Pen(grid, 1) { DashStyle = new DashStyle([2, 4], 0) };
+            _scopeGrid.Freeze();
+            _trailPens = new Pen?[TrailLength];
+            for (var k = 0; k < TrailLength; k++)
+            {
+                var b = new SolidColorBrush(Color.FromArgb((byte)(110 * Math.Pow(0.55, k)), color.R, color.G, color.B));
+                b.Freeze();
+                var pen = new Pen(b, 1.3) { LineJoin = PenLineJoin.Round };
+                pen.Freeze();
+                _trailPens[k] = pen;
+            }
+        }
+
+        var mid = Math.Round(height / 2) + 0.5;
+        dc.DrawLine(_scopeGrid, new Point(0, mid), new Point(width, mid));
+
+        // the bands, gathered into a dozen voices (each a wave of one pitch)
+        const int voices = 12;
+        Span<double> amp = stackalloc double[voices];
+        double total = 0;
+        for (var i = 0; i < _level.Length; i++)
+        {
+            var v = Math.Min(voices - 1, i * voices / _level.Length);
+            amp[v] += _level[i];
+        }
+        for (var v = 0; v < voices; v++)
+        {
+            amp[v] /= Math.Max(1, _level.Length / voices);
+            // the highs are fainter in any spectrum; lift them so they show as fizz
+            amp[v] *= 0.75 + 0.5 * v / (voices - 1);
+            total += amp[v];
+        }
+
+        var trace = new StreamGeometry();
+        if (total > 0.002)
+        {
+            var room = height / 2 - 2;
+            // the loudness sets the swing; the sum of the voices is kept inside the strip
+            var loud = Math.Clamp(total / voices * 2.2, 0, 1);
+            var scale = 1.9 * room * Math.Sqrt(loud) / Math.Max(total, 0.001); // the voices rarely all peak together
+            var steps = (int)Math.Clamp(width / 2, 32, 600);
+            using var g = trace.Open();
+            for (var n = 0; n <= steps; n++)
+            {
+                var x = width * n / steps;
+                var u = (double)n / steps;
+                var y = 0.0;
+                for (var v = 0; v < voices; v++)
+                {
+                    if (amp[v] < 0.002) continue;
+                    var cycles = 1.5 * Math.Pow(1.38, v);         // 1.5 to ~50 waves across the strip
+                    var speed = 0.9 + 0.55 * v;                   // high voices race, low ones roll
+                    y += amp[v] * Math.Sin((u * cycles + _scopeTime * speed * (v % 2 == 0 ? 1 : -1)) * Math.Tau + v * 1.7);
+                }
+                // pinned at the ends, as if triggered there
+                var ends = Math.Min(1, Math.Min(u, 1 - u) * 14);
+                var p = new Point(x, mid - Math.Clamp(y * scale, -room, room) * ends);
+                if (n == 0) g.BeginFigure(p, false, false);
+                else g.LineTo(p, true, true);
+            }
+        }
+        trace.Freeze();
+
+        // the afterglow: older traces, fainter
+        for (var k = _trails.Count - 1; k >= 0; k--)
+            dc.DrawGeometry(null, _trailPens[Math.Min(k, TrailLength - 1)], _trails[k]);
+
+        if (!trace.IsEmpty())
+        {
+            dc.DrawGeometry(null, _neonWide, trace);
+            dc.DrawGeometry(null, _neonMid, trace);
+            dc.DrawGeometry(null, _neonCore, trace);
+            _trails.Insert(0, trace);
+        }
+        else if (_trails.Count > 0)
+        {
+            _trails.RemoveAt(_trails.Count - 1); // gone quiet: the glow fades away
+        }
+        if (_trails.Count > TrailLength) _trails.RemoveAt(_trails.Count - 1);
     }
 
     /// <summary>Only the outline, glowing like a neon tube: brighter where the music is louder.</summary>

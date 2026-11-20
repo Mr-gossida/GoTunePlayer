@@ -35,6 +35,7 @@
     <Resource Include="Effects\Bokeh.ps" />
     <Resource Include="Effects\Nebula.ps" />
     <Resource Include="Effects\Lava.ps" />
+    <Resource Include="Effects\CoverGradient.ps" />
   </ItemGroup>
 
 </Project>

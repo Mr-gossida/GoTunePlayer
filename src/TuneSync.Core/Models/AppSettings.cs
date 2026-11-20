@@ -201,6 +201,8 @@ public enum BackgroundEffect
     Random,
     // (6 and 7 were 창문 빗방울 and 불꽃놀이, taken out: they couldn't look good at this cost. A
     // setting that still holds one is read as Aurora.)
+    /// <summary>커버 색 그라데이션: soft fields of the cover's colors slowly flowing into each other.</summary>
+    CoverGradient = 8,
 }
 
 public enum AuroraMode
@@ -308,6 +310,14 @@ public enum SeekBarStyle
     None,
     /// <summary>Rockets bursting over the played part on the beats.</summary>
     Fireworks,
+    /// <summary>Fireflies wandering over the played part, blinking.</summary>
+    Fireflies,
+    /// <summary>The played line as a crackling electric arc, forking on the beats.</summary>
+    Electric,
+    /// <summary>Petals drifting down over the played part, tumbling as they fall.</summary>
+    Petals,
+    /// <summary>Musical notes rising from all along the played part.</summary>
+    Notes,
 }
 
 public enum SpectrumStyle
@@ -334,6 +344,8 @@ public enum SpectrumStyle
     Reflect,
     /// <summary>Thin stems with a round head, the peak hanging above as a ring.</summary>
     Pins,
+    /// <summary>An oscilloscope trace with a phosphor afterglow.</summary>
+    Scope,
 }
 
 public enum QueueViewMode

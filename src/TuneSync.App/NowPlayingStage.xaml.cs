@@ -305,7 +305,7 @@ public partial class NowPlayingStage : UserControl
         var look = _playback.BackgroundEffect;
         if (look == BackgroundEffect.Random)
         {
-            BackgroundEffect[] choices = [BackgroundEffect.Aurora, BackgroundEffect.Caustics, BackgroundEffect.Bokeh, BackgroundEffect.Nebula, BackgroundEffect.Lava];
+            BackgroundEffect[] choices = [BackgroundEffect.Aurora, BackgroundEffect.Caustics, BackgroundEffect.Bokeh, BackgroundEffect.Nebula, BackgroundEffect.Lava, BackgroundEffect.CoverGradient];
             look = choices[Random.Shared.Next(choices.Length)];
         }
         AuroraLight.Look = look;

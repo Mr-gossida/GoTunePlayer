@@ -11,7 +11,7 @@ namespace TuneSync.App;
 /// ripple gently, loud ones surge - and each beat sends a ripple back along the wave from the
 /// thumb. The loudness comes from <see cref="Waveform"/> at the current playback moment. Pausing
 /// settles the waves flat. Clicking jumps, dragging scrubs; the seek is committed on release.</summary>
-public sealed class WaveSeekBar : FrameworkElement
+public sealed partial class WaveSeekBar : FrameworkElement
 {
     public static readonly DependencyProperty MaximumProperty = DependencyProperty.Register(
         nameof(Maximum), typeof(double), typeof(WaveSeekBar),
@@ -54,6 +54,7 @@ public sealed class WaveSeekBar : FrameworkElement
         _spouts.Clear();
         _rockets.Clear();
         _embers.Clear();
+        ClearNature();
         UpdateAnimationState();
         if (Look == SeekBarStyle.None) StopAnimating();
     }
@@ -236,6 +237,22 @@ public sealed class WaveSeekBar : FrameworkElement
             else if (Look == SeekBarStyle.Aurora)
             {
                 DrawAurora(dc, mid, thumbX, maxHeight + AuroraOverflow, fadeIn, cool, accent, warm);
+            }
+            else if (Look == SeekBarStyle.Fireflies)
+            {
+                DrawFireflies(dc, mid, thumbX, cool, accent, warm);
+            }
+            else if (Look == SeekBarStyle.Electric)
+            {
+                DrawElectric(dc, mid, thumbX, accent);
+            }
+            else if (Look == SeekBarStyle.Petals)
+            {
+                DrawPetals(dc, mid, thumbX, cool, accent, warm);
+            }
+            else if (Look == SeekBarStyle.Notes)
+            {
+                DrawNotes(dc, mid, thumbX, cool, accent, warm);
             }
             else if (Look == SeekBarStyle.Sparkle)
             {
@@ -1496,7 +1513,7 @@ public sealed class WaveSeekBar : FrameworkElement
 
     private void UpdateAnimationState()
     {
-        if (IsLoaded && OnScreen.Check(this) && (IsPlaying || _activity > 0.002 || _ripples.Count > 0 || _sparks.Count > 0 || _licks.Count > 0 || _stars.Count > 0 || _drops.Count > 0 || _splashes.Count > 0 || _droplets.Count > 0 || _jets.Count > 0 || _spouts.Count > 0 || _rockets.Count > 0 || _embers.Count > 0)
+        if (IsLoaded && OnScreen.Check(this) && (IsPlaying || _activity > 0.002 || _ripples.Count > 0 || _sparks.Count > 0 || _licks.Count > 0 || _stars.Count > 0 || _drops.Count > 0 || _splashes.Count > 0 || _droplets.Count > 0 || _jets.Count > 0 || _spouts.Count > 0 || _rockets.Count > 0 || _embers.Count > 0 || NatureAlive)
             && Look != SeekBarStyle.None) StartAnimating();
     }
 
@@ -1557,6 +1574,7 @@ public sealed class WaveSeekBar : FrameworkElement
         UpdateRain(dt, beat);
         UpdateFountain(dt, beat);
         UpdateFireworks(dt, beat);
+        UpdateNature(dt, beat);
         for (var i = _ripples.Count - 1; i >= 0; i--)
         {
             var (distance, strength) = _ripples[i];
@@ -1565,7 +1583,7 @@ public sealed class WaveSeekBar : FrameworkElement
             else _ripples[i] = (distance + dt * 150, strength);
         }
 
-        if (!IsPlaying && _activity < 0.002 && _ripples.Count == 0 && _sparks.Count == 0 && _licks.Count == 0 && _stars.Count == 0 && _drops.Count == 0 && _splashes.Count == 0 && _droplets.Count == 0 && _jets.Count == 0 && _spouts.Count == 0 && _rockets.Count == 0 && _embers.Count == 0)
+        if (!IsPlaying && _activity < 0.002 && _ripples.Count == 0 && _sparks.Count == 0 && _licks.Count == 0 && _stars.Count == 0 && _drops.Count == 0 && _splashes.Count == 0 && _droplets.Count == 0 && _jets.Count == 0 && _spouts.Count == 0 && _rockets.Count == 0 && _embers.Count == 0 && !NatureAlive)
         {
             _activity = 0;
             _level = 0;
