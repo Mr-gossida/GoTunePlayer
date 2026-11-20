@@ -385,6 +385,9 @@ public sealed partial class WaveSeekBar
         }
     }
 
+    /// <summary>How many notes rise, against the first tuning.</summary>
+    private const double NotesDensity = 0.7;
+
     private void UpdateNotes(double dt, bool beat)
     {
         for (var i = _notes.Count - 1; i >= 0; i--)
@@ -401,8 +404,11 @@ public sealed partial class WaveSeekBar
         if (thumbX - Left < 16) return;
         var energy = Energy;
         var mid = ActualHeight / 2;
-        var count = (beat ? 1 + (int)(3 * energy) : 0) + (Random.Shared.NextDouble() < dt * (1 + 6 * energy) ? 1 : 0);
-        for (var k = 0; k < count && _notes.Count < 24; k++)
+        // (all of it 30% fewer than first tuned: there were too many)
+        var burst = beat ? NotesDensity * (1 + 3 * energy) : 0;
+        var count = (int)burst + (Random.Shared.NextDouble() < burst % 1 ? 1 : 0)
+                    + (Random.Shared.NextDouble() < dt * NotesDensity * (1 + 6 * energy) ? 1 : 0);
+        for (var k = 0; k < count && _notes.Count < 17; k++)
         {
             _notes.Add(new Spark
             {
