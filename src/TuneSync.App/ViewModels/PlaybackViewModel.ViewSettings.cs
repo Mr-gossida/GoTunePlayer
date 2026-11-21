@@ -80,7 +80,7 @@ public sealed partial class PlaybackViewModel
     /// <summary>The seek bar looks in the order the settings list them (없음, 랜덤, then the looks).</summary>
     public static readonly SeekBarStyle[] SeekBarStyleOrder =
         [SeekBarStyle.None, SeekBarStyle.Random, SeekBarStyle.Wave, SeekBarStyle.Flame, SeekBarStyle.Neon, SeekBarStyle.Bars, SeekBarStyle.Fountain, SeekBarStyle.Rain, SeekBarStyle.Aurora,
-         SeekBarStyle.Sparkle, SeekBarStyle.Fireworks, SeekBarStyle.Fireflies, SeekBarStyle.Electric, SeekBarStyle.Petals, SeekBarStyle.Notes];
+         SeekBarStyle.Sparkle, SeekBarStyle.Fireworks, SeekBarStyle.Fireflies, SeekBarStyle.Electric, SeekBarStyle.Plasma, SeekBarStyle.Petals, SeekBarStyle.Notes];
 
     private void PickSeekLook()
     {
@@ -107,6 +107,7 @@ public sealed partial class PlaybackViewModel
         SeekBarStyle.Fireworks => "불꽃놀이",
         SeekBarStyle.Fireflies => "반딧불",
         SeekBarStyle.Electric => "테슬라 코일",
+        SeekBarStyle.Plasma => "플라즈마 볼",
         SeekBarStyle.Petals => "꽃잎",
         SeekBarStyle.Notes => "음표",
         _ => style.ToString(),
@@ -142,7 +143,7 @@ public sealed partial class PlaybackViewModel
 
     /// <summary>The background effects 랜덤 can pick from.</summary>
     public static readonly BackgroundEffect[] RandomBackgrounds =
-        [BackgroundEffect.Aurora, BackgroundEffect.Caustics, BackgroundEffect.Bokeh, BackgroundEffect.Nebula, BackgroundEffect.Lava, BackgroundEffect.CoverGradient];
+        [BackgroundEffect.Aurora, BackgroundEffect.Caustics, BackgroundEffect.Bokeh, BackgroundEffect.Nebula, BackgroundEffect.Lava, BackgroundEffect.CoverGradient, BackgroundEffect.Rain];
 
     /// <summary>랜덤's pick: one of <paramref name="all"/> not left out in 설정 (all of them when
     /// every one is), and a different one from <paramref name="now"/> when there's a choice, so

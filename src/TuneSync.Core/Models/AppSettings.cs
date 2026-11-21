@@ -217,6 +217,8 @@ public enum BackgroundEffect
     // setting that still holds one is read as Aurora.)
     /// <summary>커버 색 그라데이션: soft fields of the cover's colors slowly flowing into each other.</summary>
     CoverGradient = 8,
+    /// <summary>비: slanting rain over a soft glow, landing on water with spreading rings.</summary>
+    Rain = 9,
 }
 
 public enum AuroraMode
@@ -332,6 +334,8 @@ public enum SeekBarStyle
     Petals,
     /// <summary>Musical notes rising from all along the played part.</summary>
     Notes,
+    /// <summary>A plasma ball's plasma spread over the played part: soft wavering strands reaching up and down from the line.</summary>
+    Plasma,
 }
 
 public enum SpectrumStyle

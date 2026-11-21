@@ -246,6 +246,10 @@ public sealed partial class WaveSeekBar : FrameworkElement
             {
                 DrawElectric(dc, mid, thumbX, cool, accent, warm);
             }
+            else if (Look == SeekBarStyle.Plasma)
+            {
+                DrawPlasma(dc, mid, thumbX, cool, accent, warm);
+            }
             else if (Look == SeekBarStyle.Petals)
             {
                 DrawPetals(dc, mid, thumbX, cool, accent, warm);

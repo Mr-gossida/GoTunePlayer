@@ -21,7 +21,16 @@ public sealed partial class WaveSeekBar
     /// <summary>A gust that pushes the petals sideways on a beat, dying away.</summary>
     private double _gust;
 
-    private bool NatureAlive => _flies.Count > 0 || _bolts.Count > 0 || _petals.Count > 0 || _notes.Count > 0;
+    /// <summary>Which way the gusts blow (+1 right, -1 left): picked anew when the wind has
+    /// died down, and every few seconds anyway (with a beat every half second the gusts never
+    /// die down, and the petals blew one way for half a minute).</summary>
+    private double _gustDirection = 1;
+    private double _gustTurnIn;
+
+    /// <summary>The petals' breeze: a gentle wind that slowly turns from one side to the other.</summary>
+    private double _breezeTime;
+
+    private bool NatureAlive => _flies.Count > 0 || _bolts.Count > 0 || _petals.Count > 0 || _notes.Count > 0 || _filaments.Count > 0;
 
     private void ClearNature()
     {
@@ -29,6 +38,7 @@ public sealed partial class WaveSeekBar
         _bolts.Clear();
         _petals.Clear();
         _notes.Clear();
+        _filaments.Clear();
         _gust = 0;
     }
 
@@ -46,6 +56,7 @@ public sealed partial class WaveSeekBar
         UpdateBolts(dt, beat);
         UpdatePetals(dt, beat);
         UpdateNotes(dt, beat);
+        UpdatePlasma(dt, beat);
     }
 
     // ---- 반딧불 ----
@@ -141,14 +152,18 @@ public sealed partial class WaveSeekBar
     {
         DrawPlayedLine(dc, mid, thumbX, cool, accent, warm);
         var glow = Mix(accent, Color.FromRgb(0xB8, 0xA4, 0xFF), 0.55);
-        var top = -NatureOverflow;
-        var bottom = ActualHeight + NatureOverflow;
+        // The arcs keep to a band a little taller than the strip. They used to reach well past
+        // it and get bounced back at its edges, where they ran flat along them - a hard
+        // straight border above and below the bar.
+        var limit = ElectricReach(mid);
+        var top = mid - limit;
+        var bottom = mid + limit;
 
         // the wire's own faint charge glow
         if (_activity > 0.05)
         {
             var charge = (0.5 + 0.5 * Energy + 0.5 * _flash) * _activity;
-            dc.DrawLine(SolidPen(Color.FromArgb((byte)(0x30 * Math.Min(1, charge)), glow.R, glow.G, glow.B), 7), new Point(Left, mid), new Point(thumbX, mid));
+            dc.DrawLine(SolidPen(Color.FromArgb((byte)(0x30 * Math.Min(1, charge)), glow.R, glow.G, glow.B), 5), new Point(Left, mid), new Point(thumbX, mid));
         }
 
         foreach (var bolt in _bolts)
@@ -192,7 +207,7 @@ public sealed partial class WaveSeekBar
                     along.Normalize();
                     var turn = (Random.Shared.NextDouble() < 0.5 ? -1 : 1) * (0.5 + Random.Shared.NextDouble() * 0.7);
                     var dir = new Vector(along.X * Math.Cos(turn) - along.Y * Math.Sin(turn), along.X * Math.Sin(turn) + along.Y * Math.Cos(turn));
-                    var reach = span * (0.12 + Random.Shared.NextDouble() * 0.22);
+                    var reach = span * (0.1 + Random.Shared.NextDouble() * 0.15);
                     var forkPath = Jagged(from, from + dir * reach, 0.3, top, bottom);
                     Polyline(f, forkPath);
                     if (forkPath.Count > 4 && Random.Shared.NextDouble() < 0.35)
@@ -207,17 +222,21 @@ public sealed partial class WaveSeekBar
             forks.Freeze();
 
             var bright = fade * (0.7 + 0.3 * bolt.Hue);
-            dc.DrawGeometry(null, RoundPen(Color.FromArgb((byte)(0x30 * bright), glow.R, glow.G, glow.B), arc ? 7 : 5), trunk);
-            dc.DrawGeometry(null, RoundPen(Color.FromArgb((byte)(0x26 * bright), glow.R, glow.G, glow.B), 3), forks);
-            dc.DrawGeometry(null, RoundPen(Color.FromArgb((byte)(0xB0 * bright), glow.R, glow.G, glow.B), arc ? 2.2 : 1.6), trunk);
-            dc.DrawGeometry(null, RoundPen(Color.FromArgb((byte)(0x90 * bright), glow.R, glow.G, glow.B), 0.9), forks);
-            dc.DrawGeometry(null, RoundPen(Color.FromArgb((byte)(0xF0 * bright), 0xFF, 0xFF, 0xFF), arc ? 1 : 0.7), trunk);
+            dc.DrawGeometry(null, RoundPen(Color.FromArgb((byte)(0x30 * bright), glow.R, glow.G, glow.B), arc ? 4.5 : 3.5), trunk);
+            dc.DrawGeometry(null, RoundPen(Color.FromArgb((byte)(0x26 * bright), glow.R, glow.G, glow.B), 2.2), forks);
+            dc.DrawGeometry(null, RoundPen(Color.FromArgb((byte)(0xB0 * bright), glow.R, glow.G, glow.B), arc ? 1.6 : 1.2), trunk);
+            dc.DrawGeometry(null, RoundPen(Color.FromArgb((byte)(0x90 * bright), glow.R, glow.G, glow.B), 0.8), forks);
+            dc.DrawGeometry(null, RoundPen(Color.FromArgb((byte)(0xF0 * bright), 0xFF, 0xFF, 0xFF), arc ? 0.8 : 0.6), trunk);
             // where an arc leaves the wire (and where it lands), a white-hot spot
             var hot = Solid(Color.FromArgb((byte)(0x90 * bright), 0xFF, 0xFF, 0xFF));
-            dc.DrawEllipse(hot, null, start, arc ? 2.6 : 1.8, arc ? 2.6 : 1.8);
-            if (arc) dc.DrawEllipse(hot, null, end, 2.6, 2.6);
+            dc.DrawEllipse(hot, null, start, arc ? 1.8 : 1.3, arc ? 1.8 : 1.3);
+            if (arc) dc.DrawEllipse(hot, null, end, 1.8, 1.8);
         }
     }
+
+    /// <summary>How far from the wire the arcs may go, above and below: the strip's half
+    /// height and a few pixels more.</summary>
+    private static double ElectricReach(double mid) => mid - 1 + 4;
 
     /// <summary>A lightning path from <paramref name="a"/> to <paramref name="b"/>: the straight
     /// line, its middle pushed sideways at random, then the middles of the halves, and so on -
@@ -273,7 +292,8 @@ public sealed partial class WaveSeekBar
         var room = thumbX - Left;
         if (room < 24) return;
         var energy = Energy;
-        var height = ActualHeight;
+        // arcs end well inside the band, so the jags around them still fit
+        var limit = ElectricReach(ActualHeight / 2);
         double Spot() => Left + 4 + Random.Shared.NextDouble() * (room - 8);
 
         // arcs off the wire at random spots all along it - more and longer the louder it is
@@ -284,12 +304,12 @@ public sealed partial class WaveSeekBar
         {
             // up or down, leaning one way or the other
             var up = Random.Shared.NextDouble() < 0.5 ? -1 : 1;
-            var reach = 8 + Random.Shared.NextDouble() * (12 + 30 * energy);
+            var reach = 4 + Random.Shared.NextDouble() * (5 + 9 * energy);
             _bolts.Add(new Spark
             {
                 X = Spot(),
-                Vx = (Random.Shared.NextDouble() - 0.5) * reach * 1.6,
-                Vy = up * Math.Min(reach, height * (0.55 + 0.6 * energy)),
+                Vx = (Random.Shared.NextDouble() - 0.5) * reach * 2,
+                Vy = up * Math.Min(reach, limit * 0.65),
                 Life = 0.05 + Random.Shared.NextDouble() * 0.09,
                 Hue = Random.Shared.NextDouble(),
             });
@@ -301,13 +321,13 @@ public sealed partial class WaveSeekBar
             var arcs = 1 + (int)(3 * energy);
             for (var n = 0; n < arcs && _bolts.Count < 28; n++)
             {
-                var span = Math.Min(room - 8, 30 + Random.Shared.NextDouble() * (40 + 140 * energy));
+                var span = Math.Min(room - 8, 20 + Random.Shared.NextDouble() * (30 + 90 * energy));
                 var from = Left + 4 + Random.Shared.NextDouble() * Math.Max(0, room - 8 - span);
                 _bolts.Add(new Spark
                 {
                     X = from,
                     Vx = span,
-                    Vy = (Random.Shared.NextDouble() < 0.5 ? -1 : 1) * height * (0.3 + 0.35 * Random.Shared.NextDouble() + 0.3 * energy),
+                    Vy = (Random.Shared.NextDouble() < 0.5 ? -1 : 1) * limit * (0.35 + 0.2 * Random.Shared.NextDouble() + 0.15 * energy),
                     Size = 1,
                     Life = 0.12 + Random.Shared.NextDouble() * 0.1,
                     Hue = 0.6 + 0.4 * Random.Shared.NextDouble(),
@@ -382,7 +402,19 @@ public sealed partial class WaveSeekBar
     private void UpdatePetals(double dt, bool beat)
     {
         _gust *= Math.Exp(-dt * 1.6);
-        if (beat && Look == SeekBarStyle.Petals) _gust = Math.Min(1.4, _gust + 0.4 + _flash);
+        if (beat && Look == SeekBarStyle.Petals)
+        {
+            // a new gust comes from either side
+            if (_gust < 0.25 || _gustTurnIn <= 0)
+            {
+                _gustDirection = Random.Shared.NextDouble() < 0.5 ? -1 : 1;
+                _gustTurnIn = 3 + Random.Shared.NextDouble() * 4;
+            }
+            _gust = Math.Min(1.4, _gust + 0.4 + _flash);
+        }
+        _gustTurnIn -= dt;
+        _breezeTime += dt;
+        var breeze = 9 * Math.Sin(_breezeTime * 0.21) + 4 * Math.Sin(_breezeTime * 0.53 + 1.3);
         var height = ActualHeight;
         for (var i = _petals.Count - 1; i >= 0; i--)
         {
@@ -390,9 +422,9 @@ public sealed partial class WaveSeekBar
             p.Age += dt;
             // swaying down, with the gust's push
             var sway = Math.Sin(p.Age * (1.6 + p.Hue) + p.Hue * 20) * (6 + 4 * p.Hue);
-            p.X += (p.Vx + sway + 28 * _gust) * dt;
+            p.X += (p.Vx + sway + breeze + 28 * _gust * _gustDirection) * dt;
             p.Y += p.Vy * (0.75 + 0.35 * Math.Abs(Math.Sin(p.Age * 2.2 + p.Hue * 9))) * dt;
-            if (p.Y > height + 4 || p.X > Right + 10 || p.Age > 12) _petals.RemoveAt(i);
+            if (p.Y > height + 4 || p.X > Right + 10 || p.X < Left - 10 || p.Age > 12) _petals.RemoveAt(i);
             else _petals[i] = p;
         }
         if (!Spawning(SeekBarStyle.Petals)) return;
@@ -406,7 +438,7 @@ public sealed partial class WaveSeekBar
             {
                 X = Left + Random.Shared.NextDouble() * (thumbX - Left),
                 Y = -NatureOverflow + Random.Shared.NextDouble() * 4,
-                Vx = -2 + Random.Shared.NextDouble() * 4,
+                Vx = -5 + Random.Shared.NextDouble() * 10,
                 Vy = 9 + Random.Shared.NextDouble() * 7 + 8 * energy,
                 Size = (6 + Random.Shared.NextDouble() * 2.5) * EffectScale,
                 Hue = Random.Shared.NextDouble(),
