@@ -716,7 +716,8 @@ public sealed partial class WaveSeekBar : FrameworkElement
             // frame, is rebuilt by the GPU every frame (CLAUDE.md: per-frame drawing)
             var center = new Point(spout.X, mid - 1);
             double rx = 5 + 5 * s, ry = 2.5 + 3 * s;
-            var glow = new RadialGradientBrush(Color.FromArgb((byte)(130 * s), warm.R, warm.G, warm.B), Color.FromArgb(0, warm.R, warm.G, warm.B))
+            var lit = FountainColor(spout.Hue, accent);
+            var glow = new RadialGradientBrush(Color.FromArgb((byte)(130 * s), lit.R, lit.G, lit.B), Color.FromArgb(0, lit.R, lit.G, lit.B))
             {
                 MappingMode = BrushMappingMode.Absolute,
                 Center = center,
@@ -730,14 +731,17 @@ public sealed partial class WaveSeekBar : FrameworkElement
 
         foreach (var drop in _jets)
         {
-            // each drop's own tint (in sixths, so the colors - and their brushes - are few)
-            var tint = Mix(drop.Life < 0.5 ? accent : warm, Colors.White, 0.35 + 0.3 * Math.Round(drop.Life * 6) / 6);
+            // the color of the light its jet was in when it left, a little paler for some drops
+            // (in quarters, so the colors - and their brushes - stay few)
+            var tint = Mix(FountainColor(drop.Hue, accent), Colors.White, 0.15 + 0.25 * Math.Round(drop.Life * 4) / 4);
             // fades as it nears the line again, and in its first moment
             var fade = Math.Clamp((mid - drop.Y) / 6, 0, 1) * Math.Min(1, drop.Age / 0.05);
             if (fade <= 0.02) continue;
             var tail = new Point(drop.X - drop.Vx * 0.03, drop.Y - drop.Vy * 0.03);
-            DrawStreak(dc, tail, new Point(drop.X, drop.Y), Color.FromArgb((byte)(200 * fade), tint.R, tint.G, tint.B), drop.Size);
-            dc.DrawEllipse(Solid(Color.FromArgb((byte)(235 * fade), 0xFF, 0xFF, 0xFF)), null,
+            DrawStreak(dc, tail, new Point(drop.X, drop.Y), Color.FromArgb((byte)(210 * fade), tint.R, tint.G, tint.B), drop.Size);
+            // the drop itself lit in its color too (pure white washed the colors out)
+            var head = Mix(tint, Colors.White, 0.45);
+            dc.DrawEllipse(Solid(Color.FromArgb((byte)(235 * fade), head.R, head.G, head.B)), null,
                 new Point(drop.X, drop.Y), drop.Size * 0.55, drop.Size * 0.55);
         }
     }
@@ -757,6 +761,29 @@ public sealed partial class WaveSeekBar : FrameworkElement
     /// the beat, settling to 0), and whether that beat was a strong one (the whole row leaps).</summary>
     private double _danceTime, _kick;
     private bool _kickAll;
+
+    /// <summary>Where the fountain's colored lights are on the color wheel (0..1): drifting with
+    /// the dance, a step on every beat, half the wheel on a strong one.</summary>
+    private double _fountainHue;
+
+    /// <summary>Hues in steps of this, so the colors - and the brushes kept for them - stay few.</summary>
+    private const double HueStep = 1 / 24.0;
+
+    /// <summary>A fountain light's color: <paramref name="hue"/> round the color wheel, clear and
+    /// bright, leaning a little toward the cover's color so it still belongs to the song.</summary>
+    private static Color FountainColor(double hue, Color accent)
+    {
+        var h = (hue - Math.Floor(hue)) * 6;
+        var f = h - Math.Floor(h);
+        const double s = 0.62;
+        double p = 1 - s, q = 1 - s * f, t = 1 - s * (1 - f);
+        var (r, g, b) = ((int)h % 6) switch
+        {
+            0 => (1.0, t, p), 1 => (q, 1.0, p), 2 => (p, 1.0, t),
+            3 => (p, q, 1.0), 4 => (t, p, 1.0), _ => (1.0, p, q),
+        };
+        return Mix(Color.FromRgb((byte)(255 * r), (byte)(255 * g), (byte)(255 * b)), accent, 0.18);
+    }
 
     private void UpdateFountain(double dt, bool beat)
     {
@@ -784,7 +811,10 @@ public sealed partial class WaveSeekBar : FrameworkElement
         {
             _kick = 1;
             _kickAll = _beatStrength >= StrongBeat;
+            // the lights change with the beat: a step round the wheel, half of it on a strong one
+            _fountainHue += _kickAll ? 0.5 : 0.09;
         }
+        _fountainHue += dt * 0.03;
 
         // Loudness, curved so quiet and loud look far apart: quiet - low ripples; loud - tall.
         var power = Math.Pow(Math.Clamp(loud, 0, 1.25), 1.6);
@@ -812,13 +842,16 @@ public sealed partial class WaveSeekBar : FrameworkElement
             var height = room * (0.22 * (0.4 + 0.6 * share) + 1.0 * power * (0.25 + 0.75 * share) + 0.45 * _kick * share)
                          * (1 + 0.5 * _kick);
             var strength = Math.Clamp((0.15 + 0.85 * power) * (0.3 + 0.7 * share) * (0.8 + 0.4 * _kick), 0, 1);
-            _spouts.Add(new Spark { X = x, Size = strength });
+            // each jet in its own colored light: a rainbow along the row that drifts with the
+            // dance and moves on with the beat
+            var hue = Math.Round((_fountainHue + i * 0.055) / HueStep) * HueStep;
+            _spouts.Add(new Spark { X = x, Size = strength, Hue = hue });
 
             // water to match: a thin spray when low and quiet, a full column when it's up
             var rate = dt * (4 + 22 * strength);
             var count = (Random.Shared.NextDouble() < rate - Math.Floor(rate) ? 1 : 0) + (int)rate;
             for (var n = 0; n < count; n++)
-                Throw(x, mid, height, spread: 5 + 4 * strength, size: 0.75 + 0.25 * strength);
+                Throw(x, mid, height, spread: 5 + 4 * strength, size: 0.75 + 0.25 * strength, hue);
         }
 
         // 1 at the middle of a bump of this half width, falling off to 0.15 away from it
@@ -826,7 +859,7 @@ public sealed partial class WaveSeekBar : FrameworkElement
     }
 
     /// <summary>One droplet from <paramref name="x"/>, to reach about <paramref name="height"/> pixels up.</summary>
-    private void Throw(double x, double mid, double height, double spread, double size)
+    private void Throw(double x, double mid, double height, double spread, double size, double hue)
     {
         if (_jets.Count >= 320) return; // (was 220: the whole row spouts now)
         var h = Math.Max(2, height * (0.7 + 0.5 * Random.Shared.NextDouble()));
@@ -838,6 +871,7 @@ public sealed partial class WaveSeekBar : FrameworkElement
             Vy = -Math.Sqrt(2 * FountainGravity * h),
             Size = (size + 0.35 * Random.Shared.NextDouble()) * EffectScale,
             Life = Random.Shared.NextDouble(),
+            Hue = hue,
         });
     }
 
