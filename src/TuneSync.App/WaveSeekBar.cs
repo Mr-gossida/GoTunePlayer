@@ -286,6 +286,10 @@ public sealed partial class WaveSeekBar : FrameworkElement
             {
                 DrawRibbons(dc, mid, thumbX, cool, accent, warm);
             }
+            else if (Look == SeekBarStyle.Meteor)
+            {
+                DrawMeteors(dc, mid, thumbX, cool, accent, warm);
+            }
             else if (Look == SeekBarStyle.Sparkle)
             {
                 DrawPlayedLine(dc, mid, thumbX, cool, accent, warm);

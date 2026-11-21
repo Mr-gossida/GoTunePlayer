@@ -345,6 +345,8 @@ public enum SeekBarStyle
     Bubbles,
     /// <summary>Silk ribbons tied to the thumb, swaying and twisting back over the played part.</summary>
     Ribbon,
+    /// <summary>Shooting stars falling at a slant onto the played part, flashing where they land.</summary>
+    Meteor,
 }
 
 public enum SpectrumStyle

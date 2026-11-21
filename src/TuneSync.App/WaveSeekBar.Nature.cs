@@ -5,8 +5,8 @@ using TuneSync.Core.Models;
 
 namespace TuneSync.App;
 
-// The seek bar looks added after the first ten: 반딧불, 테슬라 코일, 꽃잎 and 음표 (비눗방울 and
-// 실크 리본 have files of their own). Each is particles
+// The seek bar looks added after the first ten: 반딧불, 테슬라 코일, 꽃잎 and 음표 (비눗방울,
+// 실크 리본 and 별똥별 have files of their own). Each is particles
 // over the played part, moved in UpdateNature and drawn by its own Draw method; brushes and pens
 // come from the kept sets in WaveSeekBar.cs (Solid, SolidPen), so a frame makes none of its own.
 public sealed partial class WaveSeekBar
@@ -31,7 +31,8 @@ public sealed partial class WaveSeekBar
     /// <summary>The petals' breeze: a gentle wind that slowly turns from one side to the other.</summary>
     private double _breezeTime;
 
-    private bool NatureAlive => _flies.Count > 0 || _bolts.Count > 0 || _petals.Count > 0 || _notes.Count > 0 || _bubbles.Count > 0 || _pops.Count > 0;
+    private bool NatureAlive => _flies.Count > 0 || _bolts.Count > 0 || _petals.Count > 0 || _notes.Count > 0 || _bubbles.Count > 0 || _pops.Count > 0
+                               || _meteors.Count > 0 || _impacts.Count > 0;
 
     private void ClearNature()
     {
@@ -41,6 +42,8 @@ public sealed partial class WaveSeekBar
         _notes.Clear();
         _bubbles.Clear();
         _pops.Clear();
+        _meteors.Clear();
+        _impacts.Clear();
         _gust = 0;
     }
 
@@ -59,6 +62,7 @@ public sealed partial class WaveSeekBar
         UpdatePetals(dt, beat);
         UpdateNotes(dt, beat);
         UpdateBubbles(dt, beat);
+        UpdateMeteors(dt, beat);
     }
 
     // ---- 반딧불 ----
