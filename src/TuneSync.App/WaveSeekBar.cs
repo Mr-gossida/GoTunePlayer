@@ -784,11 +784,12 @@ public sealed partial class WaveSeekBar : FrameworkElement
         if (beat) QueueVolley(thumbX);
         for (var i = _spoutQueue.Count - 1; i >= 0; i--)
         {
-            var (wait, at, strong) = _spoutQueue[i];
+            var (wait, back, strong) = _spoutQueue[i];
             wait -= dt;
-            if (wait > 0) { _spoutQueue[i] = (wait, at, strong); continue; }
+            if (wait > 0) { _spoutQueue[i] = (wait, back, strong); continue; }
             _spoutQueue.RemoveAt(i);
-            if (_spouts.Count < MaxSpouts) SpawnSpoutAt(Left + 8 + at * (thumbX - Left - 16), strong);
+            var x = thumbX - 8 - back;
+            if (_spouts.Count < MaxSpouts && x > Left + 4) SpawnSpoutAt(x, strong);
         }
         if (NoPulse && Random.Shared.NextDouble() < dt * Loud(1.2, 5, _level) && _spouts.Count < MaxSpouts)
             SpawnSpout(thumbX, strong: false);
@@ -811,9 +812,16 @@ public sealed partial class WaveSeekBar : FrameworkElement
     private const int MaxSpouts = 9;
 
     /// <summary>Jets waiting to spring up, a moment apart so a volley runs along the bar: how long
-    /// until it does, where (a share of the played part, so it stays put as the thumb moves on),
-    /// and whether it's from a strong beat.</summary>
-    private readonly List<(double Wait, double At, bool Strong)> _spoutQueue = [];
+    /// until it does, where (how far back from the thumb), and whether it's from a strong beat.</summary>
+    private readonly List<(double Wait, double Back, bool Strong)> _spoutQueue = [];
+
+    /// <summary>How far apart a volley's jets stand, however much of the bar is played (spread
+    /// over the whole played part, they stood close on a short one and far apart on a long one).</summary>
+    private const double JetSpacing = 26;
+
+    /// <summary>Where the current volley stands: how far back from the thumb its right end is.
+    /// Kept for the beat after an 'odd jets' one, so the even ones go up between them.</summary>
+    private double _volleyBack;
 
     private enum Volley { Odd, Even, SweepRight, SweepLeft, CenterOut, All }
 
@@ -822,13 +830,18 @@ public sealed partial class WaveSeekBar : FrameworkElement
     private static readonly Volley[] FountainRound =
         [Volley.Odd, Volley.Even, Volley.Odd, Volley.Even, Volley.SweepRight, Volley.SweepLeft, Volley.CenterOut, Volley.All];
 
-    /// <summary>Lines up this beat's volley: evenly spaced jets along the played part, the ones
-    /// the pattern picks, each after its own short wait.</summary>
+    /// <summary>Lines up this beat's volley: a row of up to seven jets JetSpacing apart, at a spot
+    /// of its own somewhere on the played part, the ones the pattern picks, each after its own
+    /// short wait.</summary>
     private void QueueVolley(double thumbX)
     {
         var strong = _beatStrength >= StrongBeat;
         var kind = strong ? Volley.All : FountainRound[_beatCount % FountainRound.Length];
-        var slots = Math.Clamp((int)((thumbX - Left) / 34), 3, 7);
+        var span = Math.Max(0, thumbX - Left - 16);
+        var slots = Math.Clamp((int)(span / JetSpacing) + 1, 1, 7);
+        var width = (slots - 1) * JetSpacing;
+        // a new spot for each volley, except the even jets, which fill in between the odd ones
+        if (kind != Volley.Even) _volleyBack = Random.Shared.NextDouble() * Math.Max(0, span - width);
         var middle = (slots - 1) / 2.0;
         for (var j = 0; j < slots; j++)
         {
@@ -841,7 +854,8 @@ public sealed partial class WaveSeekBar : FrameworkElement
                 Volley.CenterOut => (true, 0.07 * Math.Abs(j - middle)),
                 _ => (true, 0.0),
             };
-            if (on) _spoutQueue.Add((wait, (j + 0.5) / slots, strong || kind == Volley.All));
+            // jet j counted from the left: the rightmost stands _volleyBack back from the thumb
+            if (on) _spoutQueue.Add((wait, _volleyBack + (slots - 1 - j) * JetSpacing, strong || kind == Volley.All));
         }
     }
 
