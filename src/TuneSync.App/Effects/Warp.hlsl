@@ -59,7 +59,8 @@ float3 StarLayer(float r, float u, float t, float slices, float speed, float see
 
         // across the streak: the distance from its path
         float across = r * abs(within - place) * Tau / slices;
-        float width = 0.0006 + 0.0022 * (1.0 - z);
+        // (was 0.0006 + 0.0022: near stars were ~10 px wide bands at 1080p; now ~3-4 px)
+        float width = 0.0004 + 0.0008 * (1.0 - z);
         float thin = 1.0 - smoothstep(width * 0.4, width * 1.6, across);
 
         // along it: brightest at the head, fading back to the tail
@@ -98,7 +99,8 @@ float4 main(float2 uv : TEXCOORD) : COLOR
     float rim = smoothstep(0.45, 1.1, r) * 0.1;
     float3 sky = back.rgb + (color1.rgb * glow * 0.45 + color2.rgb * rim * 0.25) * intensity;
 
-    float3 light = stars * 1.6;
+    // (a little brighter since they got thinner, so they don't fade into the dark)
+    float3 light = stars * 2.0;
     float3 col = sky + light * intensity;
 
     // grain: about one step of 8-bit color, against banding in the glow
