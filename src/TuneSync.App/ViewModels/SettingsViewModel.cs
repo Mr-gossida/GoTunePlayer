@@ -428,6 +428,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         new(BackgroundEffect.Lava, "라바 램프"),
         new(BackgroundEffect.CoverGradient, "그라데이션"),
         new(BackgroundEffect.Rain, "비"),
+        new(BackgroundEffect.Warp, "워프"),
     ];
 
     /// <summary>설정 › 화면 보호기 › 배경 효과: how it moves (bound to Playback.AuroraMode).</summary>

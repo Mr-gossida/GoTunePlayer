@@ -37,6 +37,7 @@
     <Resource Include="Effects\Lava.ps" />
     <Resource Include="Effects\CoverGradient.ps" />
     <Resource Include="Effects\Rain.ps" />
+    <Resource Include="Effects\Warp.ps" />
   </ItemGroup>
 
 </Project>

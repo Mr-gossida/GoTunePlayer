@@ -143,7 +143,7 @@ public sealed partial class PlaybackViewModel
 
     /// <summary>The background effects 랜덤 can pick from.</summary>
     public static readonly BackgroundEffect[] RandomBackgrounds =
-        [BackgroundEffect.Aurora, BackgroundEffect.Caustics, BackgroundEffect.Bokeh, BackgroundEffect.Nebula, BackgroundEffect.Lava, BackgroundEffect.CoverGradient, BackgroundEffect.Rain];
+        [BackgroundEffect.Aurora, BackgroundEffect.Caustics, BackgroundEffect.Bokeh, BackgroundEffect.Nebula, BackgroundEffect.Lava, BackgroundEffect.CoverGradient, BackgroundEffect.Rain, BackgroundEffect.Warp];
 
     /// <summary>랜덤's pick: one of <paramref name="all"/> not left out in 설정 (all of them when
     /// every one is), and a different one from <paramref name="now"/> when there's a choice, so

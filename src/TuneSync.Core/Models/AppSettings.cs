@@ -219,6 +219,8 @@ public enum BackgroundEffect
     CoverGradient = 8,
     /// <summary>비: slanting rain over a soft glow, landing on water with spreading rings.</summary>
     Rain = 9,
+    /// <summary>워프: flying forward through stars streaming out of the middle of the screen.</summary>
+    Warp = 10,
 }
 
 public enum AuroraMode
