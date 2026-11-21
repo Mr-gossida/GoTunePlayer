@@ -32,7 +32,7 @@ public sealed partial class WaveSeekBar
     private double _breezeTime;
 
     private bool NatureAlive => _flies.Count > 0 || _bolts.Count > 0 || _petals.Count > 0 || _notes.Count > 0 || _bubbles.Count > 0 || _pops.Count > 0
-                               || _meteors.Count > 0 || _impacts.Count > 0;
+                               || _meteors.Count > 0;
 
     private void ClearNature()
     {
@@ -43,7 +43,6 @@ public sealed partial class WaveSeekBar
         _bubbles.Clear();
         _pops.Clear();
         _meteors.Clear();
-        _impacts.Clear();
         _gust = 0;
     }
 

@@ -4,69 +4,59 @@ using TuneSync.Core.Models;
 
 namespace TuneSync.App;
 
-// 별똥별: shooting stars falling onto the played part. Particles moved in UpdateNature and drawn
-// with the kept brushes and streaks (Solid, DrawStreak), like the other nature looks.
+// 별똥별: shooting stars over the played part. Particles moved in UpdateNature and drawn with the
+// kept brushes and streaks (Solid, SolidPen, DrawStreak), like the other nature looks.
 public sealed partial class WaveSeekBar
 {
     private readonly List<Spark> _meteors = [];
-    private readonly List<Spark> _impacts = [];
 
-    /// <summary>Which way the shower falls (+1 toward the thumb, -1 back): every star of a shower
-    /// keeps to it, like a real meteor shower; it turns now and then.</summary>
-    private double _showerDirection = 1;
-    private double _showerTurnIn;
+    /// <summary>How long a shooting star twinkles where it appears before it sets off (seconds).</summary>
+    private const double MeteorTwinkle = 0.3;
 
-    /// <summary>How long a landing's flash and sparks last.</summary>
-    private const double ImpactTime = 0.4;
-
-    /// <summary>Shooting stars falling at a slant out of the air above onto the played part, each a
-    /// bright head with a long fading tail; where one lands on the line it flashes and throws up a
-    /// few sparks. Now and then one falls; louder music brings more, a beat sends one down, and
-    /// a strong beat a whole shower. All of a shower fall the same way.
-    /// (In a meteor: X, Y - its head; Vx, Vy - its speed; Size - its width; Hue - its color.
-    /// In an impact: X - where it landed; Size - how bright; Hue - its color.)</summary>
+    /// <summary>Thin shooting stars, always from the left: each first twinkles for a moment where
+    /// it appears up in the air, then sets off down and to the right at a slant - slowly at first,
+    /// faster through the middle and fastest at the end - and fades out as it passes, just above
+    /// the line. Its tail grows with its speed. Now and then one falls; louder music brings more,
+    /// a beat sends one off, and a strong beat three, one after another.
+    /// (In a meteor: X, Y - where it appears; Vx, Vy - the way to where it ends; Age - seconds
+    /// since it appeared (below 0 while waiting its turn); Life - how long it flies; Size - its
+    /// width; Hue - its color.)</summary>
     private void DrawMeteors(DrawingContext dc, double mid, double thumbX, Color cool, Color accent, Color warm)
     {
         DrawPlayedLine(dc, mid, thumbX, cool, accent, warm);
         foreach (var m in _meteors)
         {
-            var fadeIn = Math.Min(1, m.Age / 0.08);
-            if (fadeIn <= 0.03) continue;
+            if (m.Age < 0) continue;
             var tone = MeteorTone(accent, m.Hue);
-            var head = new Point(m.X, m.Y);
-            // a tail as long as a tenth of a second's flight, a fainter and longer glow behind it
-            var tail = new Point(m.X - m.Vx * 0.1, m.Y - m.Vy * 0.1);
-            var trail = new Point(m.X - m.Vx * 0.2, m.Y - m.Vy * 0.2);
-            DrawStreak(dc, trail, head, Color.FromArgb((byte)(70 * fadeIn), tone.R, tone.G, tone.B), m.Size * 2.6, roundHead: false);
-            DrawStreak(dc, tail, head, Color.FromArgb((byte)(220 * fadeIn), tone.R, tone.G, tone.B), m.Size);
-            var core = Mix(tone, Colors.White, 0.7);
-            dc.DrawEllipse(Solid(Color.FromArgb((byte)(255 * fadeIn), core.R, core.G, core.B)), null, head, m.Size * 0.75, m.Size * 0.75);
-        }
+            var start = new Point(m.X, m.Y);
 
-        foreach (var hit in _impacts)
-        {
-            var t = hit.Age / ImpactTime;
-            var fade = (1 - t) * hit.Size;
-            var tone = Mix(MeteorTone(accent, hit.Hue), Colors.White, 0.35);
-            var at = new Point(hit.X, mid);
-            // the flash on the line, wide and short
-            var flash = 1 - Math.Min(1, t / 0.45);
-            if (flash > 0.02)
+            // the twinkle where it appears: a little four-pointed star that swells and fades
+            if (m.Age < MeteorTwinkle + 0.15)
             {
-                dc.DrawEllipse(Solid(Color.FromArgb((byte)(70 * flash * hit.Size), tone.R, tone.G, tone.B)), null, at, 9 * EffectScale, 4 * EffectScale);
-                dc.DrawEllipse(Solid(Color.FromArgb((byte)(200 * flash * hit.Size), 0xFF, 0xFF, 0xFF)), null, at, 2.2, 1.6);
+                var t = m.Age / (MeteorTwinkle + 0.15);
+                var glow = Math.Sin(Math.PI * Math.Min(1, t)); // up and down again
+                var arm = (2.5 + 3 * glow) * EffectScale;
+                var pen = SolidPen(Color.FromArgb((byte)(200 * glow), tone.R, tone.G, tone.B), 0.6);
+                dc.DrawLine(pen, new Point(start.X - arm, start.Y), new Point(start.X + arm, start.Y));
+                dc.DrawLine(pen, new Point(start.X, start.Y - arm), new Point(start.X, start.Y + arm));
+                dc.DrawEllipse(Solid(Color.FromArgb((byte)(240 * glow), 0xFF, 0xFF, 0xFF)), null, start, 0.9 + 0.5 * glow, 0.9 + 0.5 * glow);
             }
-            // a few sparks thrown up and falling back
-            var dot = Solid(Color.FromArgb((byte)(230 * fade), tone.R, tone.G, tone.B));
-            for (var i = 0; i < 5; i++)
-            {
-                var angle = Math.PI * (0.12 + 0.76 * (i + hit.Hue * 0.6) / 5); // fanned out over the line
-                var speed = (34 + 18 * ((i * 0.37 + hit.Hue) % 1)) * EffectScale;
-                var x = hit.X - Math.Cos(angle) * speed * hit.Age;
-                var y = mid - Math.Sin(angle) * speed * hit.Age + 160 * hit.Age * hit.Age;
-                if (y > mid) continue;
-                dc.DrawEllipse(dot, null, new Point(x, y), 0.8, 0.8);
-            }
+            if (m.Age < MeteorTwinkle) continue;
+
+            // flying: eased in - slow from the start, then ever faster to the end
+            var u = Math.Min(1, (m.Age - MeteorTwinkle) / m.Life);
+            var along = u * u;
+            var speed = 2 * u; // how fast it goes now, against its average
+            var head = new Point(m.X + m.Vx * along, m.Y + m.Vy * along);
+            // fading in as it sets off and out over the last stretch
+            var alpha = Math.Min(1, u / 0.1) * Math.Min(1, (1 - u) / 0.3);
+            if (alpha <= 0.02) continue;
+            // a tail as long as the way it's covering right now
+            var reach = 0.08 + 0.2 * speed;
+            var tail = new Point(head.X - m.Vx * reach * 0.5, head.Y - m.Vy * reach * 0.5);
+            DrawStreak(dc, tail, head, Color.FromArgb((byte)(200 * alpha), tone.R, tone.G, tone.B), m.Size, roundHead: false);
+            var core = Mix(tone, Colors.White, 0.75);
+            dc.DrawEllipse(Solid(Color.FromArgb((byte)(255 * alpha), core.R, core.G, core.B)), null, head, m.Size * 0.6, m.Size * 0.6);
         }
     }
 
@@ -77,62 +67,38 @@ public sealed partial class WaveSeekBar
 
     private void UpdateMeteors(double dt, bool beat)
     {
-        var mid = ActualHeight / 2;
-        for (var i = _impacts.Count - 1; i >= 0; i--)
-        {
-            var hit = _impacts[i];
-            hit.Age += dt;
-            if (hit.Age >= ImpactTime) _impacts.RemoveAt(i);
-            else _impacts[i] = hit;
-        }
-
-        var thumbX = PlayedX;
         for (var i = _meteors.Count - 1; i >= 0; i--)
         {
             var m = _meteors[i];
             m.Age += dt;
-            m.X += m.Vx * dt;
-            m.Y += m.Vy * dt;
-            if (m.Y >= mid - 1)
-            {
-                _meteors.RemoveAt(i);
-                // landed on the line: a flash and sparks (unless the song jumped back past it)
-                if (m.X <= thumbX + 4 && _impacts.Count < 10)
-                    _impacts.Add(new Spark { X = m.X, Size = Math.Min(1, 0.55 + 0.5 * m.Size / 2), Hue = m.Hue });
-            }
-            else if (m.Age > 2) _meteors.RemoveAt(i);
+            if (m.Age >= MeteorTwinkle + m.Life) _meteors.RemoveAt(i);
             else _meteors[i] = m;
         }
 
-        _showerTurnIn -= dt;
-        if (!Spawning(SeekBarStyle.Meteor) || thumbX - Left < 30) return;
-        if (_showerTurnIn <= 0)
-        {
-            _showerDirection = Random.Shared.NextDouble() < 0.7 ? 1 : -1; // mostly falling toward the thumb
-            _showerTurnIn = 6 + Random.Shared.NextDouble() * 8;
-        }
+        var thumbX = PlayedX;
+        if (!Spawning(SeekBarStyle.Meteor) || thumbX - Left < 90) return;
         var energy = Energy;
-        var count = (Random.Shared.NextDouble() < dt * (0.5 + 2.5 * energy) ? 1 : 0)
+        var count = (Random.Shared.NextDouble() < dt * (0.5 + 2.2 * energy) ? 1 : 0)
                     + (beat ? (_beatStrength >= StrongBeat ? 3 : 1) : 0);
+        var mid = ActualHeight / 2;
         for (var n = 0; n < count && _meteors.Count < 8; n++)
         {
-            // aimed at a spot on the played part, starting up in the air at a slant
-            var land = Left + 8 + Random.Shared.NextDouble() * (thumbX - Left - 14);
-            var slant = (24 + Random.Shared.NextDouble() * 16) * Math.PI / 180;
-            var speed = (150 + Random.Shared.NextDouble() * 90 + 60 * energy) * EffectScale;
-            var vx = Math.Cos(slant) * speed * _showerDirection;
-            var vy = Math.Sin(slant) * speed;
-            // the drop from where it appears (a little above the strip) to the line; a beat's
-            // shower is staggered so its stars don't land at once
-            var fall = mid + NatureOverflow + 4 + n * 9;
-            var time = fall / vy;
+            // it ends just above the line somewhere over the played part, having come from up and
+            // to the left of there at a slant
+            var end = Left + 70 + Random.Shared.NextDouble() * (thumbX - Left - 76);
+            var fall = mid + NatureOverflow + 2 - Random.Shared.NextDouble() * 4;
+            // a shallow slant, so it streaks a good way across (steeper, it barely moved)
+            var slant = (9 + Random.Shared.NextDouble() * 7) * Math.PI / 180;
+            var run = Math.Min(fall / Math.Tan(slant), end - Left - 4);
             _meteors.Add(new Spark
             {
-                X = land - vx * time,
+                X = end - run,
                 Y = mid - fall,
-                Vx = vx,
-                Vy = vy,
-                Size = (1.3 + Random.Shared.NextDouble() * 0.7 + 0.5 * energy) * EffectScale,
+                Vx = run,
+                Vy = fall - 3, // ending a few px above the line, where it fades out
+                Life = 0.75 + Random.Shared.NextDouble() * 0.3 - 0.15 * Math.Min(1, energy),
+                Age = -n * 0.18, // a beat's three go one after another
+                Size = (0.8 + Random.Shared.NextDouble() * 0.35) * EffectScale,
                 Hue = Random.Shared.NextDouble(),
             });
         }
