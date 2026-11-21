@@ -73,6 +73,7 @@ public partial class App : Application
         }
 
         DispatcherUnhandledException += OnDispatcherUnhandledException;
+        PlayerShortcuts.ReleaseClickedButtons();
         TaskScheduler.UnobservedTaskException += (_, args) => args.SetObserved();
         // a device's volume the last run took over (hardware volume) and couldn't put back
         _ = Task.Run(TuneSync.Core.Audio.HeldVolume.Default.PutBackLeftovers);
