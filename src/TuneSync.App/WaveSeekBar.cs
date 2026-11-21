@@ -1250,6 +1250,10 @@ public sealed partial class WaveSeekBar : FrameworkElement
     private const double FlameOverflow = 9;
     private const double TongueSpacing = 6.5;
 
+    /// <summary>How much bigger the fire is drawn than the strip's room: height, width and the
+    /// reach of its colors alike.</summary>
+    private const double FireSize = 1.1;
+
     /// <summary>How tall the fire burns: follows the music, but through <see cref="_fireLevel"/>,
     /// which rises and falls more slowly than the meter, so the fire swells and settles instead of
     /// pumping with every beat.</summary>
@@ -1257,7 +1261,10 @@ public sealed partial class WaveSeekBar : FrameworkElement
     {
         var room = ActualHeight / 2 - 2 + FlameOverflow;
         var fadeIn = Math.Min(1, (thumbX - Left) / 60);
-        return room * _activity * Loud(0.42, 0.58, _fireLevel) * fadeIn * (1 + 0.12 * _flash);
+        // FireSize: 10% bigger than the other looks' scale. The span is wide and the floor low
+        // (0.35 + 0.72, was 0.42 + 0.58: the same height at middling loudness), so quiet
+        // passages burn clearly lower and loud ones clearly higher.
+        return room * FireSize * _activity * Loud(0.35, 0.72, _fireLevel) * fadeIn * (1 + 0.12 * _flash);
     }
 
     /// <summary>The part of a tongue's flicker cycle where it stops stretching and its tip breaks off.</summary>
@@ -1338,7 +1345,7 @@ public sealed partial class WaveSeekBar : FrameworkElement
         h = full * g * shimmer;
         // A stretched tongue gets thinner; one that just dropped is short and broad. Narrower
         // than the spacing would suggest, so the tongues' own shapes show, not just one front.
-        w = TongueSpacing * (1.15 + 0.6 * Hash(i + 31)) * (1.15 - 0.3 * g);
+        w = TongueSpacing * FireSize * (1.15 + 0.6 * Hash(i + 31)) * (1.15 - 0.3 * g);
         var reach = h / room;
         lean = Draft(x, t) * w * 0.9 * (reach + 0.3) + Math.Sin(t * 7.3 + seed * 31) * 0.14 * w * reach;
         return true;
@@ -1408,7 +1415,7 @@ public sealed partial class WaveSeekBar : FrameworkElement
         core.Freeze();
         // Tongues can stretch past the strip's room now that the effects are bigger; the colors
         // reach that far too, so the tips still show.
-        room *= EffectScale;
+        room *= EffectScale * FireSize;
 
         // A warm glow on the line under the fire.
         var glow = new LinearGradientBrush
