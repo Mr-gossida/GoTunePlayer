@@ -302,7 +302,7 @@ public partial class NowPlayingStage : UserControl
     }
 
     /// <summary>Set by the screen saver while it's open when all its screens should show the same
-    /// effect for 랜덤 (설정 › 화면 보호기 › 여러 모니터의 배경); null lets each stage pick its own.</summary>
+    /// effect for 무작위 (설정 › 화면 보호기 › 여러 모니터의 배경); null lets each stage pick its own.</summary>
     public static BackgroundEffect? SharedRandomLook { get; private set; }
 
     // The song the shared pick was made for: with 곡마다 바꾸기, the first stage to see a new song
@@ -316,7 +316,7 @@ public partial class NowPlayingStage : UserControl
         _sharedLookSong = song;
     }
 
-    /// <summary>랜덤 with 곡마다 바꾸기: the look for the song that just started.</summary>
+    /// <summary>무작위 with 곡마다 바꾸기: the look for the song that just started.</summary>
     private BackgroundEffect NextRandomLook()
     {
         if (SharedRandomLook is not { } shared) return _playback.PickRandomBackground(AuroraLight.Look);
@@ -328,7 +328,7 @@ public partial class NowPlayingStage : UserControl
         return shared;
     }
 
-    /// <summary>The background effect chosen (for 랜덤, one picked when the stage opens).</summary>
+    /// <summary>The background effect chosen (for 무작위, one picked when the stage opens).</summary>
     private void ApplyLook(bool fade = false)
     {
         var look = _playback.BackgroundEffect;

@@ -92,7 +92,7 @@ public partial class SettingsView : Page
             {
                 if (IsBoundVisibility(child))
                 {
-                    // a 랜덤 pool under a card: shown with its card, and only while 랜덤 is chosen
+                    // a 무작위 pool under a card: shown with its card, and only while 무작위 is chosen
                     if (lastMatch) ShowChild(child);
                     else child.SetCurrentValue(VisibilityProperty, Visibility.Collapsed);
                     continue;
@@ -116,7 +116,7 @@ public partial class SettingsView : Page
         ContentScroller.ScrollToTop();
     }
 
-    // Some children (the 랜덤 pools) bind their Visibility to the view model. Assigning Visibility
+    // Some children (the 무작위 pools) bind their Visibility to the view model. Assigning Visibility
     // would replace that binding for good, so those get their bound value re-read instead.
     private static bool IsBoundVisibility(UIElement child) =>
         BindingOperations.GetBindingExpression(child, VisibilityProperty) is not null;

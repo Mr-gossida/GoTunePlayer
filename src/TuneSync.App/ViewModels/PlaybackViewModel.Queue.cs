@@ -151,7 +151,7 @@ public sealed partial class PlaybackViewModel
         AppSettingsStore.Save(_settings);
     }
 
-    public string ShuffleToolTip => IsShuffle ? "랜덤 재생: 켬" : "랜덤 재생: 끔";
+    public string ShuffleToolTip => IsShuffle ? "무작위 재생: 켬" : "무작위 재생: 끔";
 
     public string RepeatToolTip => Repeat switch
     {

@@ -77,7 +77,7 @@ public sealed partial class PlaybackViewModel
     [ObservableProperty]
     private SeekBarStyle _seekLook;
 
-    /// <summary>The seek bar looks in the order the settings list them (없음, 랜덤, then the looks).</summary>
+    /// <summary>The seek bar looks in the order the settings list them (없음, 무작위, then the looks).</summary>
     public static readonly SeekBarStyle[] SeekBarStyleOrder =
         [SeekBarStyle.None, SeekBarStyle.Random, SeekBarStyle.Wave, SeekBarStyle.Flame, SeekBarStyle.Neon, SeekBarStyle.Bars, SeekBarStyle.Fountain, SeekBarStyle.Rain, SeekBarStyle.Aurora,
          SeekBarStyle.Sparkle, SeekBarStyle.Fireworks, SeekBarStyle.Fireflies, SeekBarStyle.Electric, SeekBarStyle.Petals, SeekBarStyle.Notes,
@@ -103,7 +103,7 @@ public sealed partial class PlaybackViewModel
         SeekBarStyle.Rain => "빗방울",
         SeekBarStyle.Aurora => "오로라",
         SeekBarStyle.Sparkle => "별빛",
-        SeekBarStyle.Random => "랜덤 (곡마다)",
+        SeekBarStyle.Random => "무작위 (곡마다)",
         SeekBarStyle.None => "없음",
         SeekBarStyle.Fireworks => "불꽃놀이",
         SeekBarStyle.Fireflies => "반딧불",
@@ -129,7 +129,7 @@ public sealed partial class PlaybackViewModel
         }
     }
 
-    /// <summary>The spectrum's look right now: the chosen one, or with 랜덤 one picked per song.</summary>
+    /// <summary>The spectrum's look right now: the chosen one, or with 무작위 one picked per song.</summary>
     [ObservableProperty]
     private SpectrumStyle _spectrumLook;
 
@@ -140,15 +140,15 @@ public sealed partial class PlaybackViewModel
         SpectrumStyle.Neon, SpectrumStyle.Rainbow, SpectrumStyle.Reflect, SpectrumStyle.Pins, SpectrumStyle.Scope,
     ];
 
-    /// <summary>The seek bar looks 랜덤 can pick from (all but 랜덤 and 없음).</summary>
+    /// <summary>The seek bar looks 무작위 can pick from (all but 무작위 and 없음).</summary>
     public static readonly SeekBarStyle[] RandomSeekLooks =
         [.. SeekBarStyleOrder.Where(l => l is not (SeekBarStyle.Random or SeekBarStyle.None))];
 
-    /// <summary>The background effects 랜덤 can pick from.</summary>
+    /// <summary>The background effects 무작위 can pick from.</summary>
     public static readonly BackgroundEffect[] RandomBackgrounds =
         [BackgroundEffect.Aurora, BackgroundEffect.Caustics, BackgroundEffect.Bokeh, BackgroundEffect.Nebula, BackgroundEffect.Lava, BackgroundEffect.CoverGradient, BackgroundEffect.Rain, BackgroundEffect.Warp];
 
-    /// <summary>랜덤's pick: one of <paramref name="all"/> not left out in 설정 (all of them when
+    /// <summary>무작위's pick: one of <paramref name="all"/> not left out in 설정 (all of them when
     /// every one is), and a different one from <paramref name="now"/> when there's a choice, so
     /// the change shows.</summary>
     private static T PickFrom<T>(IReadOnlyList<T> all, ICollection<T> excluded, T now)
@@ -160,13 +160,13 @@ public sealed partial class PlaybackViewModel
         return from[Random.Shared.Next(from.Length)];
     }
 
-    /// <summary>A background effect for 랜덤 (picked each time the stage opens).</summary>
+    /// <summary>A background effect for 무작위 (picked each time the stage opens).</summary>
     public BackgroundEffect PickRandomBackground(BackgroundEffect now) => PickFrom(RandomBackgrounds, _settings.BackgroundRandomExcluded, now);
 
-    /// <summary>랜덤 background: a new pick for every song (설정 › 화면 보호기), not just when the stage opens.</summary>
+    /// <summary>무작위 background: a new pick for every song (설정 › 화면 효과 › 배경 효과), not just when the stage opens.</summary>
     public bool RandomBackgroundPerSong => _settings.ScreenSaverLookPerSong;
 
-    /// <summary>설정 changed which looks 랜덤 may pick: a look that just left the pool is
+    /// <summary>설정 changed which looks 무작위 may pick: a look that just left the pool is
     /// swapped for one still in it.</summary>
     public void RandomPoolChanged()
     {
@@ -187,7 +187,7 @@ public sealed partial class PlaybackViewModel
         SpectrumLook = PickFrom(RandomLooks, _settings.SpectrumRandomExcluded, SpectrumLook);
     }
 
-    /// <summary>Clicking the spectrum steps through <see cref="SpectrumStyleOrder"/> (없음, 랜덤, the looks), back to 없음 after the last.</summary>
+    /// <summary>Clicking the spectrum steps through <see cref="SpectrumStyleOrder"/> (없음, 무작위, the looks), back to 없음 after the last.</summary>
     public void CycleSpectrumStyle()
     {
         var all = SpectrumStyleOrder;
@@ -207,7 +207,7 @@ public sealed partial class PlaybackViewModel
         SpectrumStyle.Reflect => "반사 막대",
         SpectrumStyle.Pins => "핀",
         SpectrumStyle.Scope => "오실로스코프",
-        SpectrumStyle.Random => "랜덤 (곡마다)",
+        SpectrumStyle.Random => "무작위 (곡마다)",
         _ => style.ToString(),
     };
 

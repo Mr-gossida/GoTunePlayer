@@ -2,7 +2,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace TuneSync.App.ViewModels;
 
-/// <summary>One look in a 랜덤 setting's pool (설정 › 화면 효과): checked, 랜덤 may pick it.</summary>
+/// <summary>One look in a 무작위 setting's pool (설정 › 화면 효과): checked, 무작위 may pick it.</summary>
 public sealed class RandomPoolItem : ObservableObject
 {
     private readonly Action _changed;

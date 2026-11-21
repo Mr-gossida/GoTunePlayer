@@ -82,14 +82,14 @@ public sealed class AppSettings
     /// <summary>What plays along on the seek bar.</summary>
     public SeekBarStyle SeekBarStyle { get; set; } = SeekBarStyle.Wave;
 
-    /// <summary>Seek bar looks 랜덤 doesn't pick (unchecked in 설정). Kept as the ones left out,
+    /// <summary>Seek bar looks 무작위 doesn't pick (unchecked in 설정). Kept as the ones left out,
     /// so a look added later is in the pool from the start.</summary>
     public List<SeekBarStyle> SeekBarRandomExcluded { get; set; } = [];
 
-    /// <summary>Spectrum looks 랜덤 doesn't pick.</summary>
+    /// <summary>Spectrum looks 무작위 doesn't pick.</summary>
     public List<SpectrumStyle> SpectrumRandomExcluded { get; set; } = [];
 
-    /// <summary>Background effects 랜덤 doesn't pick.</summary>
+    /// <summary>Background effects 무작위 doesn't pick.</summary>
     public List<BackgroundEffect> BackgroundRandomExcluded { get; set; } = [];
 
     /// <summary>The spectrum analyzer's look (under the song info and on the screen saver).</summary>
@@ -159,11 +159,11 @@ public sealed class AppSettings
     /// <summary>How the screen saver is left: any input (default), or only the Esc key.</summary>
     public ScreenSaverExit ScreenSaverExit { get; set; } = ScreenSaverExit.AnyInput;
 
-    /// <summary>With the background effect on 랜덤 and several monitors: every screen of the
+    /// <summary>With the background effect on 무작위 and several monitors: every screen of the
     /// screen saver shows the same picked effect (one light across them), or each picks its own.</summary>
     public bool ScreenSaverSameLook { get; set; } = true;
 
-    /// <summary>With the background effect on 랜덤: the screen saver (and focus mode) picks a new
+    /// <summary>With the background effect on 무작위: the screen saver (and focus mode) picks a new
     /// effect for every song, fading from one to the next; off, one pick each time it opens.</summary>
     public bool ScreenSaverLookPerSong { get; set; }
 

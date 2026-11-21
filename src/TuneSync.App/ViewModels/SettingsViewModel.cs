@@ -29,7 +29,9 @@ public sealed partial class SettingsViewModel : ObservableObject
         Library = playback.Library;
         playback.PropertyChanged += (_, e) =>
         {
-            if (e.PropertyName == nameof(PlaybackViewModel.BackgroundEffect)) OnPropertyChanged(nameof(IsBackgroundRandom));
+            if (e.PropertyName != nameof(PlaybackViewModel.BackgroundEffect)) return;
+            OnPropertyChanged(nameof(IsBackgroundRandom));
+            OnPropertyChanged(nameof(BackgroundChoice));
         };
         _theme = settings.Theme;
         _quarantineFolderName = settings.MergeQuarantineFolderName;
@@ -256,7 +258,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         }
     }
 
-    // ---- 랜덤's pools: with 랜덤 chosen, which looks it may pick (checkboxes under the card) ----
+    // ---- 무작위's pools: with 무작위 chosen, which looks it may pick (checkboxes under the card) ----
 
     public bool IsSeekBarRandom => SeekBarStyle == SeekBarStyle.Random;
     public bool IsSpectrumRandom => SpectrumStyle == SpectrumStyle.Random;
@@ -443,7 +445,7 @@ public sealed partial class SettingsViewModel : ObservableObject
     [ObservableProperty]
     private bool _screenSaverSameLook;
 
-    /// <summary>설정 › 화면 보호기 › 여러 모니터의 배경 (only shown while the background is 랜덤).</summary>
+    /// <summary>설정 › 화면 보호기 › 여러 모니터의 배경 (only shown while the background is 무작위).</summary>
     public IReadOnlyList<Choice<bool>> ScreenSaverSameLookOptions { get; } =
     [
         new(true, "모두 같게"),
@@ -456,20 +458,41 @@ public sealed partial class SettingsViewModel : ObservableObject
         AppSettingsStore.Save(_settings);
     }
 
-    /// <summary>랜덤 background: pick once when the screen saver opens, or again for every song.</summary>
+    /// <summary>무작위 background: pick once when the screen saver or focus mode opens, or again for
+    /// every song (chosen in 배경 효과's list, see <see cref="BackgroundChoice"/>).</summary>
     [ObservableProperty]
     private bool _screenSaverLookPerSong;
-
-    public IReadOnlyList<Choice<bool>> ScreenSaverLookPerSongOptions { get; } =
-    [
-        new(false, "켤 때마다 하나"),
-        new(true, "곡마다 바꾸기"),
-    ];
 
     partial void OnScreenSaverLookPerSongChanged(bool value)
     {
         _settings.ScreenSaverLookPerSong = value;
         AppSettingsStore.Save(_settings);
+        OnPropertyChanged(nameof(BackgroundChoice));
+    }
+
+    /// <summary>설정 › 화면 효과 › 배경 효과's list: the effects, with 무작위 twice - a new pick
+    /// for every song, or one each time the screen saver or focus mode opens.</summary>
+    public IReadOnlyList<Choice<BackgroundChoice>> BackgroundChoiceOptions => _backgroundChoiceOptions ??=
+    [
+        new(new(BackgroundEffect.Random, true), "무작위 (곡마다)"),
+        new(new(BackgroundEffect.Random, false), "무작위 (켤 때마다)"),
+        .. BackgroundEffectOptions.Where(o => o.Value != BackgroundEffect.Random)
+                                  .Select(o => new Choice<BackgroundChoice>(new(o.Value, false), o.Label)),
+    ];
+
+    private IReadOnlyList<Choice<BackgroundChoice>>? _backgroundChoiceOptions;
+
+    /// <summary>The background effect and, for 무작위, when it picks anew (the choice in the list).</summary>
+    public BackgroundChoice BackgroundChoice
+    {
+        get => new(Playback.BackgroundEffect, Playback.BackgroundEffect == BackgroundEffect.Random && ScreenSaverLookPerSong);
+        set
+        {
+            // the per-song choice is only touched by the 무작위 entries, so it's kept for next time
+            if (value.Effect == BackgroundEffect.Random) ScreenSaverLookPerSong = value.PerSong;
+            Playback.BackgroundEffect = value.Effect;
+            OnPropertyChanged();
+        }
     }
 
     public IReadOnlyList<Choice<ScreenSaverExit>> ScreenSaverExitOptions { get; } =

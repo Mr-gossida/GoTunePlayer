@@ -37,7 +37,7 @@ public static class ScreenSaver
     {
         if (_windows is not null || _playback is null) return;
         NowPlayingStage.NewAuroraSession();
-        // 랜덤 background: one pick for every monitor unless the user wants each to differ.
+        // 무작위 background: one pick for every monitor unless the user wants each to differ.
         _lastSharedLook = _playback.PickRandomBackground(_lastSharedLook);
         NowPlayingStage.ShareRandomLook(_settings?.ScreenSaverSameLook != false ? _lastSharedLook : null, _playback.CurrentFile);
         ScreenSaverWindow.EscapeOnly = _settings?.ScreenSaverExit == ScreenSaverExit.EscapeKey;

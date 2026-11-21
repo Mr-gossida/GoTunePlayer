@@ -188,7 +188,7 @@ public sealed partial class PlaybackViewModel : ObservableObject, IDisposable
         LibraryFileViewModel.ArtistFirst = settings.QueueArtistFirst;
         PickSeekLook();
         PickSpectrumLook();
-        // 랜덤: a new look for every song.
+        // 무작위: a new look for every song.
         PropertyChanged += (_, e) =>
         {
             if (e.PropertyName != nameof(CurrentFile)) return;
