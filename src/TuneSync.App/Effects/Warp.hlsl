@@ -25,7 +25,9 @@ float2 span : register(c6);
 
 static const float Tau = 6.2831853;
 // how far out (in screen heights) a star is when it appears, at depth 1
-static const float Near = 0.045;
+static const float Near = 0.02;
+// how far beyond that a star may first show (screen heights; the corners are ~0.9 out)
+static const float Spread = 0.6;
 // how long a moment the streak covers, in seconds (more than the light's 1/15 s step)
 static const float Trail = 0.16;
 
@@ -47,6 +49,7 @@ float3 StarLayer(float r, float u, float t, float slices, float speed, float see
         float h2 = Hash(id + 11.0);
         float h3 = Hash(id + 23.0);
         float h4 = Hash(id + 41.0);
+        float h5 = Hash(id + 67.0);
 
         // where in the wedge it flies (kept off the wedge's edges, where its light would be cut)
         float place = 0.25 + 0.5 * h1;
@@ -54,22 +57,33 @@ float3 StarLayer(float r, float u, float t, float slices, float speed, float see
         // depth: 1 far away, near 0 as it passes; wraps around to far again
         float z = frac(h2 + k * 0.5 - t * pace);
         z = max(z, 0.015);
-        float head = Near / z;
-        float tail = Near / (z + pace * Trail);
+        // Where it first shows, as seen from here: anywhere on the screen, as a real star field
+        // projects (all starting at one small radius, they crowded into a ring round the
+        // middle). Spread out, but leaning a little toward the middle (h5^0.75: between even
+        // over the area and even over the distance), so the middle doesn't empty out.
+        float start = Near + Spread * pow(h5, 0.75);
+        float head = start / z;
+        float tail = start / (z + pace * Trail);
+
+        // How far along its trip across the screen it is: 0 where it shows, 1 as it leaves past
+        // the corner (about 1 screen height out). A star that starts far out leaves sooner, so
+        // brightness and width follow this, not the depth alone - by depth, those stars were
+        // still dim when they left.
+        float leave = start / 1.0;
+        float trip = saturate((1.0 - z) / max(1.0 - leave, 0.05));
 
         // across the streak: the distance from its path
         float across = r * abs(within - place) * Tau / slices;
         // (was 0.0006 + 0.0022: near stars were ~10 px wide bands at 1080p; now ~3-4 px)
-        float width = 0.0004 + 0.0008 * (1.0 - z);
+        float width = 0.0004 + 0.0008 * trip;
         float thin = 1.0 - smoothstep(width * 0.4, width * 1.6, across);
 
         // along it: brightest at the head, fading back to the tail
         float s = (r - tail) / max(head - tail, 1e-4);
         float streak = saturate(s) * step(r, head) * step(tail, r);
 
-        // nearer stars are brighter; a new one fades in rather than popping up in the middle
-        float near = 1.0 - z;
-        float bright = near * near * (0.5 + 0.5 * h4) * smoothstep(1.0, 0.85, z);
+        // brighter as it comes near; a new one fades in rather than popping up
+        float bright = (0.12 + 0.88 * trip * trip) * (0.5 + 0.5 * h4) * smoothstep(1.0, 0.9, z);
 
         // white, a little toward one of the cover's colors
         float3 tint = lerp(float3(1, 1, 1), lerp(color1.rgb, color2.rgb, h4), 0.3);
