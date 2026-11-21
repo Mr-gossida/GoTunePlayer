@@ -91,11 +91,14 @@
                             <Grid x:Name="RowArea" Margin="{Binding RowIndent}">
                                 <!-- the search's current hit: tinted in the accent color with a bar at the left -->
                                 <Border x:Name="HitFill" CornerRadius="6" Background="{DynamicResource PlayerAccentBrush}" Opacity="0" IsHitTestVisible="False"/>
+                                <Border x:Name="FlashFill" CornerRadius="6" Background="{DynamicResource PlayerAccentBrush}" Opacity="0" IsHitTestVisible="False"/>
                                 <Border x:Name="Bd" Background="Transparent" CornerRadius="6" Padding="{TemplateBinding Padding}">
                                     <ContentPresenter/>
                                 </Border>
                                 <Border x:Name="HitBar" Width="3" CornerRadius="1.5" Margin="0,5" HorizontalAlignment="Left"
                                         Background="{DynamicResource PlayerAccentBrush}" Visibility="Collapsed" IsHitTestVisible="False"/>
+                                <Border x:Name="FlashRing" CornerRadius="6" BorderThickness="1.5" BorderBrush="{DynamicResource PlayerAccentBrush}"
+                                        Opacity="0" IsHitTestVisible="False"/>
                             </Grid>
                         </StackPanel>
                         <ControlTemplate.Triggers>
@@ -135,6 +138,33 @@
                                         </Storyboard>
                                     </BeginStoryboard>
                                 </DataTrigger.ExitActions>
+                            </DataTrigger>
+                            <!-- just found: two quick pulses of the accent color and a ring, then gone -->
+                            <DataTrigger Binding="{Binding IsFlashing}" Value="True">
+                                <DataTrigger.EnterActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="FlashFill" Storyboard.TargetProperty="Opacity">
+                                                <LinearDoubleKeyFrame KeyTime="0:0:0" Value="0"/>
+                                                <EasingDoubleKeyFrame KeyTime="0:0:0.14" Value="0.4"/>
+                                                <EasingDoubleKeyFrame KeyTime="0:0:0.45" Value="0.1"/>
+                                                <EasingDoubleKeyFrame KeyTime="0:0:0.72" Value="0.4"/>
+                                                <EasingDoubleKeyFrame KeyTime="0:0:1.5" Value="0">
+                                                    <EasingDoubleKeyFrame.EasingFunction><CubicEase EasingMode="EaseIn"/></EasingDoubleKeyFrame.EasingFunction>
+                                                </EasingDoubleKeyFrame>
+                                            </DoubleAnimationUsingKeyFrames>
+                                            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="FlashRing" Storyboard.TargetProperty="Opacity">
+                                                <LinearDoubleKeyFrame KeyTime="0:0:0" Value="0"/>
+                                                <EasingDoubleKeyFrame KeyTime="0:0:0.14" Value="1"/>
+                                                <EasingDoubleKeyFrame KeyTime="0:0:0.45" Value="0.35"/>
+                                                <EasingDoubleKeyFrame KeyTime="0:0:0.72" Value="1"/>
+                                                <EasingDoubleKeyFrame KeyTime="0:0:1.5" Value="0">
+                                                    <EasingDoubleKeyFrame.EasingFunction><CubicEase EasingMode="EaseIn"/></EasingDoubleKeyFrame.EasingFunction>
+                                                </EasingDoubleKeyFrame>
+                                            </DoubleAnimationUsingKeyFrames>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </DataTrigger.EnterActions>
                             </DataTrigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -236,6 +266,9 @@
                             <Border x:Name="Tint" CornerRadius="10" Background="{DynamicResource PlayerAccentBrush}" Opacity="0" IsHitTestVisible="False"/>
                             <Border x:Name="Ring" CornerRadius="10" BorderThickness="3" BorderBrush="{DynamicResource PlayerAccentBrush}"
                                     Visibility="Collapsed" IsHitTestVisible="False"/>
+                            <Border x:Name="FlashFill" CornerRadius="10" Background="{DynamicResource PlayerAccentBrush}" Opacity="0" IsHitTestVisible="False"/>
+                            <Border x:Name="FlashRing" CornerRadius="10" BorderThickness="3" BorderBrush="{DynamicResource PlayerAccentBrush}"
+                                    Opacity="0" IsHitTestVisible="False"/>
                             <Border x:Name="Check" Width="24" Height="24" CornerRadius="12" Margin="8" HorizontalAlignment="Left" VerticalAlignment="Top"
                                     Background="{DynamicResource PlayerAccentBrush}" BorderBrush="#E6FFFFFF" BorderThickness="1.5"
                                     IsHitTestVisible="False" Visibility="Collapsed">
@@ -276,6 +309,33 @@
                             <DataTrigger Binding="{Binding IsSearchHit}" Value="True">
                                 <Setter TargetName="Tint" Property="Opacity" Value="0.35"/>
                                 <Setter TargetName="Ring" Property="Visibility" Value="Visible"/>
+                            </DataTrigger>
+                            <!-- just found: two quick pulses of the accent color and a ring, then gone -->
+                            <DataTrigger Binding="{Binding IsFlashing}" Value="True">
+                                <DataTrigger.EnterActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="FlashFill" Storyboard.TargetProperty="Opacity">
+                                                <LinearDoubleKeyFrame KeyTime="0:0:0" Value="0"/>
+                                                <EasingDoubleKeyFrame KeyTime="0:0:0.14" Value="0.3"/>
+                                                <EasingDoubleKeyFrame KeyTime="0:0:0.45" Value="0.1"/>
+                                                <EasingDoubleKeyFrame KeyTime="0:0:0.72" Value="0.3"/>
+                                                <EasingDoubleKeyFrame KeyTime="0:0:1.5" Value="0">
+                                                    <EasingDoubleKeyFrame.EasingFunction><CubicEase EasingMode="EaseIn"/></EasingDoubleKeyFrame.EasingFunction>
+                                                </EasingDoubleKeyFrame>
+                                            </DoubleAnimationUsingKeyFrames>
+                                            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="FlashRing" Storyboard.TargetProperty="Opacity">
+                                                <LinearDoubleKeyFrame KeyTime="0:0:0" Value="0"/>
+                                                <EasingDoubleKeyFrame KeyTime="0:0:0.14" Value="1"/>
+                                                <EasingDoubleKeyFrame KeyTime="0:0:0.45" Value="0.35"/>
+                                                <EasingDoubleKeyFrame KeyTime="0:0:0.72" Value="1"/>
+                                                <EasingDoubleKeyFrame KeyTime="0:0:1.5" Value="0">
+                                                    <EasingDoubleKeyFrame.EasingFunction><CubicEase EasingMode="EaseIn"/></EasingDoubleKeyFrame.EasingFunction>
+                                                </EasingDoubleKeyFrame>
+                                            </DoubleAnimationUsingKeyFrames>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </DataTrigger.EnterActions>
                             </DataTrigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>

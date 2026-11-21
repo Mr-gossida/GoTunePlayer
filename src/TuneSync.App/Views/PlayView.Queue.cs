@@ -384,6 +384,39 @@ public partial class PlayView
         }
         PlaylistBox.SelectedItem = current;
         ShowRow(current, center: true);
+        FlashRow(current);
+    }
+
+    private LibraryFileViewModel? _flashing;
+    private System.Windows.Threading.DispatcherTimer? _flashTimer;
+
+    /// <summary>Makes a row the eye should find (just scrolled to) pulse for a moment: its
+    /// IsFlashing starts the animation in the row's template, and is cleared once it's over. A
+    /// flag on the song rather than an animation on its row, so a row reused for another song
+    /// while scrolling doesn't carry the pulse along.</summary>
+    private void FlashRow(LibraryFileViewModel row)
+    {
+        if (_flashing is not null) _flashing.IsFlashing = false;
+        row.IsFlashing = false; // again on the same row: start over
+        _flashing = row;
+        // after layout, so the row's container is there to play it
+        Dispatcher.BeginInvoke(() =>
+        {
+            if (!ReferenceEquals(_flashing, row)) return;
+            row.IsFlashing = true;
+            _flashTimer ??= new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(1.6) };
+            _flashTimer.Tick -= FlashTimer_Tick;
+            _flashTimer.Tick += FlashTimer_Tick;
+            _flashTimer.Stop();
+            _flashTimer.Start();
+        }, System.Windows.Threading.DispatcherPriority.Loaded);
+    }
+
+    private void FlashTimer_Tick(object? sender, EventArgs e)
+    {
+        _flashTimer?.Stop();
+        if (_flashing is not null) _flashing.IsFlashing = false;
+        _flashing = null;
     }
 
     /// <summary>Scrolls <paramref name="item"/> into view where it can be seen: never under the
@@ -405,7 +438,7 @@ public partial class PlayView
     }
 
     /// <summary>The playback bar's cover was clicked: bring the playing song into view in the
-    /// list and blink it, so the eye finds it. <paramref name="openQueue"/> also opens a hidden
+    /// list and make it pulse (FlashRow), so the eye finds it. <paramref name="openQueue"/> also opens a hidden
     /// list and clears a search (the card's "재생 목록에서 보기"); otherwise a hidden list stays hidden.</summary>
     public void RevealCurrent(bool openQueue)
     {
@@ -422,18 +455,8 @@ public partial class PlayView
             if (CurrentRow() is not { } current) return;
             PlaylistBox.SelectedItem = current;
             ShowRow(current, center: true);
-            Dispatcher.BeginInvoke(() =>
-            {
-                UpdateBackToCurrent();
-                if (PlaylistBox.ItemContainerGenerator.ContainerFromItem(current) is not System.Windows.UIElement row) return;
-                row.BeginAnimation(OpacityProperty, new System.Windows.Media.Animation.DoubleAnimation(1, 0.3, TimeSpan.FromMilliseconds(170))
-                {
-                    AutoReverse = true,
-                    RepeatBehavior = new System.Windows.Media.Animation.RepeatBehavior(2),
-                    FillBehavior = System.Windows.Media.Animation.FillBehavior.Stop,
-                    EasingFunction = new System.Windows.Media.Animation.SineEase(),
-                });
-            }, System.Windows.Threading.DispatcherPriority.Background);
+            Dispatcher.BeginInvoke(UpdateBackToCurrent, System.Windows.Threading.DispatcherPriority.Background);
+            FlashRow(current);
         }, System.Windows.Threading.DispatcherPriority.Loaded);
     }
 

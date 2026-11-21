@@ -128,6 +128,11 @@ public sealed partial class LibraryFileViewModel : ObservableObject
     [ObservableProperty]
     private bool _isSearchHit;
 
+    /// <summary>Just found ("지금 재생 중", a search hit, 재생 목록에서 보기): the row pulses for
+    /// a moment so the eye finds it (PlayView.FlashRow sets it and clears it again).</summary>
+    [ObservableProperty]
+    private bool _isFlashing;
+
     /// <summary>재생 목록 보기 › 아티스트 먼저: rows lead with the artist (set for all rows).</summary>
     public static bool ArtistFirst { get; set; }
 

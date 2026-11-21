@@ -24,7 +24,7 @@ public partial class PlayView
     private void SearchBox_TextChanged(object sender, TextChangedEventArgs e)
     {
         FindMatches();
-        GoToMatch(_matches.Count > 0 ? 0 : -1);
+        GoToMatch(_matches.Count > 0 ? 0 : -1, flash: false);
     }
 
     private void SearchBox_PreviewKeyDown(object sender, KeyEventArgs e)
@@ -37,7 +37,7 @@ public partial class PlayView
                 var step = Keyboard.Modifiers.HasFlag(ModifierKeys.Shift) ? -1 : 1;
                 var current = PlaylistBox.SelectedItem as LibraryFileViewModel;
                 var at = current is null ? -1 : _matches.IndexOf(current);
-                GoToMatch(at < 0 ? (step > 0 ? 0 : _matches.Count - 1) : ((at + step) % _matches.Count + _matches.Count) % _matches.Count);
+                GoToMatch(at < 0 ? (step > 0 ? 0 : _matches.Count - 1) : ((at + step) % _matches.Count + _matches.Count) % _matches.Count, flash: true);
                 e.Handled = true;
                 break;
             case Key.Down:
@@ -58,11 +58,14 @@ public partial class PlayView
 
     private LibraryFileViewModel? _searchHit;
 
-    private void GoToMatch(int index)
+    /// <param name="flash">Pulse the hit even when it's the one already shown (Enter steps to it
+    /// again); while typing, it pulses only when the typing finds a different song.</param>
+    private void GoToMatch(int index, bool flash)
     {
         var match = index >= 0 ? _matches[index] : null;
         if (!ReferenceEquals(_searchHit, match))
         {
+            flash = true;
             if (_searchHit is not null) _searchHit.IsSearchHit = false;
             _searchHit = match;
             if (match is not null) match.IsSearchHit = true;
@@ -78,6 +81,7 @@ public partial class PlayView
         PlaylistBox.SelectedItem = match;
         PlaylistBox.ScrollIntoView(match);
         Dispatcher.BeginInvoke(() => CenterInList(match), System.Windows.Threading.DispatcherPriority.Loaded);
+        if (flash) FlashRow(match);
         SearchCounter.Text = $"{index + 1}/{_matches.Count}";
     }
 
