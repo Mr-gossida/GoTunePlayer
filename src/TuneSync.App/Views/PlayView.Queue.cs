@@ -362,7 +362,9 @@ public partial class PlayView
             if (PlaylistBox.ItemContainerGenerator.ContainerFromItem(current) is System.Windows.FrameworkElement row && row.IsVisible)
             {
                 var top = row.TransformToAncestor(PlaylistBox).Transform(new System.Windows.Point(0, 0)).Y;
-                show = top + row.ActualHeight < 0 || top > PlaylistBox.ActualHeight - 8;
+                // a row under the pinned group heading (where the list fades out) can't be seen either
+                var hidden = StickyGroup.Visibility == System.Windows.Visibility.Visible ? StickyHeight : 0;
+                show = top + row.ActualHeight < hidden + 4 || top > PlaylistBox.ActualHeight - 8;
             }
         }
         var visibility = show ? System.Windows.Visibility.Visible : System.Windows.Visibility.Collapsed;
@@ -381,7 +383,25 @@ public partial class PlayView
             return;
         }
         PlaylistBox.SelectedItem = current;
-        PlaylistBox.ScrollIntoView(current);
+        ShowRow(current, center: true);
+    }
+
+    /// <summary>Scrolls <paramref name="item"/> into view where it can be seen: never under the
+    /// pinned group heading (ScrollIntoView scrolls only as far as needed, which put a row above
+    /// the view on the very top line - right under that heading, where the list fades out), and
+    /// with <paramref name="center"/> a good way down the list, where the eye finds it.</summary>
+    private void ShowRow(object item, bool center)
+    {
+        PlaylistBox.ScrollIntoView(item);
+        PlaylistBox.UpdateLayout();
+        if (FindDescendant<System.Windows.Controls.ScrollViewer>(PlaylistBox) is not { } scroller
+            || PlaylistBox.ItemContainerGenerator.ContainerFromItem(item) is not System.Windows.FrameworkElement row) return;
+        var top = row.TransformToAncestor(PlaylistBox).Transform(new System.Windows.Point(0, 0)).Y;
+        var clear = StickyHeight + 6; // just below the pinned heading
+        double? want = center ? Math.Max(clear, (PlaylistBox.ActualHeight - row.ActualHeight) * 0.4)
+                     : top < clear ? clear : null;
+        if (want is { } y && Math.Abs(top - y) > 1) scroller.ScrollToVerticalOffset(scroller.VerticalOffset + top - y);
+        UpdateStickyGroup();
     }
 
     /// <summary>The playback bar's cover was clicked: bring the playing song into view in the
@@ -401,7 +421,7 @@ public partial class PlayView
         {
             if (CurrentRow() is not { } current) return;
             PlaylistBox.SelectedItem = current;
-            PlaylistBox.ScrollIntoView(current);
+            ShowRow(current, center: true);
             Dispatcher.BeginInvoke(() =>
             {
                 UpdateBackToCurrent();
@@ -448,7 +468,7 @@ public partial class PlayView
         if (IsLoaded)
             Dispatcher.BeginInvoke(() =>
             {
-                PlaylistBox.ScrollIntoView(current);
+                ShowRow(current, center: false);
                 UpdateBackToCurrent();
             }, System.Windows.Threading.DispatcherPriority.Loaded);
     }
