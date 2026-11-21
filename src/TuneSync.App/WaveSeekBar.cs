@@ -999,7 +999,9 @@ public sealed partial class WaveSeekBar : FrameworkElement
     {
         var t = _phase;
         var lift = _activity * Loud(0.22, 0.78, _level) + 0.4 * EffectScale * _flash;
-        var top = Math.Max(1, mid - room);
+        // (may be above the control's own top: the curtain rises past the bar by AuroraOverflow.
+        // It was held at y = 1, which kept it inside the bar whatever the overflow said.)
+        var top = mid - room;
         var bottom = Math.Max(mid + 1, ActualHeight - 1);
         var below = bottom - mid;
         // how full the curtain hangs: quiet - a thin band; loud - the whole strip
