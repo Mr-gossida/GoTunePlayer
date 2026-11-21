@@ -52,7 +52,6 @@ public sealed partial class WaveSeekBar : FrameworkElement
         _droplets.Clear();
         _jets.Clear();
         _spouts.Clear();
-        _spoutQueue.Clear();
         _rockets.Clear();
         _rocketQueue.Clear();
         _embers.Clear();
@@ -693,37 +692,31 @@ public sealed partial class WaveSeekBar : FrameworkElement
     /// 0..1 that picks the tint.</summary>
     private readonly List<Spark> _jets = [];
 
-    /// <summary>Jets that are spouting. X: where on the line; Age, Life: how long it has run and
-    /// how long it runs; Size: how strong it is (1 = normal).</summary>
+    /// <summary>The row of jets this frame, for the glow at their feet: X, and Size - how strong
+    /// it is spouting (0..1). Rebuilt every update.</summary>
     private readonly List<Spark> _spouts = [];
 
-    /// <summary>How far along its short life a jet is, as its strength: it surges up, holds, then
-    /// dies down to nothing.</summary>
-    private static double SpoutEnvelope(Spark s)
-    {
-        var t = Math.Clamp(s.Age / s.Life, 0, 1);
-        return Math.Min(1, t / 0.18) * Math.Clamp((1 - t) / 0.4, 0, 1);
-    }
-
-    /// <summary>A fountain show along the played part: jets spring up at random spots, throw
-    /// droplets that arc over and fall back onto the line, then die down and vanish while new ones
-    /// spring up elsewhere. Louder music: more jets, higher and fuller; each beat sets off a few at
-    /// once. The water takes the cover's colors, lightened, with a short streak behind each drop.</summary>
+    /// <summary>A musical fountain along the played part: a row of jets standing JetSpacing apart,
+    /// all spouting all the time, their heights danced by the music - low ripples in quiet
+    /// passages, tall columns when it's loud, a kick up on every beat that settles again, and the
+    /// shape across the row set by a choreography that changes every few beats (a rolling wave,
+    /// jets taking turns, a bright spot running along, a ring spreading from the middle), with
+    /// the whole row leaping together on a strong beat. The water takes the cover's colors,
+    /// lightened, with a short streak behind each drop.</summary>
     private void DrawFountain(DrawingContext dc, double mid, double thumbX, double room, Color cool, Color accent, Color warm)
     {
         DrawPlayedLine(dc, mid, thumbX, cool, accent, warm);
 
-        // a soft glow where each jet leaves the line
-        var strength = Math.Min(1, _activity * Loud(0.2, 0.8, _level) + 0.6 * _flash);
+        // a soft glow where each jet leaves the line, as strong as it spouts
         foreach (var spout in _spouts)
         {
-            var s = strength * SpoutEnvelope(spout);
-            if (s <= 0.05) continue;
+            var s = spout.Size;
+            if (s <= 0.08) continue;
             // mapped in pixels: a brush mapped to the ellipse's own box, whose size changes every
             // frame, is rebuilt by the GPU every frame (CLAUDE.md: per-frame drawing)
             var center = new Point(spout.X, mid - 1);
-            double rx = 7 + 5 * s, ry = 3 + 3 * s;
-            var glow = new RadialGradientBrush(Color.FromArgb((byte)(120 * s), warm.R, warm.G, warm.B), Color.FromArgb(0, warm.R, warm.G, warm.B))
+            double rx = 5 + 5 * s, ry = 2.5 + 3 * s;
+            var glow = new RadialGradientBrush(Color.FromArgb((byte)(130 * s), warm.R, warm.G, warm.B), Color.FromArgb(0, warm.R, warm.G, warm.B))
             {
                 MappingMode = BrushMappingMode.Absolute,
                 Center = center,
@@ -749,6 +742,22 @@ public sealed partial class WaveSeekBar : FrameworkElement
         }
     }
 
+    /// <summary>How far apart the fountain's jets stand.</summary>
+    private const double JetSpacing = 26;
+
+    /// <summary>The fountain's choreographies, one after the other, a new one every few beats.</summary>
+    private enum Dance { Wave, Turns, Chase, Ring }
+
+    private static readonly Dance[] Dances = [Dance.Wave, Dance.Turns, Dance.Chase, Dance.Ring];
+
+    /// <summary>Beats per choreography.</summary>
+    private const int BeatsPerDance = 4;
+
+    /// <summary>The fountain's own clock (runs faster when loud), the kick of the last beat (1 on
+    /// the beat, settling to 0), and whether that beat was a strong one (the whole row leaps).</summary>
+    private double _danceTime, _kick;
+    private bool _kickAll;
+
     private void UpdateFountain(double dt, bool beat)
     {
         var mid = ActualHeight / 2;
@@ -762,141 +771,64 @@ public sealed partial class WaveSeekBar : FrameworkElement
             if (d.Y > mid + 1 && d.Vy > 0) _jets.RemoveAt(i);
             else _jets[i] = d;
         }
-        var thumbX = Left + (Right - Left) * Math.Clamp(CurrentPosition() / Maximum, 0, 1);
-        // Jets run out on their own; one left past the thumb (after seeking back) goes at once.
-        for (var i = _spouts.Count - 1; i >= 0; i--)
-        {
-            var s = _spouts[i];
-            s.Age += dt;
-            if (s.Age >= s.Life || s.X > thumbX - 4) _spouts.RemoveAt(i);
-            else _spouts[i] = s;
-        }
+        _spouts.Clear();
+        _kick *= Math.Exp(-dt * 5);
         if (Look != SeekBarStyle.Fountain || !IsPlaying || _activity < 0.3 || Maximum <= 0) return;
 
+        var thumbX = Left + (Right - Left) * Math.Clamp(CurrentPosition() / Maximum, 0, 1);
         if (thumbX - Left < 16) return;
         var room = mid - 2 + FountainOverflow;
         var loud = Loud(0, 1, _level);
-
-        // The show keeps time with the music: each beat sets off a volley in a pattern, and the
-        // pattern moves on with every beat (odd jets, then even ones, a wave running right, one
-        // running left, from the middle out...), a strong beat sets them all off at once. Only
-        // where the music has no clear pulse do jets spring up at random, as before.
-        if (beat) QueueVolley(thumbX);
-        for (var i = _spoutQueue.Count - 1; i >= 0; i--)
+        _danceTime += dt * (0.8 + 1.2 * Math.Clamp(loud, 0, 1.2));
+        if (beat)
         {
-            var (wait, back, strong) = _spoutQueue[i];
-            wait -= dt;
-            if (wait > 0) { _spoutQueue[i] = (wait, back, strong); continue; }
-            _spoutQueue.RemoveAt(i);
-            var x = thumbX - 8 - back;
-            if (_spouts.Count < MaxSpouts && x > Left + 4) SpawnSpoutAt(x, strong);
+            _kick = 1;
+            _kickAll = _beatStrength >= StrongBeat;
         }
-        if (NoPulse && Random.Shared.NextDouble() < dt * Loud(1.2, 5, _level) && _spouts.Count < MaxSpouts)
-            SpawnSpout(thumbX, strong: false);
 
-        // Each jet throws water while it lives, more and higher at its peak.
-        var lift = Math.Pow(Math.Clamp(loud, 0, 1.1), 1.2);
-        foreach (var spout in _spouts)
+        // Loudness, curved so quiet and loud look far apart: quiet - low ripples; loud - tall.
+        var power = Math.Pow(Math.Clamp(loud, 0, 1.25), 1.6);
+        var dance = Dances[(_beatCount / BeatsPerDance) % Dances.Length];
+        var jets = (int)((thumbX - Left - 14) / JetSpacing) + 1;
+        var since = _sinceBeat;
+        for (var i = 0; i < jets; i++)
         {
-            var env = SpoutEnvelope(spout);
-            if (env <= 0.02) continue;
-            var height = room * (0.3 + 0.7 * lift) * spout.Size * (0.35 + 0.65 * env);
-            var rate = dt * Loud(9, 26, _level) * env;
+            var x = Left + 8 + i * JetSpacing;
+            // how much of the show this jet has now (0..1), by the choreography
+            var share = dance switch
+            {
+                // a wave rolling along the row
+                Dance.Wave => 0.5 + 0.5 * Math.Sin(i * 0.75 - _danceTime * 4.5),
+                // every other jet, swapping on each beat
+                Dance.Turns => (i + _beatCount) % 2 == 0 ? 1.0 : 0.2,
+                // a bright spot running along the row, a few jets on with each beat
+                Dance.Chase => Bump(i - (_beatCount * 3 + since * 6) % Math.Max(1, jets), 1.6),
+                // a ring spreading out from the middle on each beat
+                _ => Bump(Math.Abs(i - (jets - 1) / 2.0) - since * 9, 1.4),
+            };
+            if (_kickAll) share = Math.Max(share, _kick); // a strong beat: the whole row leaps
+            // low water dancing even in quiet passages (it all but vanished), rising with the
+            // music, and a kick up on the beat that settles again
+            var height = room * (0.22 * (0.4 + 0.6 * share) + 1.0 * power * (0.25 + 0.75 * share) + 0.45 * _kick * share)
+                         * (1 + 0.5 * _kick);
+            var strength = Math.Clamp((0.15 + 0.85 * power) * (0.3 + 0.7 * share) * (0.8 + 0.4 * _kick), 0, 1);
+            _spouts.Add(new Spark { X = x, Size = strength });
+
+            // water to match: a thin spray when low and quiet, a full column when it's up
+            var rate = dt * (4 + 22 * strength);
             var count = (Random.Shared.NextDouble() < rate - Math.Floor(rate) ? 1 : 0) + (int)rate;
             for (var n = 0; n < count; n++)
-                Throw(spout.X, mid, height, spread: 14, size: 0.85);
+                Throw(x, mid, height, spread: 5 + 4 * strength, size: 0.75 + 0.25 * strength);
         }
-    }
 
-    /// <summary>The most jets spouting at once.</summary>
-    private const int MaxSpouts = 9;
-
-    /// <summary>Jets waiting to spring up, a moment apart so a volley runs along the bar: how long
-    /// until it does, where (how far back from the thumb), and whether it's from a strong beat.</summary>
-    private readonly List<(double Wait, double Back, bool Strong)> _spoutQueue = [];
-
-    /// <summary>How far apart a volley's jets stand, however much of the bar is played (spread
-    /// over the whole played part, they stood close on a short one and far apart on a long one).</summary>
-    private const double JetSpacing = 26;
-
-    /// <summary>Where the current volley stands: how far back from the thumb its right end is.
-    /// Kept for the beat after an 'odd jets' one, so the even ones go up between them.</summary>
-    private double _volleyBack;
-
-    private enum Volley { Odd, Even, SweepRight, SweepLeft, CenterOut, All }
-
-    /// <summary>The fountain's patterns, one per beat, round and round: two beats of jets taking
-    /// turns, then the waves, then everything.</summary>
-    private static readonly Volley[] FountainRound =
-        [Volley.Odd, Volley.Even, Volley.Odd, Volley.Even, Volley.SweepRight, Volley.SweepLeft, Volley.CenterOut, Volley.All];
-
-    /// <summary>Lines up this beat's volley: a row of up to seven jets JetSpacing apart, at a spot
-    /// of its own somewhere on the played part, the ones the pattern picks, each after its own
-    /// short wait.</summary>
-    private void QueueVolley(double thumbX)
-    {
-        var strong = _beatStrength >= StrongBeat;
-        var kind = strong ? Volley.All : FountainRound[_beatCount % FountainRound.Length];
-        var span = Math.Max(0, thumbX - Left - 16);
-        var slots = Math.Clamp((int)(span / JetSpacing) + 1, 1, 7);
-        var width = (slots - 1) * JetSpacing;
-        // a new spot for each volley, except the even jets, which fill in between the odd ones
-        if (kind != Volley.Even) _volleyBack = Random.Shared.NextDouble() * Math.Max(0, span - width);
-        var middle = (slots - 1) / 2.0;
-        for (var j = 0; j < slots; j++)
-        {
-            var (on, wait) = kind switch
-            {
-                Volley.Odd => (j % 2 == 0, 0.0),
-                Volley.Even => (j % 2 == 1, 0.0),
-                Volley.SweepRight => (true, 0.055 * j),
-                Volley.SweepLeft => (true, 0.055 * (slots - 1 - j)),
-                Volley.CenterOut => (true, 0.07 * Math.Abs(j - middle)),
-                _ => (true, 0.0),
-            };
-            // jet j counted from the left: the rightmost stands _volleyBack back from the thumb
-            if (on) _spoutQueue.Add((wait, _volleyBack + (slots - 1 - j) * JetSpacing, strong || kind == Volley.All));
-        }
-    }
-
-    /// <summary>A beat's jet at <paramref name="x"/>: up at once and short-lived, so the jets
-    /// pulse with the beats rather than blur into one another.</summary>
-    private void SpawnSpoutAt(double x, bool strong) => _spouts.Add(new Spark
-    {
-        X = x,
-        Life = 0.42 + Random.Shared.NextDouble() * 0.12,
-        Size = strong ? 1.15 + 0.15 * Random.Shared.NextDouble() : 0.95 + 0.15 * Random.Shared.NextDouble(),
-        Age = 0.06,
-    });
-
-    /// <summary>Starts a jet at a random spot on the played part, not right on top of another one.</summary>
-    private void SpawnSpout(double thumbX, bool strong)
-    {
-        var span = thumbX - Left - 12;
-        if (span <= 0) return;
-        for (var attempt = 0; attempt < 6; attempt++)
-        {
-            var x = Left + 6 + Random.Shared.NextDouble() * span;
-            var clear = true;
-            foreach (var s in _spouts)
-                if (Math.Abs(s.X - x) < 18) { clear = false; break; }
-            if (!clear) continue;
-            _spouts.Add(new Spark
-            {
-                X = x,
-                Life = 0.7 + Random.Shared.NextDouble() * 1.1,
-                Size = strong ? 1.05 + 0.2 * Random.Shared.NextDouble() : 0.7 + 0.35 * Random.Shared.NextDouble(),
-                // a beat's jet is up at once instead of surging up
-                Age = strong ? 0.1 : 0,
-            });
-            return;
-        }
+        // 1 at the middle of a bump of this half width, falling off to 0.15 away from it
+        static double Bump(double distance, double width) => 0.15 + 0.85 * Math.Exp(-distance * distance / (width * width));
     }
 
     /// <summary>One droplet from <paramref name="x"/>, to reach about <paramref name="height"/> pixels up.</summary>
     private void Throw(double x, double mid, double height, double spread, double size)
     {
-        if (_jets.Count >= 220) return;
+        if (_jets.Count >= 320) return; // (was 220: the whole row spouts now)
         var h = Math.Max(2, height * (0.7 + 0.5 * Random.Shared.NextDouble()));
         _jets.Add(new Spark
         {
