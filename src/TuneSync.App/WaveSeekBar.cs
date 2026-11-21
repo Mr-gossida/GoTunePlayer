@@ -1280,14 +1280,14 @@ public sealed partial class WaveSeekBar : FrameworkElement
     /// <summary>The shapes a tongue can take (<see cref="Tongue"/>).</summary>
     private enum FlameShape { Teardrop, Forked, Curl, Broad, Wisp }
 
-    /// <summary>A shape for a tongue, from a steady random number: teardrops and curls most,
-    /// then forked tips, thin wisps and broad round flames.</summary>
+    /// <summary>A shape for a tongue, from a steady random number: a fairly even mix, so tall
+    /// wisps and curls, forked tips and low broad flames all show along the fire.</summary>
     private static FlameShape ShapeFor(double r) => r switch
     {
-        < 0.30 => FlameShape.Teardrop,
-        < 0.55 => FlameShape.Curl,
-        < 0.75 => FlameShape.Forked,
-        < 0.87 => FlameShape.Wisp,
+        < 0.25 => FlameShape.Teardrop,
+        < 0.45 => FlameShape.Curl,
+        < 0.65 => FlameShape.Forked,
+        < 0.85 => FlameShape.Wisp,
         _ => FlameShape.Broad,
     };
 
@@ -1317,7 +1317,7 @@ public sealed partial class WaveSeekBar : FrameworkElement
         shape = ShapeFor(Hash(i * 7 + (int)(round % 10000) * 131));
         curl = Math.Sin(t * 2.1 + seed * 40);
         var shimmer = 1 + 0.05 * Math.Sin(t * 21 + seed * 60);
-        full = amplitude * envelope * nearThumb * body * (0.78 + 0.22 * Hash(i + 31));
+        full = amplitude * envelope * nearThumb * body * (0.66 + 0.34 * Hash(i + 31));
         h = full * g * shimmer;
         // A stretched tongue gets thinner; one that just dropped is short and broad.
         w = TongueSpacing * (1.6 + 0.8 * Hash(i + 31)) * (1.15 - 0.25 * g);
@@ -1356,9 +1356,10 @@ public sealed partial class WaveSeekBar : FrameworkElement
                 if (h < 1.2) continue;
                 // The bloom: two larger, fainter ghosts of each tongue, so the fire's edge melts
                 // into a warm haze instead of ending at a hard outline (cheaper than a blur, which
-                // the GPU would redo every frame). The ghosts keep the plain shape: they're haze.
+                // the GPU would redo every frame). The wide ghost keeps the plain shape - it's
+                // haze - but the near one follows the tongue, or it would blur the shape away.
                 Tongue(bw, x, mid + 2, w * 2.2, h * 0.95 + 2, lean * 0.9, FlameShape.Teardrop, 0);
-                Tongue(bn, x, mid + 1.5, w * 1.5, h * 1.02 + 1, lean, FlameShape.Teardrop, 0);
+                Tongue(bn, x, mid + 1.5, w * 1.5, h * 1.02 + 1, lean, shape, curl);
                 Tongue(o, x, mid + 1, w, h, lean, shape, curl);
                 // The middle layer's edge feathered by a slightly larger, fainter copy.
                 Tongue(f, x + lean * 0.15, mid + 1, w * 0.8, h * 0.78, lean * 0.76, shape, curl);
@@ -1415,15 +1416,20 @@ public sealed partial class WaveSeekBar : FrameworkElement
     {
         switch (shape)
         {
+            // The shapes differ in height and width as well as outline: the tongues stand closer
+            // than they are wide and merge into one front, so only the skyline of their tips
+            // shows - an outline change alone was lost in the overlap.
             case FlameShape.Forked:
-                // two tips from one root (the nonzero fill merges them into one flame)
-                TeardropTongue(ctx, x - width * 0.14, baseY, width * 0.75, height, lean - width * 0.3);
-                TeardropTongue(ctx, x + width * 0.2, baseY, width * 0.6, height * 0.75, lean + width * 0.65);
+                // two upright tips from one root, a tall and a shorter one (the nonzero fill
+                // merges the root); splayed further they read as sideways splinters
+                TeardropTongue(ctx, x - width * 0.25, baseY, width * 0.6, height * 1.2, lean - width * 0.3);
+                TeardropTongue(ctx, x + width * 0.25, baseY, width * 0.5, height * 0.85, lean + width * 0.35);
                 return;
             case FlameShape.Curl:
             {
                 var half = width / 2;
-                var bend = half * 1.7 * curl;
+                var bend = half * 2.2 * curl;
+                height *= 1.3;
                 var tip = new Point(x + lean - bend * 0.4, baseY - height);
                 ctx.BeginFigure(new Point(x - half, baseY), isFilled: true, isClosed: true);
                 ctx.BezierTo(new Point(x - half * 1.05 + bend, baseY - height * 0.4), new Point(x + lean * 0.55 - half * 0.4 - bend, baseY - height * 0.8), tip, true, true);
@@ -1432,8 +1438,8 @@ public sealed partial class WaveSeekBar : FrameworkElement
             }
             case FlameShape.Broad:
             {
-                var half = width * 1.25 / 2;
-                var h = height * 0.8;
+                var half = width * 1.6 / 2;
+                var h = height * 0.5;
                 var tip = new Point(x + lean * 0.7, baseY - h);
                 ctx.BeginFigure(new Point(x - half, baseY), isFilled: true, isClosed: true);
                 ctx.BezierTo(new Point(x - half * 1.15, baseY - h * 0.5), new Point(x + lean * 0.5 - half * 0.85, baseY - h * 0.98), tip, true, true);
@@ -1441,10 +1447,11 @@ public sealed partial class WaveSeekBar : FrameworkElement
                 return;
             }
             case FlameShape.Wisp:
-                TeardropTongue(ctx, x, baseY, width * 0.5, height * 1.15, lean * 1.6);
+                // the tall thin spikes that break the fire's skyline
+                TeardropTongue(ctx, x, baseY, width * 0.45, height * 1.75, lean * 1.2);
                 return;
             default:
-                TeardropTongue(ctx, x, baseY, width, height, lean);
+                TeardropTongue(ctx, x, baseY, width, height * 0.8, lean);
                 return;
         }
     }
