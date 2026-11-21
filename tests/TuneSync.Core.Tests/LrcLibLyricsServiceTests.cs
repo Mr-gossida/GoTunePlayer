@@ -9,18 +9,23 @@ namespace TuneSync.Core.Tests;
 public class LrcLibLyricsServiceTests
 {
     /// <summary>Stands in for lrclib.net: "get" answers with <see cref="Get"/> (404 when null),
-    /// "search" with <see cref="Search"/>. Records the requests made.</summary>
+    /// "search" with the <see cref="SearchBy"/> list whose key is in the request (e.g.
+    /// "?track_name=막내" for the search by title alone), else with <see cref="Search"/>.
+    /// Records the requests made.</summary>
     private sealed class FakeLrcLib : HttpMessageHandler
     {
         public object? Get { get; set; }
         public List<object> Search { get; } = [];
+        public Dictionary<string, List<object>> SearchBy { get; } = [];
         public List<string> Requests { get; } = [];
 
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
         {
             var path = request.RequestUri!.PathAndQuery;
-            Requests.Add(Uri.UnescapeDataString(path));
-            object? body = path.Contains("/api/get") ? Get : Search;
+            var decoded = Uri.UnescapeDataString(path);
+            Requests.Add(decoded);
+            object? body = path.Contains("/api/get") ? Get
+                : SearchBy.FirstOrDefault(s => decoded.EndsWith(s.Key, StringComparison.Ordinal)).Value ?? Search;
             return Task.FromResult(body is null
                 ? new HttpResponseMessage(HttpStatusCode.NotFound)
                 : new HttpResponseMessage(HttpStatusCode.OK)
@@ -206,5 +211,149 @@ public class LrcLibLyricsServiceTests
         var result = await service.FindAsync(GoodDay);
 
         Assert.Equal("[00:01.00]원곡", result?.BestLyrics);
+    }
+
+    // ---- songs listed under other names ----
+
+    private static readonly LyricsQuery Maknae = new("백예린", "막내", "물고기", TimeSpan.FromSeconds(234.4));
+
+    [Fact]
+    public async Task Finds_a_song_listed_under_its_English_title_by_artist_album_and_length()
+    {
+        // what LRCLIB really has: no title search finds "막내", the album search lists the single
+        var server = new FakeLrcLib();
+        server.SearchBy["?q=백예린 물고기"] =
+        [
+            Track("백예린", "Pisces", 227, "물고기", lyrics: "난 땅에서도 숨을 쉴 수 있는"),
+            Track("백예린", "The loved one", 234, "물고기", lyrics: "사랑받고 컸어요"),
+            Track("백예린", "It was me", 201, "물고기", lyrics: "그게 나였어"),
+        ];
+        using var service = new LrcLibLyricsService(server);
+
+        var result = await service.FindAsync(Maknae);
+
+        Assert.Equal("[00:01.00]사랑받고 컸어요", result?.BestLyrics);
+        Assert.Contains(server.Requests, r => r.EndsWith("?track_name=막내")); // tried the title alone first
+    }
+
+    [Fact]
+    public async Task Another_title_in_the_same_script_is_another_song_even_on_the_same_album()
+    {
+        var server = new FakeLrcLib();
+        server.SearchBy["?q=김동률 Monologue"] = [Track("김동률", "그건 말야", 214, "Monologue", lyrics: "남의 곡")];
+        using var service = new LrcLibLyricsService(server);
+
+        Assert.Null(await service.FindAsync(new LyricsQuery("김동률", "아이처럼", "Monologue", TimeSpan.FromSeconds(214))));
+    }
+
+    [Fact]
+    public async Task By_album_needs_the_length_and_just_one_song_of_the_album_fitting_it()
+    {
+        var server = new FakeLrcLib();
+        server.SearchBy["?q=백예린 물고기"] = [Track("백예린", "The loved one", 238, "물고기")];
+        using var service = new LrcLibLyricsService(server);
+        Assert.Null(await service.FindAsync(Maknae)); // 4 s off
+
+        server.SearchBy["?q=백예린 물고기"] =
+        [
+            Track("백예린", "The loved one", 234, "물고기", lyrics: "막내"),
+            Track("백예린", "Pisces", 235, "물고기", lyrics: "물고기"),
+        ];
+        Assert.Null(await service.FindAsync(Maknae)); // which one is it?
+
+        server.SearchBy["?q=백예린 물고기"] = [Track("백예린", "The loved one", 234, "Love, Yerin")];
+        Assert.Null(await service.FindAsync(Maknae)); // another album
+    }
+
+    [Fact]
+    public async Task Finds_a_song_whose_title_holds_ours_in_brackets()
+    {
+        var server = new FakeLrcLib();
+        server.Search.Add(Track("Crush", "Ego (미워 (Ego))", 175, "wonderego", lyrics: "미워"));
+        using var service = new LrcLibLyricsService(server);
+
+        var result = await service.FindAsync(new LyricsQuery("Crush", "미워", null, TimeSpan.FromSeconds(175)));
+
+        Assert.Equal("[00:01.00]미워", result?.BestLyrics);
+        Assert.Null(await service.FindAsync(new LyricsQuery("Crush", "미워", null, TimeSpan.FromSeconds(190)))); // another recording
+        Assert.Null(await service.FindAsync(new LyricsQuery("Crush", "미워"))); // no length to tell
+    }
+
+    [Fact]
+    public async Task Finds_a_song_whose_title_is_written_in_both_languages()
+    {
+        var server = new FakeLrcLib();
+        server.Search.Add(Track("Yerin Baek", "우주를 건너 Across the universe", 247, "FRANK", lyrics: "우주를 건너"));
+        using var service = new LrcLibLyricsService(server);
+
+        var result = await service.FindAsync(new LyricsQuery("백예린 (Yerin Baek)", "우주를 건너", "FRANK", TimeSpan.FromSeconds(247)));
+
+        Assert.Equal("[00:01.00]우주를 건너", result?.BestLyrics);
+    }
+
+    [Fact]
+    public async Task Searches_by_title_alone_when_the_artist_is_written_otherwise()
+    {
+        var server = new FakeLrcLib();
+        server.SearchBy["?track_name=이 별로부터"] = [Track("아이유", "이 별로부터", 225, lyrics: "평범한 날", synced: false)];
+        using var service = new LrcLibLyricsService(server);
+
+        var result = await service.FindAsync(new LyricsQuery("아이유(IU)", "이 별로부터", "이 별로부터", TimeSpan.FromSeconds(225)));
+
+        Assert.Equal("평범한 날", result?.BestLyrics);
+    }
+
+    [Fact]
+    public async Task By_title_alone_never_takes_another_artists_song_of_the_same_length()
+    {
+        var server = new FakeLrcLib();
+        server.SearchBy["?track_name=좋은 사람"] =
+        [
+            Track("T-ARA", "좋은 사람", 212, "Absolute First Album", lyrics: "티아라"),
+            Track("Park Hyo Shin", "좋은 사람", 212, lyrics: "박효신"),
+        ];
+        using var service = new LrcLibLyricsService(server);
+
+        Assert.Null(await service.FindAsync(new LyricsQuery("폴킴", "좋은 사람", "길", TimeSpan.FromSeconds(212))));
+    }
+
+    [Fact]
+    public async Task By_title_alone_takes_the_artists_romanized_name_but_no_other()
+    {
+        var server = new FakeLrcLib();
+        server.SearchBy["?track_name=나의 X에게"] = [Track("KyoungSeo", "Dear my X (나의 X에게)", 188, lyrics: "경서")];
+        using var service = new LrcLibLyricsService(server);
+
+        var result = await service.FindAsync(new LyricsQuery("경서", "나의 X에게", null, TimeSpan.FromSeconds(188.4)));
+
+        Assert.Equal("[00:01.00]경서", result?.BestLyrics);
+
+        server.SearchBy["?track_name=나의 X에게"] = [Track("Kim Seo", "나의 X에게", 188, lyrics: "남의 곡")];
+        Assert.Null(await service.FindAsync(new LyricsQuery("경서", "나의 X에게", null, TimeSpan.FromSeconds(188.4))));
+    }
+
+    [Theory]
+    [InlineData("폴킴", "Paul Kim")]
+    [InlineData("민니", "MINNIE")]
+    [InlineData("휘인", "Whee In")]
+    [InlineData("김민석 (멜로망스)", "Kim Min-seok (MeloMance)")]
+    public async Task A_romanized_artist_name_counts_as_the_same_artist(string ours, string theirs)
+    {
+        var server = new FakeLrcLib();
+        server.SearchBy["?track_name=노래"] = [Track(theirs, "노래", 200, lyrics: "맞음")];
+        using var service = new LrcLibLyricsService(server);
+
+        Assert.NotNull(await service.FindAsync(new LyricsQuery(ours, "노래", null, TimeSpan.FromSeconds(200))));
+    }
+
+    [Fact]
+    public async Task A_credit_in_brackets_is_not_a_title()
+    {
+        var server = new FakeLrcLib();
+        server.Search.Add(Track("ZICO", "feat. Jtong", 211, lyrics: "남의 곡"));
+        server.Search.Add(Track("ZICO", "Live", 211, lyrics: "라이브"));
+        using var service = new LrcLibLyricsService(server);
+
+        Assert.Null(await service.FindAsync(new LyricsQuery("ZICO", "날 (feat. Jtong) (Live)", null, TimeSpan.FromSeconds(211))));
     }
 }
