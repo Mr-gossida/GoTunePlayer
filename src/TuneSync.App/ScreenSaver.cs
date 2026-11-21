@@ -39,7 +39,7 @@ public static class ScreenSaver
         NowPlayingStage.NewAuroraSession();
         // 랜덤 background: one pick for every monitor unless the user wants each to differ.
         _lastSharedLook = _playback.PickRandomBackground(_lastSharedLook);
-        NowPlayingStage.SharedRandomLook = _settings?.ScreenSaverSameLook != false ? _lastSharedLook : null;
+        NowPlayingStage.ShareRandomLook(_settings?.ScreenSaverSameLook != false ? _lastSharedLook : null, _playback.CurrentFile);
         ScreenSaverWindow.EscapeOnly = _settings?.ScreenSaverExit == ScreenSaverExit.EscapeKey;
         var player = ActiveWindow();
         var monitors = Monitors();
@@ -90,7 +90,9 @@ public static class ScreenSaver
                 foreach (var other in open.ToList()) other.Dismiss();
                 if (open.Count > 0) return;
                 _windows = null;
-                NowPlayingStage.SharedRandomLook = null;
+                // The next screen saver opens on something other than the last look shown.
+                if (NowPlayingStage.SharedRandomLook is { } last) _lastSharedLook = last;
+                NowPlayingStage.ShareRandomLook(null, null);
                 ActiveWindow()?.Activate();
             };
             window.ShowActivated = false;

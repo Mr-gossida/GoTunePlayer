@@ -26,6 +26,9 @@ public static class AppSettingsStore
             (settings.Hud ??= new HudSettings()).Normalize();
             // an unknown value (a newer version's choice, a hand edit) falls back to quitting
             if (!Enum.IsDefined(settings.CloseAction)) settings.CloseAction = CloseAction.Exit;
+            // a seek bar look this version doesn't know (a newer version's, a hand edit) goes back to 랜덤
+            if (!Enum.IsDefined(settings.SeekBarStyle)) settings.SeekBarStyle = SeekBarStyle.Random;
+            settings.SeekBarRandomExcluded?.RemoveAll(l => !Enum.IsDefined(l));
             return settings;
         }
         catch

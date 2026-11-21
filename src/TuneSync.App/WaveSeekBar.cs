@@ -270,10 +270,6 @@ public sealed partial class WaveSeekBar : FrameworkElement
             {
                 DrawElectric(dc, mid, thumbX, cool, accent, warm);
             }
-            else if (Look == SeekBarStyle.Plasma)
-            {
-                DrawPlasma(dc, mid, thumbX, cool, accent, warm);
-            }
             else if (Look == SeekBarStyle.Petals)
             {
                 DrawPetals(dc, mid, thumbX, cool, accent, warm);
@@ -281,6 +277,14 @@ public sealed partial class WaveSeekBar : FrameworkElement
             else if (Look == SeekBarStyle.Notes)
             {
                 DrawNotes(dc, mid, thumbX, cool, accent, warm);
+            }
+            else if (Look == SeekBarStyle.Bubbles)
+            {
+                DrawBubbles(dc, mid, thumbX, cool, accent, warm);
+            }
+            else if (Look == SeekBarStyle.Ribbon)
+            {
+                DrawRibbons(dc, mid, thumbX, cool, accent, warm);
             }
             else if (Look == SeekBarStyle.Sparkle)
             {

@@ -125,6 +125,8 @@ public partial class NowPlayingStage : UserControl
                 Views.LyricsScroller.Reset(LyricsViewer); // a new song starts from its first line
                 HideLyrics(instant: true);
                 ScheduleLyricsReveal();
+                if (_playback.BackgroundEffect == BackgroundEffect.Random && _playback.RandomBackgroundPerSong)
+                    ShowLook(NextRandomLook(), fade: true);
                 break;
             case nameof(PlaybackViewModel.IsIntroVisible):
                 if (_playback.IsIntroVisible) HideLyrics(instant: false);
@@ -137,7 +139,7 @@ public partial class NowPlayingStage : UserControl
                 ApplyAuroraMode();
                 break;
             case nameof(PlaybackViewModel.BackgroundEffect):
-                ApplyLook();
+                ApplyLook(fade: true);
                 break;
         }
     }
@@ -301,18 +303,77 @@ public partial class NowPlayingStage : UserControl
 
     /// <summary>Set by the screen saver while it's open when all its screens should show the same
     /// effect for 랜덤 (설정 › 화면 보호기 › 여러 모니터의 배경); null lets each stage pick its own.</summary>
-    public static BackgroundEffect? SharedRandomLook { get; set; }
+    public static BackgroundEffect? SharedRandomLook { get; private set; }
 
-    /// <summary>The background effect chosen (for 임의, one picked when the stage opens).</summary>
-    private void ApplyLook()
+    // The song the shared pick was made for: with 곡마다 바꾸기, the first stage to see a new song
+    // picks for every screen and the others take the same one.
+    private static LibraryFileViewModel? _sharedLookSong;
+
+    /// <summary>Called by the screen saver as it opens (a look for all screens) and closes (null).</summary>
+    public static void ShareRandomLook(BackgroundEffect? look, LibraryFileViewModel? song)
+    {
+        SharedRandomLook = look;
+        _sharedLookSong = song;
+    }
+
+    /// <summary>랜덤 with 곡마다 바꾸기: the look for the song that just started.</summary>
+    private BackgroundEffect NextRandomLook()
+    {
+        if (SharedRandomLook is not { } shared) return _playback.PickRandomBackground(AuroraLight.Look);
+        if (!ReferenceEquals(_sharedLookSong, _playback.CurrentFile))
+        {
+            _sharedLookSong = _playback.CurrentFile;
+            SharedRandomLook = shared = _playback.PickRandomBackground(shared);
+        }
+        return shared;
+    }
+
+    /// <summary>The background effect chosen (for 랜덤, one picked when the stage opens).</summary>
+    private void ApplyLook(bool fade = false)
     {
         var look = _playback.BackgroundEffect;
         if (look == BackgroundEffect.Random)
         {
             look = SharedRandomLook ?? _playback.PickRandomBackground(AuroraLight.Look);
         }
-        AuroraLight.Look = look;
+        ShowLook(look, fade);
     }
+
+    private const double AuroraStrength = 0.7;
+    private int _lookChange;
+
+    /// <summary>Switches the light to <paramref name="look"/>; with <paramref name="fade"/> the old
+    /// light dims away to the backdrop and the new one rises out of it, instead of a hard cut.</summary>
+    private void ShowLook(BackgroundEffect look, bool fade)
+    {
+        var change = ++_lookChange;
+        if (look == AuroraLight.Look && !_lookFading) return;
+        if (!fade || !_running || AuroraLayer.Effect is null)
+        {
+            _lookFading = false;
+            AuroraLight.Look = look;
+            if (_running) AuroraLight.BeginAnimation(Effects.AuroraEffect.IntensityProperty, null);
+            AuroraLight.Intensity = AuroraStrength;
+            return;
+        }
+        // From wherever the light is now (it may be halfway through a previous change).
+        _lookFading = true;
+        var from = AuroraLight.Intensity;
+        var dim = AuroraTimeline(new DoubleAnimation(from, 0, TimeSpan.FromSeconds(Math.Max(0.1, 1.2 * from / AuroraStrength)))
+            { EasingFunction = new SineEase { EasingMode = EasingMode.EaseIn } });
+        dim.Completed += (_, _) =>
+        {
+            if (change != _lookChange) return; // a newer change took over
+            AuroraLight.Look = look;
+            var rise = AuroraTimeline(new DoubleAnimation(0, AuroraStrength, TimeSpan.FromSeconds(2))
+                { EasingFunction = new SineEase { EasingMode = EasingMode.EaseOut } });
+            rise.Completed += (_, _) => { if (change == _lookChange) _lookFading = false; };
+            AuroraLight.BeginAnimation(Effects.AuroraEffect.IntensityProperty, rise);
+        };
+        AuroraLight.BeginAnimation(Effects.AuroraEffect.IntensityProperty, dim);
+    }
+
+    private bool _lookFading;
 
     private void StartAurora()
     {
@@ -327,7 +388,7 @@ public partial class NowPlayingStage : UserControl
         ShowAuroraNow();
         ApplyAuroraMode();
         // The light fades in over the backdrop (the light, not the layer: the backdrop is in it).
-        AuroraLight.BeginAnimation(Effects.AuroraEffect.IntensityProperty, AuroraTimeline(new DoubleAnimation(0, 0.7, TimeSpan.FromSeconds(2.5))));
+        AuroraLight.BeginAnimation(Effects.AuroraEffect.IntensityProperty, AuroraTimeline(new DoubleAnimation(0, AuroraStrength, TimeSpan.FromSeconds(2.5))));
     }
 
     // The aurora needs pixel shader 3.0 (any GPU from the last ~15 years).

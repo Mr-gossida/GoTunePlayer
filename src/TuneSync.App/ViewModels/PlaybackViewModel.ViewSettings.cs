@@ -80,7 +80,8 @@ public sealed partial class PlaybackViewModel
     /// <summary>The seek bar looks in the order the settings list them (없음, 랜덤, then the looks).</summary>
     public static readonly SeekBarStyle[] SeekBarStyleOrder =
         [SeekBarStyle.None, SeekBarStyle.Random, SeekBarStyle.Wave, SeekBarStyle.Flame, SeekBarStyle.Neon, SeekBarStyle.Bars, SeekBarStyle.Fountain, SeekBarStyle.Rain, SeekBarStyle.Aurora,
-         SeekBarStyle.Sparkle, SeekBarStyle.Fireworks, SeekBarStyle.Fireflies, SeekBarStyle.Electric, SeekBarStyle.Plasma, SeekBarStyle.Petals, SeekBarStyle.Notes];
+         SeekBarStyle.Sparkle, SeekBarStyle.Fireworks, SeekBarStyle.Fireflies, SeekBarStyle.Electric, SeekBarStyle.Petals, SeekBarStyle.Notes,
+         SeekBarStyle.Bubbles, SeekBarStyle.Ribbon];
 
     private void PickSeekLook()
     {
@@ -107,9 +108,10 @@ public sealed partial class PlaybackViewModel
         SeekBarStyle.Fireworks => "불꽃놀이",
         SeekBarStyle.Fireflies => "반딧불",
         SeekBarStyle.Electric => "테슬라 코일",
-        SeekBarStyle.Plasma => "플라즈마 볼",
         SeekBarStyle.Petals => "꽃잎",
         SeekBarStyle.Notes => "음표",
+        SeekBarStyle.Bubbles => "비눗방울",
+        SeekBarStyle.Ribbon => "실크 리본",
         _ => style.ToString(),
     };
 
@@ -159,6 +161,9 @@ public sealed partial class PlaybackViewModel
 
     /// <summary>A background effect for 랜덤 (picked each time the stage opens).</summary>
     public BackgroundEffect PickRandomBackground(BackgroundEffect now) => PickFrom(RandomBackgrounds, _settings.BackgroundRandomExcluded, now);
+
+    /// <summary>랜덤 background: a new pick for every song (설정 › 화면 보호기), not just when the stage opens.</summary>
+    public bool RandomBackgroundPerSong => _settings.ScreenSaverLookPerSong;
 
     /// <summary>설정 changed which looks 랜덤 may pick: a look that just left the pool is
     /// swapped for one still in it.</summary>

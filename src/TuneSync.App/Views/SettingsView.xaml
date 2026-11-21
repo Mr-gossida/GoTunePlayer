@@ -902,7 +902,7 @@
                     <ui:TextBlock Text="화면 보호기" Style="{StaticResource CategoryTitle}"/>
                     <ui:TextBlock Text="재생 중 입력이 없으면 커버와 가사, 시계를 전체 화면으로 보여 줍니다" Style="{StaticResource CategoryLead}"/>
                     <ui:CardExpander Margin="0,8,0,4" Icon="{ui:SymbolIcon SlideMultiple24}" IsExpanded="True"
-                                     Tag="화면 보호기 스크린세이버 미리 보기 시작 시간 종료 방법 ESC 모니터 듀얼 배경 효과 랜덤 같게 다르게">
+                                     Tag="화면 보호기 스크린세이버 미리 보기 시작 시간 종료 방법 ESC 모니터 듀얼 배경 효과 랜덤 무작위 같게 다르게 곡마다 바꾸기">
                         <ui:CardExpander.Header>
                             <StackPanel>
                                 <ui:TextBlock Text="화면 보호기" FontTypography="Body"/>
@@ -931,6 +931,12 @@
                                 <TextBlock Text="여러 모니터의 배경 효과" VerticalAlignment="Center"/>
                                 <ComboBox Width="200" HorizontalAlignment="Right" ItemsSource="{Binding ScreenSaverSameLookOptions}" DisplayMemberPath="Label"
                                           SelectedValuePath="Value" SelectedValue="{Binding ScreenSaverSameLook}" IsEnabled="{Binding ScreenSaverEnabled}"/>
+                            </Grid>
+                            <Grid Margin="0,0,0,10" Visibility="{Binding IsBackgroundRandom, Converter={StaticResource BoolToVisibility}}"
+                                  ToolTip="배경 효과가 무작위일 때, 화면 보호기를 켤 때 고른 효과를 계속 보여 줄지 곡이 바뀔 때마다 새로 골라 부드럽게 바꿀지 정합니다 (음악 집중 모드도 같습니다)">
+                                <TextBlock Text="무작위 배경 효과 바꾸기" VerticalAlignment="Center"/>
+                                <ComboBox Width="200" HorizontalAlignment="Right" ItemsSource="{Binding ScreenSaverLookPerSongOptions}" DisplayMemberPath="Label"
+                                          SelectedValuePath="Value" SelectedValue="{Binding ScreenSaverLookPerSong}" IsEnabled="{Binding ScreenSaverEnabled}"/>
                             </Grid>
                             <Grid>
                                 <TextBlock Text="지금 바로 띄워 보기" VerticalAlignment="Center" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>

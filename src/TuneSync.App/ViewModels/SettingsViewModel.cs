@@ -37,6 +37,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         _screenSaverMinutes = settings.ScreenSaverMinutes;
         _screenSaverExit = settings.ScreenSaverExit;
         _screenSaverSameLook = settings.ScreenSaverSameLook;
+        _screenSaverLookPerSong = settings.ScreenSaverLookPerSong;
         _minimizeToMini = settings.MinimizeToMini;
         _closeAction = settings.CloseAction;
         _lyricsSyncUseGpu = settings.LyricsSyncUseGpu;
@@ -452,6 +453,22 @@ public sealed partial class SettingsViewModel : ObservableObject
     partial void OnScreenSaverSameLookChanged(bool value)
     {
         _settings.ScreenSaverSameLook = value;
+        AppSettingsStore.Save(_settings);
+    }
+
+    /// <summary>랜덤 background: pick once when the screen saver opens, or again for every song.</summary>
+    [ObservableProperty]
+    private bool _screenSaverLookPerSong;
+
+    public IReadOnlyList<Choice<bool>> ScreenSaverLookPerSongOptions { get; } =
+    [
+        new(false, "켤 때마다 하나"),
+        new(true, "곡마다 바꾸기"),
+    ];
+
+    partial void OnScreenSaverLookPerSongChanged(bool value)
+    {
+        _settings.ScreenSaverLookPerSong = value;
         AppSettingsStore.Save(_settings);
     }
 

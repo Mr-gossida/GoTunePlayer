@@ -163,6 +163,10 @@ public sealed class AppSettings
     /// screen saver shows the same picked effect (one light across them), or each picks its own.</summary>
     public bool ScreenSaverSameLook { get; set; } = true;
 
+    /// <summary>With the background effect on 랜덤: the screen saver (and focus mode) picks a new
+    /// effect for every song, fading from one to the next; off, one pick each time it opens.</summary>
+    public bool ScreenSaverLookPerSong { get; set; }
+
     /// <summary>"싱크 가사 만들기" uses the graphics card when there's one (about four times
     /// faster, and the CPU stays free); off, it runs on the CPU only.</summary>
     public bool LyricsSyncUseGpu { get; set; } = true;
@@ -336,8 +340,11 @@ public enum SeekBarStyle
     Petals,
     /// <summary>Musical notes rising from all along the played part.</summary>
     Notes,
-    /// <summary>A plasma ball's plasma spread over the played part: soft wavering strands reaching up and down from the line.</summary>
-    Plasma,
+    /// <summary>Soap bubbles rising from the played part, popping on the beats. (This slot was the
+    /// plasma ball; settings that chose it get the bubbles.)</summary>
+    Bubbles,
+    /// <summary>Silk ribbons tied to the thumb, swaying and twisting back over the played part.</summary>
+    Ribbon,
 }
 
 public enum SpectrumStyle
