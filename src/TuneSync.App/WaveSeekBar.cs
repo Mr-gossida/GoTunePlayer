@@ -1277,33 +1277,48 @@ public sealed partial class WaveSeekBar : FrameworkElement
     /// so neighbors sway together.</summary>
     private static double Draft(double x, double t) => 0.55 * Math.Sin(t * 0.6 + x * 0.010) + 0.45 * Math.Sin(t * 1.4 - x * 0.022 + 1.1);
 
-    /// <summary>The shapes a tongue can take (<see cref="Tongue"/>).</summary>
-    private enum FlameShape { Teardrop, Forked, Curl, Broad, Wisp }
+    /// <summary>How one tongue moves this flicker cycle (<see cref="Ribbon"/>): how far waves
+    /// swing its body (Sway, in widths), how many of them run up it (Waves), how fast they run
+    /// (Rate), where they start (Phase), how hard and which way its tip hooks over (Hook, -1..1),
+    /// how far it reaches this time (Reach) and how pinched its neck is just before the tip
+    /// breaks off (Neck, 0..1).</summary>
+    private readonly record struct FlameForm(double Sway, double Waves, double Rate, double Phase, double Hook, double Reach, double Neck);
 
-    /// <summary>A shape for a tongue, from a steady random number: a fairly even mix, so tall
-    /// wisps and curls, forked tips and low broad flames all show along the fire.</summary>
-    private static FlameShape ShapeFor(double r) => r switch
+    /// <summary>The form drawn for one flicker cycle (<paramref name="round"/>) of tongue
+    /// <paramref name="i"/>: some cycles a tall lick that whips and hooks over, some a short
+    /// one that barely sways.</summary>
+    private static FlameForm FormFor(int i, double round)
     {
-        < 0.25 => FlameShape.Teardrop,
-        < 0.45 => FlameShape.Curl,
-        < 0.65 => FlameShape.Forked,
-        < 0.85 => FlameShape.Wisp,
-        _ => FlameShape.Broad,
-    };
+        var k = i * 7 + (int)(round % 10000) * 131;
+        var hookOn = Hash(k + 13) < 0.45 ? 1.0 : 0.25;
+        return new FlameForm(
+            Sway: 0.3 + 0.75 * Hash(k + 3),
+            Waves: 0.5 + 0.9 * Hash(k + 5),
+            Rate: 0.9 + 0.8 * Hash(i + 211),
+            Phase: Hash(i + 223),
+            Hook: (Hash(k + 11) * 2 - 1) * hookOn,
+            // mostly middling, now and then a tall lick that leaps well above the rest
+            Reach: 0.6 + 0.9 * Math.Pow(Hash(k + 17), 1.8),
+            Neck: 0);
+    }
+
+    private static FlameForm Blend(FlameForm a, FlameForm b, double u) => new(
+        a.Sway + (b.Sway - a.Sway) * u, a.Waves + (b.Waves - a.Waves) * u, b.Rate, b.Phase,
+        a.Hook + (b.Hook - a.Hook) * u, a.Reach + (b.Reach - a.Reach) * u, 0);
 
     /// <summary>Tongue <paramref name="i"/> at fire time <paramref name="t"/>: where it stands, how
     /// tall (<paramref name="h"/>, and <paramref name="full"/> at the top of its cycle), how wide,
-    /// how far its tip leans, its shape and how its body bends (<paramref name="curl"/>, -1..1).
-    /// The shape is picked anew each flicker cycle, just as the tongue drops back, so the fire
-    /// keeps changing its look without a tall flame ever switching shape. False past the thumb.</summary>
+    /// how far its tip leans and how it moves (<paramref name="form"/>). Each flicker cycle it
+    /// takes a new form - eased in from the last one over the first third of the cycle, so
+    /// nothing jumps - and the fire never repeats a look. False past the thumb.</summary>
     private bool TongueAt(int i, double t, double endX, double room, double amplitude,
                           out double x, out double h, out double full, out double w, out double lean,
-                          out FlameShape shape, out double curl)
+                          out FlameForm form)
     {
         var seed = Hash(i);
         x = Left + i * TongueSpacing + (seed - 0.5) * 3;
-        h = full = w = lean = curl = 0;
-        shape = FlameShape.Teardrop;
+        h = full = w = lean = 0;
+        form = default;
         if (x > endX - 1) return false;
 
         var envelope = SmoothStep(Math.Min(1, (x - Left) / 18)) * SmoothStep(Math.Min(1, (endX - x) / 8));
@@ -1313,14 +1328,17 @@ public sealed partial class WaveSeekBar : FrameworkElement
                         + 0.06 * Math.Sin((x - Left) * 0.11 + t * 3.1);
         var cycle = t * FlickerRate(i) + seed;
         var round = Math.Floor(cycle);
-        var g = FlickerCycle(cycle - round);
-        shape = ShapeFor(Hash(i * 7 + (int)(round % 10000) * 131));
-        curl = Math.Sin(t * 2.1 + seed * 40);
+        var p = cycle - round;
+        var g = FlickerCycle(p);
+        form = Blend(FormFor(i, round - 1), FormFor(i, round), SmoothStep(Math.Min(1, p / 0.35)));
+        // the neck pinches in over the last stretch before the tip breaks off
+        form = form with { Neck = p < PinchAt ? SmoothStep(Math.Clamp((p - (PinchAt - 0.2)) / 0.2, 0, 1)) : 0 };
         var shimmer = 1 + 0.05 * Math.Sin(t * 21 + seed * 60);
-        full = amplitude * envelope * nearThumb * body * (0.66 + 0.34 * Hash(i + 31));
+        full = amplitude * envelope * nearThumb * body * form.Reach * (0.8 + 0.2 * Hash(i + 31));
         h = full * g * shimmer;
-        // A stretched tongue gets thinner; one that just dropped is short and broad.
-        w = TongueSpacing * (1.6 + 0.8 * Hash(i + 31)) * (1.15 - 0.25 * g);
+        // A stretched tongue gets thinner; one that just dropped is short and broad. Narrower
+        // than the spacing would suggest, so the tongues' own shapes show, not just one front.
+        w = TongueSpacing * (1.15 + 0.6 * Hash(i + 31)) * (1.15 - 0.3 * g);
         var reach = h / room;
         lean = Draft(x, t) * w * 0.9 * (reach + 0.3) + Math.Sin(t * 7.3 + seed * 31) * 0.14 * w * reach;
         return true;
@@ -1351,21 +1369,35 @@ public sealed partial class WaveSeekBar : FrameworkElement
         using (var m = middle.Open())
         using (var c = core.Open())
         {
-            for (var i = 0; TongueAt(i, t, endX, room, amplitude, out var x, out var h, out var full, out var w, out var lean, out var shape, out var curl); i++)
+            for (var i = 0; TongueAt(i, t, endX, room, amplitude, out var x, out var h, out var full, out var w, out var lean, out var form); i++)
             {
                 if (h < 1.2) continue;
                 // The bloom: two larger, fainter ghosts of each tongue, so the fire's edge melts
                 // into a warm haze instead of ending at a hard outline (cheaper than a blur, which
-                // the GPU would redo every frame). The wide ghost keeps the plain shape - it's
-                // haze - but the near one follows the tongue, or it would blur the shape away.
-                Tongue(bw, x, mid + 2, w * 2.2, h * 0.95 + 2, lean * 0.9, FlameShape.Teardrop, 0);
-                Tongue(bn, x, mid + 1.5, w * 1.5, h * 1.02 + 1, lean, shape, curl);
-                Tongue(o, x, mid + 1, w, h, lean, shape, curl);
-                // The middle layer's edge feathered by a slightly larger, fainter copy.
-                Tongue(f, x + lean * 0.15, mid + 1, w * 0.8, h * 0.78, lean * 0.76, shape, curl);
-                Tongue(m, x + lean * 0.15, mid + 1, w * 0.62, h * 0.7, lean * 0.7, shape, curl);
+                // the GPU would redo every frame). The wide ghost is a plain teardrop - it's
+                // haze - but the near one moves with the tongue, or it would blur the shape away.
+                TeardropTongue(bw, x, mid + 2, w * 2.4, h * 0.85 + 2, lean * 0.8);
+                if (h < room * 0.3)
+                {
+                    // A short tongue barely sways: a plain teardrop looks the same and costs a
+                    // fraction of a ribbon (most of the fire's tongues are short at any moment).
+                    TeardropTongue(bn, x, mid + 1.5, w * 1.6, h * 1.04 + 1, lean);
+                    TeardropTongue(o, x, mid + 1, w, h, lean);
+                    TeardropTongue(f, x + lean * 0.15, mid + 1, w * 0.78, h * 0.8, lean * 0.8);
+                    TeardropTongue(m, x + lean * 0.15, mid + 1, w * 0.6, h * 0.72, lean * 0.72);
+                }
+                else
+                {
+                    Ribbon(bn, x, mid + 1.5, w * 1.6, h * 1.04 + 1, lean, form, t, w, h);
+                    Ribbon(o, x, mid + 1, w, h, lean, form, t, w, h);
+                    // The inner layers run along the same swaying path (the same w and h passed
+                    // as the frame), only narrower and shorter. The middle layer's edge is
+                    // feathered by a slightly larger, fainter copy.
+                    Ribbon(f, x, mid + 1, w * 0.78, h * 0.8, lean, form, t, w, h);
+                    Ribbon(m, x, mid + 1, w * 0.6, h * 0.72, lean, form, t, w, h);
+                }
                 // The core stays a small teardrop at the root: the steady hot part.
-                Tongue(c, x + lean * 0.1, mid + 1, w * 0.34, h * 0.24 + full * 0.12, lean * 0.4, FlameShape.Teardrop, 0);
+                TeardropTongue(c, x + lean * 0.1, mid + 1, w * 0.4, h * 0.24 + full * 0.12, lean * 0.4);
             }
         }
         bloomWide.Freeze();
@@ -1407,54 +1439,99 @@ public sealed partial class WaveSeekBar : FrameworkElement
         DrawLicks(dc);
     }
 
-    /// <summary>One flame tongue in the given shape, each with a wide root on the line: a
-    /// teardrop narrowing to a leaning, pointed tip; a forked one splitting into a taller and a
-    /// shorter tip; a curl whose body bends one way and its tip the other, like an S; a broad,
-    /// round-topped flame, shorter and wider; a thin wisp, taller and leaning further.</summary>
-    private static void Tongue(StreamGeometryContext ctx, double x, double baseY, double width, double height, double lean,
-                               FlameShape shape, double curl)
+    /// <summary>Points along a ribbon flame's side (<see cref="Ribbon"/>).</summary>
+    private const int RibbonSteps = 6;
+
+    /// <summary>A ribbon's half width at each step, as a share of its full width: wide at the
+    /// root, a slight belly low down, tapering to the tip. Worked out once (the steps are fixed),
+    /// as the fire builds a few hundred ribbons a frame.</summary>
+    private static readonly double[] RibbonTaper = Enumerable.Range(0, RibbonSteps)
+        .Select(k => (double)k / RibbonSteps)
+        .Select(s => 0.5 * Math.Pow(1 - s, 0.85) * (1 + 0.3 * Math.Sin(Math.PI * s)))
+        .ToArray();
+
+    /// <summary>The pinch of a ribbon's neck at each step (how much of it a full pinch takes away).</summary>
+    private static readonly double[] RibbonNeck = Enumerable.Range(0, RibbonSteps)
+        .Select(k => ((double)k / RibbonSteps - 0.62) / 0.1)
+        .Select(z => 0.7 * Math.Exp(-z * z))
+        .ToArray();
+
+    /// <summary>One flame tongue as a living ribbon, not a fixed outline: its centerline sways
+    /// with waves that run up from the root (so the body ripples and the tip whips about), its
+    /// tip may hook over to one side, and it tapers from a wide root to a pointed tip, with a
+    /// neck that pinches in just before the tip breaks off. The sway is laid out on the outer
+    /// tongue's frame (<paramref name="frameW"/> wide, <paramref name="frameH"/> tall), so the
+    /// inner, smaller layers follow the same path inside it.</summary>
+    private static void Ribbon(StreamGeometryContext ctx, double x, double baseY, double width, double height, double lean,
+                               in FlameForm form, double t, double frameW, double frameH)
     {
-        switch (shape)
+        const int n = RibbonSteps;
+        Span<Point> left = stackalloc Point[n];
+        Span<Point> right = stackalloc Point[n];
+        Point tip = default;
+        Point previous = default;
+        var share = height / Math.Max(1, frameH);
+        var swingAll = frameH * 0.3 * form.Sway;
+        var wave = Math.Tau * (form.Phase - t * form.Rate);
+        for (var k = 0; k <= n; k++)
         {
-            // The shapes differ in height and width as well as outline: the tongues stand closer
-            // than they are wide and merge into one front, so only the skyline of their tips
-            // shows - an outline change alone was lost in the overlap.
-            case FlameShape.Forked:
-                // two upright tips from one root, a tall and a shorter one (the nonzero fill
-                // merges the root); splayed further they read as sideways splinters
-                TeardropTongue(ctx, x - width * 0.25, baseY, width * 0.6, height * 1.2, lean - width * 0.3);
-                TeardropTongue(ctx, x + width * 0.25, baseY, width * 0.5, height * 0.85, lean + width * 0.35);
-                return;
-            case FlameShape.Curl:
+            var s = (double)k / n;   // 0 at the root, 1 at this layer's tip
+            var u = s * share;       // the same point on the outer tongue's frame
+            var rise = u * Math.Sqrt(u); // u^1.5: little movement low down, most near the tip
+            // sideways moves scale with the flame's height: a short one barely stirs (swung as far
+            // as a tall one, it lay flat along the line), a tall one whips about
+            var sway = swingAll * rise * Math.Sin(Math.Tau * form.Waves * u + wave);
+            var bend = Math.Max(0, u - 0.55) / 0.45;
+            var hook = form.Hook * frameH * 0.4 * bend * bend;
+            var center = new Point(x + lean * rise + sway + hook, baseY - height * s);
+            if (k == n) { tip = center; break; }
+
+            var half = width * RibbonTaper[k] * (1 - form.Neck * RibbonNeck[k]);
+            // across the ribbon: square to the path from the point below (straight up at the root)
+            double nx = 1, ny = 0;
+            if (k > 0)
             {
-                var half = width / 2;
-                var bend = half * 2.2 * curl;
-                height *= 1.3;
-                var tip = new Point(x + lean - bend * 0.4, baseY - height);
-                ctx.BeginFigure(new Point(x - half, baseY), isFilled: true, isClosed: true);
-                ctx.BezierTo(new Point(x - half * 1.05 + bend, baseY - height * 0.4), new Point(x + lean * 0.55 - half * 0.4 - bend, baseY - height * 0.8), tip, true, true);
-                ctx.BezierTo(new Point(x + lean * 0.55 + half * 0.4 - bend, baseY - height * 0.8), new Point(x + half * 1.05 + bend, baseY - height * 0.4), new Point(x + half, baseY), true, true);
-                return;
+                var dx = center.X - previous.X;
+                var dy = center.Y - previous.Y;
+                var len = Math.Sqrt(dx * dx + dy * dy);
+                if (len > 1e-6) { nx = -dy / len; ny = dx / len; }
             }
-            case FlameShape.Broad:
-            {
-                var half = width * 1.6 / 2;
-                var h = height * 0.5;
-                var tip = new Point(x + lean * 0.7, baseY - h);
-                ctx.BeginFigure(new Point(x - half, baseY), isFilled: true, isClosed: true);
-                ctx.BezierTo(new Point(x - half * 1.15, baseY - h * 0.5), new Point(x + lean * 0.5 - half * 0.85, baseY - h * 0.98), tip, true, true);
-                ctx.BezierTo(new Point(x + lean * 0.5 + half * 0.85, baseY - h * 0.98), new Point(x + half * 1.15, baseY - h * 0.5), new Point(x + half, baseY), true, true);
-                return;
-            }
-            case FlameShape.Wisp:
-                // the tall thin spikes that break the fire's skyline
-                TeardropTongue(ctx, x, baseY, width * 0.45, height * 1.75, lean * 1.2);
-                return;
-            default:
-                TeardropTongue(ctx, x, baseY, width, height * 0.8, lean);
-                return;
+            // never below the root's line (a tilted ribbon's side would dip under it)
+            left[k] = new Point(center.X - nx * half, Math.Min(baseY, center.Y - ny * half));
+            right[k] = new Point(center.X + nx * half, Math.Min(baseY, center.Y + ny * half));
+            previous = center;
         }
+
+        // Smoothed through the midpoints of the side points, with a sharp tip. Each side goes
+        // in as one call (a call per segment made the fire four times as costly to build).
+        var path = RibbonPath;
+        var j = 0;
+        for (var k = 1; k < n; k++)
+        {
+            path[j++] = left[k];
+            path[j++] = Mid(left[k], k + 1 < n ? left[k + 1] : tip);
+        }
+        // up into the tip and out of it: a straight-sided point
+        path[j++] = tip;
+        path[j++] = tip;
+        path[j++] = Mid(tip, right[n - 1]);
+        path[j++] = Mid(tip, right[n - 1]);
+        for (var k = n - 1; k >= 1; k--)
+        {
+            path[j++] = right[k];
+            path[j++] = Mid(right[k], right[k - 1]);
+        }
+        path[j++] = right[0];
+        path[j++] = right[0];
+        ctx.BeginFigure(left[0], isFilled: true, isClosed: true);
+        ctx.PolyQuadraticBezierTo(path, true, true);
     }
+
+    /// <summary>The control and end points of one ribbon's outline, reused for every ribbon
+    /// (the fire is built on the UI thread only).</summary>
+    private static readonly Point[] RibbonPath = new Point[4 * RibbonSteps + 2];
+
+    private static Point Mid(Point a, Point b) => new((a.X + b.X) / 2, (a.Y + b.Y) / 2);
 
     /// <summary>The plain teardrop: a wide root on the line narrowing to a leaning, pointed tip.</summary>
     private static void TeardropTongue(StreamGeometryContext ctx, double x, double baseY, double width, double height, double lean)
@@ -1523,7 +1600,7 @@ public sealed partial class WaveSeekBar : FrameworkElement
         var t = _fireTime;
         for (var i = 0; _licks.Count < 40; i++)
         {
-            if (!TongueAt(i, t, thumbX, room, amplitude, out var x, out _, out var full, out var w, out var lean, out _, out _)) break;
+            if (!TongueAt(i, t, thumbX, room, amplitude, out var x, out _, out var full, out var w, out var lean, out _)) break;
             var phase = Hash(i) - PinchAt;
             var crossed = Math.Floor(t * FlickerRate(i) + phase) > Math.Floor(previousTime * FlickerRate(i) + phase);
             if (!crossed || full < 6 || Random.Shared.NextDouble() > 0.35 + 0.35 * _flash) continue;
