@@ -13,6 +13,35 @@
         <conv:EnumToVisibilityConverter x:Key="EnumToVisibilityConverter"/>
         <conv:PlayPauseIconConverter x:Key="PlayPauseIconConverter"/>
 
+        <!-- The footer's keys, drawn as key caps (a thicker edge at the bottom, like a key),
+             each followed by what it does. -->
+        <Style x:Key="KeyCap" TargetType="Border">
+            <Setter Property="MinWidth" Value="20"/>
+            <Setter Property="Height" Value="20"/>
+            <Setter Property="Padding" Value="5,0"/>
+            <Setter Property="Margin" Value="0,0,3,0"/>
+            <Setter Property="CornerRadius" Value="4"/>
+            <Setter Property="BorderThickness" Value="1,1,1,2"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource ControlStrongStrokeColorDefaultBrush}"/>
+            <Setter Property="Background" Value="{DynamicResource ControlFillColorDefaultBrush}"/>
+            <Setter Property="TextElement.FontSize" Value="11"/>
+            <Setter Property="TextElement.FontWeight" Value="SemiBold"/>
+            <Setter Property="TextElement.Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}"/>
+        </Style>
+        <Style x:Key="KeyLabel" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Margin" Value="3,0,16,0"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}"/>
+        </Style>
+        <Style x:Key="KeyPlus" TargetType="TextBlock">
+            <Setter Property="Text" Value="+"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="Margin" Value="0,0,3,0"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorTertiaryBrush}"/>
+        </Style>
+
         <!-- One lyric line: [time] [mark] text. Two states that must never be confused:
              the line being sung (playing) - a tint of the player's accent, an accent bar on the
              left, accent bold text and a speaker mark; and the selected line (where Space stamps
@@ -194,8 +223,8 @@
                 </Border>
 
                 <Grid Grid.Row="1" Margin="0,6,16,0">
-                    <TextBlock FontSize="12" TextWrapping="Wrap" Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                               Text="음성 인식이 이 PC에서 노래를 듣고 각 줄의 시간을 찾습니다. 노래와 가사는 외부로 보내지 않습니다. 결과는 아래에서 들어보며 고칠 수 있습니다.">
+                    <TextBlock FontSize="12" TextWrapping="Wrap" Foreground="{DynamicResource TextFillColorSecondaryBrush}" local:KeepWords.IsEnabled="True"
+                               Text="음성 인식이 노래를 듣고 각 줄의 시간을 찾습니다. 모든 처리는 이 PC에서 이루어지며, PC 성능에 따라 걸리는 시간이 다릅니다. 결과는 아래에서 들어보며 고칠 수 있습니다.">
                         <TextBlock.Style>
                             <Style TargetType="TextBlock">
                                 <Style.Triggers>
@@ -343,9 +372,47 @@
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
-            <TextBlock FontSize="11" VerticalAlignment="Center" TextWrapping="Wrap" Foreground="{DynamicResource TextFillColorTertiaryBrush}"
-                       Text="Space 시간 찍기 · Enter 이 줄부터 듣기 · ↑↓ 줄 이동 · ←→ 0.1초 조정 · Ctrl+←→ 5초 이동 · Delete 시간 지우기 · Ctrl+S 저장"/>
-            <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="16,0,0,0">
+            <!-- the keys, as key caps, wrapping to as many rows as the window's width needs -->
+            <StackPanel VerticalAlignment="Center">
+                <WrapPanel>
+                    <StackPanel Orientation="Horizontal" Margin="0,3">
+                        <Border Style="{StaticResource KeyCap}"><TextBlock Text="Space" VerticalAlignment="Center"/></Border>
+                        <TextBlock Text="시간 찍기" Style="{StaticResource KeyLabel}"/>
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" Margin="0,3">
+                        <Border Style="{StaticResource KeyCap}"><TextBlock Text="Enter" VerticalAlignment="Center"/></Border>
+                        <TextBlock Text="이 줄부터 듣기" Style="{StaticResource KeyLabel}"/>
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" Margin="0,3">
+                        <Border Style="{StaticResource KeyCap}"><TextBlock Text="↑" VerticalAlignment="Center" HorizontalAlignment="Center"/></Border>
+                        <Border Style="{StaticResource KeyCap}"><TextBlock Text="↓" VerticalAlignment="Center" HorizontalAlignment="Center"/></Border>
+                        <TextBlock Text="줄 이동" Style="{StaticResource KeyLabel}"/>
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" Margin="0,3" ToolTip="Shift와 함께 누르면 0.5초씩">
+                        <Border Style="{StaticResource KeyCap}"><TextBlock Text="←" VerticalAlignment="Center" HorizontalAlignment="Center"/></Border>
+                        <Border Style="{StaticResource KeyCap}"><TextBlock Text="→" VerticalAlignment="Center" HorizontalAlignment="Center"/></Border>
+                        <TextBlock Text="0.1초 조정" Style="{StaticResource KeyLabel}"/>
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" Margin="0,3">
+                        <Border Style="{StaticResource KeyCap}"><TextBlock Text="Delete" VerticalAlignment="Center"/></Border>
+                        <TextBlock Text="시간 지우기" Style="{StaticResource KeyLabel}"/>
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" Margin="0,3">
+                        <Border Style="{StaticResource KeyCap}"><TextBlock Text="Ctrl" VerticalAlignment="Center"/></Border>
+                        <TextBlock Style="{StaticResource KeyPlus}"/>
+                        <Border Style="{StaticResource KeyCap}"><TextBlock Text="←" VerticalAlignment="Center" HorizontalAlignment="Center"/></Border>
+                        <Border Style="{StaticResource KeyCap}"><TextBlock Text="→" VerticalAlignment="Center" HorizontalAlignment="Center"/></Border>
+                        <TextBlock Text="5초 이동" Style="{StaticResource KeyLabel}"/>
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" Margin="0,3">
+                        <Border Style="{StaticResource KeyCap}"><TextBlock Text="Ctrl" VerticalAlignment="Center"/></Border>
+                        <TextBlock Style="{StaticResource KeyPlus}"/>
+                        <Border Style="{StaticResource KeyCap}"><TextBlock Text="S" VerticalAlignment="Center" HorizontalAlignment="Center"/></Border>
+                        <TextBlock Text="저장" Style="{StaticResource KeyLabel}"/>
+                    </StackPanel>
+                </WrapPanel>
+            </StackPanel>
+            <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="16,0,0,0" VerticalAlignment="Bottom">
                 <ui:Button Content="취소" Click="Cancel_Click" Margin="0,0,8,0"/>
                 <ui:Button Content="저장" Icon="{ui:SymbolIcon Save24}" Appearance="Primary" Command="{Binding SaveCommand}"/>
             </StackPanel>
