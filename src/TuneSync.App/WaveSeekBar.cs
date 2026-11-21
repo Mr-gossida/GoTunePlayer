@@ -55,6 +55,7 @@ public sealed partial class WaveSeekBar : FrameworkElement
         _rockets.Clear();
         _rocketQueue.Clear();
         _embers.Clear();
+        _swells.Clear();
         ClearNature();
         UpdateAnimationState();
         if (Look == SeekBarStyle.None) StopAnimating();
@@ -306,12 +307,17 @@ public sealed partial class WaveSeekBar : FrameworkElement
             }
             else
             {
-                var amplitude = maxHeight * _activity * Loud(0.18, 0.82, _level) * fadeIn;
-                if (amplitude > 0.3 || _ripples.Count > 0)
+                // A small lapping that never stops while playing (quiet passages kept the water
+                // still), and on it the swells the music makes (WaveSeekBar.Swells.cs): the loud
+                // moments make new waves instead of swelling the ones already there.
+                var amplitude = maxHeight * _activity * WaveFloor * fadeIn;
+                if (amplitude > 0.3 || _swells.Count > 0)
                 {
-                    DrawWaveLayer(dc, cool, warm, mid, thumbX, maxHeight, amplitude * 0.8, wavelength: 64, speed: 1.6, offset: 0, alpha: 0.45, withRipples: false);
+                    // the back layer carries the swells a little behind and lower, for depth
+                    DrawWaveLayer(dc, cool, warm, mid, thumbX, maxHeight, amplitude * 0.8, wavelength: 64, speed: 1.6, offset: 0, alpha: 0.45,
+                        swells: 0.75, swellLag: 14);
                     DrawWaveLayer(dc, Shift(accent, drift * 0.5, 1.0), warm, mid, thumbX, maxHeight, amplitude, wavelength: 110, speed: -1.1, offset: 2.1,
-                        alpha: 0.72 + 0.2 * _flash, withRipples: true);
+                        alpha: 0.72 + 0.2 * _flash, swells: 1, swellLag: 0);
                 }
                 DrawPlayedLine(dc, mid, thumbX, cool, accent, warm);
             }
@@ -359,11 +365,15 @@ public sealed partial class WaveSeekBar : FrameworkElement
         dc.DrawText(text, new Point(left + 7, top + 3));
     }
 
-    /// <summary>One translucent layer of drifting hills above the played line: a short ripple
-    /// modulated by a long swell, tapered at both ends. The front layer also carries the beat
-    /// ripples travelling back from the thumb.</summary>
+    /// <summary>The waves' least height while playing, as a share of the strip's half height.</summary>
+    private const double WaveFloor = 0.45;
+
+    /// <summary>One translucent layer of water above the played line: a short ripple modulated
+    /// by a long slow wave (the lapping, <paramref name="amplitude"/> high), tapered at both ends,
+    /// with the music's swells on it (<paramref name="swells"/> of their height, seen
+    /// <paramref name="swellLag"/> px further along).</summary>
     private void DrawWaveLayer(DrawingContext dc, Color from, Color to, double mid, double endX, double maxHeight,
-                               double amplitude, double wavelength, double speed, double offset, double alpha, bool withRipples)
+                               double amplitude, double wavelength, double speed, double offset, double alpha, double swells, double swellLag)
     {
         var k = 2 * Math.PI / wavelength;
         var k2 = 2 * Math.PI / (wavelength * 2.7);
@@ -373,19 +383,17 @@ public sealed partial class WaveSeekBar : FrameworkElement
             ctx.BeginFigure(new Point(Left, mid), isFilled: true, isClosed: true);
             for (var x = Left; x <= endX; x += 2)
             {
-                var envelope = SmoothStep(Math.Min(1, (x - Left) / 28)) * SmoothStep(Math.Min(1, (endX - x) / 16));
+                // eased down into the thumb over 32 px (16 made a steep drop that looked like
+                // the water heaping up against it)
+                var envelope = SmoothStep(Math.Min(1, (x - Left) / 28)) * SmoothStep(Math.Min(1, (endX - x) / 32));
                 var ripple = 0.5 + 0.5 * Math.Sin(x * k + _phase * speed + offset);
                 var swell = 0.7 + 0.3 * Math.Sin(x * k2 - _phase * 0.6 + offset * 1.7);
                 var y = amplitude * envelope * ripple * swell;
-
-                if (withRipples)
-                {
-                    foreach (var (distance, strength) in _ripples)
-                    {
-                        var d = (endX - 10 - distance - x) / 16;
-                        y += maxHeight * EffectScale * strength * Math.Exp(-d * d) * envelope;
-                    }
-                }
+                // the swells reach well into the corner at the start (they heap up there), curving
+                // down into it over the last few pixels rather than standing in it as a cliff
+                if (_swells.Count > 0)
+                    y += maxHeight * EffectScale * swells * SwellHeight(x + swellLag, endX)
+                         * SmoothStep(Math.Min(1, (x - Left) / 10)) * SmoothStep(Math.Min(1, (endX - x) / 32));
 
                 ctx.LineTo(new Point(x, mid - SoftCap(y, maxHeight * 0.8, maxHeight + Overshoot)), true, true);
             }
@@ -393,9 +401,10 @@ public sealed partial class WaveSeekBar : FrameworkElement
         }
         geometry.Freeze();
 
-        // Along the bar from one hue to the other, getting stronger toward the thumb.
+        // Along the bar from one hue to the other, a little stronger toward the thumb (from 45%
+        // it made the water by the thumb look far heavier than the rest).
         var fill = new LinearGradientBrush(
-            Color.FromArgb((byte)(255 * Math.Min(1, alpha * 0.45)), from.R, from.G, from.B),
+            Color.FromArgb((byte)(255 * Math.Min(1, alpha * 0.8)), from.R, from.G, from.B),
             Color.FromArgb((byte)(255 * Math.Min(1, alpha)), to.R, to.G, to.B),
             new Point(0, 0), new Point(1, 0));
         fill.Freeze();
@@ -1819,7 +1828,7 @@ public sealed partial class WaveSeekBar : FrameworkElement
 
     private void UpdateAnimationState()
     {
-        if (IsLoaded && OnScreen.Check(this) && (IsPlaying || _activity > 0.002 || _ripples.Count > 0 || _sparks.Count > 0 || _licks.Count > 0 || _stars.Count > 0 || _drops.Count > 0 || _splashes.Count > 0 || _droplets.Count > 0 || _jets.Count > 0 || _spouts.Count > 0 || _rockets.Count > 0 || _embers.Count > 0 || NatureAlive)
+        if (IsLoaded && OnScreen.Check(this) && (IsPlaying || _activity > 0.002 || _ripples.Count > 0 || _sparks.Count > 0 || _licks.Count > 0 || _stars.Count > 0 || _drops.Count > 0 || _splashes.Count > 0 || _droplets.Count > 0 || _jets.Count > 0 || _spouts.Count > 0 || _rockets.Count > 0 || _embers.Count > 0 || _swells.Count > 0 || NatureAlive)
             && Look != SeekBarStyle.None) StartAnimating();
     }
 
@@ -1887,6 +1896,7 @@ public sealed partial class WaveSeekBar : FrameworkElement
         UpdateFountain(dt, beat);
         UpdateFireworks(dt, beat);
         UpdateNature(dt, beat);
+        UpdateSwells(dt, beat);
         for (var i = _ripples.Count - 1; i >= 0; i--)
         {
             var (distance, strength) = _ripples[i];
@@ -1895,7 +1905,7 @@ public sealed partial class WaveSeekBar : FrameworkElement
             else _ripples[i] = (distance + dt * 150, strength);
         }
 
-        if (!IsPlaying && _activity < 0.002 && _ripples.Count == 0 && _sparks.Count == 0 && _licks.Count == 0 && _stars.Count == 0 && _drops.Count == 0 && _splashes.Count == 0 && _droplets.Count == 0 && _jets.Count == 0 && _spouts.Count == 0 && _rockets.Count == 0 && _embers.Count == 0 && !NatureAlive)
+        if (!IsPlaying && _activity < 0.002 && _ripples.Count == 0 && _sparks.Count == 0 && _licks.Count == 0 && _stars.Count == 0 && _drops.Count == 0 && _splashes.Count == 0 && _droplets.Count == 0 && _jets.Count == 0 && _spouts.Count == 0 && _rockets.Count == 0 && _embers.Count == 0 && _swells.Count == 0 && !NatureAlive)
         {
             _activity = 0;
             _level = 0;
