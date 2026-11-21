@@ -82,11 +82,21 @@ public sealed partial class WaveSeekBar : FrameworkElement
     private const double EffectScale = 1.1;
 
     /// <summary>The gap between how an effect looks in quiet and in loud passages is this much
-    /// wider than first tuned (+15%).</summary>
-    private const double RangeBoost = 1.15;
+    /// wider than first tuned (+50%; was +15%, and the effects barely told quiet from loud).</summary>
+    private const double RangeBoost = 1.5;
 
-    /// <summary>Waves and bars may reach this far past the strip's own half height.</summary>
-    private const double Overshoot = 3;
+    /// <summary>Waves and bars may reach this far past the strip's own half height (was 3: loud
+    /// passages were cut flat right at the bar's top edge).</summary>
+    private const double Overshoot = 8;
+
+    /// <summary><paramref name="value"/> as it is up to <paramref name="knee"/>, then bending
+    /// smoothly toward <paramref name="limit"/> without ever reaching it - so a loud peak comes
+    /// out rounded, not sliced flat as a hard limit leaves it.</summary>
+    private static double SoftCap(double value, double knee, double limit)
+    {
+        if (value <= knee || limit <= knee) return Math.Min(value, Math.Max(knee, limit));
+        return knee + (limit - knee) * Math.Tanh((value - knee) / (limit - knee));
+    }
 
     /// <summary>An effect's size at loudness <paramref name="level"/> (0..1): tuned as
     /// <paramref name="floor"/> in silence up to floor + <paramref name="span"/> when loud, with
@@ -355,7 +365,7 @@ public sealed partial class WaveSeekBar : FrameworkElement
                     }
                 }
 
-                ctx.LineTo(new Point(x, mid - Math.Min(maxHeight + Overshoot, y)), true, true);
+                ctx.LineTo(new Point(x, mid - SoftCap(y, maxHeight * 0.8, maxHeight + Overshoot)), true, true);
             }
             ctx.LineTo(new Point(endX, mid), true, true);
         }
@@ -459,7 +469,7 @@ public sealed partial class WaveSeekBar : FrameworkElement
                 var near = SmoothStep(Math.Clamp(1 - behind / 110, 0, 1));
                 var bounce = 0.5 + 0.5 * Math.Sin(_phase * 3.7 + i * 1.9);
                 h *= 1 + near * _activity * (0.75 * Loud(0, 1, _level) * bounce + 0.9 * EffectScale * _flash);
-                h = Math.Clamp(h, 0.8, maxHeight + Overshoot + 2);
+                h = Math.Max(0.8, SoftCap(h, maxHeight * 0.8, maxHeight + Overshoot + 2));
                 p.BeginFigure(new Point(x - BarThickness / 2, mid - h), true, true);
                 p.PolyLineTo([new Point(x + BarThickness / 2, mid - h), new Point(x + BarThickness / 2, mid + h), new Point(x - BarThickness / 2, mid + h)], false, false);
             }
@@ -974,9 +984,10 @@ public sealed partial class WaveSeekBar : FrameworkElement
 
     // ---- 오로라 ----
 
-    /// <summary>How far above the strip the aurora may hang: not at all - reaching up past the bar
-    /// it ran under the playback controls above it and looked cut off.</summary>
-    private const double AuroraOverflow = 0;
+    /// <summary>How far above the strip the aurora may hang. It was 0 because, reaching past the
+    /// bar, it ran under the player's controls and looked cut off; the seek bar now draws on top
+    /// of them with room to spare, so it may rise a little.</summary>
+    private const double AuroraOverflow = 8;
 
     /// <summary>Northern lights filling the strip over the played part, above and below the line.
     /// Like a real aurora it is a hanging curtain: a bright lower hem that sways up and down in slow
@@ -1710,26 +1721,30 @@ public sealed partial class WaveSeekBar : FrameworkElement
     private void Step(double dt)
     {
         var target = !IsPlaying ? 0 : Waveform is { } waveform ? waveform.LevelAt(CurrentPosition()) : FallbackLevel;
-        _level += (target - _level) * Math.Min(1, dt * (target > _level ? 18 : 4));
+        // up at once, down quickly enough that a drop in the music shows (was 4: a slow sink)
+        _level += (target - _level) * Math.Min(1, dt * (target > _level ? 18 : 7));
         _baseline += (target - _baseline) * Math.Min(1, dt * 1.2);
         _activity += ((IsPlaying ? 1.0 : 0.0) - _activity) * Math.Min(1, dt * 3);
 
         // Louder music flows faster.
         _phase += dt * (1.4 + 2.4 * _level) * Math.Max(_activity, 0.15);
         // The fire grows and settles more slowly than the meter; it flickers faster when loud.
-        _fireLevel += (target - _fireLevel) * Math.Min(1, dt * (target > _fireLevel ? 5 : 2));
+        // (8 up / 3 down, was 5 / 2: still smoother than the meter, but follows the music visibly)
+        _fireLevel += (target - _fireLevel) * Math.Min(1, dt * (target > _fireLevel ? 8 : 3));
         var previousFireTime = _fireTime;
         _fireTime += dt * (0.9 + 0.8 * _fireLevel + 0.8 * _flash) * Math.Max(_activity, 0.2);
 
         // A beat: loudness jumping well above its recent average sends a ripple back from the thumb.
         _sinceBeat += dt;
         var beat = false;
-        if (IsPlaying && Waveform is not null && target - _baseline > 0.16 && _sinceBeat > 0.15)
+        // (threshold 0.12, was 0.16; flash and ripple about a third stronger: more of the beats
+        // show, and clearly)
+        if (IsPlaying && Waveform is not null && target - _baseline > 0.12 && _sinceBeat > 0.15)
         {
             _sinceBeat = 0;
             beat = true;
-            _flash = Math.Max(_flash, Math.Min(1, (target - _baseline) * 3));
-            _ripples.Add((0, Math.Min(0.6, (target - _baseline) * 1.8)));
+            _flash = Math.Max(_flash, Math.Min(1, (target - _baseline) * 4));
+            _ripples.Add((0, Math.Min(0.75, (target - _baseline) * 2.4)));
             if (_ripples.Count > 6) _ripples.RemoveAt(0);
         }
         _flash *= Math.Exp(-dt * 5);
