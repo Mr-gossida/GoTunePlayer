@@ -1019,7 +1019,10 @@ public sealed partial class WaveSeekBar : FrameworkElement
         double TopAt(double x, double hem, double phase)
         {
             var folds = 0.6 + 0.26 * Math.Sin(x * 0.033 - t * 0.8 + phase) + 0.14 * Math.Sin(x * 0.091 + t * 1.8 + phase);
-            return hem - (hem - top) * Math.Min(1, (0.35 + 0.75 * fill) * Envelope(x) * folds * 1.25);
+            // tanh, not Math.Min(1, …): loud, every fold reached the ceiling and the top ran flat
+            // along it for long stretches - it looked cut off. Now the folds keep their shape and
+            // only come close to the ceiling.
+            return hem - (hem - top) * Math.Tanh((0.35 + 0.75 * fill) * Envelope(x) * folds * 1.25);
         }
 
         StreamGeometry Curtain(double phase, double raise)
