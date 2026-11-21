@@ -611,24 +611,35 @@ public sealed partial class WaveSeekBar : FrameworkElement
             var strong = _beatStrength >= StrongBeat;
             var kind = strong ? Show.Fan : FireworksRound[_beatCount % FireworksRound.Length];
             var hue = Random.Shared.NextDouble(); // one color for the whole volley
+            // Anywhere along the played part (they all went up within ~120 px of the thumb, so
+            // the show crowded round it): a volley picks its own spot each time.
+            double Anywhere() => Random.Shared.NextDouble() * span;
             switch (kind)
             {
                 case Show.Single:
-                    _rocketQueue.Add((0, Math.Pow(Random.Shared.NextDouble(), 1.5) * Math.Min(120, span), 0.1, 0.2, hue));
+                    _rocketQueue.Add((0, Anywhere(), 0.1, 0.2, hue));
                     break;
                 case Show.Pair:
-                    var at = Random.Shared.NextDouble() * Math.Min(60, span);
+                    var gap = Math.Min(70, span * 0.4);
+                    var at = Random.Shared.NextDouble() * Math.Max(0, span - gap);
                     _rocketQueue.Add((0, at, 0.05, 0.15, hue));
-                    _rocketQueue.Add((0, at + Math.Min(70, span * 0.5), 0.05, 0.15, hue));
+                    _rocketQueue.Add((0, at + gap, 0.05, 0.15, hue));
                     break;
                 case Show.Chain:
-                    for (var k = 0; k < 3; k++) // stepping back from the thumb, each a little higher
-                        _rocketQueue.Add((0.09 * k, Math.Min(span, 15 + 45 * k), -0.05 + 0.08 * k, 0.1, hue));
+                {
+                    // three going up one after the other, stepping one way or the other from a
+                    // random spot, each a little higher
+                    var step = Math.Min(45, span / 3) * (Random.Shared.NextDouble() < 0.5 ? 1 : -1);
+                    var first = step > 0 ? Random.Shared.NextDouble() * Math.Max(0, span - 2 * step)
+                                         : -2 * step + Random.Shared.NextDouble() * Math.Max(0, span + 2 * step);
+                    for (var k = 0; k < 3; k++)
+                        _rocketQueue.Add((0.09 * k, first + step * k, -0.05 + 0.08 * k, 0.1, hue));
                     break;
-                default: // a fan across the played part, all at once, high
-                    var fan = Math.Clamp((int)(span / 50), 2, 5);
+                }
+                default: // a fan across the whole played part, all at once, high
+                    var fan = Math.Clamp((int)(span / 60), 2, 5);
                     for (var k = 0; k < fan; k++)
-                        _rocketQueue.Add((0, span * (k + 0.5) / fan * Math.Min(1, 260 / Math.Max(1, span)), 0.15, 0.35, hue));
+                        _rocketQueue.Add((0, span * (k + 0.5) / fan, 0.15, 0.35, hue));
                     break;
             }
         }
