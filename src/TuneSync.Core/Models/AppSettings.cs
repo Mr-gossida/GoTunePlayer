@@ -347,6 +347,8 @@ public enum SeekBarStyle
     Ribbon,
     /// <summary>Shooting stars falling at a slant onto the played part, flashing where they land.</summary>
     Meteor,
+    /// <summary>The thumb as a pixel-art dinosaur running along the bar, jumping obstacles as tall as the music is loud.</summary>
+    Runner,
 }
 
 public enum SpectrumStyle

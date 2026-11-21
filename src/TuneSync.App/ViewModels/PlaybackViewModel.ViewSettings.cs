@@ -81,7 +81,7 @@ public sealed partial class PlaybackViewModel
     public static readonly SeekBarStyle[] SeekBarStyleOrder =
         [SeekBarStyle.None, SeekBarStyle.Random, SeekBarStyle.Wave, SeekBarStyle.Flame, SeekBarStyle.Neon, SeekBarStyle.Bars, SeekBarStyle.Fountain, SeekBarStyle.Rain, SeekBarStyle.Aurora,
          SeekBarStyle.Sparkle, SeekBarStyle.Fireworks, SeekBarStyle.Fireflies, SeekBarStyle.Electric, SeekBarStyle.Petals, SeekBarStyle.Notes,
-         SeekBarStyle.Bubbles, SeekBarStyle.Ribbon, SeekBarStyle.Meteor];
+         SeekBarStyle.Bubbles, SeekBarStyle.Ribbon, SeekBarStyle.Meteor, SeekBarStyle.Runner];
 
     private void PickSeekLook()
     {
@@ -113,6 +113,7 @@ public sealed partial class PlaybackViewModel
         SeekBarStyle.Bubbles => "비눗방울",
         SeekBarStyle.Ribbon => "실크 리본",
         SeekBarStyle.Meteor => "별똥별",
+        SeekBarStyle.Runner => "공룡 달리기",
         _ => style.ToString(),
     };
 

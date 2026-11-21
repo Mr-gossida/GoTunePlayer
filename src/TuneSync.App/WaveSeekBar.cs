@@ -56,6 +56,7 @@ public sealed partial class WaveSeekBar : FrameworkElement
         _rocketQueue.Clear();
         _embers.Clear();
         _swells.Clear();
+        ClearRunner();
         ClearNature();
         UpdateAnimationState();
         if (Look == SeekBarStyle.None) StopAnimating();
@@ -291,6 +292,11 @@ public sealed partial class WaveSeekBar : FrameworkElement
             {
                 DrawMeteors(dc, mid, thumbX, cool, accent, warm);
             }
+            else if (Look == SeekBarStyle.Runner)
+            {
+                // the ground it runs on; it and the obstacles are drawn in the thumb's place below
+                DrawPlayedLine(dc, mid, thumbX, cool, accent, warm);
+            }
             else if (Look == SeekBarStyle.Sparkle)
             {
                 DrawPlayedLine(dc, mid, thumbX, cool, accent, warm);
@@ -321,6 +327,14 @@ public sealed partial class WaveSeekBar : FrameworkElement
                 }
                 DrawPlayedLine(dc, mid, thumbX, cool, accent, warm);
             }
+        }
+
+        if (Look == SeekBarStyle.Runner)
+        {
+            // 공룡 달리기: the dinosaur is the thumb
+            DrawRunner(dc, mid, thumbX, accent, warm);
+            if ((_hover || _dragging) && Maximum > 1) DrawTimePreview(dc, mid);
+            return;
         }
 
         var radius = _hover || _dragging ? ThumbRadius + 1.5 : ThumbRadius;
@@ -1828,7 +1842,7 @@ public sealed partial class WaveSeekBar : FrameworkElement
 
     private void UpdateAnimationState()
     {
-        if (IsLoaded && OnScreen.Check(this) && (IsPlaying || _activity > 0.002 || _ripples.Count > 0 || _sparks.Count > 0 || _licks.Count > 0 || _stars.Count > 0 || _drops.Count > 0 || _splashes.Count > 0 || _droplets.Count > 0 || _jets.Count > 0 || _spouts.Count > 0 || _rockets.Count > 0 || _embers.Count > 0 || _swells.Count > 0 || NatureAlive)
+        if (IsLoaded && OnScreen.Check(this) && (IsPlaying || _activity > 0.002 || _ripples.Count > 0 || _sparks.Count > 0 || _licks.Count > 0 || _stars.Count > 0 || _drops.Count > 0 || _splashes.Count > 0 || _droplets.Count > 0 || _jets.Count > 0 || _spouts.Count > 0 || _rockets.Count > 0 || _embers.Count > 0 || _swells.Count > 0 || RunnerAlive || NatureAlive)
             && Look != SeekBarStyle.None) StartAnimating();
     }
 
@@ -1897,6 +1911,7 @@ public sealed partial class WaveSeekBar : FrameworkElement
         UpdateFireworks(dt, beat);
         UpdateNature(dt, beat);
         UpdateSwells(dt, beat);
+        UpdateRunner(dt);
         for (var i = _ripples.Count - 1; i >= 0; i--)
         {
             var (distance, strength) = _ripples[i];
@@ -1905,7 +1920,7 @@ public sealed partial class WaveSeekBar : FrameworkElement
             else _ripples[i] = (distance + dt * 150, strength);
         }
 
-        if (!IsPlaying && _activity < 0.002 && _ripples.Count == 0 && _sparks.Count == 0 && _licks.Count == 0 && _stars.Count == 0 && _drops.Count == 0 && _splashes.Count == 0 && _droplets.Count == 0 && _jets.Count == 0 && _spouts.Count == 0 && _rockets.Count == 0 && _embers.Count == 0 && _swells.Count == 0 && !NatureAlive)
+        if (!IsPlaying && _activity < 0.002 && _ripples.Count == 0 && _sparks.Count == 0 && _licks.Count == 0 && _stars.Count == 0 && _drops.Count == 0 && _splashes.Count == 0 && _droplets.Count == 0 && _jets.Count == 0 && _spouts.Count == 0 && _rockets.Count == 0 && _embers.Count == 0 && _swells.Count == 0 && !RunnerAlive && !NatureAlive)
         {
             _activity = 0;
             _level = 0;
