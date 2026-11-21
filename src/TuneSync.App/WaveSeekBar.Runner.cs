@@ -81,7 +81,6 @@ public sealed partial class WaveSeekBar
             return Math.Max(1, Math.Round(1.7 * scale)) / scale;
         }
     }
-
     /// <summary><paramref name="value"/> (px) moved onto the screen's pixel grid.</summary>
     private double OnGrid(double value)
     {
@@ -99,7 +98,7 @@ public sealed partial class WaveSeekBar
         Hazard.Pumpkin => PumpkinArt,
         Hazard.Fence => FenceArt,
         Hazard.MilkCan => MilkCanArt,
-        Hazard.Fox => frame == 0 ? FoxArt : FoxArt2,
+        Hazard.Fox => FoxRun[frame % FoxRun.Length],
         _ => frame == 0 ? EagleArt : EagleArt2,
     };
 
@@ -265,10 +264,12 @@ public sealed partial class WaveSeekBar
         {
             var kind = KindOf(o);
             // running legs and flapping wings
-            var frame = kind == Hazard.Fox ? (int)(_sceneTime * 12) % 2 : kind == Hazard.Eagle ? (int)(_sceneTime * 5) % 2 : 0;
+            var frame = kind == Hazard.Fox ? (int)(_sceneTime * 14) % FoxRun.Length : kind == Hazard.Eagle ? (int)(_sceneTime * 5) % 2 : 0;
             var art = SpriteOf(kind, frame);
             var fade = Math.Clamp((o.X - Left + 30) / 40, 0, 1);
-            var bottom = kind == Hazard.Eagle ? ground - EagleAltitude * pixel : ground;
+            // the eagle up in the air; the fox off the ground by a pixel with its legs gathered, mid-bound
+            var bottom = kind == Hazard.Eagle ? ground - EagleAltitude * pixel
+                       : kind == Hazard.Fox && frame == 2 ? ground - pixel : ground;
             DrawSprite(dc, art, OnGrid(o.X - art[0].Length * pixel / 2), bottom, pixel, fade);
         }
 
@@ -427,8 +428,10 @@ public sealed partial class WaveSeekBar
     ];
 
     /// <summary>The fox, running at the duck: pointed dark-tipped ears, a white muzzle and chest,
-    /// a long bushy tail with a white tip, black legs.</summary>
-    private static readonly string[] FoxArt =
+    /// a long bushy tail with a white tip, and legs in a darker orange (dark legs were lost against
+    /// the dark screen saver) galloping in four steps - stretched out, passing, gathered under it
+    /// (where it's off the ground, mid-bound), passing.</summary>
+    private static readonly string[] FoxBody =
     [
         "..k..k.........",
         "..oo.oo........",
@@ -436,20 +439,14 @@ public sealed partial class WaveSeekBar
         "kwwooooooooooow",
         ".wwoooooooooww.",
         "..wwoooooooo...",
-        "..k.k....k.k...",
-        ".k...k..k...k..",
     ];
 
-    private static readonly string[] FoxArt2 =
+    private static readonly string[][] FoxRun =
     [
-        "..k..k.........",
-        "..oo.oo........",
-        ".ookoooo....ooo",
-        "kwwooooooooooow",
-        ".wwoooooooooww.",
-        "..wwoooooooo...",
-        "...kk.....kk...",
-        "...kk.....kk...",
+        [.. FoxBody, ".qq.......qq...", "q..q.....q..q.."],
+        [.. FoxBody, "..qq......qq...", "..q.q....q.q..."],
+        [.. FoxBody, "...qq....qq....", "....qq..qq....."],
+        [.. FoxBody, "..qq......qq...", "...qq.....qq..."],
     ];
 
     private static readonly string[] PumpkinArt =
