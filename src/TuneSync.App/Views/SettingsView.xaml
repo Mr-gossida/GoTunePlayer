@@ -208,6 +208,9 @@
                     <ListBoxItem Tag="Playback">
                         <StackPanel Orientation="Horizontal"><ui:SymbolIcon Symbol="Play24" Margin="0,0,10,0"/><TextBlock Text="재생"/></StackPanel>
                     </ListBoxItem>
+                    <ListBoxItem Tag="Effects">
+                        <StackPanel Orientation="Horizontal"><ui:SymbolIcon Symbol="Sparkle24" Margin="0,0,10,0"/><TextBlock Text="화면 효과"/></StackPanel>
+                    </ListBoxItem>
                     <ListBoxItem Tag="Sound">
                         <StackPanel Orientation="Horizontal"><ui:SymbolIcon Symbol="DeviceEq24" Margin="0,0,10,0"/><TextBlock Text="음향"/></StackPanel>
                     </ListBoxItem>
@@ -327,7 +330,7 @@
                 <!-- 재생 -->
                 <StackPanel Tag="Playback">
                     <ui:TextBlock Text="재생" Style="{StaticResource CategoryTitle}"/>
-                    <ui:TextBlock Text="시작할 때의 재생과 재생 화면의 효과" Style="{StaticResource CategoryLead}"/>
+                    <ui:TextBlock Text="시작할 때의 재생과 가사" Style="{StaticResource CategoryLead}"/>
                     <ui:TextBlock Text="시작할 때" Style="{StaticResource Group}"/>
                     <ui:CardControl Style="{StaticResource Card}" Icon="{ui:SymbolIcon Play24}" Tag="시작하면 바로 재생 자동 재생"
                                     ToolTip="이어 들을 곡이 없으면 재생 대기열의 첫 곡(랜덤 재생이 켜져 있으면 랜덤으로 고른 곡)부터 재생합니다.">
@@ -349,60 +352,6 @@
                         <ComboBox Width="200" ItemsSource="{Binding StartupResumeOptions}" DisplayMemberPath="Label"
                                   SelectedValuePath="Value" SelectedValue="{Binding StartupResume}"/>
                     </ui:CardControl>
-                    <ui:TextBlock Text="화면 효과" Style="{StaticResource Group}"/>
-                    <ui:CardControl Style="{StaticResource Card}" Icon="{ui:SymbolIcon Flash24}" Tag="재생바 효과 플라즈마 볼 테슬라 코일 꽃잎 물결 불꽃 네온 파형 막대 분수 빗방울 오로라 별빛 불꽃놀이 폭죽 없음 랜덤 임의 시크바"
-                                    ToolTip="재생한 부분 위에서 음악에 맞춰 움직이는 효과입니다. 랜덤은 곡마다 효과 중 하나를 고르고, 없음은 움직이지 않는 선만 그립니다(가장 가벼움).">
-                        <ui:CardControl.Header>
-                            <StackPanel>
-                                <ui:TextBlock Text="재생바 효과" FontTypography="Body"/>
-                                <ui:TextBlock Text="물결 · 불꽃 · 분수 · 빗방울 등 · 랜덤 · 없음" Style="{StaticResource Desc}"/>
-                            </StackPanel>
-                        </ui:CardControl.Header>
-                        <ComboBox Width="200" ItemsSource="{Binding SeekBarStyleOptions}" DisplayMemberPath="Label"
-                                  SelectedValuePath="Value" SelectedValue="{Binding SeekBarStyle}"/>
-                    </ui:CardControl>
-                    <ContentControl Content="{Binding SeekBarRandomPool}" ContentTemplate="{StaticResource RandomPoolTemplate}" Focusable="False"
-                                    Visibility="{Binding IsSeekBarRandom, Converter={StaticResource BoolToVisibility}}"/>
-                    <ui:CardControl Style="{StaticResource Card}" Icon="{ui:SymbolIcon DataBarVertical24}" Tag="스펙트럼 모양 LED 막대 물결 랜덤"
-                                    ToolTip="곡 정보 아래와 화면 보호기의 스펙트럼입니다. 곡 정보 아래 스펙트럼을 클릭해도 차례로 바뀝니다.">
-                        <ui:CardControl.Header>
-                            <StackPanel>
-                                <ui:TextBlock Text="스펙트럼 모양" FontTypography="Body"/>
-                                <ui:TextBlock Text="스펙트럼을 클릭해도 바꿀 수 있습니다" Style="{StaticResource Desc}"/>
-                            </StackPanel>
-                        </ui:CardControl.Header>
-                        <ComboBox Width="200" ItemsSource="{Binding SpectrumStyleOptions}" DisplayMemberPath="Label"
-                                  SelectedValuePath="Value" SelectedValue="{Binding SpectrumStyle}"/>
-                    </ui:CardControl>
-                    <ContentControl Content="{Binding SpectrumRandomPool}" ContentTemplate="{StaticResource RandomPoolTemplate}" Focusable="False"
-                                    Visibility="{Binding IsSpectrumRandom, Converter={StaticResource BoolToVisibility}}"/>
-                    <ui:CardControl Style="{StaticResource Card}" Icon="{ui:SymbolIcon Timer24}" Tag="인트로 진행 게이지 전주"
-                                    ToolTip="싱크 가사가 시작되기 전 인트로 동안, 가사가 나오기까지 얼마나 남았는지 가는 막대로 보여 줍니다.">
-                        <ui:CardControl.Header>
-                            <StackPanel>
-                                <ui:TextBlock Text="인트로 진행 게이지" FontTypography="Body"/>
-                                <ui:TextBlock Text="가사가 나오기까지 남은 시간을 막대로" Style="{StaticResource Desc}"/>
-                            </StackPanel>
-                        </ui:CardControl.Header>
-                        <ui:ToggleSwitch IsChecked="{Binding ShowIntroGauge}" OnContent="표시" OffContent="숨김"/>
-                    </ui:CardControl>
-                    <ui:CardControl Style="{StaticResource Card}" Icon="{ui:SymbolIcon WeatherSunny24}" Tag="배경 효과 오로라 조명 물빛 빛망울 성운 라바 램프 비 빗방울 워프 우주 별 그라데이션 빛 배경 음악 집중 모드 저사양 내장 그래픽 GPU 절전 성능"
-                                    ToolTip="음악 집중 모드와 화면 보호기 뒤에서 움직이는 빛입니다. 효과는 모두 비슷한 부담이며, 빛이 움직일 때마다 화면 전체를 다시 그리므로 내장 그래픽에서 GPU 사용량이 높으면 절전이나 끄기를 고르세요. 절전은 빛이 덜 자주 움직이고, 끄기는 배경이 멈춘 채로 보입니다.">
-                        <ui:CardControl.Header>
-                            <StackPanel>
-                                <ui:TextBlock Text="배경 효과" FontTypography="Body"/>
-                                <ui:TextBlock Text="집중 모드·화면 보호기 뒤의 움직이는 빛 · 내장 그래픽이면 절전이나 끄기" Style="{StaticResource Desc}"/>
-                            </StackPanel>
-                        </ui:CardControl.Header>
-                        <StackPanel Orientation="Horizontal">
-                            <ComboBox Width="150" ItemsSource="{Binding BackgroundEffectOptions}" DisplayMemberPath="Label"
-                                      SelectedValuePath="Value" SelectedValue="{Binding Playback.BackgroundEffect}" AutomationProperties.Name="배경 효과"/>
-                            <ComboBox Width="170" Margin="8,0,0,0" ItemsSource="{Binding AuroraModeOptions}" DisplayMemberPath="Label"
-                                      SelectedValuePath="Value" SelectedValue="{Binding Playback.AuroraMode}" AutomationProperties.Name="배경 효과 움직임"/>
-                        </StackPanel>
-                    </ui:CardControl>
-                    <ContentControl Content="{Binding BackgroundRandomPool}" ContentTemplate="{StaticResource RandomPoolTemplate}" Focusable="False"
-                                    Visibility="{Binding IsBackgroundRandom, Converter={StaticResource BoolToVisibility}}"/>
                     <ui:TextBlock Text="가사" Style="{StaticResource Group}"/>
                     <ui:CardControl Style="{StaticResource Card}" Icon="{ui:SymbolIcon SlideText24}" Tag="가사 글꼴 폰트 서체 글씨체 싱크"
                                     ToolTip="플레이어, 음악 집중 모드, 화면 보호기, HUD, 미니 플레이어의 가사 글꼴입니다.">
@@ -453,6 +402,67 @@
                             <TextBlock Text="Every line in the font you choose" Opacity="0.32"/>
                         </StackPanel>
                     </Border>
+                    <ui:CardControl Style="{StaticResource Card}" Icon="{ui:SymbolIcon Timer24}" Tag="인트로 진행 게이지 전주"
+                                    ToolTip="싱크 가사가 시작되기 전 인트로 동안, 가사가 나오기까지 얼마나 남았는지 가는 막대로 보여 줍니다.">
+                        <ui:CardControl.Header>
+                            <StackPanel>
+                                <ui:TextBlock Text="인트로 진행 게이지" FontTypography="Body"/>
+                                <ui:TextBlock Text="가사가 나오기까지 남은 시간을 막대로" Style="{StaticResource Desc}"/>
+                            </StackPanel>
+                        </ui:CardControl.Header>
+                        <ui:ToggleSwitch IsChecked="{Binding ShowIntroGauge}" OnContent="표시" OffContent="숨김"/>
+                    </ui:CardControl>
+                </StackPanel>
+
+                <!-- 화면 효과: the moving looks of the player, focus mode and the screen saver -->
+                <StackPanel Tag="Effects">
+                    <ui:TextBlock Text="화면 효과" Style="{StaticResource CategoryTitle}"/>
+                    <ui:TextBlock Text="재생바와 스펙트럼, 집중 모드·화면 보호기 뒤의 움직이는 효과" Style="{StaticResource CategoryLead}"/>
+                    <ui:TextBlock Text="재생 화면" Style="{StaticResource Group}"/>
+                    <ui:CardControl Style="{StaticResource Card}" Icon="{ui:SymbolIcon Flash24}" Tag="재생바 효과 플라즈마 볼 테슬라 코일 꽃잎 물결 불꽃 네온 파형 막대 분수 빗방울 오로라 별빛 불꽃놀이 폭죽 없음 랜덤 임의 시크바"
+                                    ToolTip="재생한 부분 위에서 음악에 맞춰 움직이는 효과입니다. 랜덤은 곡마다 효과 중 하나를 고르고, 없음은 움직이지 않는 선만 그립니다(가장 가벼움).">
+                        <ui:CardControl.Header>
+                            <StackPanel>
+                                <ui:TextBlock Text="재생바 효과" FontTypography="Body"/>
+                                <ui:TextBlock Text="물결 · 불꽃 · 분수 · 빗방울 등 · 랜덤 · 없음" Style="{StaticResource Desc}"/>
+                            </StackPanel>
+                        </ui:CardControl.Header>
+                        <ComboBox Width="200" ItemsSource="{Binding SeekBarStyleOptions}" DisplayMemberPath="Label"
+                                  SelectedValuePath="Value" SelectedValue="{Binding SeekBarStyle}"/>
+                    </ui:CardControl>
+                    <ContentControl Content="{Binding SeekBarRandomPool}" ContentTemplate="{StaticResource RandomPoolTemplate}" Focusable="False"
+                                    Visibility="{Binding IsSeekBarRandom, Converter={StaticResource BoolToVisibility}}"/>
+                    <ui:CardControl Style="{StaticResource Card}" Icon="{ui:SymbolIcon DataBarVertical24}" Tag="스펙트럼 모양 LED 막대 물결 랜덤"
+                                    ToolTip="곡 정보 아래와 화면 보호기의 스펙트럼입니다. 곡 정보 아래 스펙트럼을 클릭해도 차례로 바뀝니다.">
+                        <ui:CardControl.Header>
+                            <StackPanel>
+                                <ui:TextBlock Text="스펙트럼 모양" FontTypography="Body"/>
+                                <ui:TextBlock Text="스펙트럼을 클릭해도 바꿀 수 있습니다" Style="{StaticResource Desc}"/>
+                            </StackPanel>
+                        </ui:CardControl.Header>
+                        <ComboBox Width="200" ItemsSource="{Binding SpectrumStyleOptions}" DisplayMemberPath="Label"
+                                  SelectedValuePath="Value" SelectedValue="{Binding SpectrumStyle}"/>
+                    </ui:CardControl>
+                    <ContentControl Content="{Binding SpectrumRandomPool}" ContentTemplate="{StaticResource RandomPoolTemplate}" Focusable="False"
+                                    Visibility="{Binding IsSpectrumRandom, Converter={StaticResource BoolToVisibility}}"/>
+                    <ui:TextBlock Text="배경" Style="{StaticResource Group}"/>
+                    <ui:CardControl Style="{StaticResource Card}" Icon="{ui:SymbolIcon WeatherSunny24}" Tag="배경 효과 오로라 조명 물빛 빛망울 성운 라바 램프 비 빗방울 워프 우주 별 그라데이션 빛 배경 음악 집중 모드 저사양 내장 그래픽 GPU 절전 성능"
+                                    ToolTip="음악 집중 모드와 화면 보호기 뒤에서 움직이는 빛입니다. 효과는 모두 비슷한 부담이며, 빛이 움직일 때마다 화면 전체를 다시 그리므로 내장 그래픽에서 GPU 사용량이 높으면 절전이나 끄기를 고르세요. 절전은 빛이 덜 자주 움직이고, 끄기는 배경이 멈춘 채로 보입니다.">
+                        <ui:CardControl.Header>
+                            <StackPanel>
+                                <ui:TextBlock Text="배경 효과" FontTypography="Body"/>
+                                <ui:TextBlock Text="집중 모드·화면 보호기 뒤의 움직이는 빛 · 내장 그래픽이면 절전이나 끄기" Style="{StaticResource Desc}"/>
+                            </StackPanel>
+                        </ui:CardControl.Header>
+                        <StackPanel Orientation="Horizontal">
+                            <ComboBox Width="150" ItemsSource="{Binding BackgroundEffectOptions}" DisplayMemberPath="Label"
+                                      SelectedValuePath="Value" SelectedValue="{Binding Playback.BackgroundEffect}" AutomationProperties.Name="배경 효과"/>
+                            <ComboBox Width="170" Margin="8,0,0,0" ItemsSource="{Binding AuroraModeOptions}" DisplayMemberPath="Label"
+                                      SelectedValuePath="Value" SelectedValue="{Binding Playback.AuroraMode}" AutomationProperties.Name="배경 효과 움직임"/>
+                        </StackPanel>
+                    </ui:CardControl>
+                    <ContentControl Content="{Binding BackgroundRandomPool}" ContentTemplate="{StaticResource RandomPoolTemplate}" Focusable="False"
+                                    Visibility="{Binding IsBackgroundRandom, Converter={StaticResource BoolToVisibility}}"/>
                 </StackPanel>
 
                 <!-- 음향: the equalizer's switch and preset; the sliders are in its own window -->
@@ -915,7 +925,7 @@
                                 <ComboBox Width="200" HorizontalAlignment="Right" ItemsSource="{Binding ScreenSaverExitOptions}" DisplayMemberPath="Label"
                                           SelectedValuePath="Value" SelectedValue="{Binding ScreenSaverExit}" IsEnabled="{Binding ScreenSaverEnabled}"/>
                             </Grid>
-                            <!-- Only while the background effect is 랜덤 (재생 › 배경 효과): otherwise every screen shows that one effect anyway. -->
+                            <!-- Only while the background effect is 랜덤 (화면 효과 › 배경 효과): otherwise every screen shows that one effect anyway. -->
                             <Grid Margin="0,0,0,10" Visibility="{Binding IsBackgroundRandom, Converter={StaticResource BoolToVisibility}}"
                                   ToolTip="배경 효과가 무작위일 때, 모니터가 여러 대면 모든 화면에 같은 효과를 이어서 보여 줄지 화면마다 따로 고를지 정합니다">
                                 <TextBlock Text="여러 모니터의 배경 효과" VerticalAlignment="Center"/>

@@ -97,7 +97,7 @@ public sealed partial class PlaybackViewModel : ObservableObject, IDisposable
         AppSettingsStore.Save(_settings);
     }
 
-    /// <summary>Which light it is (설정 › 화면 보호기 › 배경 효과); open stages follow a change at once.</summary>
+    /// <summary>Which light it is (설정 › 화면 효과 › 배경 효과); open stages follow a change at once.</summary>
     [ObservableProperty]
     private BackgroundEffect _backgroundEffect;
 

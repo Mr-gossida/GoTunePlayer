@@ -417,7 +417,7 @@ public sealed partial class SettingsViewModel : ObservableObject
     [ObservableProperty]
     private ScreenSaverExit _screenSaverExit;
 
-    /// <summary>설정 › 화면 보호기 › 배경 효과: which light (bound to Playback.BackgroundEffect).</summary>
+    /// <summary>설정 › 화면 효과 › 배경 효과: which light (bound to Playback.BackgroundEffect).</summary>
     public IReadOnlyList<Choice<BackgroundEffect>> BackgroundEffectOptions { get; } =
     [
         new(BackgroundEffect.Random, "무작위"),
@@ -431,7 +431,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         new(BackgroundEffect.Warp, "워프"),
     ];
 
-    /// <summary>설정 › 화면 보호기 › 배경 효과: how it moves (bound to Playback.AuroraMode).</summary>
+    /// <summary>설정 › 화면 효과 › 배경 효과: how it moves (bound to Playback.AuroraMode).</summary>
     public IReadOnlyList<Choice<AuroraMode>> AuroraModeOptions { get; } =
     [
         new(AuroraMode.On, "켜기"),
