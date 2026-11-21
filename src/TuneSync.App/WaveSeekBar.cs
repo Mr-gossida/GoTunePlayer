@@ -400,8 +400,7 @@ public sealed partial class WaveSeekBar : FrameworkElement
                 var ripple = 0.5 + 0.5 * Math.Sin(x * k + _phase * speed + offset);
                 var swell = 0.7 + 0.3 * Math.Sin(x * k2 - _phase * 0.6 + offset * 1.7);
                 var y = amplitude * envelope * ripple * swell;
-                // the swells reach well into the corner at the start (they heap up there), curving
-                // down into it over the last few pixels rather than standing in it as a cliff
+                // the swells curve down into the start of the bar over its last few pixels
                 if (_swells.Count > 0)
                     y += maxHeight * EffectScale * swells * SwellHeight(x + swellLag, endX)
                          * SmoothStep(Math.Min(1, (x - Left) / 10)) * SmoothStep(Math.Min(1, (endX - x) / 32));
