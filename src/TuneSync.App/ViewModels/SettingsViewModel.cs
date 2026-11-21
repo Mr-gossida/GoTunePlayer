@@ -426,7 +426,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         new(BackgroundEffect.Bokeh, "빛망울"),
         new(BackgroundEffect.Nebula, "성운"),
         new(BackgroundEffect.Lava, "라바 램프"),
-        new(BackgroundEffect.CoverGradient, "커버 색 그라데이션"),
+        new(BackgroundEffect.CoverGradient, "그라데이션"),
         new(BackgroundEffect.Rain, "비"),
     ];
 

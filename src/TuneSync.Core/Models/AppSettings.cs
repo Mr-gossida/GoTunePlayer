@@ -215,7 +215,7 @@ public enum BackgroundEffect
     Random,
     // (6 and 7 were 창문 빗방울 and 불꽃놀이, taken out: they couldn't look good at this cost. A
     // setting that still holds one is read as Aurora.)
-    /// <summary>커버 색 그라데이션: soft fields of the cover's colors slowly flowing into each other.</summary>
+    /// <summary>그라데이션:soft fields of the cover's colors slowly flowing into each other.</summary>
     CoverGradient = 8,
     /// <summary>비: slanting rain over a soft glow, landing on water with spreading rings.</summary>
     Rain = 9,

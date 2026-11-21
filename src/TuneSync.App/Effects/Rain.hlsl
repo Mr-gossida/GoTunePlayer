@@ -45,7 +45,8 @@ float RainLayer(float2 P, float t, float z, float columnWidth, float seed)
 
     // across the streak: a thin line, a little off the column's middle
     float across = (frac(qx / columnWidth) - 0.5 - (r1 - 0.5) * 0.6) * columnWidth;
-    float halfWidth = 0.0004 + 0.0009 * z;
+    // (was 0.0004 + 0.0009 z: the near rain read as thick rods; now about 1px at 1080p)
+    float halfWidth = 0.0003 + 0.00055 * z;
     float thin = 1.0 - smoothstep(halfWidth * 0.4, halfWidth * 1.6, abs(across));
 
     // along the streak: the head falls and loops; brightest at the head, fading up the tail

@@ -1,4 +1,4 @@
-// 커버 색 그라데이션 (background effect): the cover's colors as broad, soft fields that drift and
+// 그라데이션 (background effect): the cover's colors as broad, soft fields that drift and
 // flow into each other, like a mesh gradient slowly breathing. No shapes, no edges: six color
 // points wander on slow paths and every pixel is the distance-weighted blend of them, the plane
 // itself gently warped so the boundaries curve and swirl. A whisper of grain keeps the wide

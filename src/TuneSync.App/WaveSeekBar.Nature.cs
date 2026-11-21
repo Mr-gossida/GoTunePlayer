@@ -67,8 +67,6 @@ public sealed partial class WaveSeekBar
     private void DrawFireflies(DrawingContext dc, double mid, double thumbX, Color cool, Color accent, Color warm)
     {
         DrawPlayedLine(dc, mid, thumbX, cool, accent, warm);
-        // firefly light: a yellow-green leaning toward the cover's color
-        var light = Mix(Color.FromRgb(0xDC, 0xFF, 0x70), accent, 0.3);
         foreach (var f in _flies)
         {
             var b = FlyGlow(f) * (0.75 + 0.6 * _flash);
@@ -76,11 +74,37 @@ public sealed partial class WaveSeekBar
             b = Math.Min(1, b);
             var p = new Point(f.X, f.Y);
             var r = f.Size;
-            dc.DrawEllipse(Solid(Color.FromArgb((byte)(55 * b), light.R, light.G, light.B)), null, p, r * 5, r * 5);
-            dc.DrawEllipse(Solid(Color.FromArgb((byte)(150 * b), light.R, light.G, light.B)), null, p, r * 2.4, r * 2.4);
-            var core = Mix(light, Colors.White, 0.55);
-            dc.DrawEllipse(Solid(Color.FromArgb((byte)(255 * b), core.R, core.G, core.B)), null, p, r, r);
+            // each firefly its own light, from a small palette (so the kept brushes stay few),
+            // leaning a little toward the cover's color
+            var light = Mix(FlyColors[FlyColorIndex(f)], accent, 0.15);
+            // soft: a wide faint halo, a gentle middle, and a core that keeps its color
+            dc.DrawEllipse(Solid(Color.FromArgb((byte)(45 * b), light.R, light.G, light.B)), null, p, r * 5, r * 5);
+            dc.DrawEllipse(Solid(Color.FromArgb((byte)(120 * b), light.R, light.G, light.B)), null, p, r * 2.4, r * 2.4);
+            var core = Mix(light, Colors.White, 0.35);
+            dc.DrawEllipse(Solid(Color.FromArgb((byte)(230 * b), core.R, core.G, core.B)), null, p, r, r);
         }
+    }
+
+    /// <summary>The fireflies' lights: soft pastels (many hues, none of them loud) - lime, butter,
+    /// peach, rose, lilac, periwinkle, aqua and mint.</summary>
+    private static readonly Color[] FlyColors =
+    [
+        Color.FromRgb(0xD8, 0xF0, 0xA0),
+        Color.FromRgb(0xF4, 0xE4, 0xA8),
+        Color.FromRgb(0xF6, 0xC8, 0xA8),
+        Color.FromRgb(0xF2, 0xB8, 0xC8),
+        Color.FromRgb(0xD8, 0xC0, 0xF0),
+        Color.FromRgb(0xB8, 0xC8, 0xF4),
+        Color.FromRgb(0xA8, 0xE4, 0xEC),
+        Color.FromRgb(0xB0, 0xEC, 0xC8),
+    ];
+
+    /// <summary>Which of <see cref="FlyColors"/> a firefly glows in: taken from its Hue, but
+    /// scrambled so the color doesn't follow its blink rate (which Hue also sets).</summary>
+    private static int FlyColorIndex(Spark f)
+    {
+        var x = f.Hue * 97.13;
+        return Math.Clamp((int)((x - Math.Floor(x)) * FlyColors.Length), 0, FlyColors.Length - 1);
     }
 
     /// <summary>A firefly's light now: its blink (mostly dark, a slow bright swell) inside the
