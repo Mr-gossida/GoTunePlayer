@@ -52,7 +52,9 @@ public sealed partial class WaveSeekBar : FrameworkElement
         _droplets.Clear();
         _jets.Clear();
         _spouts.Clear();
+        _spoutQueue.Clear();
         _rockets.Clear();
+        _rocketQueue.Clear();
         _embers.Clear();
         ClearNature();
         UpdateAnimationState();
@@ -121,6 +123,19 @@ public sealed partial class WaveSeekBar : FrameworkElement
     private double _activity;
     private double _phase;
     private double _sinceBeat = 1;
+
+    /// <summary>Beats so far, which steps the fountain's and the fireworks' patterns along, and
+    /// how far the last one jumped above the recent average (0.12 and up; 0.25+ is a strong one).</summary>
+    private int _beatCount;
+    private double _beatStrength;
+
+    /// <summary>A beat well above the usual: it sets off a whole volley at once.</summary>
+    private const double StrongBeat = 0.25;
+
+    /// <summary>Long enough without a beat that the music has no clear pulse here: the fountain and
+    /// the fireworks then go on at random, so they don't stand still.</summary>
+    private bool NoPulse => _sinceBeat > 1.4;
+
     private readonly List<(double Distance, double Strength)> _ripples = [];
 
     // _flash: a beat's brief brightening (decays fast). _sparks: embers rising off the flames.
@@ -561,7 +576,8 @@ public sealed partial class WaveSeekBar : FrameworkElement
             _rockets.RemoveAt(i);
             var count = (int)(12 + 14 * r.Size);
             var speed = 24 + 34 * r.Size;
-            for (var n = 0; n < count && _embers.Count < 180; n++)
+            // (260, was 180: a fan of five bursts at once)
+            for (var n = 0; n < count && _embers.Count < 260; n++)
             {
                 var angle = 2 * Math.PI * (n + Random.Shared.NextDouble() * 0.5) / count;
                 var s = speed * (0.75 + 0.35 * Random.Shared.NextDouble());
@@ -581,27 +597,78 @@ public sealed partial class WaveSeekBar : FrameworkElement
         var thumbX = Left + (Right - Left) * Math.Clamp(CurrentPosition() / Maximum, 0, 1);
         if (thumbX - Left < 30) return;
         var room = mid - 2 + FireworksOverflow;
-        var launches = (beat ? 1 + (loud > 0.6 ? 1 : 0) : 0) + (Random.Shared.NextDouble() < dt * Loud(0.25, 2.2, _level) ? 1 : 0);
-        for (var n = 0; n < launches && _rockets.Count < 6; n++)
+        // how high a rocket bursts follows the music: low in quiet passages, near the top when
+        // loud (curved so the two ends differ clearly)
+        var lift = Math.Pow(Math.Clamp(loud, 0, 1.1), 1.4);
+        var span = thumbX - Left - 20;
+
+        // The show keeps time with the music: each beat sends up a volley in a pattern that moves
+        // on with every beat - a single rocket, a pair, a chain of three going up one after the
+        // other - and a strong beat a whole fan of them at once. Only where the music has no clear
+        // pulse do rockets go up at random, as before.
+        if (beat)
         {
-            // around the thumb on a beat, anywhere along the played part otherwise
-            var back = beat ? Math.Pow(Random.Shared.NextDouble(), 1.5) * Math.Min(120, thumbX - Left - 20)
-                            : Random.Shared.NextDouble() * (thumbX - Left - 20);
-            // how high it bursts follows the music: low in quiet passages, near the top when loud
-            // (curved so the two ends differ clearly), a little higher on a beat, and every
-            // rocket a bit different
-            var lift = Math.Pow(Math.Clamp(loud, 0, 1.1), 1.4);
-            var height = room * Math.Clamp((0.3 + 0.7 * lift) * (0.78 + 0.44 * Random.Shared.NextDouble()) + (beat ? 0.1 : 0), 0.3, 1.15);
+            var strong = _beatStrength >= StrongBeat;
+            var kind = strong ? Show.Fan : FireworksRound[_beatCount % FireworksRound.Length];
+            var hue = Random.Shared.NextDouble(); // one color for the whole volley
+            switch (kind)
+            {
+                case Show.Single:
+                    _rocketQueue.Add((0, Math.Pow(Random.Shared.NextDouble(), 1.5) * Math.Min(120, span), 0.1, 0.2, hue));
+                    break;
+                case Show.Pair:
+                    var at = Random.Shared.NextDouble() * Math.Min(60, span);
+                    _rocketQueue.Add((0, at, 0.05, 0.15, hue));
+                    _rocketQueue.Add((0, at + Math.Min(70, span * 0.5), 0.05, 0.15, hue));
+                    break;
+                case Show.Chain:
+                    for (var k = 0; k < 3; k++) // stepping back from the thumb, each a little higher
+                        _rocketQueue.Add((0.09 * k, Math.Min(span, 15 + 45 * k), -0.05 + 0.08 * k, 0.1, hue));
+                    break;
+                default: // a fan across the played part, all at once, high
+                    var fan = Math.Clamp((int)(span / 50), 2, 5);
+                    for (var k = 0; k < fan; k++)
+                        _rocketQueue.Add((0, span * (k + 0.5) / fan * Math.Min(1, 260 / Math.Max(1, span)), 0.15, 0.35, hue));
+                    break;
+            }
+        }
+        for (var i = _rocketQueue.Count - 1; i >= 0; i--)
+        {
+            var q = _rocketQueue[i];
+            q.Wait -= dt;
+            if (q.Wait > 0) { _rocketQueue[i] = q; continue; }
+            _rocketQueue.RemoveAt(i);
+            if (_rockets.Count < MaxRockets) Launch(thumbX - 6 - Math.Clamp(q.Back, 0, Math.Max(0, span)), q.Higher, q.Bigger, q.Hue);
+        }
+        if (NoPulse && Random.Shared.NextDouble() < dt * Loud(0.25, 2.2, _level) && _rockets.Count < MaxRockets)
+            Launch(thumbX - 6 - Random.Shared.NextDouble() * span, 0, 0, Random.Shared.NextDouble());
+
+        void Launch(double x, double higher, double bigger, double hue)
+        {
+            // every rocket a bit different
+            var height = room * Math.Clamp((0.3 + 0.7 * lift) * (0.82 + 0.36 * Random.Shared.NextDouble()) + higher, 0.3, 1.15);
             _rockets.Add(new Spark
             {
-                X = thumbX - 6 - back,
+                X = x,
                 Y = mid - 1,
                 Vy = -Math.Sqrt(2 * gravity * height + 3 * 3), // bursts at the top of its climb, that high
-                Size = Math.Clamp(0.25 + 0.75 * loud + (beat ? 0.2 : 0), 0.2, 1.2), // how big it bursts
-                Hue = Random.Shared.NextDouble(),
+                Size = Math.Clamp(0.25 + 0.75 * loud + bigger, 0.2, 1.2), // how big it bursts
+                Hue = hue,
             });
         }
     }
+
+    /// <summary>The most rockets in the air at once (a fan sends up five).</summary>
+    private const int MaxRockets = 9;
+
+    private enum Show { Single, Pair, Chain, Fan }
+
+    /// <summary>The fireworks' patterns, one per beat, round and round.</summary>
+    private static readonly Show[] FireworksRound = [Show.Single, Show.Pair, Show.Single, Show.Chain];
+
+    /// <summary>Rockets waiting to go up: how long until they do, how far back from the thumb,
+    /// how much higher and bigger than usual they burst, and their color.</summary>
+    private readonly List<(double Wait, double Back, double Higher, double Bigger, double Hue)> _rocketQueue = [];
 
     // ---- 분수 ----
 
@@ -699,11 +766,21 @@ public sealed partial class WaveSeekBar : FrameworkElement
         var room = mid - 2 + FountainOverflow;
         var loud = Loud(0, 1, _level);
 
-        // New jets spring up at random spots along the played part: now and then when quiet,
-        // often when loud, and a few at once on a beat (those start strong).
-        var births = (Random.Shared.NextDouble() < dt * Loud(1.2, 5, _level) ? 1 : 0) + (beat ? 1 + (int)(loud * 2.5) : 0);
-        for (var n = 0; n < births && _spouts.Count < MaxSpouts; n++)
-            SpawnSpout(thumbX, strong: beat);
+        // The show keeps time with the music: each beat sets off a volley in a pattern, and the
+        // pattern moves on with every beat (odd jets, then even ones, a wave running right, one
+        // running left, from the middle out...), a strong beat sets them all off at once. Only
+        // where the music has no clear pulse do jets spring up at random, as before.
+        if (beat) QueueVolley(thumbX);
+        for (var i = _spoutQueue.Count - 1; i >= 0; i--)
+        {
+            var (wait, at, strong) = _spoutQueue[i];
+            wait -= dt;
+            if (wait > 0) { _spoutQueue[i] = (wait, at, strong); continue; }
+            _spoutQueue.RemoveAt(i);
+            if (_spouts.Count < MaxSpouts) SpawnSpoutAt(Left + 8 + at * (thumbX - Left - 16), strong);
+        }
+        if (NoPulse && Random.Shared.NextDouble() < dt * Loud(1.2, 5, _level) && _spouts.Count < MaxSpouts)
+            SpawnSpout(thumbX, strong: false);
 
         // Each jet throws water while it lives, more and higher at its peak.
         var lift = Math.Pow(Math.Clamp(loud, 0, 1.1), 1.2);
@@ -720,7 +797,52 @@ public sealed partial class WaveSeekBar : FrameworkElement
     }
 
     /// <summary>The most jets spouting at once.</summary>
-    private const int MaxSpouts = 7;
+    private const int MaxSpouts = 9;
+
+    /// <summary>Jets waiting to spring up, a moment apart so a volley runs along the bar: how long
+    /// until it does, where (a share of the played part, so it stays put as the thumb moves on),
+    /// and whether it's from a strong beat.</summary>
+    private readonly List<(double Wait, double At, bool Strong)> _spoutQueue = [];
+
+    private enum Volley { Odd, Even, SweepRight, SweepLeft, CenterOut, All }
+
+    /// <summary>The fountain's patterns, one per beat, round and round: two beats of jets taking
+    /// turns, then the waves, then everything.</summary>
+    private static readonly Volley[] FountainRound =
+        [Volley.Odd, Volley.Even, Volley.Odd, Volley.Even, Volley.SweepRight, Volley.SweepLeft, Volley.CenterOut, Volley.All];
+
+    /// <summary>Lines up this beat's volley: evenly spaced jets along the played part, the ones
+    /// the pattern picks, each after its own short wait.</summary>
+    private void QueueVolley(double thumbX)
+    {
+        var strong = _beatStrength >= StrongBeat;
+        var kind = strong ? Volley.All : FountainRound[_beatCount % FountainRound.Length];
+        var slots = Math.Clamp((int)((thumbX - Left) / 34), 3, 7);
+        var middle = (slots - 1) / 2.0;
+        for (var j = 0; j < slots; j++)
+        {
+            var (on, wait) = kind switch
+            {
+                Volley.Odd => (j % 2 == 0, 0.0),
+                Volley.Even => (j % 2 == 1, 0.0),
+                Volley.SweepRight => (true, 0.055 * j),
+                Volley.SweepLeft => (true, 0.055 * (slots - 1 - j)),
+                Volley.CenterOut => (true, 0.07 * Math.Abs(j - middle)),
+                _ => (true, 0.0),
+            };
+            if (on) _spoutQueue.Add((wait, (j + 0.5) / slots, strong || kind == Volley.All));
+        }
+    }
+
+    /// <summary>A beat's jet at <paramref name="x"/>: up at once and short-lived, so the jets
+    /// pulse with the beats rather than blur into one another.</summary>
+    private void SpawnSpoutAt(double x, bool strong) => _spouts.Add(new Spark
+    {
+        X = x,
+        Life = 0.42 + Random.Shared.NextDouble() * 0.12,
+        Size = strong ? 1.15 + 0.15 * Random.Shared.NextDouble() : 0.95 + 0.15 * Random.Shared.NextDouble(),
+        Age = 0.06,
+    });
 
     /// <summary>Starts a jet at a random spot on the played part, not right on top of another one.</summary>
     private void SpawnSpout(double thumbX, bool strong)
@@ -1748,6 +1870,8 @@ public sealed partial class WaveSeekBar : FrameworkElement
         {
             _sinceBeat = 0;
             beat = true;
+            _beatCount++;
+            _beatStrength = target - _baseline;
             _flash = Math.Max(_flash, Math.Min(1, (target - _baseline) * 4));
             _ripples.Add((0, Math.Min(0.75, (target - _baseline) * 2.4)));
             if (_ripples.Count > 6) _ripples.RemoveAt(0);
