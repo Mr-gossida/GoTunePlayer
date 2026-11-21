@@ -232,9 +232,14 @@ public sealed class MfDecoder : IAudioDecoder
 
                 if (_seekTarget >= 0)
                 {
-                    // Decoding started this much before the time asked for.
+                    // Decoding started this much before the time asked for. In a FLAC file without
+                    // a seek table Windows starts from the very beginning, however far in the time
+                    // is - so the skip may be minutes long (it was capped at one minute, and a seek
+                    // to 1:30 in such a file played from 1:00, the lyrics 30 s behind the sound).
+                    // Never more than the time asked for, though: a bogus timestamp can't skip
+                    // past it.
                     var early = _seekTarget - (long)timestamp;
-                    _skipFrames = early > 0 ? Math.Min(early, TimeSpan.TicksPerMinute) * SampleRate / TimeSpan.TicksPerSecond : 0;
+                    _skipFrames = early > 0 ? Math.Min(early, _seekTarget) * SampleRate / TimeSpan.TicksPerSecond : 0;
                     _seekTarget = -1;
                 }
 
