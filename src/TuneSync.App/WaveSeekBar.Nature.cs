@@ -6,7 +6,7 @@ using TuneSync.Core.Models;
 namespace TuneSync.App;
 
 // The seek bar looks added after the first ten: 반딧불, 테슬라 코일, 꽃잎 and 음표 (비눗방울,
-// 실크 리본 and 별똥별 have files of their own). Each is particles
+// 별똥별 and 오리 have files of their own). Each is particles
 // over the played part, moved in UpdateNature and drawn by its own Draw method; brushes and pens
 // come from the kept sets in WaveSeekBar.cs (Solid, SolidPen), so a frame makes none of its own.
 public sealed partial class WaveSeekBar

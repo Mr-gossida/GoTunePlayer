@@ -161,6 +161,7 @@ public sealed partial class WaveSeekBar : FrameworkElement
     {
         Cursor = Cursors.Hand;
         Focusable = true;
+        UseLayoutRounding = true; // on whole screen pixels, so 오리's pixel art stays crisp
         FocusVisualStyle = null;
         Loaded += (_, _) => UpdateAnimationState();
         Unloaded += (_, _) => StopAnimating();
@@ -284,10 +285,6 @@ public sealed partial class WaveSeekBar : FrameworkElement
             {
                 DrawBubbles(dc, mid, thumbX, cool, accent, warm);
             }
-            else if (Look == SeekBarStyle.Ribbon)
-            {
-                DrawRibbons(dc, mid, thumbX, cool, accent, warm);
-            }
             else if (Look == SeekBarStyle.Meteor)
             {
                 DrawMeteors(dc, mid, thumbX, cool, accent, warm);
@@ -331,7 +328,7 @@ public sealed partial class WaveSeekBar : FrameworkElement
 
         if (Look == SeekBarStyle.Runner)
         {
-            // 공룡 달리기: the dinosaur is the thumb
+            // 오리: the duck is the thumb
             DrawRunner(dc, mid, thumbX, accent, warm);
             if ((_hover || _dragging) && Maximum > 1) DrawTimePreview(dc, mid);
             return;

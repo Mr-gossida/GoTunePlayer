@@ -27,8 +27,9 @@ public static class AppSettingsStore
             // an unknown value (a newer version's choice, a hand edit) falls back to quitting
             if (!Enum.IsDefined(settings.CloseAction)) settings.CloseAction = CloseAction.Exit;
             // a seek bar look this version doesn't know (a newer version's, a hand edit) goes back to 무작위
-            if (!Enum.IsDefined(settings.SeekBarStyle)) settings.SeekBarStyle = SeekBarStyle.Random;
-            settings.SeekBarRandomExcluded?.RemoveAll(l => !Enum.IsDefined(l));
+            if (!Enum.IsDefined(settings.SeekBarStyle) || settings.SeekBarStyle == SeekBarStyle.RetiredRibbon)
+                settings.SeekBarStyle = SeekBarStyle.Random;
+            settings.SeekBarRandomExcluded?.RemoveAll(l => !Enum.IsDefined(l) || l == SeekBarStyle.RetiredRibbon);
             return settings;
         }
         catch

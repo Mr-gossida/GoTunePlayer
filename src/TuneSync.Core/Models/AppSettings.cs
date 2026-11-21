@@ -343,11 +343,12 @@ public enum SeekBarStyle
     /// <summary>Soap bubbles rising from the played part, popping on the beats. (This slot was the
     /// plasma ball; settings that chose it get the bubbles.)</summary>
     Bubbles,
-    /// <summary>Silk ribbons tied to the thumb, swaying and twisting back over the played part.</summary>
-    Ribbon,
+    /// <summary>Retired (was 실크 리본, removed): kept so the looks after it keep their numbers
+    /// in saved settings; a setting that chose it goes back to 무작위 (AppSettingsStore).</summary>
+    RetiredRibbon,
     /// <summary>Shooting stars falling at a slant onto the played part, flashing where they land.</summary>
     Meteor,
-    /// <summary>The thumb as a pixel-art dinosaur running along the bar, jumping obstacles as tall as the music is loud.</summary>
+    /// <summary>The thumb as a pixel-art duck running along the bar, jumping obstacles as tall as the music is loud.</summary>
     Runner,
 }
 

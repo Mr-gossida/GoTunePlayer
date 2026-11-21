@@ -419,7 +419,7 @@
                     <ui:TextBlock Text="화면 효과" Style="{StaticResource CategoryTitle}"/>
                     <ui:TextBlock Text="재생바와 스펙트럼, 집중 모드·화면 보호기 뒤의 움직이는 효과" Style="{StaticResource CategoryLead}"/>
                     <ui:TextBlock Text="재생 화면" Style="{StaticResource Group}"/>
-                    <ui:CardControl Style="{StaticResource Card}" Icon="{ui:SymbolIcon Flash24}" Tag="재생바 효과 비눗방울 실크 리본 별똥별 테슬라 코일 꽃잎 물결 불꽃 네온 파형 막대 분수 빗방울 오로라 별빛 불꽃놀이 폭죽 없음 랜덤 무작위 임의 시크바"
+                    <ui:CardControl Style="{StaticResource Card}" Icon="{ui:SymbolIcon Flash24}" Tag="재생바 효과 비눗방울 별똥별 오리 테슬라 코일 꽃잎 물결 불꽃 네온 파형 막대 분수 빗방울 오로라 별빛 불꽃놀이 폭죽 없음 랜덤 무작위 임의 시크바"
                                     ToolTip="재생한 부분 위에서 음악에 맞춰 움직이는 효과입니다. 무작위는 곡마다 효과 중 하나를 고르고, 없음은 움직이지 않는 선만 그립니다(가장 가벼움).">
                         <ui:CardControl.Header>
                             <StackPanel>
