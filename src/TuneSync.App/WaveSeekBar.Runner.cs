@@ -5,29 +5,47 @@ using TuneSync.Core.Models;
 namespace TuneSync.App;
 
 // 오리: the thumb is a little pixel-art duck (a design of our own, like everything here) running
-// along the bar as its ground. Things come at it from the right end over the part still to play,
-// picked by how loud the music will be when they reach it: a log when it's quiet, a hay bale, a
-// wooden barrel when it's loud; now and then a fox running at it, and in loud passages an eagle
-// swooping in at head height. It jumps the ones on the ground and runs ducked under the eagle.
+// along the bar as its ground. Farm things come at it from the right end over the part still to
+// play, each set at a moment of the song and picked by how loud the music is then: a log or a
+// pumpkin when it's quiet, a hay bale or a fence, a wooden barrel or a milk can when it's loud;
+// now and then a fox running at it, and in loud passages an eagle swooping in at head height. It jumps the ones on the ground and runs ducked under the eagle.
 // Nobody plays it: every move is worked out so it always gets by. Every pixel is a whole number
 // of screen pixels on the screen's own grid, so the art stays crisp (a pixel of 1.5 px was smudged
 // at its edges and didn't read as pixel art). Drawn with kept brushes (Solid).
 public sealed partial class WaveSeekBar
 {
-    /// <summary>What's coming at the duck. (In one: X - its middle; Vx - its speed, px a second
-    /// leftward; Hue - which thing it is (<see cref="Hazard"/>); Life - 1 once the duck has
-    /// jumped it.)</summary>
+    /// <summary>What's coming at the duck right now, placed from <see cref="_cues"/> for this moment
+    /// of the song. (In one: X - its middle; Vx - its speed, px a second leftward; Hue - which thing
+    /// it is (<see cref="Hazard"/>); Age - the moment it reaches the duck (its cue's time); Life - 1
+    /// once the duck has jumped it.)</summary>
     private readonly List<Spark> _obstacles = [];
 
-    private enum Hazard { Log, Hay, Barrel, Fox, Eagle }
+    private enum Hazard { Log, Hay, Barrel, Fox, Eagle, Pumpkin, Fence, MilkCan }
+
+    /// <summary>One obstacle of the song: the moment (seconds into the song) it reaches the duck,
+    /// what it is, and how fast it comes.</summary>
+    private readonly record struct Cue(double Time, Hazard Kind, double Speed);
+
+    /// <summary>The song's obstacles in order, worked out from its loudness as far as needed: the
+    /// same song always gets the same ones at the same moments, so they stay with the music when
+    /// the song is jumped about in (they used to be sent out as it played, and a jump left them
+    /// where they were, out of step with the music). Made again for a new song.</summary>
+    private readonly List<Cue> _cues = [];
+    private WaveformData? _cuesFor;
+    private double _cuesLength;
+
+    /// <summary>The cues the duck has jumped (by their time), and the song moment last seen (to
+    /// notice a jump in the song).</summary>
+    private readonly HashSet<double> _jumpedCues = [];
+    private double _lastMoment = double.NaN;
 
     /// <summary>Dust kicked up on landing. (X, Y - where; Vx, Vy - its drift; Age, Life.)</summary>
     private readonly List<Spark> _dust = [];
 
     /// <summary>The duck: how high it is off the ground and how fast it's going up (px, px a
     /// second), its running clock (for the feet), the scene's clock (for the fox and the eagle),
-    /// time until the next obstacle, and whether it's ducking.</summary>
-    private double _jumpY, _jumpV, _runTime, _sceneTime, _nextObstacle = 0.6;
+    /// and whether it's ducking.</summary>
+    private double _jumpY, _jumpV, _runTime, _sceneTime;
     private bool _ducking;
 
     /// <summary>How fast things fall (px a second squared) and how fast the ground comes.</summary>
@@ -40,15 +58,17 @@ public sealed partial class WaveSeekBar
     /// (above the ducked duck, 8 pixels tall; into the standing one, 13).</summary>
     private const int EagleAltitude = 9;
 
-    private bool RunnerAlive => _obstacles.Count > 0 || _dust.Count > 0 || _jumpY > 0;
+    /// <summary>Something still moving on its own (the obstacles only move with the song).</summary>
+    private bool RunnerAlive => _dust.Count > 0 || _jumpY > 0;
 
     private void ClearRunner()
     {
         _obstacles.Clear();
         _dust.Clear();
+        _jumpedCues.Clear();
+        _lastMoment = double.NaN;
         _jumpY = _jumpV = 0;
         _ducking = false;
-        _nextObstacle = 0.6;
     }
 
     /// <summary>One art pixel in px: a whole number of screen pixels (2 at 100%), so its edges fall
@@ -76,6 +96,9 @@ public sealed partial class WaveSeekBar
         Hazard.Log => LogArt,
         Hazard.Hay => HayArt,
         Hazard.Barrel => BarrelArt,
+        Hazard.Pumpkin => PumpkinArt,
+        Hazard.Fence => FenceArt,
+        Hazard.MilkCan => MilkCanArt,
         Hazard.Fox => frame == 0 ? FoxArt : FoxArt2,
         _ => frame == 0 ? EagleArt : EagleArt2,
     };
@@ -87,14 +110,80 @@ public sealed partial class WaveSeekBar
         return (art[0].Length * ArtPixel / 2, art.Length * ArtPixel);
     }
 
+    /// <summary>A number from 0 to 1 fixed by <paramref name="n"/>, <paramref name="salt"/> and the
+    /// song's length: the song's own dice, the same every time.</summary>
+    private double SongDice(int n, int salt)
+    {
+        var x = Math.Sin(n * 12.9898 + salt * 78.233 + _cuesLength * 0.731) * 43758.5453;
+        return x - Math.Floor(x);
+    }
+
+    private double LoudnessAt(double seconds) =>
+        Math.Clamp(Math.Pow(Waveform is { } waveform ? waveform.LevelAt(seconds) : FallbackLevel, 1.3), 0, 1);
+
+    /// <summary>Works out the song's obstacles up to <paramref name="until"/> (seconds): one every
+    /// 0.9-1.95 s (closer in loud passages), each picked by how loud the music is when it reaches
+    /// the duck - a log or a pumpkin when quiet, a hay bale or a fence, a barrel or a milk can when
+    /// loud; now and then a fox, and in loud passages an eagle. They reach the duck at least 0.9 s apart, so the fox and the eagle,
+    /// faster than the rest, never run into the one ahead before the duck, and it's never still
+    /// in the air when the eagle comes.</summary>
+    private void PlanCues(double until)
+    {
+        if (!ReferenceEquals(_cuesFor, Waveform) || _cuesLength != Maximum)
+        {
+            _cues.Clear();
+            _jumpedCues.Clear();
+            _cuesFor = Waveform;
+            _cuesLength = Maximum;
+        }
+        var time = _cues.Count > 0 ? _cues[^1].Time : 0.6;
+        while (time < until && time < Maximum)
+        {
+            var n = _cues.Count;
+            time += Math.Max(0.9, 0.95 + SongDice(n, 0) * 1.0 - 0.3 * LoudnessAt(time));
+            var loud = LoudnessAt(time);
+            var other = SongDice(n, 2) < 0.5;
+            var kind = loud < 0.3 ? (other ? Hazard.Pumpkin : Hazard.Log)
+                     : loud < 0.6 ? (other ? Hazard.Fence : Hazard.Hay)
+                     : other ? Hazard.MilkCan : Hazard.Barrel;
+            var roll = SongDice(n, 1);
+            if (loud > 0.55 && roll < 0.3) kind = Hazard.Eagle;
+            else if (loud > 0.25 && roll > 0.82) kind = Hazard.Fox;
+            _cues.Add(new Cue(time, kind, ObstacleSpeed + kind switch { Hazard.Fox => FoxRush, Hazard.Eagle => EagleRush, _ => 0 }));
+        }
+    }
+
+    /// <summary>Puts the obstacles where they are at this moment of the song: each its cue's time
+    /// from the duck, at its speed - so they move with the song, stop when it pauses and jump when
+    /// it's jumped in (dragging the thumb included).</summary>
+    private void PlaceObstacles(double duck)
+    {
+        _obstacles.Clear();
+        if (Maximum <= 0) return;
+        var now = CurrentPosition();
+        // jumped in the song: what's ahead now hasn't been jumped yet
+        if (!double.IsNaN(_lastMoment) && Math.Abs(now - _lastMoment) > 0.5) _jumpedCues.RemoveWhere(t => t > now - 1);
+        _lastMoment = now;
+        PlanCues(now + (Right - Left) / ObstacleSpeed + 1);
+        foreach (var cue in _cues)
+        {
+            if (cue.Time < now - 4) continue;
+            // past the far end even at the slowest speed: so are all the later ones
+            if ((cue.Time - now) * ObstacleSpeed > Right + 12 - duck) break;
+            var x = duck + (cue.Time - now) * cue.Speed;
+            if (x > Right + 12 || x < Left - 30) continue;
+            _obstacles.Add(new Spark { X = x, Vx = cue.Speed, Hue = (int)cue.Kind, Age = cue.Time, Life = _jumpedCues.Contains(cue.Time) ? 1 : 0 });
+        }
+    }
+
     private void UpdateRunner(double dt)
     {
         if (Look != SeekBarStyle.Runner)
         {
-            if (RunnerAlive) ClearRunner();
+            if (RunnerAlive || _obstacles.Count > 0) ClearRunner();
             return;
         }
-        // its world slows to a stop when the music is paused, and picks up again with it
+        // the duck's own motion slows to a stop when the music is paused, and picks up again with it
         var t = dt * _activity;
         _sceneTime += t;
         var duck = PlayedX;
@@ -110,41 +199,7 @@ public sealed partial class WaveSeekBar
             else _dust[i] = d;
         }
 
-        for (var i = _obstacles.Count - 1; i >= 0; i--)
-        {
-            var o = _obstacles[i];
-            o.X -= o.Vx * t;
-            if (o.X < Left - 30) _obstacles.RemoveAt(i);
-            else _obstacles[i] = o;
-        }
-
-        // something new at the far end, picked by how loud the music will be when it gets here
-        _nextObstacle -= t;
-        if (_nextObstacle <= 0 && IsPlaying && Maximum > 0 && Right - duck > 90 && _obstacles.Count < 12)
-        {
-            var arrive = (Right - duck) / ObstacleSpeed;
-            var level = Waveform is { } waveform ? waveform.LevelAt(CurrentPosition() + arrive) : FallbackLevel;
-            var loud = Math.Clamp(Math.Pow(level, 1.3), 0, 1);
-            var kind = loud < 0.3 ? Hazard.Log : loud < 0.6 ? Hazard.Hay : Hazard.Barrel;
-            var roll = Random.Shared.NextDouble();
-            if (loud > 0.55 && roll < 0.3) kind = Hazard.Eagle;
-            else if (loud > 0.25 && roll > 0.82) kind = Hazard.Fox;
-            var speed = ObstacleSpeed + kind switch { Hazard.Fox => FoxRush, Hazard.Eagle => EagleRush, _ => 0 };
-            // the fox and the eagle are faster: not one that would reach the duck too soon after
-            // the one ahead (they'd run into each other, or the duck would still be in the air
-            // when the eagle came)
-            if (speed > ObstacleSpeed && _obstacles.Count > 0 && _obstacles[^1] is var ahead && ahead.X > duck)
-            {
-                var after = (Right + 12 - duck) / speed - (ahead.X - duck) / ahead.Vx;
-                if (after < 0.9)
-                {
-                    kind = loud < 0.3 ? Hazard.Log : loud < 0.6 ? Hazard.Hay : Hazard.Barrel;
-                    speed = ObstacleSpeed;
-                }
-            }
-            _obstacles.Add(new Spark { X = Right + 12, Vx = speed, Hue = (int)kind });
-            _nextObstacle = 0.85 + Random.Shared.NextDouble() * 1.1 - 0.3 * Math.Min(1, Energy);
-        }
+        PlaceObstacles(duck);
 
         // ducking while the eagle goes over (from a little before it reaches the duck until it's by)
         _ducking = false;
@@ -157,7 +212,7 @@ public sealed partial class WaveSeekBar
 
         // on the ground (and not under an eagle): jump the next thing so the top of the jump comes
         // over its middle
-        if (_jumpY <= 0 && _jumpV <= 0 && !_ducking)
+        if (_jumpY <= 0 && _jumpV <= 0 && !_ducking && IsPlaying)
         {
             for (var i = 0; i < _obstacles.Count; i++)
             {
@@ -172,8 +227,7 @@ public sealed partial class WaveSeekBar
                 // duck's middle, and landing came within 2 px of the back of a wide one
                 if (o.X - duck > o.Vx * rise + half - 3 * pixel) continue;
                 _jumpV = up;
-                o.Life = 1;
-                _obstacles[i] = o;
+                _jumpedCues.Add(o.Age);
                 break;
             }
         }
@@ -205,6 +259,8 @@ public sealed partial class WaveSeekBar
     {
         var pixel = ArtPixel;
         var ground = OnGrid(mid - 1.5);
+        // placed for this very moment: also when the song is jumped in while paused (no frames run then)
+        PlaceObstacles(thumbX);
         foreach (var o in _obstacles)
         {
             var kind = KindOf(o);
@@ -276,6 +332,11 @@ public sealed partial class WaveSeekBar
         'c' => Color.FromRgb(0xA8, 0x76, 0x38),
         'm' => Color.FromRgb(0x8C, 0x8E, 0x98),
         'l' => Color.FromRgb(0xB0, 0x72, 0x38),
+        // the pumpkin: skin, ridges, stem; the milk can's bright metal (with 'm' for its rims)
+        'p' => Color.FromRgb(0xF0, 0x8A, 0x24),
+        'q' => Color.FromRgb(0xB8, 0x5A, 0x14),
+        'g' => Color.FromRgb(0x5E, 0x82, 0x2C),
+        'n' => Color.FromRgb(0xD4, 0xD7, 0xDE),
         // hay: straw, its shade, the twine
         'h' => Color.FromRgb(0xE8, 0xC2, 0x5A),
         's' => Color.FromRgb(0xB9, 0x8E, 0x2E),
@@ -342,14 +403,15 @@ public sealed partial class WaveSeekBar
         ".dbbbbbbbd",
     ];
 
+    /// <summary>A hay bale seen flat from the side: straw in lines, two bands of twine round it.</summary>
     private static readonly string[] HayArt =
     [
-        ".hhhhhh.",
-        "hhshhshh",
-        "tttttttt",
-        "hshhhhsh",
-        "hhhshhhh",
-        "ssssssss",
+        "hhthhhthh",
+        "sstshhtss",
+        "hhthsstsh",
+        "shthhhthh",
+        "hhtssstsh",
+        "hhthhhthh",
     ];
 
     private static readonly string[] BarrelArt =
@@ -364,26 +426,61 @@ public sealed partial class WaveSeekBar
         ".mmmm.",
     ];
 
+    /// <summary>The fox, running at the duck: pointed dark-tipped ears, a white muzzle and chest,
+    /// a long bushy tail with a white tip, black legs.</summary>
     private static readonly string[] FoxArt =
     [
-        "..k.k.......",
-        ".koooo....oo",
-        "kwkooooooo.w",
-        ".wwoooooooo.",
-        "..wwooooooo.",
-        "..k.k...k.k.",
-        ".k...k.k...k",
+        "..k..k.........",
+        "..oo.oo........",
+        ".ookoooo....ooo",
+        "kwwooooooooooow",
+        ".wwoooooooooww.",
+        "..wwoooooooo...",
+        "..k.k....k.k...",
+        ".k...k..k...k..",
     ];
 
     private static readonly string[] FoxArt2 =
     [
-        "..k.k.......",
-        ".koooo....oo",
-        "kwkooooooo.w",
-        ".wwoooooooo.",
-        "..wwooooooo.",
-        "...kk....kk.",
-        "...kk....kk.",
+        "..k..k.........",
+        "..oo.oo........",
+        ".ookoooo....ooo",
+        "kwwooooooooooow",
+        ".wwoooooooooww.",
+        "..wwoooooooo...",
+        "...kk.....kk...",
+        "...kk.....kk...",
+    ];
+
+    private static readonly string[] PumpkinArt =
+    [
+        "...g...",
+        ".ppqpp.",
+        "pppqppp",
+        "pppqppp",
+        ".ppqpp.",
+    ];
+
+    private static readonly string[] FenceArt =
+    [
+        "l...l...l",
+        "lllllllll",
+        "b...b...b",
+        "lllllllll",
+        "b...b...b",
+        "b...b...b",
+    ];
+
+    private static readonly string[] MilkCanArt =
+    [
+        ".mnnm.",
+        "..mm..",
+        ".mnnm.",
+        "mnnnnm",
+        "mnnnnm",
+        "mmmmmm",
+        "mnnnnm",
+        "mmmmmm",
     ];
 
     private static readonly string[] EagleArt =
