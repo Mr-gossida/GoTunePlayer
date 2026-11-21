@@ -19,6 +19,11 @@ public static class PlayerPalette
     public const string TrackKey = "PlayerTrackBrush";
     public const string HoverKey = "PlayerHoverBrush";
 
+    /// <summary>A second color beside the accent: the cover's hue turned a little round the
+    /// wheel, as bright as the accent. For marks that should have color yet read apart from the
+    /// accent ones (the lossy format badges, next to the lossless ones in the accent).</summary>
+    public const string AltAccentKey = "PlayerAltAccentBrush";
+
     /// <summary>Laid over <see cref="TintKey"/> in a window that takes the player's colors
     /// (설정): the same hue, a step deeper (dark theme) or paler (light), so it belongs with the
     /// player yet reads as a window of its own.</summary>
@@ -42,12 +47,16 @@ public static class PlayerPalette
         var (h, s, _) = ToHsl(key);
         var neutral = s < 0.12;
 
-        Color tint, accent, onAccent;
+        Color tint, accent, onAccent, alt;
+        // the second color's hue: 45 degrees on from the cover's (a gray cover gets a soft blue)
+        var altHue = neutral ? 210 : (h + 45) % 360;
+        var altSaturation = neutral ? 0.55 : Math.Clamp(s, 0.45, 0.80);
         if (dark)
         {
             tint = FromHsl(h, neutral ? 0.04 : Math.Min(s, 0.42), 0.12);
             accent = neutral ? Color.FromRgb(0xF2, 0xF2, 0xF2) : FromHsl(h, Math.Clamp(s, 0.45, 0.80), 0.76);
             onAccent = neutral ? Color.FromRgb(0x14, 0x14, 0x14) : FromHsl(h, 0.55, 0.12);
+            alt = FromHsl(altHue, altSaturation, 0.72);
         }
         else
         {
@@ -59,11 +68,16 @@ public static class PlayerPalette
             for (var l = 0.35; !neutral && (Contrast(accent, Colors.White) < 4.5 || Contrast(accent, tint) < 4.5) && l > 0.15; l -= 0.01)
                 accent = FromHsl(h, Math.Clamp(s, 0.50, 0.80), l);
             onAccent = Colors.White;
+            // as text on the light background it needs the same 4.5:1
+            alt = FromHsl(altHue, altSaturation, 0.38);
+            for (var l = 0.37; Contrast(alt, tint) < 4.5 && l > 0.15; l -= 0.01)
+                alt = FromHsl(altHue, altSaturation, l);
         }
 
         Set(TintKey, tint, animate);
         Set(AccentKey, accent, animate);
         Set(OnAccentKey, onAccent, animate);
+        Set(AltAccentKey, alt, animate);
         Set(PanelKey, dark ? Color.FromArgb(0x38, 0, 0, 0) : Color.FromArgb(0x55, 0xFF, 0xFF, 0xFF), animate: false);
         Set(TrackKey, dark ? Color.FromArgb(0x40, 0xFF, 0xFF, 0xFF) : Color.FromArgb(0x30, 0, 0, 0), animate: false);
         Set(HoverKey, dark ? Color.FromArgb(0x14, 0xFF, 0xFF, 0xFF) : Color.FromArgb(0x10, 0, 0, 0), animate: false);

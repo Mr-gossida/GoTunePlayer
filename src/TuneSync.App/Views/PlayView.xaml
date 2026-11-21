@@ -143,8 +143,9 @@
         </Style>
 
         <!-- The file's type before the duration in queue rows (FLAC, MP3...): lossless formats in
-             the accent color, the rest quietly outlined. A fixed least width keeps the durations
-             lined up. -->
+             the accent color, the rest (MP3, AAC, OGG...) in the second color beside it
+             (PlayerPalette.AltAccentKey), so both have color yet read apart. A fixed least width
+             keeps the durations lined up. -->
         <Style x:Key="FormatBadge" TargetType="Border">
             <Setter Property="CornerRadius" Value="4"/>
             <Setter Property="BorderThickness" Value="1"/>
@@ -152,8 +153,8 @@
             <Setter Property="MinWidth" Value="36"/>
             <Setter Property="Margin" Value="0,0,8,0"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
-            <Setter Property="BorderBrush" Value="{DynamicResource ControlStrongStrokeColorDefaultBrush}"/>
-            <Setter Property="TextElement.Foreground" Value="{DynamicResource TextFillColorTertiaryBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource PlayerAltAccentBrush}"/>
+            <Setter Property="TextElement.Foreground" Value="{DynamicResource PlayerAltAccentBrush}"/>
             <Setter Property="ToolTip" Value="{Binding FormatToolTip}"/>
             <Style.Triggers>
                 <DataTrigger Binding="{Binding IsLosslessFormat}" Value="True">
