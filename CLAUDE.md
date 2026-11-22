@@ -98,7 +98,8 @@ Before building the debug app, kill only leftover debug processes (`*\bin\Debug\
   `CompositionTarget.Rendering` (that runs at the monitor's refresh rate and keeps WPF redrawing the whole app), and
   pauses when `OnScreen.Check` says its window is hidden or minimized. Endless WPF animations set `Timeline.DesiredFrameRate`.
   Exception: the seek bar's 오리 look (steady sideways motion in whole pixels stutters at 30) runs on
-  `CompositionTarget.Rendering`, capped at ~60-75 fps (`WaveSeekBar.NeedsScreenFrames`); only while it's the shown look.
+  `CompositionTarget.Rendering`, drawing every frame WPF makes (`WaveSeekBar.NeedsScreenFrames`); only while it's the shown
+  look. Don't skip frames to save work: skipping some of WPF's uneven 144 Hz frames made 14/21/28 ms steps that juddered.
 - Settings live in `AppSettings` (Core) and are saved with `AppSettingsStore.Save`; expose them through a view model property.
 - When editing files from scripts, keep each file's BOM and line endings (CRLF/LF) as they were.
 - Comments explain why, in plain English, like the existing code.

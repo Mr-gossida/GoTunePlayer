@@ -1922,10 +1922,6 @@ public sealed partial class WaveSeekBar : FrameworkElement
     /// <summary>The screen frame last drawn (its <see cref="RenderingEventArgs.RenderingTime"/>).</summary>
     private TimeSpan _lastScreenFrame;
 
-    /// <summary>Screen frames closer together than this are skipped: about 60-75 a second
-    /// whatever the monitor (every frame at 60 Hz, every other one at 120 or 144 Hz).</summary>
-    private static readonly TimeSpan MinScreenFrame = TimeSpan.FromMilliseconds(12);
-
     private void StartAnimating()
     {
         if (_animating) return;
@@ -1948,9 +1944,11 @@ public sealed partial class WaveSeekBar : FrameworkElement
     private void OnScreenFrame(object? sender, EventArgs e)
     {
         // the time of the frame being drawn (it can come more than once per frame): steps by
-        // whole frames, so the motion is as even as the screen's own refresh
+        // whole frames, so the motion is as even as the screen's own refresh. Every frame WPF
+        // draws (it's 0.15 ms of work): skipping ones under 12 ms apart, to hold it near 60-75,
+        // turned WPF's uneven 144 Hz frames (6.9 or 13.9 ms apart) into steps of 14, 21 and 28 ms,
+        // each held on screen a different time - the judder it was meant to cure.
         if (e is not RenderingEventArgs { RenderingTime: var time } || time == _lastScreenFrame) return;
-        if (_lastScreenFrame != TimeSpan.Zero && time - _lastScreenFrame < MinScreenFrame) return;
         var dt = _lastScreenFrame == TimeSpan.Zero ? 0 : Math.Min(0.1, (time - _lastScreenFrame).TotalSeconds);
         _lastScreenFrame = time;
         Step(dt);
