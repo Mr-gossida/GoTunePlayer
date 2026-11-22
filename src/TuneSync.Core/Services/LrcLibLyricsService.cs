@@ -73,8 +73,28 @@ public sealed class LrcLibLyricsService : ILyricsService, IDisposable
         if (!AnyFits() && !string.IsNullOrWhiteSpace(query.Album))
             Add(await SearchAsync($"search?q={Esc(query.Artist + " " + query.Album)}", ct), true);
 
+        // 6. The tags are in Hangul (or kana) but every fitting candidate is in another script: the
+        //    song may be listed under its title in that script, which ours doesn't search for.
+        //    "Some" by "소유, 정기고" only finds a romanized upload titled "썸 (Some)"; the Korean
+        //    lyrics are all under "썸". The other-language candidate's title tells us that name.
+        HashSet<string>? aliases = null;
+        if (tagged is { } script and not Script.Latin
+            && !candidates.Any(c => Match(query, c.Track, c.StrictArtist) is not null && LanguageOf(c.Track) == script))
+        {
+            var ours = TitleVariants(query.Title);
+            aliases = [.. candidates
+                .Where(c => Match(query, c.Track, c.StrictArtist) is { ByAlbum: false })
+                .Select(c => MainTitle(c.Track.TrackName))
+                .Where(v => v.Length > 0 && !ours.Contains(v) && InScript(v, script))];
+            foreach (var alias in aliases.Take(2))
+            {
+                Add(await SearchAsync($"search?q={Esc(query.Artist + " " + alias)}", ct), false);
+                Add(await SearchAsync($"search?track_name={Esc(alias)}", ct), true);
+            }
+        }
+
         var fitting = candidates
-            .Select(c => (c.Track, Fit: Match(query, c.Track, c.StrictArtist), Language: LanguageOf(c.Track)))
+            .Select(c => (c.Track, Fit: Match(query, c.Track, c.StrictArtist, aliases), Language: LanguageOf(c.Track)))
             .Where(c => c.Fit is not null)
             .Select(c => (c.Track, Fit: c.Fit!.Value, c.Language))
             .ToList();
@@ -86,7 +106,7 @@ public sealed class LrcLibLyricsService : ILyricsService, IDisposable
         else if (fitting.Select(c => Normalize(StripBrackets(c.Track.TrackName))).Distinct().Count() > 1) return null;
         if (fitting.Count == 0) return null;
 
-        // 6. The language: the tags', or the one most of the fitting candidates are in (the app's
+        // 7. The language: the tags', or the one most of the fitting candidates are in (the app's
         //    language counting double) - so one Japanese or romanized upload of a Korean song,
         //    under the same title and length, loses to the Korean ones.
         var wanted = tagged ?? fitting
@@ -156,6 +176,19 @@ public sealed class LrcLibLyricsService : ILyricsService, IDisposable
 
     private static bool IsKana(char c) => c is >= '぀' and <= 'ヿ';
 
+    /// <summary>A title without its "(…)" parts, normalized: "썸 (Some)" and "썸 (Feat. 릴보이)"
+    /// are both "썸". Unlike <see cref="TitleVariants"/> it keeps one-syllable titles.</summary>
+    private static string MainTitle(string title) => Normalize(StripBrackets(title));
+
+    /// <summary>Whether a (normalized) title is written in the script of the tags: Hangul for
+    /// Korean; kana or kanji for Japanese.</summary>
+    private static bool InScript(string title, Script script) => script switch
+    {
+        Script.Korean => title.Any(IsHangul),
+        Script.Japanese => title.Any(c => IsKana(c) || c is >= '一' and <= '鿿'),
+        _ => false,
+    };
+
     /// <summary>A candidate scoring at least this (title and length both right) can be taken
     /// without searching further.</summary>
     private const double GoodEnough = 8;
@@ -167,7 +200,9 @@ public sealed class LrcLibLyricsService : ILyricsService, IDisposable
     /// <param name="strictArtist">The artist must match: a matching length doesn't make up for
     /// another artist name (for results of a search by title alone, which has every song of that
     /// title in it).</param>
-    internal static Fit? Match(LyricsQuery query, LrcLibTrack candidate, bool strictArtist)
+    /// <param name="aliases">Other names of our song, learned from a candidate whose title holds
+    /// both ("썸 (Some)" makes "썸" a name of "Some").</param>
+    internal static Fit? Match(LyricsQuery query, LrcLibTrack candidate, bool strictArtist, IReadOnlySet<string>? aliases = null)
     {
         if (!HasSynced(candidate) && string.IsNullOrWhiteSpace(candidate.PlainLyrics)) return null; // nothing to use
         double score = 0;
@@ -197,6 +232,7 @@ public sealed class LrcLibLyricsService : ILyricsService, IDisposable
         if (Normalize(candidate.TrackName) == Normalize(query.Title)) score += 4;
         else if (Normalize(StripBrackets(candidate.TrackName)) == Normalize(StripBrackets(query.Title))) score += 3;
         else if (artist > 0 && lengthMatches && TitleVariants(candidate.TrackName).Overlaps(TitleVariants(query.Title))) score += 2;
+        else if (aliases is { Count: > 0 } && artist > 0 && lengthMatches && aliases.Contains(MainTitle(candidate.TrackName))) score += 2;
         // Another title altogether: the song under its name in the other language ("막내" is
         // listed as "The loved one") - taken only when one title is Hangul and the other Latin
         // and artist, album and length (within 2 s) all match. Two different titles in the same

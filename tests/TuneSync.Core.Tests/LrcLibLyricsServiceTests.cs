@@ -166,6 +166,25 @@ public class LrcLibLyricsServiceTests
     }
 
     [Fact]
+    public async Task Finds_Korean_lyrics_under_the_Korean_title_a_romanized_upload_gives()
+    {
+        // what LRCLIB really answers for "Some" by "소유, 정기고": every search by our title finds
+        // only a romanized upload titled "썸 (Some)"; the Korean lyrics are listed under "썸"
+        var server = new FakeLrcLib();
+        server.Search.Add(Track("소유 & 정기고 feat. 릴보이 of 긱스", "썸 (Some)", 211, "Some", lyrics: Romanized));
+        server.SearchBy["?track_name=썸"] =
+        [
+            Track("NATURE", "썸 (You'll Be Mine)", 217, lyrics: "남의 곡"),
+            Track("소유, 정기고", "썸 (Feat. 릴보이 Of 긱스 )", 210, "썸", lyrics: Korean),
+        ];
+        using var service = new LrcLibLyricsService(server);
+
+        var result = await service.FindAsync(new LyricsQuery("소유, 정기고", "Some (Feat. 릴보이 Of 긱스 )", "Some", TimeSpan.FromSeconds(211)));
+
+        Assert.Equal($"[00:01.00]{Korean}", result?.BestLyrics);
+    }
+
+    [Fact]
     public async Task An_English_song_still_gets_its_English_lyrics()
     {
         var server = new FakeLrcLib { Get = Track("Coldplay", "Yellow", 266, "Parachutes", lyrics: "Look at the stars") };
