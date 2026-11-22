@@ -9,6 +9,7 @@ namespace TuneSync.App;
 // play, each set at a moment of the song and picked by how loud the music is then: a log or a
 // pumpkin when it's quiet, a hay bale or a fence, a wooden barrel or a milk can when it's loud;
 // now and then a fox running at it, and in loud passages an eagle swooping in at head height. It jumps the ones on the ground and runs ducked under the eagle.
+// The fox, jumped, skids to a sit, looks up at the duck going over and then gazes after it.
 // It moves with the music: each thing is set so the duck takes off on a beat of the song (higher
 // on a strong one), it bobs on every beat as it runs and quacks on strong ones, its feet go
 // faster when the music is loud, and a loud landing kicks up more dust.
@@ -20,7 +21,8 @@ public sealed partial class WaveSeekBar
     /// <summary>What's coming at the duck right now, placed from <see cref="_cues"/> for this moment
     /// of the song. (In one: X - its middle; Vx - its speed, px a second leftward; Hue - which thing
     /// it is (<see cref="Hazard"/>); Age - the moment it reaches the duck (its cue's time); Life - 1
-    /// once the duck has jumped it; Size - its cue's <see cref="Cue.Lift"/>.)</summary>
+    /// once the duck has jumped it; Size - its cue's <see cref="Cue.Lift"/>; Vy - for the fox, seconds
+    /// since the duck went over it, 0 before.)</summary>
     private readonly List<Spark> _obstacles = [];
 
     private enum Hazard { Log, Hay, Barrel, Fox, Eagle, Pumpkin, Fence, MilkCan }
@@ -97,6 +99,33 @@ public sealed partial class WaveSeekBar
     /// standing one, 13).</summary>
     private const int EagleAltitude = 9;
 
+    /// <summary>The song moment the scene is drawn at: its own clock, moved on by exactly each
+    /// frame's time and drawn gently toward the player's position. The position itself comes
+    /// from a stopwatch read whenever the frame handler runs, and every 200 ms it's set again from
+    /// the player: per 14 ms frame it moved anything from 1 to 31 ms of song, and at 135 px a
+    /// second that's a 2-px back-and-forth that read as stutter even at 68 frames.</summary>
+    private double _sceneClock;
+    private bool _sceneClockSet;
+
+    /// <summary>The moment to draw at: the smooth clock while playing, else where playback is.</summary>
+    private double RunnerNow => _sceneClockSet && IsPlaying && !_dragging ? _sceneClock : CurrentPosition();
+
+    /// <summary>Moves the scene's clock on by <paramref name="dt"/> and a little toward the
+    /// player's position (an error is gone in about half a second, without a jump); jumps to it
+    /// when the song was jumped in, paused, dragged or the frames stalled.</summary>
+    private void AdvanceSceneClock(double dt)
+    {
+        var position = CurrentPosition();
+        if (!_sceneClockSet || !IsPlaying || _dragging || Math.Abs(position - (_sceneClock + dt)) > 0.25)
+        {
+            _sceneClock = position;
+            _sceneClockSet = true;
+            return;
+        }
+        _sceneClock += dt;
+        _sceneClock += (position - _sceneClock) * Math.Min(1, dt * 2);
+    }
+
     /// <summary>Something still moving on its own (the obstacles only move with the song).</summary>
     private bool RunnerAlive => _dust.Count > 0 || _jumpY > 0;
 
@@ -106,6 +135,7 @@ public sealed partial class WaveSeekBar
         _dust.Clear();
         _jumpedCues.Clear();
         _lastMoment = double.NaN;
+        _sceneClockSet = false;
         _jumpY = _jumpV = 0;
         _ducking = false;
     }
@@ -324,7 +354,7 @@ public sealed partial class WaveSeekBar
     {
         _obstacles.Clear();
         if (Maximum <= 0) return;
-        var now = CurrentPosition();
+        var now = RunnerNow;
         // jumped in the song: what's ahead now hasn't been jumped yet
         if (!double.IsNaN(_lastMoment) && Math.Abs(now - _lastMoment) > 0.5) _jumpedCues.RemoveWhere(t => t > now - 1);
         _lastMoment = now;
@@ -335,9 +365,37 @@ public sealed partial class WaveSeekBar
             // past the far end even at the slowest speed: so are all the later ones
             if ((cue.Time - now) * ObstacleSpeed > Right + 12 - duck) break;
             var x = duck + (cue.Time - now) * cue.Speed;
+            // the fox, once the duck is over it, skids to a sit and is carried off with the ground
+            var passed = cue.Kind == Hazard.Fox && now > cue.Time ? now - cue.Time : 0;
+            if (passed > 0) x = duck - FoxSkid(passed, cue.Speed);
             if (x > Right + 12 || x < Left - 30) continue;
-            _obstacles.Add(new Spark { X = x, Vx = cue.Speed, Hue = (int)cue.Kind, Age = cue.Time, Life = _jumpedCues.Contains(cue.Time) ? 1 : 0, Size = cue.Lift });
+            _obstacles.Add(new Spark { X = x, Vx = cue.Speed, Hue = (int)cue.Kind, Age = cue.Time, Life = _jumpedCues.Contains(cue.Time) ? 1 : 0, Size = cue.Lift, Vy = passed });
         }
+    }
+
+    /// <summary>How long the fox takes to skid from its run to a sit.</summary>
+    private const double FoxSkidSeconds = 0.3;
+
+    /// <summary>How far behind the duck the fox is <paramref name="passed"/> seconds after it
+    /// went under it: slowing evenly from its run (<paramref name="speed"/>) to the ground's speed,
+    /// then sitting still on the ground as it goes by. Smooth, so it doesn't jerk at the switch.</summary>
+    private static double FoxSkid(double passed, double speed)
+    {
+        var slow = speed - ObstacleSpeed;
+        if (passed < FoxSkidSeconds) return speed * passed - slow * passed * passed / (2 * FoxSkidSeconds);
+        return speed * FoxSkidSeconds - slow * FoxSkidSeconds / 2 + ObstacleSpeed * (passed - FoxSkidSeconds);
+    }
+
+    /// <summary>The fox after the duck went over it: still running for the first moment of the
+    /// skid, then sitting turned round - looking up at the duck in the air, then just gazing off
+    /// to the right where it went, blinking now and then.</summary>
+    private string[] FoxAfter(double passed)
+    {
+        if (passed < 0.12) return FoxRun[0];
+        if (passed < 0.65) return FoxSitLookUp;
+        // a blink of about a tenth of a second every 2.6 seconds
+        var blink = (passed - 0.65) % 2.6 > 2.5;
+        return blink ? FoxSitBlink : FoxSitGaze;
     }
 
     private void UpdateRunner(double dt, bool beat)
@@ -347,6 +405,7 @@ public sealed partial class WaveSeekBar
             if (RunnerAlive || _obstacles.Count > 0) ClearRunner();
             return;
         }
+        AdvanceSceneClock(dt);
         // the duck's own motion slows to a stop when the music is paused, and picks up again with it
         var t = dt * _activity;
         _sceneTime += t;
@@ -453,6 +512,11 @@ public sealed partial class WaveSeekBar
             // running legs and flapping wings
             var frame = kind == Hazard.Fox ? (int)(_sceneTime * 14) % FoxRun.Length : kind == Hazard.Eagle ? (int)(_sceneTime * 8) % EagleFlap.Length : 0;
             var art = SpriteOf(kind, frame);
+            if (kind == Hazard.Fox && o.Vy > 0)
+            {
+                art = FoxAfter(o.Vy);
+                frame = 0; // on the ground
+            }
             var fade = Math.Clamp((o.X - Left + 30) / 40, 0, 1);
             // the eagle up in the air; the fox off the ground by a pixel with its legs gathered, mid-bound
             var bottom = kind == Hazard.Eagle ? ground - EagleAltitude * pixel
@@ -696,6 +760,40 @@ public sealed partial class WaveSeekBar
         ".wwoooooooooooww.",
         "...wwooooooooo...",
     ];
+
+    /// <summary>The fox sat down, turned to face the way the duck went: looking up at it in the
+    /// air (ears laid back, nose up)...</summary>
+    private static readonly string[] FoxSitLookUp =
+    [
+        "....o..o....k.",
+        "....oo.oo..ww.",
+        "....ooooooww..",
+        "....ooowkoo...",
+        "....oooooow...",
+        ".....ooooo....",
+        ".....oowwo....",
+        "oo..ooowwo....",
+        "wooooooowq....",
+        ".oooooo.qq....",
+    ];
+
+    /// <summary>...then just gazing off to the right, ...</summary>
+    private static readonly string[] FoxSitGaze =
+    [
+        "......o..o....",
+        "......oo.oo...",
+        ".....oooooo...",
+        "....oooowkoo..",
+        "....oooooowwwk",
+        "....oooooww...",
+        ".....oowwo....",
+        "oo..ooowwo....",
+        "wooooooowq....",
+        ".oooooo.qq....",
+    ];
+
+    /// <summary>...blinking now and then.</summary>
+    private static readonly string[] FoxSitBlink = [.. FoxSitGaze.Select((row, i) => i == 3 ? row.Replace('k', 'o') : row)];
 
     private static readonly string[][] FoxRun =
     [
