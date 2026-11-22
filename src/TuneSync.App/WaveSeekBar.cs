@@ -52,12 +52,15 @@ public sealed partial class WaveSeekBar : FrameworkElement
         _droplets.Clear();
         _jets.Clear();
         _spouts.Clear();
+        _pools.Clear();
         _rockets.Clear();
         _rocketQueue.Clear();
         _embers.Clear();
         _swells.Clear();
         ClearRunner();
         ClearNature();
+        // onto the other clock if the new look needs the screen's frames (or no longer does)
+        if (_animating && _onScreenFrames != NeedsScreenFrames(Look)) StopAnimating();
         UpdateAnimationState();
         if (Look == SeekBarStyle.None) StopAnimating();
     }
@@ -723,16 +726,44 @@ public sealed partial class WaveSeekBar : FrameworkElement
     /// it is spouting (0..1). Rebuilt every update.</summary>
     private readonly List<Spark> _spouts = [];
 
+    /// <summary>Rings spreading on the line where the water comes down. X: where; Size: how wide
+    /// the ring grows; Age, Life; Y: how strong it starts; Hue: its jet's light; Vx: 1 for a fall
+    /// from high enough to send a second, fainter ring after it.</summary>
+    private readonly List<Spark> _pools = [];
+
+    /// <summary>The most rings spreading at once: hundreds of drops land every second, so a new
+    /// ring starts only where no fresh one is already spreading, and never past this many.</summary>
+    private const int MaxPools = 30;
+
     /// <summary>A musical fountain along the played part: a row of jets standing JetSpacing apart,
     /// all spouting all the time, their heights danced by the music - low ripples in quiet
     /// passages, tall columns when it's loud, a kick up on every beat that settles again, and the
     /// shape across the row set by a choreography that changes every few beats (a rolling wave,
     /// jets taking turns, a bright spot running along, a ring spreading from the middle), with
     /// the whole row leaping together on a strong beat. The water takes the cover's colors,
-    /// lightened, with a short streak behind each drop.</summary>
+    /// lightened, with a short streak behind each drop; where it comes down, rings spread on the
+    /// line as on a pool, wider the higher the water went.</summary>
     private void DrawFountain(DrawingContext dc, double mid, double thumbX, double room, Color cool, Color accent, Color warm)
     {
         DrawPlayedLine(dc, mid, thumbX, cool, accent, warm);
+
+        // rings where the water lands, flat on the line as on a pool (kept pens, alpha in steps)
+        foreach (var pool in _pools)
+        {
+            var p = Math.Clamp(pool.Age / pool.Life, 0, 1);
+            var grow = 1 - (1 - p) * (1 - p);
+            var alpha = pool.Y * (1 - p);
+            var ring = Mix(FountainColor(pool.Hue, accent), Colors.White, 0.5);
+            var rx = 1.5 + pool.Size * grow;
+            dc.DrawEllipse(null, SolidPen(Color.FromArgb((byte)(255 * alpha), ring.R, ring.G, ring.B), 1),
+                new Point(pool.X, mid), rx, rx * 0.3);
+            if (pool.Vx > 0 && p > 0.2)
+            {
+                var inner = rx * 0.55;
+                dc.DrawEllipse(null, SolidPen(Color.FromArgb((byte)(150 * alpha), ring.R, ring.G, ring.B), 0.9),
+                    new Point(pool.X, mid), inner, inner * 0.3);
+            }
+        }
 
         // a soft glow where each jet leaves the line, as strong as it spouts
         foreach (var spout in _spouts)
@@ -818,6 +849,13 @@ public sealed partial class WaveSeekBar : FrameworkElement
     private void UpdateFountain(double dt, bool beat)
     {
         var mid = ActualHeight / 2;
+        for (var i = _pools.Count - 1; i >= 0; i--)
+        {
+            var r = _pools[i];
+            r.Age += dt;
+            if (r.Age >= r.Life) _pools.RemoveAt(i);
+            else _pools[i] = r;
+        }
         for (var i = _jets.Count - 1; i >= 0; i--)
         {
             var d = _jets[i];
@@ -825,7 +863,11 @@ public sealed partial class WaveSeekBar : FrameworkElement
             d.Y += d.Vy * dt;
             d.Vy += FountainGravity * dt;
             d.Age += dt;
-            if (d.Y > mid + 1 && d.Vy > 0) _jets.RemoveAt(i);
+            if (d.Y > mid + 1 && d.Vy > 0)
+            {
+                _jets.RemoveAt(i);
+                Land(d, mid);
+            }
             else _jets[i] = d;
         }
         _spouts.Clear();
@@ -887,6 +929,31 @@ public sealed partial class WaveSeekBar : FrameworkElement
 
         // 1 at the middle of a bump of this half width, falling off to 0.15 away from it
         static double Bump(double distance, double width) => 0.15 + 0.85 * Math.Exp(-distance * distance / (width * width));
+    }
+
+    /// <summary>A drop back on the line: a ring as wide, lasting and bright as the drop fell far
+    /// (its speed tells how high it went) - small quick ones under low ripples, wide ones with a
+    /// second ring under the tall columns.</summary>
+    private void Land(Spark drop, double mid)
+    {
+        if (_pools.Count >= MaxPools) return;
+        var room = mid - 2 + FountainOverflow;
+        // (the tall columns go well over the strip - up to about two and a half times - so 1.8
+        // times it counts as all the way up; against the strip itself nearly every ring was full size)
+        var high = Math.Clamp(drop.Vy * drop.Vy / (2 * FountainGravity) / (1.8 * room), 0, 1);
+        // one ring at a time where the water comes down: none while a fresh one spreads there
+        var near = 4 + 5 * high;
+        foreach (var r in _pools)
+            if (Math.Abs(r.X - drop.X) < near && r.Age < 0.08 + 0.12 * high) return;
+        _pools.Add(new Spark
+        {
+            X = drop.X,
+            Size = (2.5 + 10 * high) * EffectScale,
+            Life = 0.3 + 0.4 * high,
+            Y = 0.3 + 0.55 * high,
+            Hue = drop.Hue,
+            Vx = high > 0.5 ? 1 : 0,
+        });
     }
 
     /// <summary>One droplet from <paramref name="x"/>, to reach about <paramref name="height"/> pixels up.</summary>
@@ -1838,23 +1905,55 @@ public sealed partial class WaveSeekBar : FrameworkElement
 
     private void UpdateAnimationState()
     {
-        if (IsLoaded && OnScreen.Check(this) && (IsPlaying || _activity > 0.002 || _ripples.Count > 0 || _sparks.Count > 0 || _licks.Count > 0 || _stars.Count > 0 || _drops.Count > 0 || _splashes.Count > 0 || _droplets.Count > 0 || _jets.Count > 0 || _spouts.Count > 0 || _rockets.Count > 0 || _embers.Count > 0 || _swells.Count > 0 || RunnerAlive || NatureAlive)
+        if (IsLoaded && OnScreen.Check(this) && (IsPlaying || _activity > 0.002 || _ripples.Count > 0 || _sparks.Count > 0 || _licks.Count > 0 || _stars.Count > 0 || _drops.Count > 0 || _splashes.Count > 0 || _droplets.Count > 0 || _jets.Count > 0 || _spouts.Count > 0 || _pools.Count > 0 || _rockets.Count > 0 || _embers.Count > 0 || _swells.Count > 0 || RunnerAlive || NatureAlive)
             && Look != SeekBarStyle.None) StartAnimating();
     }
+
+    /// <summary>The 오리 scene runs on the screen's own frames (<see cref="OnScreenFrame"/>), not
+    /// on <see cref="FrameTicker"/>: everything in it slides along at a steady 135 px a second in
+    /// whole pixel steps, and at 30 frames that's 4-5 px jumps that read as stutter (moving the
+    /// mouse over the bar, which redraws it on every mouse event, made it smooth). The flowing
+    /// looks stay at 30, which they look the same at.</summary>
+    private static bool NeedsScreenFrames(SeekBarStyle look) => look == SeekBarStyle.Runner;
+
+    /// <summary>Which clock the animation is on while <see cref="_animating"/>.</summary>
+    private bool _onScreenFrames;
+
+    /// <summary>The screen frame last drawn (its <see cref="RenderingEventArgs.RenderingTime"/>).</summary>
+    private TimeSpan _lastScreenFrame;
+
+    /// <summary>Screen frames closer together than this are skipped: about 60-75 a second
+    /// whatever the monitor (every frame at 60 Hz, every other one at 120 or 144 Hz).</summary>
+    private static readonly TimeSpan MinScreenFrame = TimeSpan.FromMilliseconds(12);
 
     private void StartAnimating()
     {
         if (_animating) return;
         _animating = true;
         _lastFrame = TimeSpan.Zero;
-        FrameTicker.Add(OnRendering);
+        _lastScreenFrame = TimeSpan.Zero;
+        _onScreenFrames = NeedsScreenFrames(Look);
+        if (_onScreenFrames) CompositionTarget.Rendering += OnScreenFrame;
+        else FrameTicker.Add(OnRendering);
     }
 
     private void StopAnimating()
     {
         if (!_animating) return;
         _animating = false;
-        FrameTicker.Remove(OnRendering);
+        if (_onScreenFrames) CompositionTarget.Rendering -= OnScreenFrame;
+        else FrameTicker.Remove(OnRendering);
+    }
+
+    private void OnScreenFrame(object? sender, EventArgs e)
+    {
+        // the time of the frame being drawn (it can come more than once per frame): steps by
+        // whole frames, so the motion is as even as the screen's own refresh
+        if (e is not RenderingEventArgs { RenderingTime: var time } || time == _lastScreenFrame) return;
+        if (_lastScreenFrame != TimeSpan.Zero && time - _lastScreenFrame < MinScreenFrame) return;
+        var dt = _lastScreenFrame == TimeSpan.Zero ? 0 : Math.Min(0.1, (time - _lastScreenFrame).TotalSeconds);
+        _lastScreenFrame = time;
+        Step(dt);
     }
 
     private void OnRendering(object? sender, EventArgs e)
@@ -1916,7 +2015,7 @@ public sealed partial class WaveSeekBar : FrameworkElement
             else _ripples[i] = (distance + dt * 150, strength);
         }
 
-        if (!IsPlaying && _activity < 0.002 && _ripples.Count == 0 && _sparks.Count == 0 && _licks.Count == 0 && _stars.Count == 0 && _drops.Count == 0 && _splashes.Count == 0 && _droplets.Count == 0 && _jets.Count == 0 && _spouts.Count == 0 && _rockets.Count == 0 && _embers.Count == 0 && _swells.Count == 0 && !RunnerAlive && !NatureAlive)
+        if (!IsPlaying && _activity < 0.002 && _ripples.Count == 0 && _sparks.Count == 0 && _licks.Count == 0 && _stars.Count == 0 && _drops.Count == 0 && _splashes.Count == 0 && _droplets.Count == 0 && _jets.Count == 0 && _spouts.Count == 0 && _pools.Count == 0 && _rockets.Count == 0 && _embers.Count == 0 && _swells.Count == 0 && !RunnerAlive && !NatureAlive)
         {
             _activity = 0;
             _level = 0;

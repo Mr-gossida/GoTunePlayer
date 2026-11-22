@@ -97,6 +97,8 @@ Before building the debug app, kill only leftover debug processes (`*\bin\Debug\
 - Continuous decorative motion (spectrum, seek-bar waves/fire, aurora) runs on `FrameTicker` (~30 fps), not
   `CompositionTarget.Rendering` (that runs at the monitor's refresh rate and keeps WPF redrawing the whole app), and
   pauses when `OnScreen.Check` says its window is hidden or minimized. Endless WPF animations set `Timeline.DesiredFrameRate`.
+  Exception: the seek bar's 오리 look (steady sideways motion in whole pixels stutters at 30) runs on
+  `CompositionTarget.Rendering`, capped at ~60-75 fps (`WaveSeekBar.NeedsScreenFrames`); only while it's the shown look.
 - Settings live in `AppSettings` (Core) and are saved with `AppSettingsStore.Save`; expose them through a view model property.
 - When editing files from scripts, keep each file's BOM and line endings (CRLF/LF) as they were.
 - Comments explain why, in plain English, like the existing code.
