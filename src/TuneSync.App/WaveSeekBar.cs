@@ -1907,7 +1907,7 @@ public sealed partial class WaveSeekBar : FrameworkElement
         UpdateFireworks(dt, beat);
         UpdateNature(dt, beat);
         UpdateSwells(dt, beat);
-        UpdateRunner(dt);
+        UpdateRunner(dt, beat);
         for (var i = _ripples.Count - 1; i >= 0; i--)
         {
             var (distance, strength) = _ripples[i];

@@ -9,6 +9,9 @@ namespace TuneSync.App;
 // play, each set at a moment of the song and picked by how loud the music is then: a log or a
 // pumpkin when it's quiet, a hay bale or a fence, a wooden barrel or a milk can when it's loud;
 // now and then a fox running at it, and in loud passages an eagle swooping in at head height. It jumps the ones on the ground and runs ducked under the eagle.
+// It moves with the music: each thing is set so the duck takes off on a beat of the song (higher
+// on a strong one), it bobs on every beat as it runs and quacks on strong ones, its feet go
+// faster when the music is loud, and a loud landing kicks up more dust.
 // Nobody plays it: every move is worked out so it always gets by. Every pixel is a whole number
 // of screen pixels on the screen's own grid, so the art stays crisp (a pixel of 1.5 px was smudged
 // at its edges and didn't read as pixel art). Drawn with kept brushes (Solid).
@@ -17,14 +20,35 @@ public sealed partial class WaveSeekBar
     /// <summary>What's coming at the duck right now, placed from <see cref="_cues"/> for this moment
     /// of the song. (In one: X - its middle; Vx - its speed, px a second leftward; Hue - which thing
     /// it is (<see cref="Hazard"/>); Age - the moment it reaches the duck (its cue's time); Life - 1
-    /// once the duck has jumped it.)</summary>
+    /// once the duck has jumped it; Size - its cue's <see cref="Cue.Lift"/>.)</summary>
     private readonly List<Spark> _obstacles = [];
 
     private enum Hazard { Log, Hay, Barrel, Fox, Eagle, Pumpkin, Fence, MilkCan }
 
     /// <summary>One obstacle of the song: the moment (seconds into the song) it reaches the duck,
-    /// what it is, and how fast it comes.</summary>
-    private readonly record struct Cue(double Time, Hazard Kind, double Speed);
+    /// what it is, how fast it comes, and how much higher than usual the duck jumps it (0 to
+    /// <see cref="MaxLift"/>: a strong beat sends it up higher).</summary>
+    private readonly record struct Cue(double Time, Hazard Kind, double Speed, double Lift);
+
+    /// <summary>The song's beats (moment and strength), found ahead of time in its loudness the way
+    /// the live beat is found (<see cref="Step"/>), so obstacles can be set where the duck takes
+    /// off on one. Found again for new loudness data.</summary>
+    private List<(double Time, double Strength)> _songBeats = [];
+    private WaveformData? _beatsFor;
+
+    /// <summary>The song's ordinary beat strength and its strongest ones: a jump is lifted
+    /// between the two, so it's the song's own big hits that send the duck higher (a
+    /// fixed scale lifted nearly every jump in a loud modern song).</summary>
+    private double _beatMid = 0.2, _beatTop = 0.4;
+
+    /// <summary>How much more room a strong beat's jump leaves above the thing (as a share of the
+    /// usual room).</summary>
+    private const double MaxLift = 0.7;
+
+    /// <summary>The duck's bob on a beat while it runs: time since the beat and how high (px); and
+    /// how long its beak stays open for a quack on a strong beat (seconds left).</summary>
+    private double _bobTime = 1, _bobHeight, _quackLeft;
+    private const double BobSeconds = 0.18;
 
     /// <summary>The song's obstacles in order, worked out from its loudness as far as needed: the
     /// same song always gets the same ones at the same moments, so they stay with the music when
@@ -118,11 +142,97 @@ public sealed partial class WaveSeekBar
     };
 
     /// <summary>An obstacle's half width and height in px.</summary>
-    private (double Half, double Height) SizeOf(Spark o)
+    private (double Half, double Height) SizeOf(Spark o) => SizeOf(KindOf(o));
+
+    private (double Half, double Height) SizeOf(Hazard kind)
     {
-        var art = SpriteOf(KindOf(o), 0);
+        var art = SpriteOf(kind, 0);
         return (art[0].Length * ArtPixel / 2, art.Length * ArtPixel);
     }
+
+    /// <summary>The jump over a <paramref name="kind"/> coming at <paramref name="speed"/>: how fast
+    /// the duck leaves the ground, how fast it falls, and whether it's a big flapping one. Used both
+    /// to set the obstacles (so the take-off lands on a beat) and for the jump itself, so the two
+    /// always agree.</summary>
+    private (double Up, double Gravity, bool Big) LeapOver(Hazard kind, double speed, double lift)
+    {
+        var pixel = ArtPixel;
+        var (half, height) = SizeOf(kind);
+        // a small hop over a low thing, a big flapping jump over a tall one
+        var big = height >= TallRows * pixel - 0.01;
+        var gravity = big ? LeapGravity : RunnerGravity;
+        // the feet (6 art pixels, their middle half a pixel ahead of the duck's) must be off
+        // the ground while the thing passes under them, with a pixel to spare each side:
+        // that long above its top, half of it either side of the top of the jump
+        var under = (2 * half + 8 * pixel) / 2 / speed;
+        var spare = Math.Max((big ? LeapSpare : HopSpare) * pixel * (1 + lift), gravity / 2 * under * under);
+        return (Math.Sqrt(2 * gravity * (height + spare)), gravity, big);
+    }
+
+    /// <summary>Seconds from take-off to the top of the jump over a cue's thing (none for the
+    /// eagle, which is ducked under as it arrives).</summary>
+    private double RiseFor(Hazard kind, double speed, double lift)
+    {
+        if (kind == Hazard.Eagle) return 0;
+        var (up, gravity, _) = LeapOver(kind, speed, lift);
+        return up / gravity;
+    }
+
+    /// <summary>The song's beats, worked out once per loudness data: a slice well above the
+    /// running average (the same rule and numbers as the live beat in <see cref="Step"/>).</summary>
+    private List<(double Time, double Strength)> SongBeats()
+    {
+        if (ReferenceEquals(_beatsFor, Waveform)) return _songBeats;
+        _beatsFor = Waveform;
+        _songBeats = [];
+        if (Waveform is not { } waveform) return _songBeats;
+        var levels = waveform.Levels;
+        var step = waveform.BucketSeconds;
+        double baseline = 0, since = 1;
+        for (var i = 0; i < levels.Length; i++)
+        {
+            var level = levels[i];
+            since += step;
+            if (level - baseline > 0.12 && since > 0.15)
+            {
+                _songBeats.Add((i * step, level - baseline));
+                since = 0;
+            }
+            baseline += (level - baseline) * Math.Min(1, step * 1.2);
+        }
+        if (_songBeats.Count > 0)
+        {
+            var sorted = _songBeats.Select(b => b.Strength).Order().ToArray();
+            // (the jumps are set on the strongest beat near each spot, so most are above the
+            // median: lifted from the 60th to the 97th percentile, only the big hits go highest)
+            _beatMid = sorted[(int)((sorted.Length - 1) * 0.6)];
+            _beatTop = Math.Max(_beatMid + 0.05, sorted[(int)((sorted.Length - 1) * 0.97)]);
+        }
+        return _songBeats;
+    }
+
+    /// <summary>What a cue reaching the duck about <paramref name="time"/> is (the
+    /// <paramref name="n"/>th of the song): picked by how loud the music is then, with the song's
+    /// own dice.</summary>
+    private Hazard KindAt(double time, int n)
+    {
+        var loud = LoudnessAt(time);
+        var other = SongDice(n, 2) < 0.5;
+        var kind = loud < 0.3 ? (other ? Hazard.Pumpkin : Hazard.Log)
+                 : loud < 0.6 ? (other ? Hazard.Fence : Hazard.Hay)
+                 : other ? Hazard.MilkCan : Hazard.Barrel;
+        var roll = SongDice(n, 1);
+        if (loud > 0.55 && roll < 0.3) kind = Hazard.Eagle;
+        else if (loud > 0.25 && roll > 0.82) kind = Hazard.Fox;
+        return kind;
+    }
+
+    private static double SpeedOf(Hazard kind) =>
+        ObstacleSpeed + kind switch { Hazard.Fox => FoxRush, Hazard.Eagle => EagleRush, _ => 0 };
+
+    /// <summary>How much higher a jump taken off on a beat of <paramref name="strength"/> goes:
+    /// nothing for an ordinary beat of the song, up to <see cref="MaxLift"/> for its strongest.</summary>
+    private double LiftOf(double strength) => Math.Clamp((strength - _beatMid) / (_beatTop - _beatMid), 0, 1) * MaxLift;
 
     /// <summary>A number from 0 to 1 fixed by <paramref name="n"/>, <paramref name="salt"/> and the
     /// song's length: the song's own dice, the same every time.</summary>
@@ -165,20 +275,46 @@ public sealed partial class WaveSeekBar
         }
         var until = now + (Right - Left) / ObstacleSpeed + 1;
         var time = _cues.Count > 0 ? _cues[^1].Time : _cuesFrom;
+        var beats = SongBeats();
         while (time < until && time < Maximum)
         {
             var n = _cues.Count;
-            time += Math.Max(0.9, 0.95 + SongDice(n, 0) * 1.0 - 0.3 * LoudnessAt(time));
-            var loud = LoudnessAt(time);
-            var other = SongDice(n, 2) < 0.5;
-            var kind = loud < 0.3 ? (other ? Hazard.Pumpkin : Hazard.Log)
-                     : loud < 0.6 ? (other ? Hazard.Fence : Hazard.Hay)
-                     : other ? Hazard.MilkCan : Hazard.Barrel;
-            var roll = SongDice(n, 1);
-            if (loud > 0.55 && roll < 0.3) kind = Hazard.Eagle;
-            else if (loud > 0.25 && roll > 0.82) kind = Hazard.Fox;
-            _cues.Add(new Cue(time, kind, ObstacleSpeed + kind switch { Hazard.Fox => FoxRush, Hazard.Eagle => EagleRush, _ => 0 }));
+            // where it would go by the dice alone; a beat near there is better
+            var nominal = time + Math.Max(0.9, 0.95 + SongDice(n, 0) * 1.0 - 0.3 * LoudnessAt(time));
+            var cue = new Cue(nominal, KindAt(nominal, n), 0, 0);
+            var best = double.NegativeInfinity;
+            // the duck takes off a jump's rise before the thing reaches it: set the thing so that
+            // moment is on a beat (the eagle arrives on one, as the duck ducks); stronger beats and
+            // ones nearer the dice's moment win, and they stay at least 0.9 s apart as before
+            for (var i = FirstBeatFrom(beats, time + 0.4); i < beats.Count && beats[i].Time < nominal + 0.8; i++)
+            {
+                var (beat, strength) = beats[i];
+                var kind = KindAt(beat + 0.25, n);
+                var lift = LiftOf(strength);
+                var at = beat + RiseFor(kind, SpeedOf(kind), lift);
+                if (at < time + 0.9 || at > time + 2.4) continue;
+                var score = strength - 0.12 * Math.Abs(at - nominal);
+                if (score <= best) continue;
+                best = score;
+                cue = new Cue(at, kind, 0, lift);
+            }
+            time = cue.Time;
+            _cues.Add(cue with { Speed = SpeedOf(cue.Kind) });
         }
+    }
+
+    /// <summary>The index of the first of <paramref name="beats"/> at or after
+    /// <paramref name="time"/>.</summary>
+    private static int FirstBeatFrom(List<(double Time, double Strength)> beats, double time)
+    {
+        int lo = 0, hi = beats.Count;
+        while (lo < hi)
+        {
+            var mid = (lo + hi) / 2;
+            if (beats[mid].Time < time) lo = mid + 1;
+            else hi = mid;
+        }
+        return lo;
     }
 
     /// <summary>Puts the obstacles where they are at this moment of the song: each its cue's time
@@ -200,11 +336,11 @@ public sealed partial class WaveSeekBar
             if ((cue.Time - now) * ObstacleSpeed > Right + 12 - duck) break;
             var x = duck + (cue.Time - now) * cue.Speed;
             if (x > Right + 12 || x < Left - 30) continue;
-            _obstacles.Add(new Spark { X = x, Vx = cue.Speed, Hue = (int)cue.Kind, Age = cue.Time, Life = _jumpedCues.Contains(cue.Time) ? 1 : 0 });
+            _obstacles.Add(new Spark { X = x, Vx = cue.Speed, Hue = (int)cue.Kind, Age = cue.Time, Life = _jumpedCues.Contains(cue.Time) ? 1 : 0, Size = cue.Lift });
         }
     }
 
-    private void UpdateRunner(double dt)
+    private void UpdateRunner(double dt, bool beat)
     {
         if (Look != SeekBarStyle.Runner)
         {
@@ -229,6 +365,18 @@ public sealed partial class WaveSeekBar
 
         PlaceObstacles(duck);
 
+        // on every beat it bobs up a pixel or two as it runs, and on a strong one it quacks too
+        // (in the air it already has the jump; ducked, it keeps low)
+        _bobTime += dt;
+        _quackLeft = Math.Max(0, _quackLeft - dt);
+        if (beat && IsPlaying && _jumpY <= 0 && !_ducking)
+        {
+            var strong = _beatStrength >= StrongBeat;
+            _bobTime = 0;
+            _bobHeight = (strong ? 2 : 1) * pixel;
+            if (strong) _quackLeft = 0.2;
+        }
+
         // ducking while the eagle goes over (from a little before it reaches the duck until it's by)
         _ducking = false;
         foreach (var o in _obstacles)
@@ -246,18 +394,10 @@ public sealed partial class WaveSeekBar
             {
                 var o = _obstacles[i];
                 if (KindOf(o) == Hazard.Eagle) continue;
-                var (half, height) = SizeOf(o);
+                var (half, _) = SizeOf(o);
                 if (o.Life > 0 || o.X + half < duck - 4) continue;
-                // a small hop over a low thing, a big flapping jump over a tall one
-                var big = height >= TallRows * pixel - 0.01;
-                var gravity = big ? LeapGravity : RunnerGravity;
-                // the feet (6 art pixels, their middle half a pixel ahead of the duck's) must be off
-                // the ground while the thing passes under them, with a pixel to spare each side:
-                // that long above its top, half of it either side of the top of the jump
-                var under = (2 * half + 8 * pixel) / 2 / o.Vx;
-                var spare = Math.Max((big ? LeapSpare : HopSpare) * pixel, gravity / 2 * under * under);
-                var apex = height + spare;
-                var up = Math.Sqrt(2 * gravity * apex);
+                // the same jump its cue was set for, so the take-off comes on the beat
+                var (up, gravity, big) = LeapOver(KindOf(o), o.Vx, o.Size);
                 var rise = up / gravity; // seconds to the top
                 // (the top used to come where it suited a narrow thing: a long log was still under
                 // the feet when they came down)
@@ -278,18 +418,25 @@ public sealed partial class WaveSeekBar
             {
                 _jumpY = _jumpV = 0;
                 var mid = ActualHeight / 2;
-                for (var n = 0; n < 4; n++)
+                // a louder landing kicks up more dust, and further
+                var puffs = 3 + (int)Math.Round(4 * _level);
+                var spread = 0.8 + 0.8 * _level;
+                for (var n = 0; n < puffs; n++)
+                {
+                    var side = n - (puffs - 1) / 2.0;
                     _dust.Add(new Spark
                     {
-                        X = duck + (n - 1.5) * 3,
+                        X = duck + side * 3,
                         Y = mid - 2,
-                        Vx = (n - 1.5) * 9 - 6,
-                        Vy = -6 - Random.Shared.NextDouble() * 6,
+                        Vx = (side * 9 - 6) * spread,
+                        Vy = (-6 - Random.Shared.NextDouble() * 6) * spread,
                         Life = 0.35,
                     });
+                }
             }
         }
-        else if (IsPlaying) _runTime += t;
+        // its feet go faster when the music is loud
+        else if (IsPlaying) _runTime += t * (0.75 + 0.75 * _level);
     }
 
     /// <summary>The obstacles, the dust and the duck at <paramref name="thumbX"/> (in place of the
@@ -330,13 +477,25 @@ public sealed partial class WaveSeekBar
         }
         else
         {
-            // in a big jump its little wings beat, up and down (about 7 times a second)
-            body = _bigJump && _jumpY > 0.5 ? DuckFlap[(int)(_flapTime * 14) % 2] : DuckArt;
+            // in a big jump its little wings beat, up and down (about 7 times a second), and it
+            // quacks: the beak opens and shuts on its own, slower beat (5 times a second), so the
+            // two don't move in lockstep
+            if (_bigJump && _jumpY > 0.5)
+            {
+                var wing = (int)(_flapTime * 14) % 2;
+                body = (int)(_flapTime * 10) % 2 == 0 ? DuckFlapQuack[wing] : DuckFlap[wing];
+            }
+            else
+            {
+                body = _quackLeft > 0 ? DuckQuack : DuckArt;
+            }
             feet = _jumpY > 0.5 ? DuckFeet[2] : DuckFeet[step];
         }
+        // the beat's bob: up and back down in a moment, feet and all
+        var bob = _bobTime < BobSeconds && _jumpY <= 0 ? _bobHeight * Math.Sin(Math.PI * _bobTime / BobSeconds) : 0;
         var rows = body.Length + feet.Length;
         var left = OnGrid(thumbX - body[0].Length * pixel / 2);
-        var top = OnGrid(ground - _jumpY) - rows * pixel;
+        var top = OnGrid(ground - _jumpY - bob) - rows * pixel;
         DrawSprite(dc, body, left, top + body.Length * pixel, pixel, 1);
         DrawSprite(dc, feet, left, top + rows * pixel, pixel, 1);
     }
@@ -445,6 +604,22 @@ public sealed partial class WaveSeekBar
         ],
     ];
 
+    /// <summary><see cref="DuckFlap"/> with the beak open: the upper half stays, the lower half
+    /// drops a row, and the dark inside of the mouth shows between them.</summary>
+    private static readonly string[][] DuckFlapQuack = [.. DuckFlap.Select(OpenBeak)];
+
+    /// <summary>The running duck quacking on a strong beat.</summary>
+    private static readonly string[] DuckQuack = OpenBeak(DuckArt);
+
+    /// <summary>The beak is the last three columns of rows 2-4 in every duck frame.</summary>
+    private static string[] OpenBeak(string[] art)
+    {
+        var open = (string[])art.Clone();
+        open[3] = open[3][..^3] + "OE.";
+        open[4] = open[4][..^3] + "KOO";
+        return open;
+    }
+
     /// <summary>The duck's feet: two running frames, and tucked up for a jump.</summary>
     private static readonly string[][] DuckFeet =
     [
@@ -530,15 +705,17 @@ public sealed partial class WaveSeekBar
         [.. FoxBody, "...qq......qq....", "....qq......qq..."],
     ];
 
-    /// <summary>A pumpkin: round and wide, two deep ridges down it, a stem on top, a shine.</summary>
+    /// <summary>A pumpkin: round and wide, a stem on top, a shine, and two deep ridges that start
+    /// at the stem, bow outward with the belly and come back in at the bottom (straight ones made
+    /// it look like a flat box).</summary>
     private static readonly string[] PumpkinArt =
     [
         "....g....",
         "..pqgqp..",
-        ".hpqpqpp.",
-        "pppqpqppp",
-        "pppqpqppp",
-        ".ppqpqpp.",
+        ".hqpppqp.",
+        "pqpppppqp",
+        "pqpppppqp",
+        ".pqpppqp.",
     ];
 
     private static readonly string[] FenceArt =
