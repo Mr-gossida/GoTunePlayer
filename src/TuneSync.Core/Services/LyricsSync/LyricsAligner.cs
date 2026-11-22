@@ -92,8 +92,70 @@ public static class LyricsAligner
             (times, confident, charTime) = Place(lines.Count, lyricChars, lineLength, heardChars, matched);
         }
 
+        ShiftAmongRepeats(lines, times, confident);
         return Fill(lines, lineLength, times, confident, charTime, duration.TotalSeconds, voice);
     }
+
+    /// <summary>A line sung twice in a row of which only one was heard: the alignment can give
+    /// what was heard to either (both cost the same), and it tends to take the second. Which one
+    /// it was is told by the pace: the heard one is moved to its unheard twin when that spreads
+    /// the singing between the heard lines around them more evenly over the lines. ("왜 날
+    /// 설레이게 해" twice at 3:12 and 3:19 of 백예린's "왜? 날": the first was heard but given to
+    /// the second, and the first was squeezed into the line before, 5 s early.)</summary>
+    public static void ShiftAmongRepeats(IReadOnlyList<string> lines, double?[] times, bool[] confident)
+    {
+        // the song's usual time per line, from neighboring heard lines: per line, not per letter
+        // (lines follow the bars of the music, and a held note makes a short line long - "나는
+        // 견딜 수 없어", 7 letters over 9 s, made the letters say nothing here), and on the song's
+        // own clock, not the singing's (the breath after a line is part of its bar: without it,
+        // both choices here looked equally even)
+        var paces = new List<double>();
+        for (var k = 0; k + 1 < lines.Count; k++)
+            if (confident[k] && confident[k + 1])
+                paces.Add(times[k + 1]!.Value - times[k]!.Value);
+        if (paces.Count < 3) return;
+        paces.Sort();
+        var pace = paces[paces.Count / 2];
+        if (pace <= 0) return;
+
+        var normalized = lines.Select(Normalize).ToList();
+        for (var i = 0; i < lines.Count; i++)
+        {
+            if (!confident[i]) continue;
+            foreach (var j in new[] { i - 1, i + 1 })
+            {
+                if (j < 0 || j >= lines.Count || confident[j] || !Similar(normalized[i], normalized[j])) continue;
+                int lo = Math.Min(i, j), hi = Math.Max(i, j);
+                var before = Enumerable.Range(0, lo).LastOrDefault(k => confident[k], -1);
+                var after = Enumerable.Range(hi + 1, lines.Count - hi - 1).FirstOrDefault(k => confident[k], -1);
+                if (before < 0 || after < 0) continue;
+                // an instrumental in the stretch (Beat It's guitar solo between two "Beat it"
+                // lines) makes the pace say nothing: that's no place to judge by it
+                if (times[after]!.Value - times[before]!.Value > (after - before) * pace * MaxStretch) continue;
+                var at = times[i]!.Value;
+                // how far the singing on either side of the heard line is from the usual pace
+                double Uneven(int heardLine)
+                {
+                    double Off(double span, int from, int to) =>
+                        span <= 0 ? double.MaxValue : Math.Abs(Math.Log(span / ((to - from) * pace)));
+                    return Off(at - times[before]!.Value, before, heardLine) + Off(times[after]!.Value - at, heardLine, after);
+                }
+                if (Uneven(j) + EvenerBy >= Uneven(i)) continue;
+                times[j] = times[i];
+                confident[j] = true;
+                confident[i] = false;
+                break;
+            }
+        }
+    }
+
+    /// <summary>How much more even (in summed log pace ratios) the pace must get to move a heard
+    /// line to its twin: a clear difference, not a coin toss.</summary>
+    private const double EvenerBy = 0.25;
+
+    /// <summary>A stretch taking more than this many times the usual time per line has an
+    /// instrumental in it.</summary>
+    private const double MaxStretch = 2;
 
     /// <summary>The estimates again, for lines put together from several passes: the heard lines
     /// may be others than in any one pass, so the lines between them are spread anew (a heard

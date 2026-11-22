@@ -272,6 +272,41 @@ public class LyricsAlignerTests
     }
 
     [Fact]
+    public void A_line_sung_twice_in_a_row_and_heard_once_goes_to_the_copy_the_pace_says()
+    {
+        // The times at the end of a real song as the alignment left them: the first of two equal
+        // lines was heard (at 192.5 s) but given to the second, and the first squeezed in at
+        // 187 s, in the middle of the held line before. Lines come every 6-7 s; only the first
+        // copy keeps that pace on both sides.
+        string[] lines =
+        [
+            "하나 둘 셋 넷 다섯", "여섯 일곱 여덟 아홉 열", "길게 부르는 줄",
+            "두 번 부르는 줄", "두 번 부르는 줄", "그 다음 줄", "끝에서 둘째 줄",
+        ];
+        double?[] times = [168.6, 176.4, 182.1, 187.1, 192.5, 205.7, 212.4];
+        bool[] confident = [true, true, true, false, true, true, true];
+
+        LyricsAligner.ShiftAmongRepeats(lines, times, confident);
+
+        Assert.Equal([true, true, true, true, false, true, true], confident);
+        Assert.Equal(192.5, times[3]);
+    }
+
+    [Fact]
+    public void A_heard_repeat_stays_where_the_pace_does_not_clearly_say_otherwise()
+    {
+        // Here the heard copy is the second one: lines come every 6.5 s as it is, and giving it
+        // to the first would make that uneven, so nothing moves.
+        string[] lines = ["첫 줄은 이렇게", "둘째 줄은 저렇게", "같은 줄 또 불러", "같은 줄 또 불러", "마지막 줄", "정말 마지막"];
+        double?[] times = [10, 16.5, 21, 29.5, 36, 42.5];
+        bool[] confident = [true, true, false, true, true, true];
+
+        LyricsAligner.ShiftAmongRepeats(lines, times, confident);
+
+        Assert.Equal([true, true, false, true, true, true], confident);
+    }
+
+    [Fact]
     public void Lines_not_heard_are_spread_over_the_singing_not_over_an_instrumental()
     {
         // Two lines heard, at 10 s and 40 s; the two between them weren't. The singer sings from
