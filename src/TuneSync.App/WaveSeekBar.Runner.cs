@@ -427,26 +427,29 @@ public sealed partial class WaveSeekBar
         ".mmmm.",
     ];
 
-    /// <summary>The fox, running at the duck: pointed dark-tipped ears, a white muzzle and chest,
+    /// <summary>The fox, running at the duck: tall pointed ears (orange to the tip: dark tips were
+    /// lost against the dark screen saver), an eye with a light
+    /// glint beside it, a white muzzle reaching out ahead of its head to a dark nose, a white chest,
     /// a long bushy tail with a white tip, and legs in a darker orange (dark legs were lost against
     /// the dark screen saver) galloping in four steps - stretched out, passing, gathered under it
     /// (where it's off the ground, mid-bound), passing.</summary>
     private static readonly string[] FoxBody =
     [
-        "..k..k.........",
-        "..oo.oo........",
-        ".ookoooo....ooo",
-        "kwwooooooooooow",
-        ".wwoooooooooww.",
-        "..wwoooooooo...",
+        "....o..o.........",
+        "...oo.oo.........",
+        "...oooooo....ooo.",
+        "..ookwoooo..ooooo",
+        "kwwwoooooooooooow",
+        ".wwoooooooooooww.",
+        "...wwooooooooo...",
     ];
 
     private static readonly string[][] FoxRun =
     [
-        [.. FoxBody, ".qq.......qq...", "q..q.....q..q.."],
-        [.. FoxBody, "..qq......qq...", "..q.q....q.q..."],
-        [.. FoxBody, "...qq....qq....", "....qq..qq....."],
-        [.. FoxBody, "..qq......qq...", "...qq.....qq..."],
+        [.. FoxBody, "..qq.......qq....", ".q..q.....q..q..."],
+        [.. FoxBody, "...qq......qq....", "...q.q.....q.q..."],
+        [.. FoxBody, "....qq...qq......", ".....qq.qq......."],
+        [.. FoxBody, "...qq......qq....", "....qq......qq..."],
     ];
 
     private static readonly string[] PumpkinArt =
