@@ -386,15 +386,19 @@ public sealed partial class WaveSeekBar
         return speed * FoxSkidSeconds - slow * FoxSkidSeconds / 2 + ObstacleSpeed * (passed - FoxSkidSeconds);
     }
 
-    /// <summary>The fox after the duck went over it: still running for the first moment of the
-    /// skid, then sitting turned round - looking up at the duck in the air, then just gazing off
-    /// to the right where it went, blinking now and then.</summary>
-    private string[] FoxAfter(double passed)
+    /// <summary>The fox after the duck went over it: still running for a blink of the skid, then
+    /// sitting turned round - looking up at the duck in the air, and dropping its gaze to the right
+    /// as the duck lands (<paramref name="land"/> seconds after it went over), blinking now and
+    /// then. (It used to look up for a fixed 0.65 s: the duck was down at about 0.33 s, so the
+    /// head turned a beat late.)</summary>
+    private string[] FoxAfter(double passed, double land)
     {
-        if (passed < 0.12) return FoxRun[0];
-        if (passed < 0.65) return FoxSitLookUp;
+        if (passed < 0.05) return FoxRun[0];
+        // the head comes down just before the feet touch, following the duck's fall
+        var gaze = Math.Max(0.15, land - 0.04);
+        if (passed < gaze) return FoxSitLookUp;
         // a blink of about a tenth of a second every 2.6 seconds
-        var blink = (passed - 0.65) % 2.6 > 2.5;
+        var blink = (passed - gaze) % 2.6 > 2.5;
         return blink ? FoxSitBlink : FoxSitGaze;
     }
 
@@ -514,7 +518,8 @@ public sealed partial class WaveSeekBar
             var art = SpriteOf(kind, frame);
             if (kind == Hazard.Fox && o.Vy > 0)
             {
-                art = FoxAfter(o.Vy);
+                // the jump over it is symmetric: the duck lands a rise after the top, which was over the fox
+                art = FoxAfter(o.Vy, RiseFor(Hazard.Fox, o.Vx, o.Size));
                 frame = 0; // on the ground
             }
             var fade = Math.Clamp((o.X - Left + 30) / 40, 0, 1);
@@ -839,50 +844,63 @@ public sealed partial class WaveSeekBar
     ];
 
     /// <summary>The eagle, flying at the duck: a white head with a dark eye and a hooked yellow beak,
-    /// a brown body narrowing under the wing, a fanned white tail, and a big pale wing beating in four
-    /// steps - raised high, spread level with feather tips, lowered, level. (It was a small dark-brown
-    /// shape that didn't read as a bird, and then a level wing lying on a two-row body: a brick.)</summary>
+    /// a brown body that tapers to a white tail, yellow talons tucked under it, and a broad wing with
+    /// fingered tips beating in four steps - raised high, spread, lowered, spread. Drawn about half
+    /// again as big as it was (16 x 8 art pixels read as a brown smudge); the body stays two rows above
+    /// the picture's bottom, so it still flies over the ducked duck and into the standing one.</summary>
     private static readonly string[][] EagleFlap =
     [
         [
-            "..........ff....",
-            "........ffe.....",
-            "......ffee......",
-            ".....feee.......",
-            "yvkveeeeeeevvv..",
-            "..vv.eeeee.vv...",
-            "................",
-            "................",
+            "...............f.f.f..",
+            ".............fffffff..",
+            "...........ffeeeeeef..",
+            "..........feeeeeeef...",
+            ".........feeeeeeef....",
+            "........feeeeeeee.....",
+            "...vvvv..eeeeeee...vv.",
+            "yyvkvvvveeeeeeeeeevvvv",
+            ".yy.vvveeeeeeeeeevvv..",
+            "........yy..yy........",
+            "......................",
         ],
         [
-            "................",
-            "................",
-            "................",
-            ".....ffffffff.f.",
-            "yvkveeeeeeevvv..",
-            "..vv.eeeee.vv...",
-            "................",
-            "................",
+            "......................",
+            "......................",
+            "......................",
+            "..............f.f.f.f.",
+            "..........ffffffffff..",
+            "........feeeeeeeeef...",
+            "...vvvv..eeeeeee...vv.",
+            "yyvkvvvveeeeeeeeeevvvv",
+            ".yy.vvveeeeeeeeeevvv..",
+            "........yy..yy........",
+            "......................",
         ],
         [
-            "................",
-            "................",
-            "................",
-            "................",
-            "yvkveeeeeeevvv..",
-            "..vv.eeeee.vv...",
-            ".....feee.......",
-            "......ffee......",
+            "......................",
+            "......................",
+            "......................",
+            "......................",
+            "......................",
+            "......................",
+            "...vvvv..eeeeeee...vv.",
+            "yyvkvvvveeeeeeeeeevvvv",
+            ".yy.vvveeeeeeeeeevvv..",
+            "........yyfeeeeeef....",
+            "..........ffeeeef.f.f.",
         ],
         [
-            "................",
-            "................",
-            "................",
-            ".....ffffffff.f.",
-            "yvkveeeeeeevvv..",
-            "..vv.eeeee.vv...",
-            "................",
-            "................",
+            "......................",
+            "......................",
+            "......................",
+            "..............f.f.f.f.",
+            "..........ffffffffff..",
+            "........feeeeeeeeef...",
+            "...vvvv..eeeeeee...vv.",
+            "yyvkvvvveeeeeeeeeevvvv",
+            ".yy.vvveeeeeeeeeevvv..",
+            "........yy..yy........",
+            "......................",
         ],
     ];
 }
