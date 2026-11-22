@@ -225,14 +225,14 @@ public class LrcLibLyricsServiceTests
         server.SearchBy["?q=백예린 물고기"] =
         [
             Track("백예린", "Pisces", 227, "물고기", lyrics: "난 땅에서도 숨을 쉴 수 있는"),
-            Track("백예린", "The loved one", 234, "물고기", lyrics: "사랑받고 컸어요"),
+            Track("백예린", "The loved one", 234, "물고기", lyrics: "우리 집 막내"),
             Track("백예린", "It was me", 201, "물고기", lyrics: "그게 나였어"),
         ];
         using var service = new LrcLibLyricsService(server);
 
         var result = await service.FindAsync(Maknae);
 
-        Assert.Equal("[00:01.00]사랑받고 컸어요", result?.BestLyrics);
+        Assert.Equal("[00:01.00]우리 집 막내", result?.BestLyrics);
         Assert.Contains(server.Requests, r => r.EndsWith("?track_name=막내")); // tried the title alone first
     }
 
@@ -250,19 +250,34 @@ public class LrcLibLyricsServiceTests
     public async Task By_album_needs_the_length_and_just_one_song_of_the_album_fitting_it()
     {
         var server = new FakeLrcLib();
-        server.SearchBy["?q=백예린 물고기"] = [Track("백예린", "The loved one", 238, "물고기")];
+        server.SearchBy["?q=백예린 물고기"] = [Track("백예린", "The loved one", 238, "물고기", lyrics: "막내")];
         using var service = new LrcLibLyricsService(server);
         Assert.Null(await service.FindAsync(Maknae)); // 4 s off
 
         server.SearchBy["?q=백예린 물고기"] =
         [
             Track("백예린", "The loved one", 234, "물고기", lyrics: "막내"),
-            Track("백예린", "Pisces", 235, "물고기", lyrics: "물고기"),
+            Track("백예린", "Pisces", 235, "물고기", lyrics: "막내 물고기"),
         ];
         Assert.Null(await service.FindAsync(Maknae)); // which one is it?
 
-        server.SearchBy["?q=백예린 물고기"] = [Track("백예린", "The loved one", 234, "Love, Yerin")];
+        server.SearchBy["?q=백예린 물고기"] = [Track("백예린", "The loved one", 234, "Love, Yerin", lyrics: "막내")];
         Assert.Null(await service.FindAsync(Maknae)); // another album
+    }
+
+    [Fact]
+    public async Task By_album_needs_the_lyrics_to_sing_our_title()
+    {
+        // what LRCLIB really has: no "왜? 날", but "Antifreeze" of the same album, just as long
+        var server = new FakeLrcLib();
+        server.SearchBy["?q=백예린 선물"] = [Track("백예린", "Antifreeze", 246, "선물", lyrics: "우린 오래전부터")];
+        using var service = new LrcLibLyricsService(server);
+        var whyMe = new LyricsQuery("백예린", "왜? 날", "선물", TimeSpan.FromSeconds(246.5));
+        Assert.Null(await service.FindAsync(whyMe));
+
+        // the title sung with other spacing and punctuation still counts
+        server.SearchBy["?q=백예린 선물"] = [Track("백예린", "Why me", 246, "선물", lyrics: "그런데 왜 날")];
+        Assert.NotNull(await service.FindAsync(whyMe));
     }
 
     [Fact]

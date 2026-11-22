@@ -200,10 +200,13 @@ public sealed class LrcLibLyricsService : ILyricsService, IDisposable
         // Another title altogether: the song under its name in the other language ("막내" is
         // listed as "The loved one") - taken only when one title is Hangul and the other Latin
         // and artist, album and length (within 2 s) all match. Two different titles in the same
-        // script are two songs, however alike their lengths ("아이처럼" / "그건 말야").
+        // script are two songs, however alike their lengths ("아이처럼" / "그건 말야"). The lyrics
+        // must also sing our title: "The loved one" sings "막내", but "Antifreeze" - another song
+        // of the album "선물", just as long as "왜? 날", which LRCLIB doesn't have - never says "왜 날".
         else if (artist > 0 && diff <= 2 && SameAlbum(query.Album, candidate.AlbumName)
                  && IsTranslation(query.Title, candidate.TrackName)
-                 && !VersionWords.Any(w => Words(candidate.TrackName).Contains(w))) byAlbum = true;
+                 && !VersionWords.Any(w => Words(candidate.TrackName).Contains(w))
+                 && SingsTitle(candidate, query.Title)) byAlbum = true;
         else return null;
 
         // A live/remix/… version we weren't asked for.
@@ -222,6 +225,19 @@ public sealed class LrcLibLyricsService : ILyricsService, IDisposable
             !s.Any(IsHangul) && !s.Any(IsKana) && s.Any(c => c is >= 'A' and <= 'Z' or >= 'a' and <= 'z');
         return ours.Any(IsHangul) && IsLatinOnly(theirs) || theirs.Any(IsHangul) && IsLatinOnly(ours);
     }
+
+    /// <summary>Whether the lyrics hold the title, spacing and punctuation aside ("왜? 날" is
+    /// found in "왜 날 ..."). Timestamps are dropped first so their digits don't split a line.</summary>
+    private static bool SingsTitle(LrcLibTrack track, string title)
+    {
+        var wanted = Normalize(StripBrackets(title));
+        if (wanted.Length == 0) return false;
+        var lyrics = track.PlainLyrics is { Length: > 0 } plain ? plain
+            : LrcTimestamp.Replace(track.SyncedLyrics ?? "", " ");
+        return Normalize(lyrics).Contains(wanted);
+    }
+
+    private static readonly System.Text.RegularExpressions.Regex LrcTimestamp = new(@"\[[^\]]*\]");
 
     private static bool SameAlbum(string? ours, string? theirs) =>
         Normalize(ours ?? "") is { Length: > 0 } album && Normalize(theirs ?? "") == album;
