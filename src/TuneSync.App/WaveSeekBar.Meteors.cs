@@ -47,7 +47,8 @@ public sealed partial class WaveSeekBar
                     var reach = 0.08 + 0.2 * speed;
                     var tail = new Point(head.X - m.Vx * reach * 0.5, head.Y - m.Vy * reach * 0.5);
                     DrawStreak(dc, tail, head, Color.FromArgb((byte)(200 * alpha), tone.R, tone.G, tone.B), m.Size, roundHead: false);
-                    var core = Mix(tone, Colors.White, 0.75);
+                    // a bright head that still keeps a hint of the star's color
+                    var core = Mix(tone, Colors.White, 0.6);
                     dc.DrawEllipse(Solid(Color.FromArgb((byte)(255 * alpha), core.R, core.G, core.B)), null, head, m.Size * 0.6, m.Size * 0.6);
                 }
             }
@@ -69,10 +70,35 @@ public sealed partial class WaveSeekBar
         }
     }
 
-    /// <summary>A shooting star's color: the cover's color pulled a little round the wheel by
-    /// <paramref name="hue"/> and made pale, as starlight is (in steps, so the brushes stay few).</summary>
-    private static Color MeteorTone(Color accent, double hue) =>
-        Mix(Shift(accent, Math.Round((hue - 0.5) * 4) * 15, 1.25), Colors.White, 0.4);
+    /// <summary>The soft colors shooting stars come in, round the whole wheel: rose, peach, gold,
+    /// mint, aqua, sky, periwinkle and lilac. (Turning the cover's color round the wheel gave
+    /// nearly the same color every time, and none at all for a grey cover.)</summary>
+    private static readonly Color[] StarColors =
+    [
+        Color.FromRgb(0xFF, 0xA6, 0xC9), Color.FromRgb(0xFF, 0xBE, 0x9C), Color.FromRgb(0xFF, 0xE2, 0x94),
+        Color.FromRgb(0xAE, 0xF0, 0xC8), Color.FromRgb(0x96, 0xE6, 0xEA), Color.FromRgb(0xA2, 0xC8, 0xFF),
+        Color.FromRgb(0xB8, 0xAE, 0xFF), Color.FromRgb(0xE2, 0xAE, 0xFF),
+    ];
+
+    /// <summary>Which of <see cref="StarColors"/> the last shooting star took.</summary>
+    private int _lastStarColor;
+
+    /// <summary>A shooting star's color: one of <see cref="StarColors"/> (<paramref name="hue"/>
+    /// picks it), leaning a little toward the cover's color so they sit with the rest of the bar,
+    /// and kept pale, as starlight is (a few colors, so the brushes stay few).</summary>
+    private static Color MeteorTone(Color accent, double hue)
+    {
+        var star = StarColors[(int)(hue * StarColors.Length) % StarColors.Length];
+        return Mix(Mix(star, accent, 0.15), Colors.White, 0.2);
+    }
+
+    /// <summary>A color for the next shooting star, never the last one's or its neighbor on the
+    /// wheel, so two in a row always look different.</summary>
+    private double NextStarHue()
+    {
+        _lastStarColor = (_lastStarColor + 2 + Random.Shared.Next(StarColors.Length - 3)) % StarColors.Length;
+        return (_lastStarColor + 0.5) / StarColors.Length;
+    }
 
     private void UpdateMeteors(double dt, bool beat)
     {
@@ -114,7 +140,7 @@ public sealed partial class WaveSeekBar
                 Life = 0.75 + Random.Shared.NextDouble() * 0.3 - 0.15 * Math.Min(1, energy),
                 Age = -n * 0.18, // a strong beat's two go one after another
                 Size = (0.8 + Random.Shared.NextDouble() * 0.35) * EffectScale,
-                Hue = Random.Shared.NextDouble(),
+                Hue = NextStarHue(),
             });
         }
     }
