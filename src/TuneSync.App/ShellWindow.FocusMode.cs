@@ -16,7 +16,7 @@ public partial class ShellWindow
 {
     // --- 음악 집중 모드 (click the big cover, or F11) ---
     // The screen saver's picture, inside the player window and answering to the mouse: drag the
-    // seek bar, click a lyric line, and controls that show while the mouse moves.
+    // seek bar, and controls that show while the mouse moves.
 
     private NowPlayingStage? _focusStage;
     private System.Windows.Threading.DispatcherTimer? _focusIdle;

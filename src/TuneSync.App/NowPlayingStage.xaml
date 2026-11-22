@@ -132,8 +132,7 @@
                     <ItemsControl x:Name="LyricsItems" ItemsSource="{Binding LyricsLines}">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
-                                <Grid x:Name="Line" Margin="0,5" RenderTransformOrigin="0.5,0.5" Opacity="0.55" Background="Transparent"
-                                      MouseLeftButtonUp="LyricLine_Click">
+                                <Grid x:Name="Line" Margin="0,5" RenderTransformOrigin="0.5,0.5" Opacity="0.55">
                                     <Grid.RenderTransform>
                                         <ScaleTransform ScaleX="0.62" ScaleY="0.62"/>
                                     </Grid.RenderTransform>

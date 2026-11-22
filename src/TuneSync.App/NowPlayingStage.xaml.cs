@@ -56,7 +56,6 @@ public partial class NowPlayingStage : UserControl
             SeekPanel.IsHitTestVisible = true;
             StageSeekBar.SeekStarted += (_, _) => _playback.BeginSeek();
             StageSeekBar.SeekCompleted += (_, seconds) => _playback.EndSeek(seconds);
-            LyricsViewer.IsHitTestVisible = true;
             // In a window the taskbar clock is right there; and the song keeps clear of the
             // controls that show along the bottom.
             ClockPanel.Visibility = Visibility.Collapsed;
@@ -142,14 +141,6 @@ public partial class NowPlayingStage : UserControl
                 ApplyLook(fade: true);
                 break;
         }
-    }
-
-    /// <summary>Focus mode: a click on a lyric line plays from it.</summary>
-    private void LyricLine_Click(object sender, MouseButtonEventArgs e)
-    {
-        if (!_interactive || sender is not FrameworkElement { DataContext: LyricsLineViewModel line }) return;
-        _playback.SeekTo(line.Time);
-        e.Handled = true;
     }
 
     /// <summary>The song's column shrinks to fit a window too short for it (focus mode in a small
