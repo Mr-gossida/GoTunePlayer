@@ -48,12 +48,13 @@ public partial class LyricsSyncWindow : Wpf.Ui.Controls.FluentWindow
     }
 
     /// <summary>Opens the editor for <paramref name="file"/>'s lyrics: plain ones to sync, or
-    /// synced ones to fix (their times loaded). True when synced lyrics were saved.</summary>
-    public static bool Run(Window? owner, LibraryFileViewModel file, string lyrics)
+    /// synced ones to fix (their times loaded). Once synced lyrics were saved (to the file), what
+    /// the save replaced; else null.</summary>
+    public static TuneSync.Core.Services.TagEditUndo? Run(Window? owner, LibraryFileViewModel file, string lyrics)
     {
         var window = Create(file, lyrics);
         window.Owner = owner;
-        return window.ShowDialog() == true;
+        return window.ShowDialog() == true ? window._viewModel.SavedUndo : null;
     }
 
     internal static LyricsSyncWindow Create(LibraryFileViewModel file, string lyrics)

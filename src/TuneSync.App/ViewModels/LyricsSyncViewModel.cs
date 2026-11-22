@@ -497,6 +497,9 @@ public sealed partial class LyricsSyncViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private bool _isSaving;
 
+    /// <summary>What the save replaced, so the tag editor that opened this one can offer to undo it.</summary>
+    public TagEditUndo? SavedUndo { get; private set; }
+
     [RelayCommand]
     private async Task SaveAsync()
     {
@@ -516,7 +519,7 @@ public sealed partial class LyricsSyncViewModel : ObservableObject, IDisposable
         var resume = await _playback.ReleaseIfPlayingAsync([File.Path]);
         try
         {
-            await Task.Run(() => TagEditService.Write(File.Model, null, null, lrc));
+            SavedUndo = await Task.Run(() => TagEditService.Write(File.Model, null, null, lrc));
         }
         catch (Exception ex)
         {

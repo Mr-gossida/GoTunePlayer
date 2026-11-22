@@ -791,9 +791,18 @@ public sealed partial class TagEditorViewModel : ObservableObject
         if (!CanMakeSynced && !CanEditSynced) return;
         var file = _selection[0];
         var owner = Application.Current.Windows.OfType<Window>().FirstOrDefault(w => w.IsActive);
-        if (!LyricsSyncWindow.Run(owner, file, LyricsText)) return;
+        if (LyricsSyncWindow.Run(owner, file, LyricsText) is not { } undo) return;
         file.SetPendingLyrics(null);
         Reload();
+
+        // The sync editor's 저장 already wrote the file. Say so in this editor's save bar (with its
+        // undo), or its own 저장 button reads as a second step still to do.
+        _lastSave = [undo];
+        UndoText = "싱크 가사를 저장했습니다";
+        CanUndo = true;
+        _undoTimer.Stop();
+        _undoTimer.Start();
+        Saved?.Invoke(this, EventArgs.Empty);
     }
 
     [RelayCommand]
