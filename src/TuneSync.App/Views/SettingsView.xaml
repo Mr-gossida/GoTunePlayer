@@ -159,6 +159,12 @@
 
         <Style x:Key="Card" TargetType="ui:CardControl" BasedOn="{StaticResource {x:Type ui:CardControl}}">
             <Setter Property="Margin" Value="0,0,0,4"/>
+            <!-- a card that can't be used right now (e.g. exclusive-only settings in shared mode) must look it -->
+            <Style.Triggers>
+                <Trigger Property="IsEnabled" Value="False">
+                    <Setter Property="Opacity" Value="0.45"/>
+                </Trigger>
+            </Style.Triggers>
         </Style>
         <!-- the category list: a bar in the player's accent marks the open one -->
         <Style x:Key="NavItem" TargetType="ListBoxItem">
