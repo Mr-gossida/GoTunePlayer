@@ -55,7 +55,7 @@ public sealed partial class OutputViewModel : ObservableObject
     private SpeakerLayout _layout;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(CanUpsample), nameof(UpsampleNote))]
+    [NotifyPropertyChangedFor(nameof(CanUpsample), nameof(UpsampleNote), nameof(CanRemaster))]
     private bool _exclusive;
 
     public IReadOnlyList<Choice<UpsampleMode>> UpsampleModes { get; } =
@@ -129,11 +129,15 @@ public sealed partial class OutputViewModel : ObservableObject
 
     /// <summary>The file's sound as it is (in exclusive mode): no processing, the song's own rate.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(CanChooseFormat), nameof(CanUpsample), nameof(UpsampleNote))]
+    [NotifyPropertyChangedFor(nameof(CanChooseFormat), nameof(CanUpsample), nameof(UpsampleNote), nameof(CanRemaster))]
     private bool _bitPerfect;
 
     /// <summary>Rate and bits are GoTune's to choose only when the sound isn't sent bit-perfect.</summary>
     public bool CanChooseFormat => !BitPerfect;
+
+    /// <summary>DoP (DSD playback as-is, DSD remastering) goes straight to the device, so it exists only in exclusive mode;
+    /// remastering also needs a rate and bits GoTune chooses.</summary>
+    public bool CanRemaster => Exclusive && CanChooseFormat;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(UpsampleNote))]

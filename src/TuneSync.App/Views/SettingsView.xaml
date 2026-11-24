@@ -626,13 +626,14 @@
                         <ComboBox Width="260" ItemsSource="{Binding Filters}" DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding Filter}"/>
                     </ui:CardControl>
                     <ui:CardControl Style="{StaticResource Card}" DataContext="{Binding Output}" Icon="{ui:SymbolIcon MusicNote224}"
+                                    IsEnabled="{Binding Exclusive}"
                                     Tag="DSD DSF DFF DoP SACD 원음 DSD64 DSD128 DSD256 재생"
                                     ToolTip="PCM으로 변환: 어떤 장치에서도 재생되고 이퀄라이저·볼륨이 적용됩니다(176.4kHz로 변환). DoP로 원음 그대로: DSD를 변환하지 않고 DAC에 보냅니다. 독점 모드 + 하드웨어 볼륨이 켜져 있고 장치에 하드웨어 볼륨이 있을 때만 DoP로 보내고, 아니면 PCM으로 재생합니다.">
                         <ui:CardControl.Header>
                             <StackPanel>
                                 <ui:TextBlock Text="DSD 재생" FontTypography="Body"/>
                                 <ui:TextBlock Text="DSF·DFF 파일을 PCM으로 바꾸거나, DoP로 DAC에 그대로 보냅니다" Style="{StaticResource Desc}"/>
-                                <ui:TextBlock Text="DoP는 독점 모드와 하드웨어 볼륨이 있을 때만 · 아니면 PCM으로 재생" Style="{StaticResource Desc}" Margin="0,2,0,0"
+                                <ui:TextBlock Text="DoP는 독점 모드와 하드웨어 볼륨이 있을 때만 · 아니면 PCM으로 재생 (독점 모드가 꺼져 있으면 항상 PCM)" Style="{StaticResource Desc}" Margin="0,2,0,0"
                                               Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
                             </StackPanel>
                         </ui:CardControl.Header>
@@ -640,7 +641,7 @@
                                  AutomationProperties.Name="DSD 재생"/>
                     </ui:CardControl>
                     <ui:CardControl Style="{StaticResource Card}" DataContext="{Binding Output}" Icon="{ui:SymbolIcon Wand24}"
-                                    IsEnabled="{Binding CanChooseFormat}"
+                                    IsEnabled="{Binding CanRemaster}"
                                     Tag="DSD 리마스터링 업스케일링 PCM DSD 변환 DoP 시그마 델타"
                                     ToolTip="독점 모드에서 PCM 곡을 5차 시그마-델타 변조로 DSD로 바꿔 DoP로 보냅니다. 볼륨과 이퀄라이저는 DSD로 바꾸기 전에 적용됩니다. DAC가 DoP를 지원해야 하며, 장치가 그 형식을 받지 않으면 평소처럼 PCM으로 재생합니다.">
                         <ui:CardControl.Header>
