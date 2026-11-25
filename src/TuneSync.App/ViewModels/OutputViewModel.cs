@@ -55,7 +55,8 @@ public sealed partial class OutputViewModel : ObservableObject
     private SpeakerLayout _layout;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(CanUpsample), nameof(UpsampleNote), nameof(CanRemaster))]
+    [NotifyPropertyChangedFor(nameof(CanUpsample), nameof(UpsampleNote), nameof(CanRemaster), nameof(RemasterNote),
+        nameof(RemasterActive), nameof(CanChooseFormat), nameof(CanChooseFilter), nameof(FilterNote))]
     private bool _exclusive;
 
     public IReadOnlyList<Choice<UpsampleMode>> UpsampleModes { get; } =
@@ -74,7 +75,7 @@ public sealed partial class OutputViewModel : ObservableObject
     ];
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(UpsampleNote), nameof(UpsampleExample))]
+    [NotifyPropertyChangedFor(nameof(UpsampleNote), nameof(UpsampleExample), nameof(CanChooseFilter), nameof(FilterNote))]
     private UpsampleMode _upsampling;
 
     /// <summary>What the chosen upsampling makes of the usual rates, under the choices.</summary>
@@ -109,16 +110,35 @@ public sealed partial class OutputViewModel : ObservableObject
     private DsdOutput _dsdOutput;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(RemasterActive), nameof(CanChooseFormat), nameof(CanUpsample), nameof(UpsampleNote))]
     private DsdRemaster _remaster;
 
     private bool _dsdConfirmed;
 
-    /// <summary>Upsampling has nothing to do when the sound goes out bit-perfect.</summary>
-    public bool CanUpsample => !(Exclusive && BitPerfect);
+    /// <summary>DSD remastering is on and will be used (it picks its own rate, ignoring the rate, bits and upsampling).</summary>
+    public bool RemasterActive => Exclusive && !BitPerfect && Remaster != DsdRemaster.Off;
+
+    /// <summary>Upsampling has nothing to do when the sound goes out bit-perfect, at a rate fixed by hand, or as DSD.</summary>
+    public bool CanUpsample => !(Exclusive && (BitPerfect || SampleRate > 0 || RemasterActive));
+
+    /// <summary>The conversion filter only works where GoTune converts the rate: never bit-perfect,
+    /// and in shared mode only while upsampling is on (else Windows alone converts).</summary>
+    public bool CanChooseFilter => Exclusive ? !BitPerfect : Upsampling != UpsampleMode.Off;
+
+    public string FilterNote =>
+        Exclusive && BitPerfect ? "비트퍼펙트가 켜져 있어 샘플 속도를 바꾸지 않으므로 쓰지 않습니다"
+        : !Exclusive && Upsampling == UpsampleMode.Off ? "공유 모드에서 업샘플링이 꺼져 있으면 쓰지 않습니다"
+        : "GoTune이 샘플 속도를 바꿀 때마다 쓰는 필터 · 대역 밖 잡음은 약 140dB 줄입니다";
+
+    public string RemasterNote =>
+        !Exclusive ? "독점 모드를 켜야 쓸 수 있습니다"
+        : BitPerfect ? "비트퍼펙트가 켜져 있어 쓸 수 없습니다"
+        : "독점 모드 전용 · DAC가 DoP를 지원해야 합니다";
 
     /// <summary>What upsampling does with the settings as they are now.</summary>
     public string UpsampleNote =>
         Exclusive && BitPerfect ? "비트퍼펙트가 켜져 있어 업샘플링하지 않습니다"
+        : RemasterActive ? "DSD 리마스터링이 켜져 있어 DSD 속도로 보냅니다"
         : Exclusive && SampleRate > 0 ? $"독점 모드의 샘플 속도를 {SampleRate / 1000.0:0.#}kHz로 정해 두어 그 속도로 보냅니다"
         : Upsampling == UpsampleMode.Off ? "곡의 샘플 속도 그대로 보냅니다"
         : Exclusive ? "곡 속도의 정수배 중 장치가 받는 속도로 보냅니다"
@@ -129,18 +149,20 @@ public sealed partial class OutputViewModel : ObservableObject
 
     /// <summary>The file's sound as it is (in exclusive mode): no processing, the song's own rate.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(CanChooseFormat), nameof(CanUpsample), nameof(UpsampleNote), nameof(CanRemaster))]
+    [NotifyPropertyChangedFor(nameof(CanChooseFormat), nameof(CanUpsample), nameof(UpsampleNote), nameof(CanRemaster), nameof(RemasterNote),
+        nameof(RemasterActive), nameof(CanChooseFilter), nameof(FilterNote))]
     private bool _bitPerfect;
 
-    /// <summary>Rate and bits are GoTune's to choose only when the sound isn't sent bit-perfect.</summary>
-    public bool CanChooseFormat => !BitPerfect;
+    /// <summary>Rate and bits are GoTune's to choose only when the sound isn't sent bit-perfect
+    /// and isn't remastered to DSD (which sets its own).</summary>
+    public bool CanChooseFormat => !BitPerfect && !RemasterActive;
 
     /// <summary>DoP (DSD playback as-is, DSD remastering) goes straight to the device, so it exists only in exclusive mode;
-    /// remastering also needs a rate and bits GoTune chooses.</summary>
-    public bool CanRemaster => Exclusive && CanChooseFormat;
+    /// remastering also needs the sound processed, which bit-perfect isn't.</summary>
+    public bool CanRemaster => Exclusive && !BitPerfect;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(UpsampleNote))]
+    [NotifyPropertyChangedFor(nameof(UpsampleNote), nameof(CanUpsample))]
     private int _sampleRate;
 
     [ObservableProperty]

@@ -157,6 +157,21 @@
             </Setter>
         </Style>
 
+        <!-- a group of settings inside a card that can't be used right now looks it (same fade as a disabled card).
+             Only the outermost disabled group fades: a disabled parent also disables its children, and
+             fading both would multiply to a much fainter 0.2 than everything else that's unavailable. -->
+        <Style x:Key="Dimmable" TargetType="Panel">
+            <Style.Triggers>
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding IsEnabled, RelativeSource={RelativeSource Self}}" Value="False"/>
+                        <Condition Binding="{Binding Parent.IsEnabled, RelativeSource={RelativeSource Self}}" Value="True"/>
+                    </MultiDataTrigger.Conditions>
+                    <Setter Property="Opacity" Value="0.45"/>
+                </MultiDataTrigger>
+            </Style.Triggers>
+        </Style>
+
         <Style x:Key="Card" TargetType="ui:CardControl" BasedOn="{StaticResource {x:Type ui:CardControl}}">
             <Setter Property="Margin" Value="0,0,0,4"/>
             <!-- a card that can't be used right now (e.g. exclusive-only settings in shared mode) must look it -->
@@ -536,7 +551,7 @@
                                                  IsChecked="{Binding Exclusive}" OnContent="켬" OffContent="끔"/>
                             </Grid>
                         </ui:CardExpander.Header>
-                        <StackPanel Margin="40,0,0,0" IsEnabled="{Binding Exclusive}">
+                        <StackPanel Margin="40,0,0,0" IsEnabled="{Binding Exclusive}" Style="{StaticResource Dimmable}">
                             <Grid Margin="0,4,0,10">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
@@ -565,7 +580,7 @@
                                 <ui:ToggleSwitch Grid.Column="1" VerticalAlignment="Center" IsChecked="{Binding HardwareVolume}" OnContent="켬" OffContent="끔"
                                                  AutomationProperties.Name="하드웨어 볼륨"/>
                             </Grid>
-                            <Grid Margin="0,4" IsEnabled="{Binding CanChooseFormat}">
+                            <Grid Margin="0,4" IsEnabled="{Binding CanChooseFormat}" Style="{StaticResource Dimmable}">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto"/>
@@ -577,7 +592,7 @@
                                 <ComboBox Grid.Column="1" Width="230" ItemsSource="{Binding SampleRates}" DisplayMemberPath="Label"
                                           SelectedValuePath="Value" SelectedValue="{Binding SampleRate}"/>
                             </Grid>
-                            <Grid Margin="0,8,0,4" IsEnabled="{Binding CanChooseFormat}">
+                            <Grid Margin="0,8,0,4" IsEnabled="{Binding CanChooseFormat}" Style="{StaticResource Dimmable}">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto"/>
@@ -592,6 +607,9 @@
                             <ui:TextBlock Margin="0,6,0,0" Style="{StaticResource Desc}"
                                           Text="비트퍼펙트를 켜면 곡의 샘플 속도로, 원본을 담을 수 있는 가장 알맞은 비트로 자동으로 보냅니다."
                                           Visibility="{Binding BitPerfect, Converter={StaticResource BoolToVisibility}}"/>
+                            <ui:TextBlock Margin="0,6,0,0" Style="{StaticResource Desc}" TextWrapping="Wrap"
+                                          Text="DSD 리마스터링이 켜져 있어 샘플 속도와 비트는 DSD(DoP) 형식으로 정해집니다."
+                                          Visibility="{Binding RemasterActive, Converter={StaticResource BoolToVisibility}}"/>
                             <ui:TextBlock Margin="0,6,0,0" Style="{StaticResource Desc}" Text="장치에 지원되는 형식을 묻는 중…"
                                           Visibility="{Binding IsProbing, Converter={StaticResource BoolToVisibility}}"/>
                             <ui:TextBlock Margin="0,6,0,0" Style="{StaticResource Desc}" Foreground="{DynamicResource SystemFillColorCautionBrush}"
@@ -621,12 +639,13 @@
                         </StackPanel>
                     </ui:CardControl>
                     <ui:CardControl Style="{StaticResource Card}" DataContext="{Binding Output}" Icon="{ui:SymbolIcon Filter24}"
+                                    IsEnabled="{Binding CanChooseFilter}"
                                     Tag="변환 필터 업샘플링 선형 위상 최소 위상 프리링잉 아포다이징 디지털 필터"
                                     ToolTip="선형 위상: 원음의 대역 끝까지 평탄하고 모든 주파수가 같은 시간만큼 늦습니다(교과서적인 정확한 복원). 최소 위상: 같은 주파수 특성에, 날카로운 소리 앞에 울림(프리링잉)이 없습니다. 부드러운 필터: 조금 일찍(CD 기준 약 17.6kHz부터) 완만하게 줄여 울림이 가장 적습니다.">
                         <ui:CardControl.Header>
                             <StackPanel>
                                 <ui:TextBlock Text="변환 필터" FontTypography="Body"/>
-                                <ui:TextBlock Text="GoTune이 샘플 속도를 바꿀 때마다 쓰는 필터 · 대역 밖 잡음은 약 140dB 줄입니다" Style="{StaticResource Desc}"/>
+                                <ui:TextBlock Text="{Binding FilterNote}" Style="{StaticResource Desc}" TextWrapping="Wrap"/>
                             </StackPanel>
                         </ui:CardControl.Header>
                         <ComboBox Width="260" ItemsSource="{Binding Filters}" DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding Filter}"/>
@@ -654,7 +673,7 @@
                             <StackPanel>
                                 <ui:TextBlock Text="DSD 리마스터링" FontTypography="Body"/>
                                 <ui:TextBlock Text="PCM 곡을 DSD로 바꿔 DoP로 보냅니다" Style="{StaticResource Desc}"/>
-                                <ui:TextBlock Text="독점 모드 전용 · DAC가 DoP를 지원해야 합니다" Style="{StaticResource Desc}" Margin="0,2,0,0"
+                                <ui:TextBlock Text="{Binding RemasterNote}" Style="{StaticResource Desc}" Margin="0,2,0,0" TextWrapping="Wrap"
                                               Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
                                 <ui:TextBlock Style="{StaticResource Desc}" Margin="0,4,0,0" Foreground="{DynamicResource SystemFillColorCautionBrush}" TextWrapping="Wrap"
                                               Text="⚠ DoP를 지원하지 않는 DAC에서는 큰 잡음이 납니다. 처음엔 이어폰을 빼고 볼륨을 낮춘 채 확인하세요."/>
