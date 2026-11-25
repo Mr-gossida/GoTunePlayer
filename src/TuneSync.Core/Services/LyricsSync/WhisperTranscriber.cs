@@ -22,6 +22,7 @@ public sealed class WhisperTranscriber(string modelPath, LyricsSyncOptions optio
     private const int WindowSeconds = 30;
 
     private WhisperFactory? _factory;
+    private bool _factoryOnGpu; // read for the graphics card (whisper.cpp may still have found none)
     private volatile bool _disposed;
 
     public WhisperTranscriber(string modelPath) : this(modelPath, LyricsSyncOptions.Default) { }
@@ -36,6 +37,7 @@ public sealed class WhisperTranscriber(string modelPath, LyricsSyncOptions optio
     /// <summary>Forgets where the last listening ran, so a new one isn't shown with the old device.</summary>
     public static void ForgetDevice() => _deviceKnown = false;
     private static string? _gpuName;
+    private static volatile bool _gpuIntegrated;
     private static int _logging;
 
     private static void WatchLog()
@@ -49,7 +51,9 @@ public sealed class WhisperTranscriber(string modelPath, LyricsSyncOptions optio
             {
                 var name = text[(text.IndexOf("0 = ", StringComparison.Ordinal) + 4)..];
                 _gpuName = name.Split('|')[0].Trim();
-            }
+                // "uma: 1": the graphics shares the PC's memory, i.e. it's built into the CPU
+                // (whisper.cpp takes a separate card first when there is one)
+                _gpuIntegrated = text.Contains("uma: 1");            }
             else if (text.Contains("whisper_backend_init_gpu: using")) { _gpuInUse = _gpuName ?? "GPU"; _deviceKnown = true; }
             else if (text.Contains("whisper_backend_init_gpu: no GPU found")) { _gpuInUse = null; _deviceKnown = true; }
         });
@@ -66,7 +70,7 @@ public sealed class WhisperTranscriber(string modelPath, LyricsSyncOptions optio
         ObjectDisposedException.ThrowIf(_disposed, this);
         if (_factory is null)
         {
-            var factory = Open(modelPath, options.UseGpu);
+            var (factory, onGpu) = Open(modelPath, options.UseGpu);
             // Disposed while the model was being read: nothing else would free it.
             if (_disposed)
             {
@@ -74,6 +78,7 @@ public sealed class WhisperTranscriber(string modelPath, LyricsSyncOptions optio
                 throw new ObjectDisposedException(nameof(WhisperTranscriber));
             }
             _factory = factory;
+            _factoryOnGpu = onGpu;
         }
         // After the model is read: a try on the graphics card that gave up mustn't count.
         _deviceKnown = false;
@@ -108,6 +113,13 @@ public sealed class WhisperTranscriber(string modelPath, LyricsSyncOptions optio
             // Cancelled, ProcessAsync throws at once while whisper.cpp still runs on its own
             // thread until it next checks: DisposeAsync waits for that, so this returns only once
             // nothing runs on the model any more (and it can be freed).
+            // On the CPU, the encoder takes most of the time and always works through 30 s of
+            // sound, though most pieces (cut at the singer's pauses) are far shorter: it's given
+            // just the piece and a little more. Measured (tools/SyncBench, CPU, 8 threads):
+            // listening 40% faster, lines placed as well as before (10 songs, within 1 s: 76% /
+            // 75%). Not on the graphics card: there a different length each piece made it slower.
+            if (!_factoryOnGpu || _deviceKnown && _gpuInUse is null)
+                builder = builder.WithAudioContextSize(ContextFor(piece.Length));
             await using var processor = builder.Build();
             await foreach (var segment in processor.ProcessAsync(piece, ct))
             {
@@ -137,15 +149,28 @@ public sealed class WhisperTranscriber(string modelPath, LyricsSyncOptions optio
     /// may have no room for it, and whisper.cpp says no more than that it couldn't load the
     /// model; when the CPU can't either, the file itself is at fault
     /// (<see cref="WhisperModelLoadException"/>).</summary>
-    private static WhisperFactory Open(string modelPath, bool useGpu)
+    private static (WhisperFactory Factory, bool OnGpu) Open(string modelPath, bool useGpu)
     {
         if (useGpu)
         {
-            try { return Load(modelPath, true); }
+            try
+            {
+                var gpu = Load(modelPath, true);
+                // Graphics built into the CPU listens slower than the CPU itself (seen on
+                // integrated graphics; whisper.cpp's Vulkan code is made for separate cards), so
+                // there the CPU listens. Its log names the device as the model is read.
+                if (!_gpuIntegrated) return (gpu, true);
+                gpu.Dispose();
+            }
             catch (WhisperModelLoadException) { /* the CPU tells whether the file is at fault */ }
         }
-        return Load(modelPath, false);
+        return (Load(modelPath, false), false);
     }
+
+    /// <summary>The encoder's length for a piece, in its 20 ms steps (1500 = 30 s): the piece and
+    /// about 1.3 s more (64 steps; the full 30 s was no better on songs with known timings).</summary>
+    private static int ContextFor(int samples) =>
+        Math.Min(1500, (int)Math.Ceiling(samples / (double)AudioDecoder.SampleRate * 50) + 64);
 
     private static WhisperFactory Load(string modelPath, bool useGpu)
     {

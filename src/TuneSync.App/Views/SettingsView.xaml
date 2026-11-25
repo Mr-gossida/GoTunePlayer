@@ -1095,8 +1095,8 @@
                     </ui:CardControl>
                     <ui:TextBlock Text="가사 싱크" Style="{StaticResource Group}"/>
                     <ui:CardControl Style="{StaticResource Card}" Icon="{ui:SymbolIcon DeveloperBoard24}"
-                                    Tag="가사 싱크 싱크 가사 만들기 자동 맞추기 처리 장치 자동 선택 그래픽 카드 GPU CPU 가속 Vulkan 음성 인식 속도"
-                                    ToolTip="자동: 음성 인식과 목소리 분리를 그래픽 카드로 처리하고(여러 배 빠르고 CPU를 거의 쓰지 않습니다), 그래픽 카드가 없거나 쓸 수 없으면 CPU로 처리합니다. CPU만: 모두 CPU로 처리해 곡당 몇 분씩 걸릴 수 있습니다. 실제로 쓴 장치는 맞추는 동안 진행 표시에 나옵니다.">
+                                    Tag="가사 싱크 싱크 가사 만들기 자동 맞추기 처리 장치 자동 선택 그래픽 카드 GPU CPU 가속 Vulkan 음성 인식 속도 내장 그래픽"
+                                    ToolTip="자동: 음성 인식과 목소리 분리를 그래픽 카드로 처리하고(여러 배 빠르고 CPU를 거의 쓰지 않습니다), 그래픽 카드가 없거나 쓸 수 없으면 CPU로 처리합니다. 내장 그래픽에서는 음성 인식이 CPU보다 느려 음성 인식만 CPU로 처리합니다. CPU만: 모두 CPU로 처리해 곡당 몇 분씩 걸릴 수 있습니다. 실제로 쓴 장치는 맞추는 동안 진행 표시에 나옵니다.">
                         <ui:CardControl.Header>
                             <StackPanel>
                                 <ui:TextBlock Text="처리 장치" FontTypography="Body"/>

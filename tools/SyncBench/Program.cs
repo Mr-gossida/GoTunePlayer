@@ -71,6 +71,9 @@ else
 }
 
 var all = new List<double>();
+var sepClock = new Stopwatch();
+var listenClock = new Stopwatch();
+int passCount = 0, gapCount = 0;
 using var engine = new LyricsSyncEngine(model, vocalModel, options);
 using var transcriber = new WhisperTranscriber(model, options);
 foreach (var song in songs)
@@ -83,11 +86,15 @@ foreach (var song in songs)
     var truth = LrcParser.Parse(lyrics).Where(l => l.Text.Length > 0).OrderBy(l => l.Time).ToList();
     var plain = string.Join("\n", truth.Select(l => l.Text));
     var clock = Stopwatch.StartNew();
+    sepClock.Reset(); listenClock.Reset(); passCount = gapCount = 0;
     var result = cache is null ? await engine.SyncAsync(song, plain, null, CancellationToken.None) : await SyncCached(song, plain);
     if (result.Count != truth.Count) { Console.WriteLine($"{Path.GetFileName(song)}: line count {result.Count} vs {truth.Count}"); continue; }
     var errors = truth.Select((l, i) => Math.Abs((result[i].Time - l.Time).TotalSeconds)).ToList();
     all.AddRange(errors);
     Console.WriteLine($"{Path.GetFileName(song),-50} {Summary(errors)}  confident={result.Count(r => r.IsConfident)}/{result.Count}  {clock.Elapsed.TotalSeconds:0}s");
+    // with BENCH_CACHE, what took the time (only what wasn't in the cache yet)
+    if (cache is not null && (sepClock.ElapsedTicks > 0 || listenClock.ElapsedTicks > 0))
+        Console.WriteLine($"   separating {sepClock.Elapsed.TotalSeconds:0.0}s, listening {listenClock.Elapsed.TotalSeconds:0.0}s ({passCount} passes, {gapCount} gaps)");
     if (Environment.GetEnvironmentVariable("BENCH_DETAIL") == "1")
         for (var i = 0; i < truth.Count; i++)
             Console.WriteLine($"   {truth[i].Time.TotalSeconds,7:0.00} {result[i].Time.TotalSeconds,7:0.00} {(result[i].IsConfident ? ' ' : '?')} {errors[i],5:0.00}  {truth[i].Text}");
@@ -116,7 +123,9 @@ async Task<List<AlignedLine>> SyncCached(string song, string plain)
         if (File.Exists(name + ".vocals.f32")) vocals = MemoryMarshal.Cast<byte, float>(File.ReadAllBytes(name + ".vocals.f32")).ToArray();
         else
         {
+            sepClock.Start();
             vocals = engine.SeparateVocals(song, null, CancellationToken.None);
+            sepClock.Stop();
             File.WriteAllBytes(name + ".vocals.f32", MemoryMarshal.AsBytes(vocals.AsSpan()).ToArray());
         }
     }
@@ -133,8 +142,12 @@ async Task<List<AlignedLine>> SyncCached(string song, string plain)
         var key = Convert.ToHexString(System.Security.Cryptography.SHA1.HashData(System.Text.Encoding.UTF8.GetBytes($"{gap.Source}|{gap.Start:0.00}|{gap.End:0.00}|{gap.Prompt}")))[..12];
         var file = $"{name}.gap.{key}.json";
         if (File.Exists(file)) return JsonSerializer.Deserialize<List<TimedText>>(File.ReadAllText(file))!;
+        Mix();
+        listenClock.Start();
         var heard = await transcriber.TranscribeAsync(gap.Source == LyricsSyncEngine.Source.Vocals ? vocals! : Mix(),
             LyricsSyncEngine.LanguageOf(lines), gap.Prompt, null, CancellationToken.None, LyricsSyncEngine.Pieces(gap));
+        listenClock.Stop();
+        gapCount++;
         File.WriteAllText(file, JsonSerializer.Serialize(heard));
         return heard;
     }
@@ -143,8 +156,12 @@ async Task<List<AlignedLine>> SyncCached(string song, string plain)
     {
         var file = $"{name}.{pass.Source}.{(pass.Hinted ? "hinted" : "free")}.json";
         if (File.Exists(file)) return JsonSerializer.Deserialize<List<TimedText>>(File.ReadAllText(file))!;
+        Mix();
+        listenClock.Start();
         var heard = await transcriber.TranscribeAsync(pass.Source == LyricsSyncEngine.Source.Vocals ? vocals! : Mix(),
             LyricsSyncEngine.LanguageOf(lines), pass.Hinted ? LyricsSyncEngine.Prompt(lines) : null, null, CancellationToken.None, windows);
+        listenClock.Stop();
+        passCount++;
         File.WriteAllText(file, JsonSerializer.Serialize(heard));
         return heard;
     }
