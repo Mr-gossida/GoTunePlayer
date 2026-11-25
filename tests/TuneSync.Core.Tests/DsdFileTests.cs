@@ -142,6 +142,141 @@ public class DsdFileTests(ITestOutputHelper log)
         }
     }
 
+    [Theory]
+    [InlineData(44100, 64)]
+    [InlineData(44100, 128)]
+    [InlineData(48000, 64)]
+    [InlineData(48000, 128)]
+    [InlineData(96000, 128)]
+    [InlineData(192000, 128)]
+    public void Remastering_AtEveryRate_DecodesBackToTheTone(int songRate, int multiple)
+    {
+        var dsdRate = DsdRemasterer.DsdRateFor(songRate, multiple);
+        var remaster = new DsdRemasterer(songRate, dsdRate, Models.ResampleFilter.Sharp);
+        var input = new double[songRate / 2 * 2];
+        for (var i = 0; i < input.Length / 2; i++) input[2 * i] = input[2 * i + 1] = 0.5 * Math.Sin(2 * Math.PI * 1000 * i / (double)songRate);
+        var dop = new double[(int)((long)songRate / 2 * (dsdRate / 16) / songRate * 2) + 4000];
+        var made = remaster.Process(input, dop);
+        Assert.Equal(0, remaster.Resets);
+        Assert.True(made > dsdRate / 16 / 2 - 2000, $"only {made} DoP frames came out");
+
+        var bytes = new byte[made * 2];
+        for (var f = 0; f < made; f++)
+        {
+            var value = (int)Math.Round(dop[f * 2] * 8388608.0) & 0xFFFFFF;
+            Assert.Equal(f % 2 == 0 ? 0x05 : 0xFA, value >> 16);
+            bytes[2 * f] = (byte)(value >> 8);
+            bytes[2 * f + 1] = (byte)value;
+        }
+        var decimator = new DsdDecimator(dsdRate, dsdRate / 16);
+        var pcm = new double[bytes.Length];
+        var count = decimator.Process(bytes, pcm);
+        var level = LevelOf([.. pcm[..count].Select(v => (float)v)], 1, 0, dsdRate / 16, 1000);
+        log.WriteLine($"{songRate} -> DSD{multiple}: 1 kHz at -6 dBFS came back at {level:0.00} dB");
+        Assert.InRange(level, -6.1, -5.9);
+    }
+
+    /// <summary>The way the player feeds it: a whole device buffer per call (exclusive mode takes
+    /// nothing less - what falls short is zero-filled, and a zero word in the middle of DoP drops the DAC out
+    /// of DSD), so every call must come back with exactly the room asked for.</summary>
+    [Theory]
+    [InlineData(44100, 64, 5292)]
+    [InlineData(44100, 128, 10584)]
+    [InlineData(44100, 128, 10583)]
+    [InlineData(48000, 128, 11520)]
+    [InlineData(96000, 64, 4608)]
+    public void Remastering_FillsEveryDeviceBuffer(int songRate, int multiple, int room)
+    {
+        var dsdRate = DsdRemasterer.DsdRateFor(songRate, multiple);
+        var remaster = new DsdRemasterer(songRate, dsdRate, Models.ResampleFilter.Sharp);
+        var phase = 0;
+        var output = new double[room * 2];
+        for (var call = 0; call < 60; call++)
+        {
+            var need = remaster.InputFor(room);
+            var input = new double[need * 2];
+            for (var i = 0; i < need; i++) input[2 * i] = input[2 * i + 1] = 0.3 * Math.Sin(2 * Math.PI * 1000 * phase++ / songRate);
+            var made = remaster.Process(input, output);
+            // the converter's lookahead may short the first calls; after that nothing may be missing
+            if (call >= 5) Assert.True(made == room, $"call {call}: {made} of {room} frames");
+        }
+    }
+
+    [Theory]
+    [InlineData("sine0dB")]
+    [InlineData("square0dB")]
+    [InlineData("noise0dB")]
+    [InlineData("nan")]
+    public void Remastering_LoudAndBrokenInput_KeepsPlaying(string kind)
+    {
+        const int songRate = 44100;
+        var dsdRate = DsdRemasterer.DsdRateFor(songRate, 128);
+        var remaster = new DsdRemasterer(songRate, dsdRate, Models.ResampleFilter.Sharp);
+        var rng = new Random(1);
+        var input = new double[songRate * 2 * 2];
+        for (var i = 0; i < input.Length / 2; i++)
+        {
+            double v = kind switch
+            {
+                "sine0dB" => Math.Sin(2 * Math.PI * 1000 * i / songRate),
+                "square0dB" => Math.Sin(2 * Math.PI * 100 * i / songRate) >= 0 ? 1 : -1,
+                "noise0dB" => rng.NextDouble() * 2 - 1,
+                _ => i == 1000 ? double.NaN : 0.3 * Math.Sin(2 * Math.PI * 1000 * i / songRate),
+            };
+            input[2 * i] = input[2 * i + 1] = v;
+        }
+        var dop = new double[songRate * 2 * 16];
+        var made = remaster.Process(input, dop);
+        // longest run of equal DSD bits in the last half second (a stuck loop is one endless run)
+        long run = 0, longest = 0; int last = -1;
+        for (var f = made - dsdRate / 16 / 2; f < made; f++)
+        {
+            var word = (int)Math.Round(dop[2 * f] * 8388608.0) & 0xFFFF;
+            for (var b = 15; b >= 0; b--)
+            {
+                var bit = word >> b & 1;
+                run = bit == last ? run + 1 : 1; last = bit;
+                longest = Math.Max(longest, run);
+            }
+        }
+        log.WriteLine($"{kind}: resets {remaster.Resets}, longest run of equal bits {longest}");
+        Assert.True(longest < 64, $"{kind}: the bit stream is stuck ({longest} equal bits in a row)");
+    }
+
+    [Theory]
+    [InlineData(24, 24)]
+    [InlineData(24, 32)]
+    [InlineData(32, 32)]
+    public void Remastering_ThroughTheSampleWriter_KeepsDopIntact(int validBits, int container)
+    {
+        var dsdRate = DsdRemasterer.DsdRateFor(44100, 64);
+        var remaster = new DsdRemasterer(44100, dsdRate, Models.ResampleFilter.Sharp);
+        var input = new double[44100 * 2];
+        for (var i = 0; i < input.Length / 2; i++) input[2 * i] = input[2 * i + 1] = 0.5 * Math.Sin(2 * Math.PI * 1000 * i / 44100.0);
+        var dop = new double[44100 * 4 * 2 + 2000];
+        var made = remaster.Process(input, dop);
+        var writer = new TuneSync.Core.Audio.SampleWriter(validBits, isFloat: false, container, dither: false);
+        var bytes = new byte[made * 2 * writer.BytesPerSample];
+        writer.Write(dop.AsSpan(0, made * 2), bytes);
+        var step = writer.BytesPerSample;
+        var dsd = new byte[made * 2];
+        for (var f = 0; f < made; f++)
+        {
+            var at = f * 2 * step;                // left channel
+            var top = at + step - 1;              // most significant byte
+            // the 24 bits of DoP sit at the top of the sample: marker, first byte, second byte
+            var m =bytes[top]; var b1 = bytes[top - 1]; var b2 = bytes[top - 2];
+            Assert.Equal(f % 2 == 0 ? 0x05 : 0xFA, m);
+            dsd[2 * f] = b1; dsd[2 * f + 1] = b2;
+        }
+        var decimator = new DsdDecimator(dsdRate, 176400);
+        var pcm = new double[dsd.Length];
+        var count = decimator.Process(dsd, pcm);
+        var level = LevelOf([.. pcm[..count].Select(v => (float)v)], 1, 0, 176400, 1000);
+        log.WriteLine($"{validBits} bits in {container}: back at {level:0.00} dB");
+        Assert.InRange(level, -6.1, -5.9);
+    }
+
     [Fact]
     public void Remastering_DecodesBackToTheTone()
     {

@@ -89,5 +89,5 @@ public sealed class DsdRemasterer : IResampler
     }
 
     /// <summary>PCM to DSD units, kept within what the loop can take (a little over DSD's 0 dB).</summary>
-    private static double Scale(double pcm) => Math.Clamp(pcm * DsdModulator.PcmFullScale, -0.6, 0.6);
+    private static double Scale(double pcm) => double.IsNaN(pcm) ? 0 : Math.Clamp(pcm * DsdModulator.PcmFullScale, -0.6, 0.6);
 }

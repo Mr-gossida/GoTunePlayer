@@ -54,7 +54,10 @@ public sealed class DsdModulator
         var v = x + s;
         var bit = v >= 0;
         var e = (bit ? 1.0 : -1.0) - v;
-        if (Math.Abs(s) > 50)
+        // "not within" rather than "above": a NaN (one bad sample in, e.g.) compares false both
+        // ways and would otherwise stay in the loop for good - every bit then comes out the same,
+        // which a DAC takes as DSD at a constant level, i.e. silence
+        if (!(Math.Abs(s) <= 50) || double.IsNaN(x))
         {
             // ran away: start again from rest
             Array.Clear(_e);
