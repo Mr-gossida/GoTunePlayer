@@ -6,9 +6,12 @@ namespace TuneSync.App;
 
 // 오리: the thumb is a little pixel-art duck (a design of our own, like everything here) running
 // along the bar as its ground. Farm things come at it from the right end over the part still to
-// play, each set at a moment of the song and picked by how loud the music is then: a log or a
-// pumpkin when it's quiet, a hay bale or a fence, a wooden barrel or a milk can when it's loud;
-// now and then a fox running at it, and in loud passages an eagle swooping in at head height. It jumps the ones on the ground and runs ducked under the eagle.
+// play, each set at a moment of the song and picked by how loud the music is then: a log, a
+// pumpkin, a stone or a toadstool when it's quiet; a hay bale, a fence or a hedgehog; a wooden
+// barrel, a milk can, a crate or a sunflower when it's loud; now and then a fox running at it, and
+// in loud passages an eagle swooping in at head height. It jumps the ones on the ground and runs
+// ducked under the eagle. Now and then a worm or a ladybug comes instead: the duck bends down,
+// pecks it up on the beat and munches.
 // The fox, jumped, skids to a sit, looks up at the duck going over and then gazes after it.
 // It moves with the music: each thing is set so the duck takes off on a beat of the song (higher
 // on a strong one), it bobs on every beat as it runs and quacks on strong ones, its feet go
@@ -25,7 +28,22 @@ public sealed partial class WaveSeekBar
     /// since the duck went over it, 0 before.)</summary>
     private readonly List<Spark> _obstacles = [];
 
-    private enum Hazard { Log, Hay, Barrel, Fox, Eagle, Pumpkin, Fence, MilkCan }
+    private enum Hazard { Log, Hay, Barrel, Fox, Eagle, Pumpkin, Fence, MilkCan, Rock, Mushroom, Hedgehog, Crate, Sunflower, Worm, Ladybug }
+
+    /// <summary>The worm and the ladybug aren't jumped: the duck pecks them up as they reach it.</summary>
+    private static bool IsFood(Hazard kind) => kind is Hazard.Worm or Hazard.Ladybug;
+
+    /// <summary>What's picked at each loudness: quiet, middling, loud.</summary>
+    private static readonly Hazard[] QuietThings = [Hazard.Log, Hazard.Pumpkin, Hazard.Rock, Hazard.Mushroom];
+    private static readonly Hazard[] MiddleThings = [Hazard.Hay, Hazard.Fence, Hazard.Hedgehog];
+    private static readonly Hazard[] LoudThings = [Hazard.Barrel, Hazard.MilkCan, Hazard.Crate, Hazard.Sunflower];
+
+    /// <summary>Where the pecking duck's beak tip is, in art pixels ahead of its middle: food is
+    /// gone when its middle gets there.</summary>
+    private const double BeakReach = 8;
+
+    /// <summary>The food the duck has eaten (by its cue's time), so its crumbs fly once.</summary>
+    private readonly HashSet<double> _eatenCues = [];
 
     /// <summary>One obstacle of the song: the moment (seconds into the song) it reaches the duck,
     /// what it is, how fast it comes, and how much higher than usual the duck jumps it (0 to
@@ -134,6 +152,7 @@ public sealed partial class WaveSeekBar
         _obstacles.Clear();
         _dust.Clear();
         _jumpedCues.Clear();
+        _eatenCues.Clear();
         _lastMoment = double.NaN;
         _sceneClockSet = false;
         _jumpY = _jumpV = 0;
@@ -167,6 +186,13 @@ public sealed partial class WaveSeekBar
         Hazard.Pumpkin => PumpkinArt,
         Hazard.Fence => FenceArt,
         Hazard.MilkCan => MilkCanArt,
+        Hazard.Rock => RockArt,
+        Hazard.Mushroom => MushroomArt,
+        Hazard.Crate => CrateArt,
+        Hazard.Sunflower => SunflowerArt,
+        Hazard.Hedgehog => HedgehogWalk[frame % HedgehogWalk.Length],
+        Hazard.Worm => WormWiggle[frame % WormWiggle.Length],
+        Hazard.Ladybug => LadybugWalk[frame % LadybugWalk.Length],
         Hazard.Fox => FoxRun[frame % FoxRun.Length],
         _ => EagleFlap[frame % EagleFlap.Length],
     };
@@ -200,10 +226,12 @@ public sealed partial class WaveSeekBar
     }
 
     /// <summary>Seconds from take-off to the top of the jump over a cue's thing (none for the
-    /// eagle, which is ducked under as it arrives).</summary>
+    /// eagle, which is ducked under as it arrives; for food, from the moment it's eaten - so that
+    /// comes on the beat - to its reaching the duck's middle).</summary>
     private double RiseFor(Hazard kind, double speed, double lift)
     {
         if (kind == Hazard.Eagle) return 0;
+        if (IsFood(kind)) return BeakReach * ArtPixel / speed;
         var (up, gravity, _) = LeapOver(kind, speed, lift);
         return up / gravity;
     }
@@ -247,13 +275,16 @@ public sealed partial class WaveSeekBar
     private Hazard KindAt(double time, int n)
     {
         var loud = LoudnessAt(time);
-        var other = SongDice(n, 2) < 0.5;
-        var kind = loud < 0.3 ? (other ? Hazard.Pumpkin : Hazard.Log)
-                 : loud < 0.6 ? (other ? Hazard.Fence : Hazard.Hay)
-                 : other ? Hazard.MilkCan : Hazard.Barrel;
+        var things = loud < 0.3 ? QuietThings : loud < 0.6 ? MiddleThings : LoudThings;
+        var pick = Math.Min(things.Length - 1, (int)(SongDice(n, 2) * things.Length));
+        // never the same thing twice running: the next one in the list instead
+        if (n > 0 && things[pick] == _cues[n - 1].Kind) pick = (pick + 1) % things.Length;
+        var kind = things[pick];
         var roll = SongDice(n, 1);
         if (loud > 0.55 && roll < 0.3) kind = Hazard.Eagle;
         else if (loud > 0.25 && roll > 0.82) kind = Hazard.Fox;
+        // now and then a snack instead: a worm when it's quiet, a ladybug when it's not
+        else if (SongDice(n, 3) < 0.16) kind = loud < 0.4 ? Hazard.Worm : Hazard.Ladybug;
         return kind;
     }
 
@@ -268,8 +299,16 @@ public sealed partial class WaveSeekBar
     /// song's length: the song's own dice, the same every time.</summary>
     private double SongDice(int n, int salt)
     {
-        var x = Math.Sin(n * 12.9898 + salt * 78.233 + _cuesLength * 0.731) * 43758.5453;
-        return x - Math.Floor(x);
+        // a proper integer mix (splitmix64): the old sine hash gave neighboring cues similar
+        // numbers, so the same thing often came four or five times in a row
+        unchecked
+        {
+            var h = (ulong)n * 0x9E3779B97F4A7C15UL ^ (ulong)salt * 0xBF58476D1CE4E5B9UL ^ (ulong)BitConverter.DoubleToInt64Bits(_cuesLength);
+            h ^= h >> 30; h *= 0xBF58476D1CE4E5B9UL;
+            h ^= h >> 27; h *= 0x94D049BB133111EBUL;
+            h ^= h >> 31;
+            return (h >> 11) * (1.0 / (1UL << 53));
+        }
     }
 
     private double LoudnessAt(double seconds) =>
@@ -290,6 +329,7 @@ public sealed partial class WaveSeekBar
         {
             _cues.Clear();
             _jumpedCues.Clear();
+            _eatenCues.Clear();
             _cuesFor = Waveform;
             _cuesLength = Maximum;
             _cuesFrom = Math.Max(0.6, now + (Right - duck) / ObstacleSpeed - 0.9);
@@ -356,7 +396,11 @@ public sealed partial class WaveSeekBar
         if (Maximum <= 0) return;
         var now = RunnerNow;
         // jumped in the song: what's ahead now hasn't been jumped yet
-        if (!double.IsNaN(_lastMoment) && Math.Abs(now - _lastMoment) > 0.5) _jumpedCues.RemoveWhere(t => t > now - 1);
+        if (!double.IsNaN(_lastMoment) && Math.Abs(now - _lastMoment) > 0.5)
+        {
+            _jumpedCues.RemoveWhere(t => t > now - 1);
+            _eatenCues.RemoveWhere(t => t > now - 1);
+        }
         _lastMoment = now;
         PlanCues(now, duck);
         foreach (var cue in _cues)
@@ -368,10 +412,33 @@ public sealed partial class WaveSeekBar
             // the fox, once the duck is over it, skids to a sit and is carried off with the ground
             var passed = cue.Kind == Hazard.Fox && now > cue.Time ? now - cue.Time : 0;
             if (passed > 0) x = duck - FoxSkid(passed, cue.Speed);
+            // food is gone once it's reached the pecking beak
+            if (IsFood(cue.Kind) && now >= EatenAt(cue)) continue;
             if (x > Right + 12 || x < Left - 30) continue;
             _obstacles.Add(new Spark { X = x, Vx = cue.Speed, Hue = (int)cue.Kind, Age = cue.Time, Life = _jumpedCues.Contains(cue.Time) ? 1 : 0, Size = cue.Lift, Vy = passed });
         }
     }
+
+    /// <summary>The song moment a food cue's middle reaches the duck's beak and it's eaten.</summary>
+    private double EatenAt(Cue cue) => cue.Time - RiseFor(cue.Kind, cue.Speed, 0);
+
+    /// <summary>Seconds since the duck ate the food nearest this moment (negative just before:
+    /// it's already bending down for it), or NaN with none near.</summary>
+    private double SinceEaten(double now)
+    {
+        foreach (var cue in _cues)
+        {
+            if (!IsFood(cue.Kind)) continue;
+            var since = now - EatenAt(cue);
+            if (since < -PeckAhead) break;
+            if (since < PeckHold + MunchSeconds) return since;
+        }
+        return double.NaN;
+    }
+
+    /// <summary>How long before the food reaches the beak the duck bends its head down for it, how
+    /// long it keeps it down after, and how long it then munches (beak opening and shutting).</summary>
+    private const double PeckAhead = 0.12, PeckHold = 0.12, MunchSeconds = 0.32;
 
     /// <summary>How long the fox takes to skid from its run to a sit.</summary>
     private const double FoxSkidSeconds = 0.3;
@@ -428,6 +495,29 @@ public sealed partial class WaveSeekBar
 
         PlaceObstacles(duck);
 
+        // food reaching the beak is eaten: a few crumbs of it fly
+        var moment = RunnerNow;
+        foreach (var cue in _cues)
+        {
+            if (!IsFood(cue.Kind)) continue;
+            var since = moment - EatenAt(cue);
+            if (since < 0) break;
+            if (since > 0.3 || !_eatenCues.Add(cue.Time)) continue;
+            var color = cue.Kind == Hazard.Worm ? 'P' : 'R';
+            for (var n = 0; n < 3; n++)
+            {
+                _dust.Add(new Spark
+                {
+                    X = duck + BeakReach * pixel,
+                    Y = ActualHeight / 2 - 1.5 - 3 * pixel,
+                    Vx = -10 + n * 12,
+                    Vy = -14 - n % 2 * 8,
+                    Life = 0.3,
+                    Hue = color,
+                });
+            }
+        }
+
         // on every beat it bobs up a pixel or two as it runs, and on a strong one it quacks too
         // (in the air it already has the jump; ducked, it keeps low)
         _bobTime += dt;
@@ -456,7 +546,7 @@ public sealed partial class WaveSeekBar
             for (var i = 0; i < _obstacles.Count; i++)
             {
                 var o = _obstacles[i];
-                if (KindOf(o) == Hazard.Eagle) continue;
+                if (KindOf(o) == Hazard.Eagle || IsFood(KindOf(o))) continue;
                 var (half, _) = SizeOf(o);
                 if (o.Life > 0 || o.X + half < duck - 4) continue;
                 // the same jump its cue was set for, so the take-off comes on the beat
@@ -514,7 +604,14 @@ public sealed partial class WaveSeekBar
         {
             var kind = KindOf(o);
             // running legs and flapping wings
-            var frame = kind == Hazard.Fox ? (int)(_sceneTime * 14) % FoxRun.Length : kind == Hazard.Eagle ? (int)(_sceneTime * 8) % EagleFlap.Length : 0;
+            var frame = kind switch
+            {
+                Hazard.Fox => (int)(_sceneTime * 14) % FoxRun.Length,
+                Hazard.Eagle => (int)(_sceneTime * 8) % EagleFlap.Length,
+                Hazard.Hedgehog or Hazard.Ladybug => (int)(_sceneTime * 8),
+                Hazard.Worm => (int)(_sceneTime * 4),
+                _ => 0,
+            };
             var art = SpriteOf(kind, frame);
             if (kind == Hazard.Fox && o.Vy > 0)
             {
@@ -532,7 +629,9 @@ public sealed partial class WaveSeekBar
         foreach (var d in _dust)
         {
             var a = 1 - d.Age / d.Life;
-            dc.DrawRectangle(Solid(Color.FromArgb((byte)(190 * a), 0xFF, 0xFF, 0xFF)), null,
+            // dust is white; crumbs of food take its color
+            var c = d.Hue > 0 && ArtColor((char)(int)d.Hue) is { } crumb ? crumb : Colors.White;
+            dc.DrawRectangle(Solid(Color.FromArgb((byte)(190 * a), c.R, c.G, c.B)), null,
                 new Rect(OnGrid(d.X), OnGrid(d.Y), pixel, pixel));
         }
 
@@ -556,14 +655,20 @@ public sealed partial class WaveSeekBar
             }
             else
             {
-                body = _quackLeft > 0 ? DuckQuack : DuckArt;
+                // bending down for food, then munching it; otherwise quacking on a strong beat
+                var eaten = _jumpY <= 0.5 ? SinceEaten(RunnerNow) : double.NaN;
+                var munch = eaten - PeckHold;
+                body = eaten < PeckHold ? DuckPeckArt
+                     : munch < MunchSeconds ? ((int)(munch / 0.08) % 2 == 0 ? DuckQuack : DuckArt)
+                     : _quackLeft > 0 ? DuckQuack : DuckArt;
             }
             feet = _jumpY > 0.5 ? DuckFeet[2] : DuckFeet[step];
         }
         // the beat's bob: up and back down in a moment, feet and all
         var bob = _bobTime < BobSeconds && _jumpY <= 0 ? _bobHeight * Math.Sin(Math.PI * _bobTime / BobSeconds) : 0;
         var rows = body.Length + feet.Length;
-        var left = OnGrid(thumbX - body[0].Length * pixel / 2);
+        // (placed by the standing duck's width: the pecking one reaches further forward)
+        var left = OnGrid(thumbX - DuckArt[0].Length * pixel / 2);
         var top = OnGrid(ground - _jumpY - bob) - rows * pixel;
         DrawSprite(dc, body, left, top + body.Length * pixel, pixel, 1);
         DrawSprite(dc, feet, left, top + rows * pixel, pixel, 1);
@@ -621,6 +726,21 @@ public sealed partial class WaveSeekBar
         'f' => Color.FromRgb(0xC8, 0x92, 0x56),
         'v' => Color.FromRgb(0xF2, 0xEE, 0xE6),
         'y' => Color.FromRgb(0xF2, 0xB6, 0x32),
+        // the barrel's hoops where they turn away
+        'i' => Color.FromRgb(0x62, 0x64, 0x6E),
+        // stone: lit top, body, shade
+        'x' => Color.FromRgb(0xC8, 0xC6, 0xBE),
+        'a' => Color.FromRgb(0x9C, 0x98, 0x8E),
+        'z' => Color.FromRgb(0x6E, 0x6A, 0x64),
+        // red (the mushroom's cap, the ladybug) and its shade; leaves
+        'R' => Color.FromRgb(0xE4, 0x42, 0x34),
+        'Q' => Color.FromRgb(0xA8, 0x28, 0x22),
+        'G' => Color.FromRgb(0x8C, 0xB8, 0x40),
+        // the hedgehog's spines (and their light tips: 'f')
+        'u' => Color.FromRgb(0x84, 0x60, 0x40),
+        // the worm and its shade
+        'P' => Color.FromRgb(0xF4, 0x9A, 0xA8),
+        'S' => Color.FromRgb(0xCC, 0x68, 0x7C),
         _ => null,
     };
 
@@ -630,9 +750,9 @@ public sealed partial class WaveSeekBar
     [
         ".....KKKK....",
         "....KYYYYK...",
-        "....KYYEYYKOO",
-        "....KYYYYYOOO",
-        "K...KYYYYYK..",
+        "...KYYYEYYKOO",
+        "...KYYYYYYOOO",
+        "K..KYYYYYYK..",
         "KYK.KYYYYK...",
         "KYYKYYYYYYK..",
         "KYYYWWWWYYYK.",
@@ -648,9 +768,9 @@ public sealed partial class WaveSeekBar
         [
             ".....KKKK....",
             "....KYYYYK...",
-            "....KYYEYYKOO",
-            "..W.KYYYYYOOO",
-            "KWW.KYYYYYK..",
+            "...KYYYEYYKOO",
+            "..WKYYYYYYOOO",
+            "KWWKYYYYYYK..",
             "KWWWKYYYYK...",
             "KYWWYYYYYYK..",
             "KYYYYYYYYYYK.",
@@ -661,9 +781,9 @@ public sealed partial class WaveSeekBar
         [
             ".....KKKK....",
             "....KYYYYK...",
-            "....KYYEYYKOO",
-            "....KYYYYYOOO",
-            "K...KYYYYYK..",
+            "...KYYYEYYKOO",
+            "...KYYYYYYOOO",
+            "K..KYYYYYYK..",
             "KYK.KYYYYK...",
             "KYYKYYYYYYK..",
             "KYYYWWWWYYYK.",
@@ -688,6 +808,23 @@ public sealed partial class WaveSeekBar
         open[4] = open[4][..^3] + "KOO";
         return open;
     }
+
+    /// <summary>The duck pecking up food: tail up, its head bent down in front of it nearly to
+    /// the ground, the beak at the bottom.</summary>
+    private static readonly string[] DuckPeckArt =
+    [
+        "................",
+        "................",
+        ".K..............",
+        "KYK.............",
+        "KYYKKKKKKK.KKK..",
+        ".KYYYYYYYYKYYYK.",
+        ".KYYYYYYYYYYEYYK",
+        ".KYYWWWWYYYYYYYK",
+        "..KYYWWWYYYYYYK.",
+        "...KYYYYYYKKKOO.",
+        "....KKKKKK....O.",
+    ];
 
     /// <summary>The duck's feet: two running frames, and tucked up for a jump.</summary>
     private static readonly string[][] DuckFeet =
@@ -737,16 +874,19 @@ public sealed partial class WaveSeekBar
         "hhthhhthh",
     ];
 
+    /// <summary>A wooden barrel standing up: its staves bulge out in the middle (the outline
+    /// curves like the pumpkin's), lit from the upper left like the rest, a dark seam between two
+    /// staves, and two iron hoops whose ends are darker where they turn away.</summary>
     private static readonly string[] BarrelArt =
     [
-        ".mmmm.",
-        "dblbbd",
-        "mmmmmm",
-        "dblbbd",
-        "dblbbd",
-        "mmmmmm",
-        "dblbbd",
-        ".mmmm.",
+        "..cbbbd..",
+        ".cblbbbd.",
+        "immmmmmmi",
+        "blbbdbbbd",
+        "blbbdbbbd",
+        "immmmmmmi",
+        ".cblbbbd.",
+        "..ddddd..",
     ];
 
     /// <summary>The fox, running at the duck: tall pointed ears (orange to the tip: dark tips were
@@ -843,64 +983,162 @@ public sealed partial class WaveSeekBar
         "mmmmmm",
     ];
 
-    /// <summary>The eagle, flying at the duck: a white head with a dark eye and a hooked yellow beak,
-    /// a brown body that tapers to a white tail, yellow talons tucked under it, and a broad wing with
-    /// fingered tips beating in four steps - raised high, spread, lowered, spread. Drawn about half
-    /// again as big as it was (16 x 8 art pixels read as a brown smudge); the body stays two rows above
-    /// the picture's bottom, so it still flies over the ducked duck and into the standing one.</summary>
+    /// <summary>The eagle, flying at the duck, drawn round and chunky like the fox and the duck: a
+    /// round white head with a dark eye and a small hooked yellow beak, a plump brown body with a
+    /// paler belly, a short white tail, yellow talons tucked under it, and one broad wing with
+    /// fingered tips beating in four steps - raised, level, lowered, level. Its belly stays a row
+    /// above the picture's bottom, so it flies over the ducked duck and into the standing one.</summary>
     private static readonly string[][] EagleFlap =
     [
         [
-            "...............f.f.f..",
-            ".............fffffff..",
-            "...........ffeeeeeef..",
-            "..........feeeeeeef...",
-            ".........feeeeeeef....",
-            "........feeeeeeee.....",
-            "...vvvv..eeeeeee...vv.",
-            "yyvkvvvveeeeeeeeeevvvv",
-            ".yy.vvveeeeeeeeeevvv..",
-            "........yy..yy........",
-            "......................",
+            "..........f.f.f..",
+            ".........fffffff.",
+            "........feeeeef..",
+            ".......feeeeef...",
+            "..vvv.feeeeef....",
+            ".vvvvvfeeee......",
+            "yvkvvveeeeeeeev..",
+            ".yvvvveeeeeeeeevv",
+            "...vveeffffeeeev.",
+            "......ffffff.....",
+            ".......y..y......",
         ],
         [
-            "......................",
-            "......................",
-            "......................",
-            "..............f.f.f.f.",
-            "..........ffffffffff..",
-            "........feeeeeeeeef...",
-            "...vvvv..eeeeeee...vv.",
-            "yyvkvvvveeeeeeeeeevvvv",
-            ".yy.vvveeeeeeeeeevvv..",
-            "........yy..yy........",
-            "......................",
+            ".................",
+            ".................",
+            ".................",
+            "...........f.f.f.",
+            "..vvv..ffffffff..",
+            ".vvvvvfeeeeeeef..",
+            "yvkvvveeeeeeeev..",
+            ".yvvvveeeeeeeeevv",
+            "...vveeffffeeeev.",
+            "......ffffff.....",
+            ".......y..y......",
         ],
         [
-            "......................",
-            "......................",
-            "......................",
-            "......................",
-            "......................",
-            "......................",
-            "...vvvv..eeeeeee...vv.",
-            "yyvkvvvveeeeeeeeeevvvv",
-            ".yy.vvveeeeeeeeeevvv..",
-            "........yyfeeeeeef....",
-            "..........ffeeeef.f.f.",
+            ".................",
+            ".................",
+            ".................",
+            ".................",
+            "..vvv............",
+            ".vvvvv.eeeee.....",
+            "yvkvvveeeeeeeev..",
+            ".yvvvveeeeeeeeevv",
+            "...vveeeeeeeeeev.",
+            "......feeeeeef...",
+            ".......ffeef.f.f.",
         ],
         [
-            "......................",
-            "......................",
-            "......................",
-            "..............f.f.f.f.",
-            "..........ffffffffff..",
-            "........feeeeeeeeef...",
-            "...vvvv..eeeeeee...vv.",
-            "yyvkvvvveeeeeeeeeevvvv",
-            ".yy.vvveeeeeeeeeevvv..",
-            "........yy..yy........",
-            "......................",
+            ".................",
+            ".................",
+            ".................",
+            "...........f.f.f.",
+            "..vvv..ffffffff..",
+            ".vvvvvfeeeeeeef..",
+            "yvkvvveeeeeeeev..",
+            ".yvvvveeeeeeeeevv",
+            "...vveeffffeeeev.",
+            "......ffffff.....",
+            ".......y..y......",
         ],
+    ];
+
+    /// <summary>A stone: a low rounded lump, lit on top, shaded at its right and underneath.</summary>
+    private static readonly string[] RockArt =
+    [
+        "...xxaa...",
+        "..xaaaaaz.",
+        ".xaaaaaazz",
+        "aaazaaazzz",
+    ];
+
+    /// <summary>A toadstool: a red cap with white spots over a white stem, its rim in shade.</summary>
+    private static readonly string[] MushroomArt =
+    [
+        "..RRR..",
+        ".RwRRR.",
+        "RRRRwRR",
+        "QQQQQQQ",
+        "..wwn..",
+        "..wwn..",
+    ];
+
+    /// <summary>A hedgehog trundling at the duck: a pointed pale face with a dark eye and nose,
+    /// a round back of spines with light tips, little dark feet stepping in two frames.</summary>
+    private static readonly string[] HedgehogBody =
+    [
+        "....uufuuf..",
+        "..ufuufuufu.",
+        ".rkuufuufuuf",
+        "krrrrufuufuu",
+        "..rrruuuuuu.",
+    ];
+
+    private static readonly string[][] HedgehogWalk =
+    [
+        [.. HedgehogBody, "..d.d..d.d.."],
+        [.. HedgehogBody, "...d.d..d.d."],
+    ];
+
+    /// <summary>A wooden crate: a light frame round a darker panel crossed by a brace, shaded on
+    /// the right and underneath.</summary>
+    private static readonly string[] CrateArt =
+    [
+        "lllllllb",
+        "lbbbbbld",
+        "lbbbblbd",
+        "lbbblbbd",
+        "lbblbbbd",
+        "lblbbbbd",
+        "llbbbbbd",
+        "lddddddd",
+    ];
+
+    /// <summary>A sunflower taller than the duck: yellow petals round a brown middle, on a green
+    /// stem with a leaf either side.</summary>
+    private static readonly string[] SunflowerArt =
+    [
+        "..yyy..",
+        ".ybbby.",
+        "yybdbyy",
+        ".ybbby.",
+        "..yyy..",
+        "...g...",
+        ".GGg...",
+        "..Gg...",
+        "...gGG.",
+        "...gG..",
+    ];
+
+    /// <summary>Duck food: an earthworm wriggling (its humps travel along it in two frames)...</summary>
+    private static readonly string[][] WormWiggle =
+    [
+        [
+            ".PP..PP..",
+            "PSSPPSSP.",
+            "P..SS..SS",
+        ],
+        [
+            "P..PP..P.",
+            "SPPSSPPSP",
+            ".SS..SS..",
+        ],
+    ];
+
+    /// <summary>...and a ladybug walking at the duck: a red shell with dark spots and a shine,
+    /// a dark head, legs stepping in two frames.</summary>
+    private static readonly string[] LadybugBody =
+    [
+        "..wRRR.",
+        ".RkRRkR",
+        "kRRRkRR",
+        ".QQQQQ.",
+    ];
+
+    private static readonly string[][] LadybugWalk =
+    [
+        [.. LadybugBody, ".k.k.k."],
+        [.. LadybugBody, "..k.k.k"],
     ];
 }
