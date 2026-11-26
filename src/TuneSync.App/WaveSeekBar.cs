@@ -126,6 +126,8 @@ public sealed partial class WaveSeekBar : FrameworkElement
     private double _baseline;
     private double _activity;
     private double _phase;
+    // the aurora's own, calmer clock, loudness and beat glow (see Step)
+    private double _auroraTime, _auroraLevel, _auroraGlow;
     private double _sinceBeat = 1;
 
     /// <summary>Beats so far, which steps the fountain's and the fireworks' patterns along, and
@@ -1202,20 +1204,21 @@ public sealed partial class WaveSeekBar : FrameworkElement
 
     /// <summary>The aurora's height at middling loudness, and how far it swings from there between
     /// silence and full loudness (was 0.61 and 1.17 through <see cref="Loud"/>).</summary>
-    private const double AuroraMiddle = 0.55, AuroraSwing = 0.6;
-    /// <summary>Northern lights filling the strip over the played part, above and below the line.
+    private const double AuroraMiddle = 0.55, AuroraSwing = 0.6;    /// <summary>Northern lights filling the strip over the played part, above and below the line.
     /// Like a real aurora it is a hanging curtain: a bright lower hem that sways up and down in slow
     /// waves, folds that drift sideways along the top edge, and fine vertical rays whose brightness
     /// ripples along the curtain in travelling pulses. A dimmer second curtain hangs behind, higher
     /// and out of step, for depth. Colors run through the cover's hues along the bar, shading to a
-    /// neighboring hue toward the top. It rises with the music and flares on each beat.</summary>
+    /// neighboring hue toward the top. It drifts slowly, swells with the music over about half a
+    /// second and glows softly on a beat (its own clock and levels; see Step).</summary>
     private void DrawAurora(DrawingContext dc, double mid, double thumbX, double room, double fadeIn, Color cool, Color accent, Color warm)
     {
-        var t = _phase;
+        var t = _auroraTime;
+        var glow = _auroraGlow;
         // Its own, narrower range rather than Loud's (+50% boost): with that the curtain all but
         // vanished in quiet passages and sat pinned at its full height from about 70% loudness up.
         // Now it swings about two-thirds as far around a slightly lower middle, flares less on a beat.
-        var lift = _activity * EffectScale * Math.Max(0, AuroraMiddle + AuroraSwing * (_level - 0.5)) + 0.28 * EffectScale * _flash;        // (may be above the control's own top: the curtain rises past the bar by AuroraOverflow.
+        var lift = _activity * EffectScale * Math.Max(0, AuroraMiddle + AuroraSwing * (_auroraLevel - 0.5)) + 0.28 * EffectScale * glow;        // (may be above the control's own top: the curtain rises past the bar by AuroraOverflow.
         // It was held at y = 1, which kept it inside the bar whatever the overflow said.)
         var top = mid - room;
         var bottom = Math.Max(mid + 1, ActualHeight - 1);
@@ -1312,7 +1315,7 @@ public sealed partial class WaveSeekBar : FrameworkElement
             {
                 new GradientStop(Color.FromArgb(0x50, cool.R, cool.G, cool.B), 0),
                 new GradientStop(Color.FromArgb(0xA0, accent.R, accent.G, accent.B), 0.5),
-                new GradientStop(Color.FromArgb((byte)(0xB8 + 0x40 * _flash), warm.R, warm.G, warm.B), 1),
+                new GradientStop(Color.FromArgb((byte)(0xB8 + 0x40 * Math.Min(1, glow)), warm.R, warm.G, warm.B), 1),
             },
         };
         hue.Freeze();
@@ -1331,7 +1334,7 @@ public sealed partial class WaveSeekBar : FrameworkElement
         };
         fringe.Freeze();
         var glimmer1 = AlongBar(thumbX, Color.FromArgb(0x10, 0xFF, 0xFF, 0xFF), Color.FromArgb(0x30, 0xFF, 0xFF, 0xFF));
-        var glimmer2 = AlongBar(thumbX, Color.FromArgb(0x20, 0xFF, 0xFF, 0xFF), Color.FromArgb((byte)(0x60 + 0x50 * _flash), 0xFF, 0xFF, 0xFF));
+        var glimmer2 = AlongBar(thumbX, Color.FromArgb(0x20, 0xFF, 0xFF, 0xFF), Color.FromArgb((byte)(0x60 + 0x50 * Math.Min(1, glow)), 0xFF, 0xFF, 0xFF));
 
         // the hem glows softly (no hard edge), fading out at both ends of the curtain
         var span = Math.Max(1, thumbX - Left);
@@ -1979,6 +1982,11 @@ public sealed partial class WaveSeekBar : FrameworkElement
 
         // Louder music flows faster.
         _phase += dt * (1.4 + 2.4 * _level) * Math.Max(_activity, 0.15);
+        // The aurora drifts and swells rather than dancing: its own clock runs at about half the
+        // pace and hardly speeds up when loud, its height follows the music over about half a
+        // second, and a beat brightens it in a soft glow, not a flash.
+        _auroraLevel += (_level - _auroraLevel) * Math.Min(1, dt * (_level > _auroraLevel ? 2.5 : 1.5));
+        _auroraTime += dt * (0.9 + 0.6 * _auroraLevel) * Math.Max(_activity, 0.15);
         // The fire grows and settles more slowly than the meter; it flickers faster when loud.
         // (8 up / 3 down, was 5 / 2: still smoother than the meter, but follows the music visibly)
         _fireLevel += (target - _fireLevel) * Math.Min(1, dt * (target > _fireLevel ? 8 : 3));
@@ -2001,6 +2009,7 @@ public sealed partial class WaveSeekBar : FrameworkElement
             if (_ripples.Count > 6) _ripples.RemoveAt(0);
         }
         _flash *= Math.Exp(-dt * 5);
+        _auroraGlow = _flash > _auroraGlow ? _auroraGlow + (_flash - _auroraGlow) * Math.Min(1, dt * 6) : _auroraGlow * Math.Exp(-dt * 1.5);
         UpdateSparks(dt, beat);
         SpawnLicks(previousFireTime);
         UpdateStars(dt, beat);
@@ -2022,6 +2031,7 @@ public sealed partial class WaveSeekBar : FrameworkElement
         {
             _activity = 0;
             _level = 0;
+            _auroraLevel = _auroraGlow = 0;
             StopAnimating();
         }
         InvalidateVisual();
