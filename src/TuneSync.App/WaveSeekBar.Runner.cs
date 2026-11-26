@@ -1695,28 +1695,28 @@ public sealed partial class WaveSeekBar
         ".uuuuuuuu..",
     ];
 
-    /// <summary>...rolled up in a round ball, light spine tips all over it and sticking out at
-    /// its sides, shaded underneath...</summary>
+    /// <summary>...rolled up in a round ball as tall as it is wide (eleven wide by six tall
+    /// read as a flat lump), light spine tips all over it, shaded underneath...</summary>
     private static readonly string[] HedgehogBall =
     [
-        "...fufuf...",
-        "..uuuuuuu..",
-        ".uufuuufuu.",
-        "fuuuuuuuuuf",
-        "..uuuuuud..",
-        "...uuudd...",
+        "..fuf..",
+        ".uufuu.",
+        "fuuuuuf",
+        "uufuuuu",
+        ".uuuud.",
+        "..udd..",
     ];
 
     /// <summary>...and the same ball with its spine tips shifted, so it shivers between the two.
     /// (Spikes sticking out further all round made it look like a burr, not a round ball.)</summary>
     private static readonly string[] HedgehogBristle =
     [
-        "..fufufuf..",
-        "..uuuuuuu..",
-        ".ufuuufuuu.",
-        "fuuuuuuuuuf",
-        "..uuuuuud..",
-        "...uuudd...",
+        "..ufu..",
+        ".fuuuf.",
+        "uufuufu",
+        "fuuuuuf",
+        ".uuufd.",
+        "..udd..",
     ];
 
     /// <summary>A wooden crate: a light frame round a darker panel crossed by a brace, shaded on
