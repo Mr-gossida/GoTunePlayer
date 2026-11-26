@@ -4,7 +4,8 @@ namespace TuneSync.Core.Services.LyricsSync;
 
 /// <summary>What "싱크 가사 만들기" may use of the PC.</summary>
 /// <param name="UseGpu">Listen (Whisper, through Vulkan) and separate the vocals (DirectML) on
-/// the graphics card when there's one that works; otherwise, or when false, on the CPU.</param>
+/// the graphics card when there's one that works - with the CPU alongside when it's built into
+/// the CPU (see <see cref="WorkShare"/>); otherwise, or when false, on the CPU.</param>
 /// <param name="Threads">CPU threads for whatever runs on the CPU.</param>
 public sealed record LyricsSyncOptions(bool UseGpu, int Threads)
 {

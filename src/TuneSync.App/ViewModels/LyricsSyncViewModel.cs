@@ -276,7 +276,7 @@ public sealed partial class LyricsSyncViewModel : ObservableObject, IDisposable
                 break;
             case LyricsSyncEngine.Stage.Separating:
                 SetStep(0);
-                ProcessingDevice = _engine?.SeparatesOnGpu switch { true => "GPU", false => "CPU", null => "" };
+                ProcessingDevice = _engine?.SeparationDevice ?? "";
                 (Status, Progress, StepPercent) = ("반주를 빼고 목소리만 남기는 중…", p.Value, Percent(p.Value));
                 break;
             case LyricsSyncEngine.Stage.Listening:
@@ -284,7 +284,7 @@ public sealed partial class LyricsSyncViewModel : ObservableObject, IDisposable
                 // Until whisper.cpp says which device it took, it's still loading the model (on
                 // the graphics card that can take several seconds the first time).
                 var device = LyricsSyncEngine.ListeningDevice;
-                ProcessingDevice = device switch { null => "", "CPU" => "CPU", _ => "GPU" };
+                ProcessingDevice = device switch { null => "", "CPU" => "CPU", _ => LyricsSyncEngine.ListeningWithCpu ? "GPU + CPU" : "GPU" };
                 (Status, Progress, StepPercent) = device is null
                     ? ($"{PassName(p)} · 음성 인식 준비 중…", 0, "")
                     : (PassName(p), p.Value, Percent(p.Value));

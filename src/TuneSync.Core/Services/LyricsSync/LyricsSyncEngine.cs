@@ -50,9 +50,13 @@ public sealed class LyricsSyncEngine : IDisposable
     /// or null until it has begun.</summary>
     public static string? ListeningDevice => WhisperTranscriber.Device;
 
-    /// <summary>Whether the vocal separation runs on the graphics card, or null until the model
-    /// has been opened (the first separation).</summary>
-    public bool? SeparatesOnGpu => _separator?.UsesGpu;
+    /// <summary>The CPU listens alongside the graphics card named by <see cref="ListeningDevice"/>
+    /// (graphics built into the CPU, see <see cref="WorkShare"/>).</summary>
+    public static bool ListeningWithCpu => WhisperTranscriber.WithCpu;
+
+    /// <summary>Where the vocal separation runs: "GPU", "CPU" or "GPU + CPU", or null until the
+    /// model has been opened (the first separation).</summary>
+    public string? SeparationDevice => _separator?.Device;
 
     public enum Stage { Decoding, Separating, Listening, Aligning }
 
@@ -88,22 +92,22 @@ public sealed class LyricsSyncEngine : IDisposable
         var song = await Task.Run(() => AudioDecoder.ReadMono16k(audioPath, ct), ct);
         var duration = TimeSpan.FromSeconds(song.Length / (double)AudioDecoder.SampleRate);
 
-        float[]? vocals = null;
-        if (_vocalModelPath is not null)
-        {
-            progress?.Report(new(Stage.Separating, 0));
-            vocals = await Task.Run(() => SeparateVocals(audioPath,
-                new Progress<double>(p => progress?.Report(new(Stage.Separating, p))), ct), ct);
-        }
-        var (windows, voice) = UseVocals(vocals);
-
-        WhisperTranscriber.ForgetDevice();
-        var language = LanguageOf(lines);
-        var passes = Passes(vocals is not null);
-        int done = 0, gaps = 0;
         List<AlignedLine> aligned;
         try
         {
+            float[]? vocals = null;
+            if (_vocalModelPath is not null)
+            {
+                progress?.Report(new(Stage.Separating, 0));
+                vocals = await Task.Run(() => SeparateVocals(audioPath,
+                    new Progress<double>(p => progress?.Report(new(Stage.Separating, p))), ct), ct);
+            }
+            var (windows, voice) = UseVocals(vocals);
+
+            WhisperTranscriber.ForgetDevice();
+            var language = LanguageOf(lines);
+            var passes = Passes(vocals is not null);
+            int done = 0, gaps = 0;
             aligned = await SyncAsync(lines, duration, voice, passes, pass =>
             {
                 var index = done++;
@@ -144,6 +148,9 @@ public sealed class LyricsSyncEngine : IDisposable
         ObjectDisposedException.ThrowIf(_disposed, this);
         if (_separator is null)
         {
+            // The speech recognition model first: as its library loads, it tells whether the
+            // graphics card is built into the CPU, and then the CPU separates alongside it.
+            if (_options.UseGpu) _transcriber.Open();
             var separator = OpenSeparator();
             // Disposed while the model was opening: nothing else would free it.
             if (_disposed)
@@ -162,7 +169,7 @@ public sealed class LyricsSyncEngine : IDisposable
     {
         try
         {
-            return new VocalSeparator(_vocalModelPath!, _options.UseGpu, _options.Threads);
+            return new VocalSeparator(_vocalModelPath!, _options.UseGpu, _options.Threads, shareWithCpu: WhisperTranscriber.GpuIntegrated);
         }
         catch (OnnxRuntimeException ex)
         {

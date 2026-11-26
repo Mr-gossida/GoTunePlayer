@@ -11,7 +11,12 @@ namespace TuneSync.Core.Services.LyricsSync;
 ///
 /// The model works on spectrograms of 44.1 kHz stereo: 7680-point frames every 1024 samples,
 /// the lowest 3072 bins, 256 frames (about 6 s) at a time. Each piece overlaps its neighbors
-/// and only its middle is kept, where the model has context on both sides.</summary>
+/// and only its middle is kept, where the model has context on both sides.
+///
+/// With graphics built into the CPU, the CPU takes pieces too (<see cref="WorkShare"/>): on a
+/// Core Ultra 5 225 a song took 59 s on its Intel graphics, 67 s on the CPU (5 threads) and 40 s
+/// on both. The CPU's copy of the model is opened for each song and closed after: while it
+/// works it holds about 1.5 GB more.</summary>
 public sealed class VocalSeparator : IDisposable
 {
     public const int SampleRate = 44100;
@@ -33,14 +38,26 @@ public sealed class VocalSeparator : IDisposable
     /// <summary>True when the model runs on the graphics card.</summary>
     public bool UsesGpu { get; }
 
+    /// <summary>Where the separation runs: "GPU", "CPU", or "GPU + CPU" (see the summary).</summary>
+    public string Device => _cpuSpeed is null ? (UsesGpu ? "GPU" : "CPU")
+        : _gpuSpeed.Retired ? "CPU" : _cpuSpeed.Retired ? "GPU" : "GPU + CPU";
+
     private readonly ParallelOptions _parallel;
+    private readonly string _modelPath;
+    private readonly int _threads;
+    private readonly WorkShare.Device _gpuSpeed = new("GPU");
+    private readonly WorkShare.Device? _cpuSpeed; // when the CPU shares the work with the graphics
 
     /// <param name="threads">CPU threads for the spectrograms (and the model itself, on the CPU).</param>
-    public VocalSeparator(string modelPath, bool allowGpu = true, int threads = 0)
+    /// <param name="shareWithCpu">When the model runs on the graphics card, let the CPU take
+    /// pieces too (for graphics built into the CPU).</param>
+    public VocalSeparator(string modelPath, bool allowGpu = true, int threads = 0, bool shareWithCpu = false)
     {
         if (threads <= 0) threads = Environment.ProcessorCount;
         _parallel = new ParallelOptions { MaxDegreeOfParallelism = threads };
+        (_modelPath, _threads) = (modelPath, threads);
         (_session, UsesGpu) = Open(modelPath, allowGpu, threads);
+        if (UsesGpu && shareWithCpu) _cpuSpeed = new WorkShare.Device("CPU");
         _input = _session.InputMetadata.Keys.First();
         for (var i = 0; i < FftSize; i++) _window[i] = (float)(0.5 - 0.5 * Math.Cos(2 * Math.PI * i / FftSize));
         for (var t = 0; t < Frames; t++)
@@ -60,9 +77,11 @@ public sealed class VocalSeparator : IDisposable
             }
             catch (Exception) { /* no usable graphics card or driver: the CPU does it, slower */ }
         }
-        using var cpu = new SessionOptions { IntraOpNumThreads = threads };
+        using var cpu = CpuOptions(threads);
         return (new InferenceSession(modelPath, cpu), false);
     }
+
+    private static SessionOptions CpuOptions(int threads) => new() { IntraOpNumThreads = threads };
 
     /// <summary>The vocals of a 44.1 kHz stereo song, as one channel at 44.1 kHz.</summary>
     /// <param name="progress">0..1.</param>
@@ -79,14 +98,25 @@ public sealed class VocalSeparator : IDisposable
         }
 
         var vocals = new float[n];
-        var spectrum = new float[4 * Bins * Frames];
-        var tensor = new DenseTensor<float>(spectrum, [1, 4, Bins, Frames]);
-        var piece = new float[2][] { new float[Chunk], new float[Chunk] };
-        for (var s = 0; s < steps; s++)
+        var shared = _cpuSpeed is { Retired: false } && !_gpuSpeed.Retired;
+        using var cpuOptions = shared ? CpuOptions(_threads) : null;
+        using var cpu = cpuOptions is null ? null : new InferenceSession(_modelPath, cpuOptions);
+        var sessions = cpu is null ? [_session] : new[] { _session, cpu };
+        WorkShare.Device[] speeds = cpu is null ? [_gpuSpeed] : [_gpuSpeed, _cpuSpeed!];
+        // Each device works on one piece at a time, in buffers of its own.
+        var buffers = new (float[] Spectrum, DenseTensor<float> Tensor, float[][] Piece)?[sessions.Length];
+
+        bool SeparatePiece(int device, int s, CancellationToken token)
         {
-            ct.ThrowIfCancellationRequested();
-            for (var c = 0; c < 2; c++) Forward(padded[c].AsSpan(s * Step, Chunk), spectrum, c);
-            using (var results = _session.Run([NamedOnnxValue.CreateFromTensor(_input, tensor)]))
+            token.ThrowIfCancellationRequested();
+            if (buffers[device] is null)
+            {
+                var spectrum = new float[4 * Bins * Frames];
+                buffers[device] = (spectrum, new DenseTensor<float>(spectrum, [1, 4, Bins, Frames]), [new float[Chunk], new float[Chunk]]);
+            }
+            var (spectrumOf, tensor, piece) = buffers[device]!.Value;
+            for (var c = 0; c < 2; c++) Forward(padded[c].AsSpan(s * Step, Chunk), spectrumOf, c);
+            using (var results = sessions[device].Run([NamedOnnxValue.CreateFromTensor(_input, tensor)]))
             {
                 var output = results[0].AsTensor<float>();
                 var data = output is DenseTensor<float> dense ? dense.Buffer.Span : output.ToArray();
@@ -95,8 +125,14 @@ public sealed class VocalSeparator : IDisposable
             var to = s * Step;
             var count = Math.Min(Step, n - to);
             for (var i = 0; i < count; i++) vocals[to + i] = (piece[0][Trim + i] + piece[1][Trim + i]) * 0.5f;
-            progress?.Report((s + 1) / (double)steps);
+            return true;
         }
+
+        // Every piece is the same size; none is taken twice (each takes a device about as long).
+        WorkShare.RunAsync(speeds, [.. Enumerable.Repeat(1.0, steps)],
+                (device, s, token) => Task.FromResult(SeparatePiece(device, s, token)),
+                hedge: false, progress is null ? null : done => progress.Report(done / (double)steps), ct)
+            .GetAwaiter().GetResult();
         return vocals;
     }
 

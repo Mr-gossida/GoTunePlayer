@@ -99,7 +99,7 @@ foreach (var song in songs)
         for (var i = 0; i < truth.Count; i++)
             Console.WriteLine($"   {truth[i].Time.TotalSeconds,7:0.00} {result[i].Time.TotalSeconds,7:0.00} {(result[i].IsConfident ? ' ' : '?')} {errors[i],5:0.00}  {truth[i].Text}");
 }
-Console.WriteLine($"{"ALL",-50} {Summary(all)}  listened on {LyricsSyncEngine.ListeningDevice ?? "-"}, {options.Threads} CPU threads");
+Console.WriteLine($"{"ALL",-50} {Summary(all)}  listened on {LyricsSyncEngine.ListeningDevice ?? "-"}{(LyricsSyncEngine.ListeningWithCpu ? " + CPU" : "")}, separated on {engine.SeparationDevice ?? "-"}, {options.Threads} CPU threads");
 
 // The engine's own steps, with the vocals and what was heard kept in the cache folder.
 async Task<List<AlignedLine>> SyncCached(string song, string plain)
