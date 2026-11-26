@@ -599,6 +599,7 @@ public sealed partial class WaveSeekBar
         var pixel = ArtPixel;
         var ground = OnGrid(mid - 1.5);
         DrawClouds(dc, ground, pixel);
+        DrawHills(dc, ground, pixel, accent);
         // placed for this very moment: also when the song is jumped in while paused (no frames run then)
         PlaceObstacles(thumbX);
         foreach (var o in _obstacles)
@@ -681,6 +682,86 @@ public sealed partial class WaveSeekBar
     /// they read as far off behind it.</summary>
     private const double CloudSpeed = ObstacleSpeed / 4;
 
+    /// <summary>How far in from either end of the bar a cloud (or the hills) fades in or out (px).</summary>
+    private const double CloudFade = 70;
+
+    /// <summary>How fast the far hills go by (px a second): half the clouds' speed, an eighth of
+    /// the ground's - the furthest thing there is.</summary>
+    private const double HillSpeed = ObstacleSpeed / 8;
+
+    /// <summary>How strong the hills are drawn: faint, so the picture behind the bar (the cover's
+    /// colors, the aurora) still shows through and the duck and its things stand out.</summary>
+    private const double HillAlpha = 0.3;
+
+    /// <summary>The height of the hills (art pixels) at world column <paramref name="j"/>: two
+    /// slow swells of different lengths, so the line never quite repeats.</summary>
+    private static int HillHeight(int j) =>
+        (int)Math.Round(2 + 6 * (0.5 + 0.5 * Math.Sin(j * 0.022 + 0.7)) + 2 * (0.5 + 0.5 * Math.Sin(j * 0.061 + 2.1)));
+
+    /// <summary>Now and then a lone tree stands on a hilltop (more of them crowded the line into
+    /// a band).</summary>
+    private static bool TreeAt(int j) => (j % 233 == 40 || j % 317 == 7) && HillHeight(j) >= 6;
+
+    private static readonly string[] TreeArt =
+    [
+        "..XXX..",
+        ".XXXXX.",
+        "XXXXXXX",
+        ".XXXXX.",
+        "...X...",
+        "...X...",
+    ];
+
+    /// <summary>A far line of low rolling hills along the ground, one flat color (the cover's,
+    /// greyed) and faint, with a tree here and there, drifting by slower than the clouds and
+    /// fading at the bar's ends like them. Like everything here they move with the song. Drawn
+    /// as columns an art pixel wide, side by side columns of the same height as one rectangle.</summary>
+    private void DrawHills(DrawingContext dc, double ground, double pixel, Color accent)
+    {
+        var tone = Color.FromRgb((byte)((accent.R + 0x90) / 2), (byte)((accent.G + 0x90) / 2), (byte)((accent.B + 0x90) / 2));
+        Color Shade(double alpha) => Color.FromArgb((byte)(255 * HillAlpha * alpha), tone.R, tone.G, tone.B);
+        // how faint at screen x: fading out over the last stretch at either end, in a few steps
+        // so neighboring columns still share a rectangle
+        double Fade(double x) => Math.Round(Math.Clamp(Math.Min(x - Left, Right - x) / CloudFade, 0, 1) * 8) / 8;
+
+        var shift = RunnerNow * HillSpeed;
+        var first = (int)Math.Floor((Left + shift) / pixel);
+        var last = (int)Math.Ceiling((Right + shift) / pixel);
+        int runStart = first, runHeight = -1;
+        double runFade = -1;
+        for (var j = first; j <= last + 1; j++)
+        {
+            var x = j * pixel - shift;
+            var height = j <= last ? HillHeight(j) : -1;
+            var fade = j <= last ? Fade(x + pixel / 2) : -1;
+            if (height == runHeight && fade == runFade) continue;
+            if (runHeight > 0 && runFade > 0)
+            {
+                var x0 = OnGrid(runStart * pixel - shift);
+                var x1 = OnGrid(j * pixel - shift);
+                dc.DrawRectangle(Solid(Shade(runFade)), null, new Rect(x0, ground - runHeight * pixel, x1 - x0, runHeight * pixel));
+            }
+            runStart = j;
+            runHeight = height;
+            runFade = fade;
+        }
+
+        for (var j = first; j <= last; j++)
+        {
+            if (!TreeAt(j)) continue;
+            var left = j * pixel - shift - TreeArt[0].Length / 2 * pixel;
+            var fade = Fade(left + TreeArt[0].Length * pixel / 2);
+            if (fade <= 0) continue;
+            var brush = Solid(Shade(fade));
+            // standing on the hill (sunk into it, the overlap drew darker: both are see-through)
+            var top = ground - (HillHeight(j) + TreeArt.Length) * pixel;
+            for (var r = 0; r < TreeArt.Length; r++)
+                for (var c = 0; c < TreeArt[r].Length; c++)
+                    if (TreeArt[r][c] == 'X')
+                        dc.DrawRectangle(brush, null, new Rect(OnGrid(left) + c * pixel, OnGrid(top) + r * pixel, pixel, pixel));
+        }
+    }
+
     /// <summary>Clouds in the sky behind everything, faint, at a few heights above the duck's
     /// head. Like the obstacles they move with the song (stopping when it pauses), going round
     /// the bar: one about every 230 px of it.</summary>
@@ -698,7 +779,13 @@ public sealed partial class WaveSeekBar
             x = Left - 40 + (x % span + span) % span;
             // art pixels off the ground to its bottom: its top no higher than the eagle's wings go
             var altitude = 13 + (i * 2) % 3;
-            DrawSprite(dc, art, OnGrid(x), ground - altitude * pixel, pixel, 0.8);
+            // fading in as it comes past the right end and out before the left one (it went
+            // round to the other end at full strength, so it vanished all at once); gone
+            // entirely by the time it goes round
+            var width = art[0].Length * pixel;
+            var fade = Math.Clamp(Math.Min(x - Left, Right - (x + width)) / CloudFade, 0, 1);
+            if (fade <= 0) continue;
+            DrawSprite(dc, art, OnGrid(x), ground - altitude * pixel, pixel, 0.8 * fade);
         }
     }
 
