@@ -1200,6 +1200,9 @@ public sealed partial class WaveSeekBar : FrameworkElement
     /// of them with room to spare, so it may rise a little.</summary>
     private const double AuroraOverflow = 8;
 
+    /// <summary>The aurora's height at middling loudness, and how far it swings from there between
+    /// silence and full loudness (was 0.61 and 1.17 through <see cref="Loud"/>).</summary>
+    private const double AuroraMiddle = 0.55, AuroraSwing = 0.6;
     /// <summary>Northern lights filling the strip over the played part, above and below the line.
     /// Like a real aurora it is a hanging curtain: a bright lower hem that sways up and down in slow
     /// waves, folds that drift sideways along the top edge, and fine vertical rays whose brightness
@@ -1209,8 +1212,10 @@ public sealed partial class WaveSeekBar : FrameworkElement
     private void DrawAurora(DrawingContext dc, double mid, double thumbX, double room, double fadeIn, Color cool, Color accent, Color warm)
     {
         var t = _phase;
-        var lift = _activity * Loud(0.22, 0.78, _level) + 0.4 * EffectScale * _flash;
-        // (may be above the control's own top: the curtain rises past the bar by AuroraOverflow.
+        // Its own, narrower range rather than Loud's (+50% boost): with that the curtain all but
+        // vanished in quiet passages and sat pinned at its full height from about 70% loudness up.
+        // Now it swings about two-thirds as far around a slightly lower middle, flares less on a beat.
+        var lift = _activity * EffectScale * Math.Max(0, AuroraMiddle + AuroraSwing * (_level - 0.5)) + 0.28 * EffectScale * _flash;        // (may be above the control's own top: the curtain rises past the bar by AuroraOverflow.
         // It was held at y = 1, which kept it inside the bar whatever the overflow said.)
         var top = mid - room;
         var bottom = Math.Max(mid + 1, ActualHeight - 1);
