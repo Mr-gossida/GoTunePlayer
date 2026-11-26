@@ -713,8 +713,15 @@ public sealed partial class TagEditorViewModel : ObservableObject
         {
             SetLyricsText("");
             IsLyricsPending = false;
-            var with = _selection.Count(f => f.Model.HasLyrics);
-            LyricsInfo = _selection.Count == 0 ? "" : $"가사 있음 {with}곡 · 없음 {_selection.Count - with}곡";
+            var synced = _selection.Count(f => f.Model is { HasLyrics: true, IsLyricsSynced: true });
+            var plain = _selection.Count(f => f.Model is { HasLyrics: true, IsLyricsSynced: false });
+            var none = _selection.Count - synced - plain;
+            List<string> kinds = [];
+            if (plain > 0) kinds.Add($"일반 가사 {plain}곡");
+            if (synced > 0) kinds.Add($"싱크 가사 {synced}곡");
+            if (none > 0) kinds.Add($"가사 없음 {none}곡");
+            LyricsInfo = string.Join(" · ", kinds);
+            OnPropertyChanged(nameof(CanBatchSync));
             return;
         }
 
@@ -803,6 +810,19 @@ public sealed partial class TagEditorViewModel : ObservableObject
         _undoTimer.Stop();
         _undoTimer.Start();
         Saved?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>Several songs with lyrics: "선택한 곡 싱크 가사 만들기" (the batch window says which
+    /// it syncs and how long that takes before anything starts).</summary>
+    public bool CanBatchSync => _selection.Count > 1 && _selection.Any(f => f.Model.HasLyrics);
+
+    [RelayCommand]
+    private Task BatchSyncAsync() => BatchSyncWindow.OfferAsync(_selection);
+
+    /// <summary>A batch saved these songs' lyrics: re-read the panel if it shows any of them.</summary>
+    public void RefreshIfShowing(IReadOnlyCollection<LibraryFileViewModel> files)
+    {
+        if (_selection.Any(files.Contains)) Reload();
     }
 
     [RelayCommand]

@@ -745,14 +745,21 @@
                     <StackPanel Style="{StaticResource EditorEmpty}"
                                 Visibility="{Binding IsSingle, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=False}">
                         <ui:SymbolIcon Symbol="TextQuote24" FontSize="32" Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
-                        <TextBlock Text="가사는 한 곡씩 편집할 수 있습니다." Margin="0,10,0,0" TextAlignment="Center" TextWrapping="Wrap"
+                        <TextBlock Text="가사 내용은 한 곡씩 편집할 수 있습니다." Margin="0,10,0,0" TextAlignment="Center" TextWrapping="Wrap"
                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
                         <TextBlock Text="{Binding LyricsInfo}" Margin="0,4,0,0" FontSize="12" TextAlignment="Center"
                                    Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
-                        <ui:Button Content="선택한 곡 가사 찾기" Icon="{ui:SymbolIcon Search24}" HorizontalAlignment="Center" Margin="0,14,0,0"
-                                   Command="{Binding SearchLyricsCommand}"
-                                   Visibility="{Binding IsMulti, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}"
-                                   ToolTip="선택한 곡마다 LRCLIB에서 가사를 찾아 저장 전 변경으로 넣습니다"/>
+                        <!-- several songs: find their lyrics, or time the lyrics they have (one batch) -->
+                        <StackPanel HorizontalAlignment="Center" Margin="0,14,0,0"
+                                    Visibility="{Binding IsMulti, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}">
+                            <ui:Button Content="선택한 곡 가사 찾기" Icon="{ui:SymbolIcon Search24}" HorizontalAlignment="Stretch"
+                                       Command="{Binding SearchLyricsCommand}"
+                                       ToolTip="선택한 곡마다 LRCLIB에서 가사를 찾아 저장 전 변경으로 넣습니다"/>
+                            <ui:Button Content="선택한 곡 싱크 가사 만들기" Icon="{ui:SymbolIcon Sparkle24}" HorizontalAlignment="Stretch" Margin="0,8,0,0"
+                                       Command="{Binding BatchSyncCommand}"
+                                       Visibility="{Binding CanBatchSync, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}"
+                                       ToolTip="일반 가사가 있는 곡마다 음성 인식으로 줄의 시간을 맞춰 바로 저장합니다. 시작하기 전에 예상 시간을 알려 드립니다."/>
+                        </StackPanel>
                         <ContentControl Content="{Binding}" ContentTemplate="{StaticResource SearchStatusTemplate}" Focusable="False" Margin="0,8,0,0"/>
                     </StackPanel>
                 </Grid>

@@ -9,6 +9,10 @@
         WindowBackdropType="Mica" WindowCornerPreference="Round" ShowInTaskbar="False"
         PreviewKeyDown="Window_PreviewKeyDown">
     <Window.Resources>
+        <ResourceDictionary>
+        <ResourceDictionary.MergedDictionaries>
+            <ResourceDictionary Source="Views/SyncStepChips.xaml"/>
+        </ResourceDictionary.MergedDictionaries>
         <BooleanToVisibilityConverter x:Key="BoolToVisibility"/>
         <conv:EnumToVisibilityConverter x:Key="EnumToVisibilityConverter"/>
         <conv:PlayPauseIconConverter x:Key="PlayPauseIconConverter"/>
@@ -77,6 +81,7 @@
                 </Setter.Value>
             </Setter>
         </Style>
+        </ResourceDictionary>
     </Window.Resources>
 
     <Grid>
@@ -153,54 +158,13 @@
                 <!-- title, then (while syncing) the steps: done ones get a check, the current one the accent -->
                 <StackPanel Orientation="Horizontal" MinHeight="22">
                     <TextBlock Text="자동으로 맞추기" FontWeight="SemiBold" VerticalAlignment="Center"/>
-                    <ItemsControl ItemsSource="{Binding Steps}" Margin="14,0,0,0" VerticalAlignment="Center" Focusable="False">
+                    <ItemsControl ItemsSource="{Binding Steps}" Margin="14,0,0,0" VerticalAlignment="Center" Focusable="False"
+                                  ItemTemplate="{StaticResource SyncStepChipTemplate}">
                         <ItemsControl.ItemsPanel>
                             <ItemsPanelTemplate>
                                 <StackPanel Orientation="Horizontal"/>
                             </ItemsPanelTemplate>
                         </ItemsControl.ItemsPanel>
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate>
-                                <StackPanel Orientation="Horizontal">
-                                    <ui:SymbolIcon Symbol="ChevronRight12" FontSize="12" Margin="6,0"
-                                                   Foreground="{DynamicResource TextFillColorTertiaryBrush}"
-                                                   Visibility="{Binding HasPrevious, Converter={StaticResource BoolToVisibility}}"/>
-                                    <Border x:Name="Chip" CornerRadius="11" Padding="4,2,10,2" Background="Transparent">
-                                        <StackPanel Orientation="Horizontal">
-                                            <Grid Width="18" Height="18" Margin="0,0,6,0">
-                                                <Ellipse x:Name="Dot" Fill="{DynamicResource ControlFillColorSecondaryBrush}"
-                                                         Stroke="{DynamicResource ControlStrokeColorDefaultBrush}" StrokeThickness="1"/>
-                                                <TextBlock x:Name="Number" Text="{Binding Number}" FontSize="11" FontWeight="SemiBold"
-                                                           HorizontalAlignment="Center" VerticalAlignment="Center"
-                                                           Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
-                                                <ui:SymbolIcon x:Name="Check" Symbol="Checkmark12" FontSize="11" Visibility="Collapsed"
-                                                               HorizontalAlignment="Center" VerticalAlignment="Center"
-                                                               Foreground="{DynamicResource TextOnAccentFillColorPrimaryBrush}"/>
-                                            </Grid>
-                                            <TextBlock x:Name="Name" Text="{Binding Name}" FontSize="12" VerticalAlignment="Center"
-                                                       Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
-                                        </StackPanel>
-                                    </Border>
-                                </StackPanel>
-                                <DataTemplate.Triggers>
-                                    <DataTrigger Binding="{Binding IsActive}" Value="True">
-                                        <Setter TargetName="Chip" Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}"/>
-                                        <Setter TargetName="Dot" Property="Fill" Value="{DynamicResource AccentFillColorDefaultBrush}"/>
-                                        <Setter TargetName="Dot" Property="Stroke" Value="{x:Null}"/>
-                                        <Setter TargetName="Number" Property="Foreground" Value="{DynamicResource TextOnAccentFillColorPrimaryBrush}"/>
-                                        <Setter TargetName="Name" Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}"/>
-                                        <Setter TargetName="Name" Property="FontWeight" Value="SemiBold"/>
-                                    </DataTrigger>
-                                    <DataTrigger Binding="{Binding IsDone}" Value="True">
-                                        <Setter TargetName="Dot" Property="Fill" Value="{DynamicResource AccentFillColorDefaultBrush}"/>
-                                        <Setter TargetName="Dot" Property="Stroke" Value="{x:Null}"/>
-                                        <Setter TargetName="Number" Property="Visibility" Value="Collapsed"/>
-                                        <Setter TargetName="Check" Property="Visibility" Value="Visible"/>
-                                        <Setter TargetName="Name" Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}"/>
-                                    </DataTrigger>
-                                </DataTemplate.Triggers>
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
                     </ItemsControl>
                 </StackPanel>
 

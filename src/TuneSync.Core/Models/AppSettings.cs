@@ -174,6 +174,11 @@ public sealed class AppSettings
     /// <summary>How much of the CPU "싱크 가사 만들기" may use for what runs on it.</summary>
     public LyricsSyncCpuUsage LyricsSyncCpuUsage { get; set; } = LyricsSyncCpuUsage.Normal;
 
+    /// <summary>How fast "싱크 가사 만들기" has been on this PC: seconds per minute of song, per
+    /// device setting (see <see cref="Services.LyricsSync.LyricsSyncSpeed"/>), for the time a
+    /// batch of songs will take.</summary>
+    public Dictionary<string, double> LyricsSyncSecondsPerMinute { get; set; } = [];
+
     /// <summary>The equalizer and tone controls.</summary>
     public ToneSettings Tone { get; set; } = new();
 

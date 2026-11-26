@@ -175,6 +175,11 @@ public sealed partial class LyricsSyncViewModel : ObservableObject, IDisposable
     private async Task AutoSyncAsync()
     {
         if (IsBusy) return;
+        if (LyricsSyncActivity.BatchRunning)
+        {
+            Toast.Info("싱크 가사 일괄 만들기가 진행 중입니다", "일괄 작업이 끝나거나 중지한 뒤에 자동으로 맞출 수 있습니다. 두 작업이 함께 돌면 둘 다 두 배쯤 느려집니다.");
+            return;
+        }
         if (NeedsModel)
         {
             // Someone who synced before the vocal separation came along has Whisper already.
@@ -198,6 +203,7 @@ public sealed partial class LyricsSyncViewModel : ObservableObject, IDisposable
 
         var ct = BeginWork();
         IsSyncing = true;
+        LyricsSyncActivity.SingleStarted();
         Progress = 0;
         try
         {
@@ -210,7 +216,10 @@ public sealed partial class LyricsSyncViewModel : ObservableObject, IDisposable
             _engine ??= new LyricsSyncEngine(LyricsSyncOptions.From(_settings));
             ShowSteps(_engine.Separates);
             var progress = new Progress<LyricsSyncEngine.SyncProgress>(Show);
+            var clock = System.Diagnostics.Stopwatch.StartNew();
             var result = await _engine.SyncAsync(audio, plain, progress, ct);
+            // How fast this PC is, for the time a batch of songs is said to take.
+            if (LyricsSyncSpeed.Record(_settings, File.Model.Duration, clock.Elapsed)) AppSettingsStore.Save(_settings);
             for (var i = 0; i < sung.Count && i < result.Count; i++)
             {
                 sung[i].Time = result[i].Time;
@@ -239,6 +248,7 @@ public sealed partial class LyricsSyncViewModel : ObservableObject, IDisposable
         finally
         {
             IsSyncing = false;
+            LyricsSyncActivity.SingleEnded();
             Progress = 0;
             StepPercent = "";
             ProcessingDevice = "";
@@ -250,7 +260,7 @@ public sealed partial class LyricsSyncViewModel : ObservableObject, IDisposable
     private void ShowSteps(bool separates)
     {
         Steps.Clear();
-        string[] names = separates ? ["목소리 분리", "노래 듣기", "줄 맞추기"] : ["노래 듣기", "줄 맞추기"];
+        var names = SyncProgressText.StepNames(separates);
         for (var i = 0; i < names.Length; i++) Steps.Add(new SyncStepViewModel(i + 1, names[i]));
         SetStep(0);
     }
@@ -264,49 +274,11 @@ public sealed partial class LyricsSyncViewModel : ObservableObject, IDisposable
 
     private void Show(LyricsSyncEngine.SyncProgress p)
     {
-        var separates = Steps.Count == 3;
-        var listening = separates ? 1 : 0;
-        switch (p.Stage)
-        {
-            case LyricsSyncEngine.Stage.Decoding:
-                // Reading the song comes before the first step proper.
-                SetStep(0);
-                ProcessingDevice = "";
-                (Status, Progress, StepPercent) = ("노래를 읽는 중…", 0, "");
-                break;
-            case LyricsSyncEngine.Stage.Separating:
-                SetStep(0);
-                ProcessingDevice = _engine?.SeparationDevice ?? "";
-                (Status, Progress, StepPercent) = ("반주를 빼고 목소리만 남기는 중…", p.Value, Percent(p.Value));
-                break;
-            case LyricsSyncEngine.Stage.Listening:
-                SetStep(listening);
-                // Until whisper.cpp says which device it took, it's still loading the model (on
-                // the graphics card that can take several seconds the first time).
-                var device = LyricsSyncEngine.ListeningDevice;
-                ProcessingDevice = device switch { null => "", "CPU" => "CPU", _ => LyricsSyncEngine.ListeningWithCpu ? "GPU + CPU" : "GPU" };
-                (Status, Progress, StepPercent) = device is null
-                    ? ($"{PassName(p)} · 음성 인식 준비 중…", 0, "")
-                    : (PassName(p), p.Value, Percent(p.Value));
-                break;
-            default:
-                SetStep(Steps.Count - 1);
-                (Status, Progress, StepPercent) = ("들은 내용과 가사 줄을 맞추는 중…", 1, "");
-                break;
-        }
-    }
-
-    private static string Percent(double value) => $"{(int)(value * 100)}%";
-
-    /// <summary>"첫 번째 듣기 · 목소리만" and so on: a third listen only happens when the first two
-    /// disagree, so it's "한 번 더", not "세 번째" of a count that was never announced.
-    /// Then the stretches no listen heard: "놓친 부분 다시 듣기 · 2번째 구간".</summary>
-    private static string PassName(LyricsSyncEngine.SyncProgress p)
-    {
-        if (p.Relistening) return $"놓친 부분 다시 듣기 · {p.PassIndex + 1}번째 구간";
-        var which = p.PassIndex switch { 0 => "첫 번째 듣기", 1 => "두 번째 듣기", _ => "한 번 더 듣기" };
-        var what = p.Listen.Source == LyricsSyncEngine.Source.Vocals ? "목소리만" : p.Listen.Hinted ? "가사를 참고해서" : "원곡";
-        return $"{which} · {what}";
+        var shown = SyncProgressText.Describe(p, _engine, Steps.Count);
+        SetStep(shown.Step);
+        // Reading the song shows no device; the last step keeps the one before.
+        if (p.Stage != LyricsSyncEngine.Stage.Aligning) ProcessingDevice = shown.Device;
+        (Status, Progress, StepPercent) = (shown.Status, shown.Value, shown.Percent);
     }
 
     private async Task<bool> DownloadModelAsync()

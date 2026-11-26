@@ -81,8 +81,6 @@ public sealed class WhisperTranscriber(string modelPath, LyricsSyncOptions optio
         IProgress<int>? progress, CancellationToken ct, IReadOnlyList<(double Start, double End)>? windows = null)
     {
         var listeners = OpenListeners();
-        // After the model is read: a try on the graphics card that gave up mustn't count.
-        _deviceKnown = false;
         // Sharing (until one of the two was found much slower, or failed).
         _sharedGpu = listeners.Count(l => !l.Speed.Retired) > 1 ? _gpuName ?? "GPU" : null;
 
@@ -179,6 +177,9 @@ public sealed class WhisperTranscriber(string modelPath, LyricsSyncOptions optio
             foreach (var (factory, _) in factories) factory.Dispose();
             throw new ObjectDisposedException(nameof(WhisperTranscriber));
         }
+        // A try on the graphics card that gave up while the model was read mustn't count. (Only
+        // here, not at every listen: the badge and the status would blink "준비 중" each pass.)
+        _deviceKnown = false;
         return _listeners = [.. factories.Select(f => new Listener(f.Factory, f.OnGpu, new WorkShare.Device(f.OnGpu ? "GPU" : "CPU")))];
     }
 
