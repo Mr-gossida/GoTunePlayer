@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
 using TuneSync.Core.Models;
+using Wpf.Ui.Appearance;
 
 namespace TuneSync.App;
 
@@ -168,8 +169,9 @@ public sealed partial class WaveSeekBar : FrameworkElement
         Focusable = true;
         UseLayoutRounding = true; // on whole screen pixels, so 오리's pixel art stays crisp
         FocusVisualStyle = null;
-        Loaded += (_, _) => UpdateAnimationState();
-        Unloaded += (_, _) => StopAnimating();
+        // (the theme's event is static: subscribed only while loaded, so a closed window's bar isn't kept)
+        Loaded += (_, _) => { UpdateAnimationState(); ApplicationThemeManager.Changed += OnAppThemeChanged; };
+        Unloaded += (_, _) => { StopAnimating(); ApplicationThemeManager.Changed -= OnAppThemeChanged; };
         // Hidden (mini player in use) or minimized: no waves to draw.
         OnScreen.Watch(this, () => { if (OnScreen.Check(this)) UpdateAnimationState(); else StopAnimating(); });
     }

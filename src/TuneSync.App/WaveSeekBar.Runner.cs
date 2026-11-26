@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Media;
 using TuneSync.Core.Models;
+using Wpf.Ui.Appearance;
 
 namespace TuneSync.App;
 
@@ -9,7 +10,8 @@ namespace TuneSync.App;
 // play, each set at a moment of the song and picked by how loud the music is then: a log, a
 // pumpkin, a stone or a toadstool when it's quiet; a hay bale, a fence or a hedgehog; a wooden
 // barrel, a milk can, a crate or a sunflower when it's loud; now and then a fox running at it, and
-// in loud passages an eagle swooping in at head height. It jumps the ones on the ground and runs
+// in loud passages an eagle swooping in at head height. Near the end the way is clear and the
+// duck walks into its house at the right end. By day (the sun) with the light theme, by night (moon, stars) with the dark one. It jumps the ones on the ground and runs
 // ducked under the eagle. Now and then a worm, a caterpillar or a grasshopper comes instead: the duck bends down,
 // pecks it up on the beat and munches. Faint clouds drift by behind, slower than the ground.
 // The fox, jumped, skids to a sit, looks up at the duck going over and then gazes after it.
@@ -336,7 +338,8 @@ public sealed partial class WaveSeekBar
             _eatenCues.Clear();
             _cuesFor = Waveform;
             _cuesLength = Maximum;
-            _cuesFrom = Math.Max(0.6, now + (Right - duck) / ObstacleSpeed - 0.9);
+            // (and not before the duck is out of its egg and off)
+            _cuesFrom = Math.Max(HatchOut + 1, now + (Right - duck) / ObstacleSpeed - 0.9);
         }
         // the song's loudness just came (it's worked out after the song starts): what's on the
         // track stays as it is, and only what comes after it is picked again (all of it picked
@@ -350,7 +353,9 @@ public sealed partial class WaveSeekBar
         var until = now + (Right - Left) / ObstacleSpeed + 1;
         var time = _cues.Count > 0 ? _cues[^1].Time : _cuesFrom;
         var beats = SongBeats();
-        while (time < until && time < Maximum)
+        // (nothing in the last stretch: the way to the house is clear; a cue comes at most 2.4 s
+        // after the one before)
+        while (time < until && time < Maximum - HouseSeconds - 2.4)
         {
             var n = _cues.Count;
             // where it would go by the dice alone; a beat near there is better
@@ -613,8 +618,13 @@ public sealed partial class WaveSeekBar
     {
         var pixel = ArtPixel;
         var ground = OnGrid(mid - 1.5);
-        DrawClouds(dc, ground, pixel);
-        DrawHills(dc, ground, pixel, accent);
+        var night = Night;
+        DrawSky(dc, ground, pixel, night);
+        DrawClouds(dc, ground, pixel, night);
+        DrawHills(dc, ground, pixel, accent, night);
+        var house = HouseShown;
+        var doorRight = OnGrid(Right - (DuckArt[0].Length / 2.0 + 1) * pixel);
+        if (house > 0) DrawHouse(dc, ground, pixel, doorRight, house, night || thumbX - DuckArt[0].Length / 2.0 * pixel >= doorRight - 4 * pixel);
         // placed for this very moment: also when the song is jumped in while paused (no frames run then)
         PlaceObstacles(thumbX);
         foreach (var o in _obstacles)
@@ -642,7 +652,9 @@ public sealed partial class WaveSeekBar
             var bottom = kind == Hazard.Eagle ? ground - EagleAltitude * pixel
                        : kind == Hazard.Fox && frame == 2 ? ground - pixel
                        : kind == Hazard.Grasshopper ? ground - OnGrid(GrassHop(o.X, thumbX, pixel)) : ground;
-            DrawSprite(dc, art, OnGrid(o.X - art[0].Length * pixel / 2), bottom, pixel, fade);
+            var artLeft = OnGrid(o.X - art[0].Length * pixel / 2);
+            DrawOutline(dc, art, artLeft, bottom, pixel, fade, night);
+            DrawSprite(dc, art, artLeft, bottom, pixel, fade);
         }
 
         foreach (var d in _dust)
@@ -653,6 +665,21 @@ public sealed partial class WaveSeekBar
             dc.DrawRectangle(Solid(Color.FromArgb((byte)(190 * a), c.R, c.G, c.B)), null,
                 new Rect(OnGrid(d.X), OnGrid(d.Y), pixel, pixel));
         }
+
+        // the start of the song: the duck hatches from an egg, then sets off
+        var since = RunnerNow;
+        var hatchScene = Maximum >= StorySong;
+        if (hatchScene && since < HatchBreak)
+        {
+            DrawEgg(dc, since, thumbX, ground, pixel);
+            return;
+        }
+        var shellX = OnGrid(ThumbXAt(HatchBreak) - EggArt[0].Length * pixel / 2);
+        var hatching = hatchScene && since < HatchOut;
+        // once it's off, the bottom of the shell stays where it broke and fades away (it broke at
+        // the bar's very start: carried off with the ground it was gone at once, past the end)
+        var shellFade = Math.Clamp(1 - (since - HatchOut) / 0.8, 0, 1);
+        if (hatchScene && !hatching && shellFade > 0) DrawSprite(dc, EggBottomArt, shellX, ground, pixel, shellFade);
 
         // the duck: running, tucked up in a jump, or ducked under the eagle
         var step = (int)(_runTime * 10) % 2;
@@ -689,12 +716,188 @@ public sealed partial class WaveSeekBar
         // (placed by the standing duck's width: the pecking one reaches further forward)
         var left = OnGrid(thumbX - DuckArt[0].Length * pixel / 2);
         var top = OnGrid(ground - _jumpY - bob) - rows * pixel;
+        if (hatching)
+        {
+            // just out: it pops up out of the bottom of the shell with a quack, and stands in it
+            // a moment before running off
+            var out_ = since - HatchBreak;
+            body = out_ < 0.3 ? DuckQuack : DuckArt;
+            feet = DuckFeet[0];
+            top = OnGrid(ground + (1 - Math.Clamp(out_ / 0.2, 0, 1)) * 6 * pixel) - rows * pixel;
+            // (rising from inside the shell: nothing of it below the ground)
+            dc.PushClip(new RectangleGeometry(new Rect(-1000, -1000, ActualWidth + 2000, ground + 1000)));
+            DrawSprite(dc, body, left, top + body.Length * pixel, pixel, 1);
+            DrawSprite(dc, feet, left, top + rows * pixel, pixel, 1);
+            dc.Pop();
+            DrawSprite(dc, EggBottomArt, shellX, ground, pixel, 1);
+            // the top of the shell flies off up and back, and fades
+            var fly = Math.Min(out_, 0.5);
+            var topBottom = ground - (EggArt.Length - EggBottomArt.Length + 1) * pixel;
+            DrawSprite(dc, EggTopArt, OnGrid(shellX - 50 * fly), OnGrid(topBottom - (60 * fly - 90 * fly * fly)), pixel, Math.Clamp(1 - out_ / 0.5, 0, 1));
+            return;
+        }
+        // going in at the house's door: what has gone past the door's far side is inside
+        if (house > 0) dc.PushClip(new RectangleGeometry(new Rect(-1000, -1000, doorRight + 1000, ActualHeight + 2000)));
         DrawSprite(dc, body, left, top + body.Length * pixel, pixel, 1);
         DrawSprite(dc, feet, left, top + rows * pixel, pixel, 1);
+        if (house > 0) dc.Pop();
     }
 
-    /// <summary>Pixel art from rows of letters (see <see cref="ArtColor"/>; '.' is clear), its
-    /// bottom-left corner at (<paramref name="left"/>, <paramref name="bottom"/>).</summary>
+    // ---- the start of the song: the duck hatches ----
+
+    /// <summary>Songs at least this long (seconds) get the hatching and the house (a short one
+    /// would be nothing but them).</summary>
+    private const double StorySong = 20;
+
+    /// <summary>When (seconds into the song) the egg starts to crack, breaks open, and the duck
+    /// runs off out of it.</summary>
+    private const double HatchCrack = 1.2, HatchBreak = 2.0, HatchOut = 2.6;
+
+    /// <summary>Where the thumb is at <paramref name="seconds"/> into the song.</summary>
+    private double ThumbXAt(double seconds) => Left + (Right - Left) * Math.Clamp(seconds / Maximum, 0, 1);
+
+    /// <summary>The egg before it breaks: rocking now and then, a crack spreading across it,
+    /// rocking harder and faster as it cracks.</summary>
+    private void DrawEgg(DrawingContext dc, double since, double thumbX, double ground, double pixel)
+    {
+        var art = since < HatchCrack ? EggArt : since < HatchCrack + 0.3 ? EggCrackingArt : EggCrackedArt;
+        int tilt;
+        if (since < HatchCrack)
+        {
+            // a little rock (left, back, right, back) in the first half of each 0.6 s
+            var phase = since % 0.6;
+            tilt = phase > 0.3 ? 0 : (int)(phase / 0.075) switch { 0 => -1, 2 => 1, _ => 0 };
+        }
+        else tilt = ((int)(since / 0.06) % 4) switch { 0 => -1, 2 => 1, _ => 0 };
+        var left = OnGrid(thumbX - art[0].Length * pixel / 2);
+        // rocking on its base: the top half leans a pixel over, the bottom stays put
+        var split = 6;
+        DrawSprite(dc, art[..split], left + tilt * pixel, ground - (art.Length - split) * pixel, pixel, 1);
+        DrawSprite(dc, art[split..], left, ground, pixel, 1);
+    }
+
+    // ---- the end of the song: the duck goes home ----
+
+    /// <summary>How long before the song ends the duck's house shows at the bar's right end
+    /// (no obstacles come in that last stretch).</summary>
+    private const double HouseSeconds = 12;
+
+    /// <summary>How much the house shows: fading in over a second and a half as the last stretch
+    /// begins (and gone again when the song is jumped back).</summary>
+    private double HouseShown => Maximum >= StorySong ?Math.Clamp((RunnerNow - (Maximum - HouseSeconds)) / 1.5, 0, 1) : 0;
+
+    /// <summary>The house at the bar's right end, its door on the left so the duck walks in
+    /// (the duck is drawn in front of it and cut off past the door's far side, so it goes in
+    /// through the doorway, and it's all the way in as the song ends); its window lights up as
+    /// the duck gets home, or is lit all along at night.</summary>
+    private void DrawHouse(DrawingContext dc, double ground, double pixel, double doorRight, double alpha, bool lit)
+    {
+        // the door's far side is the 13th column
+        var left = doorRight - 13 * pixel;
+        DrawSprite(dc, lit ? HouseLitArt : HouseArt, left, ground, pixel, alpha);
+    }
+
+    private static readonly string[] HouseArt =
+    [
+        ".........RRRR.........",
+        ".......RRRRRRRR.......",
+        ".....RRRRRRRRRRRR.....",
+        "...RRRRRRRRRRRRRRRR...",
+        ".RRRRRRRRRRRRRRRRRRRR.",
+        "QQQQQQQQQQQQQQQQQQQQQQ",
+        ".ccccbbbbbccccccccccb.",
+        ".llbbDDDDDbbllllllllb.",
+        ".bbDDDDDDDDDblllllllb.",
+        ".bDDDDDDDDDDDbccccccb.",
+        ".bDDDDDDDDDDDlbbbbbbb.",
+        ".bDDDDDDDDDDDlbJJbJJb.",
+        ".bDDDDDDDDDDDcbbbbbbb.",
+        ".bDDDDDDDDDDDlbJJbJJb.",
+        ".bDDDDDDDDDDDlbbbbbbb.",
+        ".bDDDDDDDDDDDbccccccb.",
+        ".bDDDDDDDDDDDbllllllb.",
+        ".bDDDDDDDDDDDbllllllb.",
+        ".bDDDDDDDDDDDbccccccb.",
+        ".bDDDDDDDDDDDbllllllb.",
+        ".bDDDDDDDDDDDbllllllb.",
+    ];
+
+    /// <summary>The house with its window lit.</summary>
+    private static readonly string[] HouseLitArt = [.. HouseArt.Select(row => row.Replace('J', 'L'))];
+
+    // ---- the sky: day or night, with the app's theme ----
+
+    /// <summary>Night with the dark theme, day with the light one (it used to be picked per song
+    /// at random; following the theme it suits the rest of the screen). Redrawn when the theme
+    /// changes (see <see cref="OnAppThemeChanged"/>).</summary>
+    private static bool Night => ApplicationThemeManager.GetAppTheme() != ApplicationTheme.Light;
+
+    /// <summary>The app's theme changed: draw the sky again (while paused no frames run).</summary>
+    private void OnAppThemeChanged(ApplicationTheme theme, Color accent)
+    {
+        if (Look == SeekBarStyle.Runner) InvalidateVisual();
+    }
+
+    /// <summary>By day the sun, by night the moon and twinkling stars; still, high up behind
+    /// everything, fading at the bar's ends like the clouds.</summary>
+    private void DrawSky(DrawingContext dc, double ground, double pixel, bool night)
+    {
+        double Fade(double x) => Math.Clamp(Math.Min(x - Left, Right - x) / CloudFade, 0, 1);
+        var width = Right - Left;
+        var orbX = OnGrid(Left + 0.72 * width);
+        var orb = night ? MoonArt : SunArt;
+        var orbFade = Fade(orbX);
+        if (orbFade > 0) DrawSprite(dc, orb, orbX, ground - 15 * pixel, pixel, (night ? 0.85 : 1.0) * orbFade); // (a see-through sun looked like a dull brown coin)
+        if (!night) return;
+        var count = Math.Max(6, (int)(width / 45));
+        for (var i = 0; i < count; i++)
+        {
+            var x = Left + SongDice(i, 11) * width;
+            var altitude = 11 + (int)(SongDice(i, 12) * 11);
+            // not over the moon
+            if (Math.Abs(x - (orbX + 3 * pixel)) < 8 * pixel && altitude > 12) continue;
+            var fade = Fade(x);
+            if (fade <= 0) continue;
+            // each twinkles at its own pace
+            var twinkle = 0.35 + 0.65 * (0.5 + 0.5 * Math.Sin(_sceneTime * (1.2 + SongDice(i, 13)) + i * 2.1));
+            var color = Color.FromArgb((byte)(255 * 0.8 * twinkle * fade), 0xFF, 0xF4, 0xD0);
+            var y = OnGrid(ground - altitude * pixel);
+            x = OnGrid(x);
+            var brush = Solid(color);
+            dc.DrawRectangle(brush, null, new Rect(x, y, pixel, pixel));
+            // a few bigger ones, a little cross
+            if (i % 5 == 0)
+            {
+                dc.DrawRectangle(brush, null, new Rect(x - pixel, y, pixel, pixel));
+                dc.DrawRectangle(brush, null, new Rect(x + pixel, y, pixel, pixel));
+                dc.DrawRectangle(brush, null, new Rect(x, y - pixel, pixel, pixel));
+                dc.DrawRectangle(brush, null, new Rect(x, y + pixel, pixel, pixel));
+            }
+        }
+    }
+
+    private static readonly string[] SunArt =
+    [
+        "..yyy..",
+        ".yyhyy.",
+        "yyhhyyy",
+        "yyhyyyy",
+        "yyyyyyy",
+        ".yyyyy.",
+        "..yyy..",
+    ];
+
+    private static readonly string[] MoonArt =
+    [
+        "..WWW.",
+        ".WWW..",
+        "WWW...",
+        "WWW...",
+        "WWW...",
+        ".WWW..",
+        "..WWW.",
+    ];
+
     /// <summary>How fast the clouds drift by (px a second): a quarter of the ground's speed, so
     /// they read as far off behind it.</summary>
     private const double CloudSpeed = ObstacleSpeed / 4;
@@ -733,10 +936,14 @@ public sealed partial class WaveSeekBar
     /// greyed) and faint, with a tree here and there, drifting by slower than the clouds and
     /// fading at the bar's ends like them. Like everything here they move with the song. Drawn
     /// as columns an art pixel wide, side by side columns of the same height as one rectangle.</summary>
-    private void DrawHills(DrawingContext dc, double ground, double pixel, Color accent)
+    private void DrawHills(DrawingContext dc, double ground, double pixel, Color accent, bool night)
     {
-        var tone = Color.FromRgb((byte)((accent.R + 0x90) / 2), (byte)((accent.G + 0x90) / 2), (byte)((accent.B + 0x90) / 2));
-        Color Shade(double alpha) => Color.FromArgb((byte)(255 * HillAlpha * alpha), tone.R, tone.G, tone.B);
+        // at night mostly a deep blue (the cover's color only a touch), a little stronger
+        var tone = night
+            ? Color.FromRgb((byte)((accent.R + 3 * 0x30) / 4), (byte)((accent.G + 3 * 0x3C) / 4), (byte)((accent.B + 3 * 0x66) / 4))
+            : Color.FromRgb((byte)((accent.R + 0x90) / 2), (byte)((accent.G + 0x90) / 2), (byte)((accent.B + 0x90) / 2));
+        var strength = night ? 0.45 : HillAlpha;
+        Color Shade(double alpha) => Color.FromArgb((byte)(255 * strength * alpha), tone.R, tone.G, tone.B);
         // how faint at screen x: fading out over the last stretch at either end, in a few steps
         // so neighboring columns still share a rectangle
         double Fade(double x) => Math.Round(Math.Clamp(Math.Min(x - Left, Right - x) / CloudFade, 0, 1) * 8) / 8;
@@ -782,14 +989,16 @@ public sealed partial class WaveSeekBar
     /// <summary>Clouds in the sky behind everything, faint, at a few heights above the duck's
     /// head. Like the obstacles they move with the song (stopping when it pauses), going round
     /// the bar: one about every 230 px of it.</summary>
-    private void DrawClouds(DrawingContext dc, double ground, double pixel)
+    private void DrawClouds(DrawingContext dc, double ground, double pixel, bool night)
     {
         var span = Right - Left + 80;
         var count = Math.Max(2, (int)(span / 230));
         var now = RunnerNow;
         for (var i = 0; i < count; i++)
         {
-            var art = CloudArt[i % CloudArt.Length];
+            // at night only every other one, and dimmer
+            if (night && i % 2 == 1) continue;
+            var art = (night ? CloudArt : CloudDayArt)[i % CloudArt.Length];
             // spread out evenly, each nudged a little so they don't look lined up
             var offset = (i + 0.35 * Math.Sin(i * 2.4)) * span / count;
             var x = offset - now * CloudSpeed;
@@ -802,10 +1011,44 @@ public sealed partial class WaveSeekBar
             var width = art[0].Length * pixel;
             var fade = Math.Clamp(Math.Min(x - Left, Right - (x + width)) / CloudFade, 0, 1);
             if (fade <= 0) continue;
-            DrawSprite(dc, art, OnGrid(x), ground - altitude * pixel, pixel, 0.8 * fade);
+            DrawSprite(dc, art, OnGrid(x), ground - altitude * pixel, pixel, (night ? 0.35 : 0.8) * fade);
         }
     }
 
+    /// <summary>Each picture's outline: the clear cells next to its pixels (and just outside it),
+    /// worked out once per picture.</summary>
+    private static readonly Dictionary<string[], (int Row, int Column)[]> _outlines = new(ReferenceEqualityComparer.Instance);
+
+    private static (int Row, int Column)[] OutlineOf(string[] art)
+    {
+        if (_outlines.TryGetValue(art, out var known)) return known;
+        bool Filled(int r, int c) => r >= 0 && r < art.Length && c >= 0 && c < art[r].Length && ArtColor(art[r][c]) is not null;
+        var width = art.Max(row => row.Length);
+        var cells = new List<(int, int)>();
+        for (var r = -1; r <= art.Length; r++)
+            for (var c = -1; c <= width; c++)
+                if (!Filled(r, c) && (Filled(r - 1, c) || Filled(r + 1, c) || Filled(r, c - 1) || Filled(r, c + 1)))
+                    cells.Add((r, c));
+        return _outlines[art] = [.. cells];
+    }
+
+    /// <summary>An outline round a picture, so it stands out whatever the theme: soft and dark on
+    /// the light one (white and pale parts - the fox's muzzle and tail tip, the eagle's head, the
+    /// milk can, the toadstool's stem - were lost on it), faint and light on the dark one (dark
+    /// wood - the barrel, the crate, the log - was lost against the night's blue hills). The duck,
+    /// the egg and the house have outlines of their own.</summary>
+    private void DrawOutline(DrawingContext dc, string[] art, double left, double bottom, double pixel, double alpha, bool night)
+    {
+        var brush = Solid(night
+            ? Color.FromArgb((byte)(70 * alpha), 0xF0, 0xEC, 0xE4)
+            : Color.FromArgb((byte)(150 * alpha), 0x4A, 0x40, 0x3A));
+        var top = bottom - art.Length * pixel;
+        foreach (var (r, c) in OutlineOf(art))
+            dc.DrawRectangle(brush, null, new Rect(left + c * pixel, top + r * pixel, pixel, pixel));
+    }
+
+    /// <summary>Pixel art from rows of letters (see <see cref="ArtColor"/>; '.' is clear), its
+    /// bottom-left corner at (<paramref name="left"/>, <paramref name="bottom"/>).</summary>
     private void DrawSprite(DrawingContext dc, string[] art, double left, double bottom, double pixel, double alpha)
     {
         var top = bottom - art.Length * pixel;
@@ -874,6 +1117,14 @@ public sealed partial class WaveSeekBar
         // a cloud's white and its shaded underside
         'U' => Color.FromRgb(0xF2, 0xF6, 0xFC),
         'V' => Color.FromRgb(0xB8, 0xC8, 0xDC),
+        // a cloud by day and its underside
+        'A' => Color.FromRgb(0xD6, 0xE2, 0xF2),
+        'B' => Color.FromRgb(0xA6, 0xBA, 0xD4),
+        // the house: inside the door, the window dark and lit; the hedgehog's face
+        'D' => Color.FromRgb(0x2C, 0x20, 0x18),
+        'J' => Color.FromRgb(0x3A, 0x40, 0x58),
+        'L' => Color.FromRgb(0xFF, 0xD8, 0x70),
+        'C' => Color.FromRgb(0xF0, 0xDC, 0xC0),
         _ => null,
     };
 
@@ -1205,6 +1456,10 @@ public sealed partial class WaveSeekBar
         ],
     ];
 
+    /// <summary>The clouds by day, a pale blue: by day the theme is light, and white clouds were lost
+    /// on it. (After <see cref="CloudArt"/>: static fields are set in order.)</summary>
+    private static readonly string[][] CloudDayArt = [.. CloudArt.Select(c => c.Select(row => row.Replace('U', 'A').Replace('V', 'B')).ToArray())];
+
     /// <summary>A stone: a low rounded lump, lit on top, shaded at its right and underneath.</summary>
     private static readonly string[] RockArt =
     [
@@ -1225,21 +1480,25 @@ public sealed partial class WaveSeekBar
         "..wwn..",
     ];
 
-    /// <summary>A hedgehog trundling at the duck: a pointed pale face with a dark eye and nose,
-    /// a round back of spines with light tips, little dark feet stepping in two frames.</summary>
+    /// <summary>A hedgehog trundling at the duck: a cream pointed face with a dark eye and nose
+    /// poking out of a dome of brown spines whose light tips make a jagged edge, little dark feet
+    /// stepping in two frames. (Its face was once tan like its spines, and the whole read as a
+    /// brown lump.)</summary>
     private static readonly string[] HedgehogBody =
     [
-        "....uufuuf..",
-        "..ufuufuufu.",
-        ".rkuufuufuuf",
-        "krrrrufuufuu",
-        "..rrruuuuuu.",
+        "......f.f.f.f..",
+        ".....fufufufuf.",
+        "....uuuuuuuuuuf",
+        "..CCuuuuuuuuuuu",
+        ".CkCCuuuuuuuuuf",
+        "kCCCCCuuuuuuuu.",
+        "...CCCCuuuuuu..",
     ];
 
     private static readonly string[][] HedgehogWalk =
     [
-        [.. HedgehogBody, "..d.d..d.d.."],
-        [.. HedgehogBody, "...d.d..d.d."],
+        [.. HedgehogBody, "...k.k....k.k.."],
+        [.. HedgehogBody, "....k.k....k.k."],
     ];
 
     /// <summary>A wooden crate: a light frame round a darker panel crossed by a brace, shaded on
@@ -1324,5 +1583,84 @@ public sealed partial class WaveSeekBar
             ".GGGGGGGGGGGg",
             "..g.g.......g",
         ],
+    ];
+
+    /// <summary>The egg the duck hatches from at the start of a song: cream, outlined like the duck, a shine at its upper left, shaded at its lower right.</summary>
+    private static readonly string[] EggArt =
+    [
+        "....KKK....",
+        "...KwwwK...",
+        "..KwwwwwK..",
+        ".KwUwwwwwK.",
+        ".KwUwwwwwK.",
+        "KwwwwwwwwwK",
+        "KwwwwwwwwwK",
+        "KwwwwwwwwnK",
+        "KwwwwwwwwnK",
+        "KwwwwwwwnnK",
+        ".KwwwwwnnK.",
+        "..KwwnnnK..",
+        "...KKKKK...",
+    ];
+
+    /// <summary>...a crack starting across it...</summary>
+    private static readonly string[] EggCrackingArt =
+    [
+        "....KKK....",
+        "...KwwwK...",
+        "..KwwwwwK..",
+        ".KwUwwwwwK.",
+        ".KwUwwwwwK.",
+        "KwKwKwwwwwK",
+        "KKwKwKwwwwK",
+        "KwwwwwwwwnK",
+        "KwwwwwwwwnK",
+        "KwwwwwwwnnK",
+        ".KwwwwwnnK.",
+        "..KwwnnnK..",
+        "...KKKKK...",
+    ];
+
+    /// <summary>...cracked all the way round...</summary>
+    private static readonly string[] EggCrackedArt =
+    [
+        "....KKK....",
+        "...KwwwK...",
+        "..KwwwwwK..",
+        ".KwUwwwwwK.",
+        ".KwUwwwwwK.",
+        "KwKwKwKwKwK",
+        "KKwKwKwKwKK",
+        "KwwwwwwwwnK",
+        "KwwwwwwwwnK",
+        "KwwwwwwwnnK",
+        ".KwwwwwnnK.",
+        "..KwwnnnK..",
+        "...KKKKK...",
+    ];
+
+    /// <summary>...its top, flying off as the duck comes out...</summary>
+    private static readonly string[] EggTopArt =
+    [
+        "....KKK....",
+        "...KwwwK...",
+        "..KwwwwwK..",
+        ".KwUwwwwwK.",
+        ".KwUwwwwwK.",
+        "KwKwKwKwKwK",
+        "KK.K.K.K.KK",
+    ];
+
+    /// <summary>...and its bottom, left behind on the ground as the duck runs off.</summary>
+    private static readonly string[] EggBottomArt =
+    [
+        "..K.K.K.K..",
+        "KKwKwKwKwKK",
+        "KwwwwwwwwnK",
+        "KwwwwwwwwnK",
+        "KwwwwwwwnnK",
+        ".KwwwwwnnK.",
+        "..KwwnnnK..",
+        "...KKKKK...",
     ];
 }
