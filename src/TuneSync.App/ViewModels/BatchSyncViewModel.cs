@@ -20,8 +20,12 @@ public sealed partial class BatchSyncItemViewModel(LibraryFileViewModel file) : 
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsWaiting), nameof(IsActive), nameof(IsDone), nameof(IsSkipped), nameof(IsFailed),
-        nameof(IsUndone), nameof(NeedsCheck), nameof(CanReview))]
+        nameof(IsUndone), nameof(NeedsCheck), nameof(CanReview), nameof(CanSelect))]
     private BatchSyncItemState _state;
+
+    /// <summary>Picked in the list, for 되돌리기 / 다시 저장 on several songs at once.</summary>
+    [ObservableProperty]
+    private bool _isSelected;
 
     /// <summary>The line at the row's right: "대기", "2분 05초 · 확인 필요 3줄", why it failed…</summary>
     [ObservableProperty]
@@ -49,6 +53,13 @@ public sealed partial class BatchSyncItemViewModel(LibraryFileViewModel file) : 
     public bool IsUndone => State == BatchSyncItemState.Undone;
     public bool NeedsCheck => IsDone && CheckCount > 0 && !IsReviewed;
     public bool CanReview => IsDone;
+
+    /// <summary>Saved or undone: the ones selection, 되돌리기 and 다시 저장 are about.</summary>
+    public bool CanSelect => IsDone || IsUndone;
+
+    /// <summary>The synced lyrics as they were in the file when undone (the batch's, or as fixed
+    /// with '확인'), so 다시 저장 puts them back without syncing the song again.</summary>
+    public string? UndoneLyrics { get; set; }
 
     /// <summary>Which lines were estimated (their saved time and text): the file keeps only the
     /// times, so '확인' hands these to the sync editor to mark them there.</summary>
@@ -92,7 +103,16 @@ public sealed partial class BatchSyncViewModel : ObservableObject, IDisposable
         _settings = settings;
         _editor = editor;
         IncludeSynced = includeSynced;
-        foreach (var song in songs) Items.Add(new BatchSyncItemViewModel(song));
+        foreach (var song in songs)
+        {
+            var item = new BatchSyncItemViewModel(song);
+            item.PropertyChanged += (_, e) =>
+            {
+                if (e.PropertyName is nameof(BatchSyncItemViewModel.IsSelected) or nameof(BatchSyncItemViewModel.State))
+                    SelectionChanged();
+            };
+            Items.Add(item);
+        }
         _clock.Tick += (_, _) => UpdateTotals();
         UpdateTotals();
     }
@@ -106,6 +126,13 @@ public sealed partial class BatchSyncViewModel : ObservableObject, IDisposable
     [NotifyPropertyChangedFor(nameof(IsRunning), nameof(IsStopped), nameof(IsFinished), nameof(IsDownloading),
         nameof(IsStopping), nameof(CanResume), nameof(CanUndoAll), nameof(TaskbarState), nameof(FooterHint))]
     private BatchSyncPhase _phase = BatchSyncPhase.Ready;
+
+    partial void OnPhaseChanged(BatchSyncPhase value)
+    {
+        // Picking is for after the work (like 모두 되돌리기): a song that starts must not be undone under it.
+        if (IsRunning) ClearSelection();
+        SelectionChanged();
+    }
 
     /// <summary>Working (or stopping): the window asks before closing, the single-song sync waits.</summary>
     public bool IsRunning => Phase is BatchSyncPhase.Downloading or BatchSyncPhase.Running or BatchSyncPhase.Stopping;
@@ -183,9 +210,75 @@ public sealed partial class BatchSyncViewModel : ObservableObject, IDisposable
     {
         BatchSyncPhase.Running or BatchSyncPhase.Downloading => "작업하는 동안 PC가 절전 모드로 들어가지 않습니다. 화면은 꺼질 수 있습니다.",
         BatchSyncPhase.Stopping => "지금 곡을 마무리하는 중입니다…",
+        _ when CanUndoAll && CanPick => "끝난 곡은 저장되어 있습니다. 곡을 클릭해 골라 되돌릴 수 있고, 창을 닫으면 되돌릴 수 없습니다.",
         _ when CanUndoAll => "끝난 곡은 저장되어 있습니다. 창을 닫으면 되돌릴 수 없습니다.",
+        _ when Items.Any(i => i.IsUndone && i.UndoneLyrics is not null) => "되돌린 곡은 창을 닫기 전까지 다시 저장할 수 있습니다.",
         _ => "",
     };
+
+    // ---- picking songs (after the work) ----
+
+    /// <summary>Songs can be picked: nothing runs and some song is saved or undone.</summary>
+    public bool CanPick => !IsRunning && Items.Any(i => i.CanSelect);
+
+    private IEnumerable<BatchSyncItemViewModel> Picked => Items.Where(i => i.IsSelected && i.CanSelect);
+    private IEnumerable<BatchSyncItemViewModel> PickedToUndo => Picked.Where(i => i.IsDone && i.Undo is not null);
+    private IEnumerable<BatchSyncItemViewModel> PickedToSave => Picked.Where(i => i.IsUndone && i.UndoneLyrics is not null);
+
+    public bool HasSelection => !IsRunning && Picked.Any();
+    public string SelectionText => $"{Picked.Count()}곡 선택";
+    public bool CanUndoSelected => HasSelection && PickedToUndo.Any();
+    public string UndoSelectedText => $"{PickedToUndo.Count()}곡 되돌리기";
+    public bool CanSaveSelected => HasSelection && PickedToSave.Any();
+    public string SaveSelectedText => $"{PickedToSave.Count()}곡 다시 저장";
+    public bool HasNeedsCheck => Items.Any(i => i.NeedsCheck);
+
+    /// <summary>The selection's bar and buttons follow every pick (a few hundred songs at most).</summary>
+    private void SelectionChanged()
+    {
+        foreach (var name in (string[])[nameof(CanPick), nameof(HasSelection), nameof(SelectionText), nameof(CanUndoSelected),
+                     nameof(UndoSelectedText), nameof(CanSaveSelected), nameof(SaveSelectedText), nameof(HasNeedsCheck),
+                     nameof(CanUndoAll), nameof(FooterHint)])
+            OnPropertyChanged(name);
+    }
+
+    [RelayCommand]
+    private void SelectAll()
+    {
+        if (!CanPick) return;
+        foreach (var item in Items) item.IsSelected = item.CanSelect;
+    }
+
+    /// <summary>The songs with a yellow dot: the ones most likely to want undoing.</summary>
+    [RelayCommand]
+    private void SelectNeedsCheck()
+    {
+        if (!CanPick) return;
+        foreach (var item in Items) item.IsSelected = item.NeedsCheck;
+    }
+
+    [RelayCommand]
+    public void ClearSelection()
+    {
+        foreach (var item in Items) item.IsSelected = false;
+    }
+
+    /// <summary>A click on a row: picks it or lets it go; with Shift, every song from the last one
+    /// clicked to this one takes this one's new state.</summary>
+    public void Pick(BatchSyncItemViewModel item, bool range)
+    {
+        if (!CanPick || !item.CanSelect) return;
+        var value = !item.IsSelected;
+        var from = range && _anchor is not null ? Items.IndexOf(_anchor) : -1;
+        var to = Items.IndexOf(item);
+        if (from < 0) item.IsSelected = value;
+        else
+            for (var i = Math.Min(from, to); i <= Math.Max(from, to); i++)
+                if (Items[i].CanSelect) Items[i].IsSelected = value;
+        _anchor = item;
+    }
+
+    private BatchSyncItemViewModel? _anchor;
 
     private int Waiting => Items.Count(i => i.IsWaiting || i.IsActive);
 
@@ -312,9 +405,7 @@ public sealed partial class BatchSyncViewModel : ObservableObject, IDisposable
                 if (!result[i].IsConfident) item.Estimated.Add((result[i].Time, sung[i]));
             item.CheckCount = item.Estimated.Count;
             item.State = BatchSyncItemState.Done;
-            item.Status = item.CheckCount == 0
-                ? $"완료 · {Took(item.Took)}"
-                : $"완료 · {Took(item.Took)} · 확인 필요 {item.CheckCount}줄";
+            item.Status = DoneStatus(item);
             return;
         }
         catch (OperationCanceledException)
@@ -526,24 +617,45 @@ public sealed partial class BatchSyncViewModel : ObservableObject, IDisposable
     private async Task UndoAllAsync()
     {
         var saved = Items.Where(i => i.IsDone && i.Undo is not null).ToList();
-        if (IsRunning || saved.Count == 0) return;
+        if (IsRunning || _fileWork || saved.Count == 0) return;
         // (KeepWords: the message box would otherwise break a word in two)
         if (!await Dialogs.ConfirmAsync("모두 되돌리기", KeepWords.Joined(
-                    $"이 작업에서 저장한 {saved.Count}곡의 가사를 작업 전으로 되돌릴까요? 목록의 확인 버튼으로 고친 내용도 함께 되돌아갑니다."),
+                    $"이 작업에서 저장한 {saved.Count}곡의 가사를 작업 전으로 되돌릴까요? 목록의 확인 버튼으로 고친 내용도 함께 되돌아갑니다. 창을 닫기 전까지는 곡을 골라 다시 저장할 수 있습니다."),
                 $"{saved.Count}곡 되돌리기"))
             return;
-        var resume = await _playback.ReleaseIfPlayingAsync(saved.Select(i => i.File.Path));
+        _fileWork = true;
+        int failed;
+        try { failed = await UndoAsync(saved); }
+        finally { _fileWork = false; }
+        (OutcomeSymbol, IsOutcomeQuiet) = (Wpf.Ui.Controls.SymbolRegular.ArrowUndo24, true);
+        OutcomeTitle = "되돌렸습니다";
+        OutcomeText = failed == 0 ? $"{saved.Count - failed}곡의 가사를 작업 전으로 되돌렸습니다. 창을 닫기 전까지는 곡을 골라 다시 저장할 수 있습니다."
+            : $"{saved.Count - failed}곡을 되돌렸고, {failed}곡은 되돌리지 못해 저장한 상태로 남아 있습니다.";
+        if (failed > 0) Toast.Warning("일부 곡을 되돌리지 못했습니다", $"{failed}곡은 저장한 상태로 남아 있습니다.");
+    }
+
+    private bool _fileWork; // undoing or saving again: one at a time, a second click waits for nothing
+
+    /// <summary>Puts back what the batch replaced in <paramref name="items"/>, keeping what was in the
+    /// file (to save again); how many couldn't be. Picked songs that are done with are let go.</summary>
+    private async Task<int> UndoAsync(IReadOnlyList<BatchSyncItemViewModel> items)
+    {
+        var resume = await _playback.ReleaseIfPlayingAsync(items.Select(i => i.File.Path));
         var failed = 0;
         try
         {
-            foreach (var item in saved)
+            foreach (var item in items)
             {
                 try
                 {
+                    // as it is now, '확인' fixes included (else re-saving would lose them)
+                    var lyrics = await Task.Run(() => TagService.ReadLyrics(item.File.Path));
                     await Task.Run(() => TagEditService.Undo(item.Undo!));
+                    item.UndoneLyrics = lyrics;
                     item.Undo = null;
                     item.State = BatchSyncItemState.Undone;
-                    item.Status = "되돌림";
+                    item.Status = "되돌림"; // (its 다시 저장 button says the rest)
+                    item.IsSelected = false;
                 }
                 catch { failed++; }
             }
@@ -552,13 +664,87 @@ public sealed partial class BatchSyncViewModel : ObservableObject, IDisposable
         {
             resume?.Invoke(null);
         }
-        Refresh([.. saved.Select(i => i.File)]);
+        Refresh([.. items.Select(i => i.File)]);
         UpdateTotals();
-        (OutcomeSymbol, IsOutcomeQuiet) = (Wpf.Ui.Controls.SymbolRegular.ArrowUndo24, true);
-        OutcomeTitle = "되돌렸습니다";
-        OutcomeText = failed == 0 ? $"{saved.Count - failed}곡의 가사를 작업 전으로 되돌렸습니다."
-            : $"{saved.Count - failed}곡을 되돌렸고, {failed}곡은 되돌리지 못해 저장한 상태로 남아 있습니다.";
-        if (failed > 0) Toast.Warning("일부 곡을 되돌리지 못했습니다", $"{failed}곡은 저장한 상태로 남아 있습니다.");
+        return failed;
+    }
+
+    /// <summary>Writes an undone song's synced lyrics back; how many couldn't be.</summary>
+    private async Task<int> SaveAgainAsync(IReadOnlyList<BatchSyncItemViewModel> items)
+    {
+        var failed = 0;
+        foreach (var item in items)
+        {
+            try
+            {
+                item.Undo = await SaveAsync(item.File, item.UndoneLyrics!);
+                item.UndoneLyrics = null;
+                item.State = BatchSyncItemState.Done;
+                item.Status = DoneStatus(item);
+                item.IsSelected = false;
+            }
+            catch { failed++; }
+        }
+        UpdateTotals();
+        return failed;
+    }
+
+    private static string DoneStatus(BatchSyncItemViewModel item) =>
+        item.IsReviewed ? $"완료 · {Took(item.Took)} · 확인함"
+        : item.CheckCount == 0 ? $"완료 · {Took(item.Took)}"
+        : $"완료 · {Took(item.Took)} · 확인 필요 {item.CheckCount}줄";
+
+    /// <summary>The row's own 되돌리기: no question asked, 다시 저장 brings it back.</summary>
+    public async Task UndoOneAsync(BatchSyncItemViewModel item)
+    {
+        if (IsRunning || _fileWork || !item.IsDone || item.Undo is null) return;
+        _fileWork = true;
+        try
+        {
+            if (await UndoAsync([item]) > 0) Toast.Warning("되돌리지 못했습니다", item.File.DisplayTitle);
+        }
+        finally { _fileWork = false; }
+    }
+
+    public async Task SaveOneAsync(BatchSyncItemViewModel item)
+    {
+        if (IsRunning || _fileWork || !item.IsUndone || item.UndoneLyrics is null) return;
+        _fileWork = true;
+        try
+        {
+            if (await SaveAgainAsync([item]) > 0) Toast.Warning("다시 저장하지 못했습니다", item.File.DisplayTitle);
+        }
+        finally { _fileWork = false; }
+    }
+
+    [RelayCommand]
+    private async Task UndoSelectedAsync()
+    {
+        var items = PickedToUndo.ToList();
+        if (IsRunning || _fileWork || items.Count == 0) return;
+        _fileWork = true;
+        try
+        {
+            var failed = await UndoAsync(items);
+            if (failed > 0) Toast.Warning("일부 곡을 되돌리지 못했습니다", $"{failed}곡은 저장한 상태로 남아 있습니다.");
+            else Toast.Success($"{items.Count}곡을 되돌렸습니다", "창을 닫기 전까지 다시 저장할 수 있습니다.");
+        }
+        finally { _fileWork = false; }
+    }
+
+    [RelayCommand]
+    private async Task SaveSelectedAsync()
+    {
+        var items = PickedToSave.ToList();
+        if (IsRunning || _fileWork || items.Count == 0) return;
+        _fileWork = true;
+        try
+        {
+            var failed = await SaveAgainAsync(items);
+            if (failed > 0) Toast.Warning("일부 곡을 저장하지 못했습니다", $"{failed}곡은 되돌린 상태로 남아 있습니다.");
+            else Toast.Success($"{items.Count}곡을 다시 저장했습니다", "");
+        }
+        finally { _fileWork = false; }
     }
 
     /// <summary>Opens a finished song in the sync editor, to listen to the estimated lines.</summary>
@@ -578,7 +764,7 @@ public sealed partial class BatchSyncViewModel : ObservableObject, IDisposable
         if (LyricsSyncWindow.Run(owner, item.File, lyrics, item.Estimated) is not null)
         {
             item.IsReviewed = true;
-            item.Status = $"완료 · {Took(item.Took)} · 확인함";
+            item.Status = DoneStatus(item);
             Refresh([item.File]);
             UpdateTotals();
         }

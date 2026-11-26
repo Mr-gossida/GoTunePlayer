@@ -130,13 +130,39 @@ public partial class BatchSyncWindow : FluentWindow
         if (sender is FrameworkElement { DataContext: BatchSyncItemViewModel item }) await ViewModel.ReviewAsync(item, this);
     }
 
+    private async void UndoOne_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { DataContext: BatchSyncItemViewModel item }) await ViewModel.UndoOneAsync(item);
+    }
+
+    private async void SaveOne_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { DataContext: BatchSyncItemViewModel item }) await ViewModel.SaveOneAsync(item);
+    }
+
+    /// <summary>A click on a row (not on its buttons or check box, which handle their own) picks it;
+    /// Shift picks the songs between too.</summary>
+    private void SongRow_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is System.Windows.Controls.ListBoxItem { DataContext: BatchSyncItemViewModel item })
+            ViewModel.Pick(item, Keyboard.Modifiers.HasFlag(ModifierKeys.Shift));
+    }
+
     private void Close_Click(object sender, RoutedEventArgs e) => Close();
 
     private void Window_PreviewKeyDown(object sender, KeyEventArgs e)
     {
+        if (e.Key == Key.A && Keyboard.Modifiers == ModifierKeys.Control && ViewModel.CanPick)
+        {
+            e.Handled = true;
+            ViewModel.SelectAllCommand.Execute(null);
+            return;
+        }
         if (e.Key != Key.Escape) return;
         e.Handled = true;
-        Close();
+        // Esc lets the picked songs go first; then it closes
+        if (ViewModel.HasSelection) ViewModel.ClearSelection();
+        else Close();
     }
 
     /// <summary>Still working: ask before stopping it (what's done is saved either way).</summary>
