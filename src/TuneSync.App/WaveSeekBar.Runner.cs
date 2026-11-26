@@ -642,6 +642,7 @@ public sealed partial class WaveSeekBar
                 _ => 0,
             };
             var art = SpriteOf(kind, frame);
+            if (kind == Hazard.Hedgehog) art = HedgehogPose((o.X - thumbX) / pixel) ?? art;
             if (kind == Hazard.Fox && o.Vy > 0)
             {
                 // the jump over it is symmetric: the duck lands a rise after the top, which was over the fox
@@ -863,7 +864,7 @@ public sealed partial class WaveSeekBar
 
     /// <summary>How long before the song ends the duck's house shows at the bar's right end, at
     /// the least (no obstacles come in that last stretch).</summary>
-    private const double HouseSeconds = 12;
+    private const double HouseSeconds = 8;
 
     /// <summary>How much the house shows: fading in over a second and a half as the last stretch
     /// begins (and gone again when the song is jumped back).</summary>
@@ -873,11 +874,12 @@ public sealed partial class WaveSeekBar
     /// thumb reaches the bar's end.</summary>
     private double DoorRight(double pixel) => OnGrid(Right - (DuckArt[0].Length / 2.0 + 1) * pixel);
 
-    /// <summary>The song moment the house starts to show: while the duck is still three of its
-    /// own lengths short of it, so it's seen walking up to it - at least
-    /// <see cref="HouseSeconds"/> before the end. (Showing it a fixed time before the end put it
-    /// right on top of the duck: on a four-minute song the thumb moves only some 25 px in 12 s.)
-    /// Never, for a short song or a bar too short to walk up to it.</summary>
+    /// <summary>The song moment the house starts to show: as late as it can without landing on
+    /// the duck - when the duck is just short of where it will stand - and at least
+    /// <see cref="HouseSeconds"/> before the end. (A fixed time before the end put it right on
+    /// top of the duck: on a four-minute song the thumb moves only some 25 px in 12 s; three duck
+    /// lengths ahead was too early, half a minute before the end.) Never, for a short song or a
+    /// bar too short to walk up to it.</summary>
     private double HouseFrom
     {
         get
@@ -886,7 +888,7 @@ public sealed partial class WaveSeekBar
             var pixel = ArtPixel;
             var duck = DuckArt[0].Length;
             var houseLeft = DoorRight(pixel) - 9 * pixel;
-            var thumb = houseLeft - (duck / 2.0 + 3 * duck) * pixel;
+            var thumb = houseLeft - (duck / 2.0 + 4) * pixel;
             var at = (thumb - Left) / (Right - Left) * Maximum;
             if (at < Maximum / 2) return double.PositiveInfinity;
             return Math.Min(at, Maximum - HouseSeconds);
@@ -899,8 +901,10 @@ public sealed partial class WaveSeekBar
     /// the duck gets home, or is lit all along at night.</summary>
     private void DrawHouse(DrawingContext dc, double ground, double pixel, double doorRight, double alpha, bool lit)
     {
-        // the door's far side is the 9th column
-        var left = doorRight - 9 * pixel;
+        // the door's far side is the 9th column; it slides in from the right as it fades in,
+        // like the scenery going by (just appearing beside the duck looked like a pop-up)
+        var slide = 1 - alpha;
+        var left = OnGrid(doorRight - 9 * pixel + slide * slide * 8 * pixel);
         DrawSprite(dc, lit ? HouseLitArt : HouseArt, left, ground, pixel, alpha);
     }
 
@@ -1668,6 +1672,48 @@ public sealed partial class WaveSeekBar
     [
         [.. HedgehogBody, "..k.k..k.k."],
         [.. HedgehogBody, "...k.k..k.k"],
+    ];
+
+    /// <summary>The hedgehog as the duck comes near (<paramref name="ahead"/>: how far in front of
+    /// the duck it is, in art pixels): it tucks its face in, then rolls up into a ball with its
+    /// spines up, shivering, until the duck has jumped it and gone on; then it uncurls again.
+    /// Null when it's just walking.</summary>
+    private string[]? HedgehogPose(double ahead) =>
+        ahead is > 45 or < -36 ? null
+        : ahead is > 38 or < -28 ? HedgehogTuck
+        : (int)(_sceneTime * 12) % 4 == 0 ? HedgehogBall : HedgehogBristle;
+
+    /// <summary>Tucking its face in...</summary>
+    private static readonly string[] HedgehogTuck =
+    [
+        "...f.f.f...",
+        "..fufufuf..",
+        ".fuuuuuuuf.",
+        "CkCuuuuuuuf",
+        "CPuuuuuuuu.",
+        ".uuuuuuuu..",
+    ];
+
+    /// <summary>...rolled up in a ball, its spines sticking out all round...</summary>
+    private static readonly string[] HedgehogBall =
+    [
+        "...f.f.f...",
+        ".f.fufuf.f.",
+        "..fuuuuuf..",
+        "ffuuuuuuuff",
+        "..uuuuuuu..",
+        "...uuuuu...",
+    ];
+
+    /// <summary>...and bristling, the spines raised further (it shivers between the two).</summary>
+    private static readonly string[] HedgehogBristle =
+    [
+        "..f..f..f..",
+        "f..fufuf..f",
+        ".ffuuuuuff.",
+        "..uuuuuuu..",
+        "ffuuuuuuuff",
+        "...uuuuu...",
     ];
 
     /// <summary>A wooden crate: a light frame round a darker panel crossed by a brace, shaded on
