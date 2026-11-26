@@ -1545,61 +1545,62 @@ public sealed partial class WaveSeekBar
         ],
     ];
 
-    /// <summary>At night, in the eagle's place, a horned owl: ear tufts, a pale face with big
-    /// yellow eyes looking out at you and a little grey beak, grey-brown feathers, its wings
-    /// beating like the eagle's (it's the eagle's frames, recolored, with an owl's head).</summary>
+    /// <summary>At night, in the eagle's place, a horned owl: a big round head with little ear
+    /// tufts, a pale heart-shaped face with big yellow eyes looking out at you, pink cheeks and a
+    /// little grey beak, grey-brown feathers, its wings beating like the eagle's (it's the eagle's
+    /// frames, recolored, with an owl's head).</summary>
     private static readonly string[][] OwlFlap =
     [
         [
             "............N.N.N..",
-            "...........NNNNNNN.",
-            "..........NMMMMMN..",
-            ".M...M...NMMMMMN...",
-            ".MMMMMM.NMMMMMN....",
-            "MHHMHHMMNMMMM......",
-            "HykHykMMMMMMMMMMN..",
-            "MHHzHHMMMMMMMMMMMNN",
-            ".MMMMMMMMNNNNMMMMN.",
-            "........NNNNNNNN...",
+            ".N.....N...NNNNNNN.",
+            "..MMMMM...NMMMMMN..",
+            ".MMMMMMMMNMMMMMN...",
+            "MHHHMHHHMMMMMMN....",
+            "HkyHMkyHMMMMM......",
+            "HyyHMyyHMMMMMMMMN..",
+            "MHPHzHPHMMMMMMMMMNN",
+            ".MHHHHHMMNNNNMMMMN.",
+            "..MMMMM.NNNNNNNN...",
             "...................",
         ],
         [
             "...................",
-            "...................",
-            "...................",
-            ".M...M.......N.N.N.",
-            ".MMMMMM..NNNNNNNN..",
-            "MHHMHHMMNMMMMMMMN..",
-            "HykHykMMMMMMMMMMN..",
-            "MHHzHHMMMMMMMMMMMNN",
-            ".MMMMMMMMNNNNMMMMN.",
-            "........NNNNNNNN...",
+            ".N.....N...........",
+            "..MMMMM............",
+            ".MMMMMMMM....N.N.N.",
+            "MHHHMHHHMNNNNNNNN..",
+            "HkyHMkyHMMMMMMMMN..",
+            "HyyHMyyHMMMMMMMMN..",
+            "MHPHzHPHMMMMMMMMMNN",
+            ".MHHHHHMMNNNNMMMMN.",
+            "..MMMMM.NNNNNNNN...",
             "...................",
         ],
         [
             "...................",
-            "...................",
-            "...................",
-            ".M...M.............",
-            ".MMMMMM............",
-            "MHHMHHMM.MMMMM.....",
-            "HykHykMMMMMMMMMMN..",
-            "MHHzHHMMMMMMMMMMMNN",
-            ".MMMMMMMMMMMMMMMMN.",
-            "........NMMMMMNN...",
+            ".N.....N...........",
+            "..MMMMM............",
+            ".MMMMMMMM..........",
+            "MHHHMHHHM..........",
+            "HkyHMkyHMMMMMM.....",
+            "HyyHMyyHMMMMMMMMN..",
+            "MHPHzHPHMMMMMMMMMNN",
+            ".MHHHHHMMMMMMMMMMN.",
+            "..MMMMM.NMMMMMNN...",
             ".........NNMMN.N.N.",
         ],
         [
             "...................",
-            "...................",
-            "...................",
-            ".M...M.......N.N.N.",
-            ".MMMMMM..NNNNNNNN..",
-            "MHHMHHMMNMMMMMMMN..",
-            "HykHykMMMMMMMMMMN..",
-            "MHHzHHMMMMMMMMMMMNN",
-            ".MMMMMMMMNNNNMMMMN.",
-            "........NNNNNNNN...",
+            ".N.....N...........",
+            "..MMMMM............",
+            ".MMMMMMMM....N.N.N.",
+            "MHHHMHHHMNNNNNNNN..",
+            "HkyHMkyHMMMMMMMMN..",
+            "HyyHMyyHMMMMMMMMN..",
+            "MHPHzHPHMMMMMMMMMNN",
+            ".MHHHHHMMNNNNMMMMN.",
+            "..MMMMM.NNNNNNNN...",
             "...................",
         ],
     ];
@@ -1675,8 +1676,8 @@ public sealed partial class WaveSeekBar
     ];
 
     /// <summary>The hedgehog as the duck comes near (<paramref name="ahead"/>: how far in front of
-    /// the duck it is, in art pixels): it tucks its face in, then rolls up into a ball with its
-    /// spines up, shivering, until the duck has jumped it and gone on; then it uncurls again.
+    /// the duck it is, in art pixels): it tucks its face in, then rolls up into a round ball,
+    /// shivering, until the duck has jumped it and gone on; then it uncurls again.
     /// Null when it's just walking.</summary>
     private string[]? HedgehogPose(double ahead) =>
         ahead is > 45 or < -36 ? null
@@ -1694,26 +1695,28 @@ public sealed partial class WaveSeekBar
         ".uuuuuuuu..",
     ];
 
-    /// <summary>...rolled up in a ball, its spines sticking out all round...</summary>
+    /// <summary>...rolled up in a round ball, light spine tips all over it and sticking out at
+    /// its sides, shaded underneath...</summary>
     private static readonly string[] HedgehogBall =
     [
-        "...f.f.f...",
-        ".f.fufuf.f.",
-        "..fuuuuuf..",
-        "ffuuuuuuuff",
+        "...fufuf...",
         "..uuuuuuu..",
-        "...uuuuu...",
+        ".uufuuufuu.",
+        "fuuuuuuuuuf",
+        "..uuuuuud..",
+        "...uuudd...",
     ];
 
-    /// <summary>...and bristling, the spines raised further (it shivers between the two).</summary>
+    /// <summary>...and the same ball with its spine tips shifted, so it shivers between the two.
+    /// (Spikes sticking out further all round made it look like a burr, not a round ball.)</summary>
     private static readonly string[] HedgehogBristle =
     [
-        "..f..f..f..",
-        "f..fufuf..f",
-        ".ffuuuuuff.",
+        "..fufufuf..",
         "..uuuuuuu..",
-        "ffuuuuuuuff",
-        "...uuuuu...",
+        ".ufuuufuuu.",
+        "fuuuuuuuuuf",
+        "..uuuuuud..",
+        "...uuudd...",
     ];
 
     /// <summary>A wooden crate: a light frame round a darker panel crossed by a brace, shaded on
