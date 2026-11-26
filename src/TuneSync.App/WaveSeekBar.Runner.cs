@@ -10,7 +10,7 @@ namespace TuneSync.App;
 // pumpkin, a stone or a toadstool when it's quiet; a hay bale, a fence or a hedgehog; a wooden
 // barrel, a milk can, a crate or a sunflower when it's loud; now and then a fox running at it, and
 // in loud passages an eagle swooping in at head height. It jumps the ones on the ground and runs
-// ducked under the eagle. Now and then a worm or a ladybug comes instead: the duck bends down,
+// ducked under the eagle. Now and then a worm, a caterpillar or a grasshopper comes instead: the duck bends down,
 // pecks it up on the beat and munches. Faint clouds drift by behind, slower than the ground.
 // The fox, jumped, skids to a sit, looks up at the duck going over and then gazes after it.
 // It moves with the music: each thing is set so the duck takes off on a beat of the song (higher
@@ -28,10 +28,11 @@ public sealed partial class WaveSeekBar
     /// since the duck went over it, 0 before.)</summary>
     private readonly List<Spark> _obstacles = [];
 
-    private enum Hazard { Log, Hay, Barrel, Fox, Eagle, Pumpkin, Fence, MilkCan, Rock, Mushroom, Hedgehog, Crate, Sunflower, Worm, Ladybug }
+    private enum Hazard { Log, Hay, Barrel, Fox, Eagle, Pumpkin, Fence, MilkCan, Rock, Mushroom, Hedgehog, Crate, Sunflower, Worm, Caterpillar, Grasshopper }
 
-    /// <summary>The worm and the ladybug aren't jumped: the duck pecks them up as they reach it.</summary>
-    private static bool IsFood(Hazard kind) => kind is Hazard.Worm or Hazard.Ladybug;
+    /// <summary>The worm, the caterpillar and the grasshopper aren't jumped: the duck pecks them
+    /// up as they reach it.</summary>
+    private static bool IsFood(Hazard kind) => kind is Hazard.Worm or Hazard.Caterpillar or Hazard.Grasshopper;
 
     /// <summary>What's picked at each loudness: quiet, middling, loud.</summary>
     private static readonly Hazard[] QuietThings = [Hazard.Log, Hazard.Pumpkin, Hazard.Rock, Hazard.Mushroom];
@@ -192,7 +193,8 @@ public sealed partial class WaveSeekBar
         Hazard.Sunflower => SunflowerArt,
         Hazard.Hedgehog => HedgehogWalk[frame % HedgehogWalk.Length],
         Hazard.Worm => WormWiggle[frame % WormWiggle.Length],
-        Hazard.Ladybug => LadybugWalk[frame % LadybugWalk.Length],
+        Hazard.Caterpillar => CaterpillarCrawl[frame % CaterpillarCrawl.Length],
+        Hazard.Grasshopper => GrasshopperArt[frame % GrasshopperArt.Length],
         Hazard.Fox => FoxRun[frame % FoxRun.Length],
         _ => EagleFlap[frame % EagleFlap.Length],
     };
@@ -283,8 +285,10 @@ public sealed partial class WaveSeekBar
         var roll = SongDice(n, 1);
         if (loud > 0.55 && roll < 0.3) kind = Hazard.Eagle;
         else if (loud > 0.25 && roll > 0.82) kind = Hazard.Fox;
-        // now and then a snack instead: a worm when it's quiet, a ladybug when it's not
-        else if (SongDice(n, 3) < 0.16) kind = loud < 0.4 ? Hazard.Worm : Hazard.Ladybug;
+        // now and then a snack instead: a worm when it's quiet, a caterpillar or a grasshopper
+        // when it's not (a red ladybug looked like nothing a duck would eat)
+        else if (SongDice(n, 3) < 0.16)
+            kind = loud < 0.4 ? Hazard.Worm : SongDice(n, 4) < 0.5 ? Hazard.Caterpillar : Hazard.Grasshopper;
         return kind;
     }
 
@@ -419,6 +423,17 @@ public sealed partial class WaveSeekBar
         }
     }
 
+    /// <summary>How high the grasshopper is off the ground (px): it springs up on each beat (the
+    /// duck's bob keeps the time since the last one) and lands again, and keeps to the ground
+    /// as it gets close, so it's there for the beak.</summary>
+    private double GrassHop(double x, double duck, double pixel)
+    {
+        const double airborne = 0.3;
+        if (_bobTime >= airborne) return 0;
+        var near = Math.Clamp((x - (duck + BeakReach * pixel)) / 40, 0, 1);
+        return Math.Sin(Math.PI * _bobTime / airborne) * 5 * pixel * near;
+    }
+
     /// <summary>The song moment a food cue's middle reaches the duck's beak and it's eaten.</summary>
     private double EatenAt(Cue cue) => cue.Time - RiseFor(cue.Kind, cue.Speed, 0);
 
@@ -503,7 +518,7 @@ public sealed partial class WaveSeekBar
             var since = moment - EatenAt(cue);
             if (since < 0) break;
             if (since > 0.3 || !_eatenCues.Add(cue.Time)) continue;
-            var color = cue.Kind == Hazard.Worm ? 'P' : 'R';
+            var color = cue.Kind == Hazard.Worm ? 'P' : 'G';
             for (var n = 0; n < 3; n++)
             {
                 _dust.Add(new Spark
@@ -610,8 +625,9 @@ public sealed partial class WaveSeekBar
             {
                 Hazard.Fox => (int)(_sceneTime * 14) % FoxRun.Length,
                 Hazard.Eagle => (int)(_sceneTime * 8) % EagleFlap.Length,
-                Hazard.Hedgehog or Hazard.Ladybug => (int)(_sceneTime * 8),
-                Hazard.Worm => (int)(_sceneTime * 4),
+                Hazard.Hedgehog => (int)(_sceneTime * 8),
+                Hazard.Worm or Hazard.Caterpillar => (int)(_sceneTime * 4),
+                Hazard.Grasshopper => GrassHop(o.X, thumbX, pixel) > 0 ? 1 : 0,
                 _ => 0,
             };
             var art = SpriteOf(kind, frame);
@@ -624,7 +640,8 @@ public sealed partial class WaveSeekBar
             var fade = Math.Clamp((o.X - Left + 30) / 40, 0, 1);
             // the eagle up in the air; the fox off the ground by a pixel with its legs gathered, mid-bound
             var bottom = kind == Hazard.Eagle ? ground - EagleAltitude * pixel
-                       : kind == Hazard.Fox && frame == 2 ? ground - pixel : ground;
+                       : kind == Hazard.Fox && frame == 2 ? ground - pixel
+                       : kind == Hazard.Grasshopper ? ground - OnGrid(GrassHop(o.X, thumbX, pixel)) : ground;
             DrawSprite(dc, art, OnGrid(o.X - art[0].Length * pixel / 2), bottom, pixel, fade);
         }
 
@@ -845,7 +862,7 @@ public sealed partial class WaveSeekBar
         'x' => Color.FromRgb(0xC8, 0xC6, 0xBE),
         'a' => Color.FromRgb(0x9C, 0x98, 0x8E),
         'z' => Color.FromRgb(0x6E, 0x6A, 0x64),
-        // red (the mushroom's cap, the ladybug) and its shade; leaves
+        // red (the mushroom's cap) and its shade; leaves (and the caterpillar and the grasshopper)
         'R' => Color.FromRgb(0xE4, 0x42, 0x34),
         'Q' => Color.FromRgb(0xA8, 0x28, 0x22),
         'G' => Color.FromRgb(0x8C, 0xB8, 0x40),
@@ -1270,19 +1287,42 @@ public sealed partial class WaveSeekBar
         ],
     ];
 
-    /// <summary>...and a ladybug walking at the duck: a red shell with dark spots and a shine,
-    /// a dark head, legs stepping in two frames.</summary>
-    private static readonly string[] LadybugBody =
+    /// <summary>...a green caterpillar crawling at the duck: a darker head with an eye, its
+    /// back in round segments, little feet stepping in two frames...</summary>
+    private static readonly string[][] CaterpillarCrawl =
     [
-        "..wRRR.",
-        ".RkRRkR",
-        "kRRRkRR",
-        ".QQQQQ.",
+        [
+            "gg.GG.GG.G",
+            "kgGGGGGGGG",
+            ".g.g.g.g.g",
+        ],
+        [
+            "gg..GG.GG.",
+            "kgGGGGGGGG",
+            "g.g.g.g.g.",
+        ],
     ];
 
-    private static readonly string[][] LadybugWalk =
+    /// <summary>...and a grasshopper: a long antenna, a dark eye, a green body and its big hind
+    /// leg folded up over the back into a peak (without it, it read as a lizard); sitting, then
+    /// in the air with the leg stretched out behind.</summary>
+    private static readonly string[][] GrasshopperArt =
     [
-        [.. LadybugBody, ".k.k.k."],
-        [.. LadybugBody, "..k.k.k"],
+        [
+            "g..........gg",
+            ".g.......gg.g",
+            ".GGG...gg...g",
+            "GkGGGgggGGGGg",
+            ".GGGGGGGGGGG.",
+            "..g.g.......g",
+        ],
+        [
+            "g............",
+            ".g...........",
+            ".GGG.........",
+            "GkGGGgggGGGgg",
+            ".GGGGGGGGGGGg",
+            "..g.g.......g",
+        ],
     ];
 }
