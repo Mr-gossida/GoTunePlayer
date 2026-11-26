@@ -72,8 +72,10 @@ public sealed partial class LyricsSyncViewModel : ObservableObject, IDisposable
     private bool _disposed;
 
     public LyricsSyncViewModel(PlaybackViewModel playback, LibraryViewModel library, Network.NetworkLibrary network,
-        AppSettings settings, LibraryFileViewModel file, string lyrics)
+        AppSettings settings, LibraryFileViewModel file, string lyrics,
+        List<(TimeSpan Time, string Text)>? estimated = null)
     {
+        _estimated = estimated;
         _settings = settings;
         _playback = playback;
         _library = library;
@@ -86,16 +88,37 @@ public sealed partial class LyricsSyncViewModel : ObservableObject, IDisposable
             // Already synced: start from its times (and keep its [ar:]/[ti:]… tags for saving).
             _header = LrcWriter.HeaderLines(lyrics);
             foreach (var line in synced) Lines.Add(new SyncLineViewModel(line.Text) { Time = line.Time });
+            MarkEstimated();
         }
         else
         {
             foreach (var line in LrcWriter.PlainLines(lyrics)) Lines.Add(new SyncLineViewModel(line));
         }
-        SelectedLine = Lines.FirstOrDefault(l => !l.IsGap) ?? Lines.FirstOrDefault();
+        SelectedLine = Lines.FirstOrDefault(l => l.NeedsCheck) ?? Lines.FirstOrDefault(l => !l.IsGap) ?? Lines.FirstOrDefault();
+        var check = Lines.Count(l => l.NeedsCheck);
+        if (check > 0) Status = $"노란색으로 표시된 {check}줄은 추정한 시간이니 들어보고 확인하세요.";
         UpdateSummary();
     }
 
     private readonly List<string> _header = [];
+
+    /// <summary>The lines a batch sync estimated (see <see cref="LyricsSyncWindow.Run"/>); on save it
+    /// is left holding those still unchecked.</summary>
+    private readonly List<(TimeSpan Time, string Text)>? _estimated;
+
+    /// <summary>The file holds only times, so the estimated lines are found by their text and saved
+    /// time (rounded to 1/100 s in the file). Each one marks one line, so a repeated chorus line
+    /// marks only the occurrence that was estimated.</summary>
+    private void MarkEstimated()
+    {
+        if (_estimated is null) return;
+        foreach (var (time, text) in _estimated)
+        {
+            var line = Lines.FirstOrDefault(l => l.IsConfident && l.Time is { } t
+                && Math.Abs((t - time).TotalMilliseconds) < 10 && l.Text.Trim() == text.Trim());
+            if (line is not null) line.IsConfident = false;
+        }
+    }
 
     /// <summary>The song already had synced lyrics: this edits their timing ("싱크 가사 편집")
     /// rather than making them from plain text.</summary>
@@ -504,6 +527,12 @@ public sealed partial class LyricsSyncViewModel : ObservableObject, IDisposable
             IsSaving = false;
         }
 
+        if (_estimated is not null)
+        {
+            // what's still unchecked, at its time as saved (opening again marks just these)
+            _estimated.Clear();
+            foreach (var line in Lines.Where(l => l.NeedsCheck)) _estimated.Add((line.Time!.Value, line.Text));
+        }
         _library.RefreshRows([File.Model]);
         if (IsThisSongLoaded) _playback.ReloadLyrics();
         HasChanges = false;

@@ -50,6 +50,10 @@ public sealed partial class BatchSyncItemViewModel(LibraryFileViewModel file) : 
     public bool NeedsCheck => IsDone && CheckCount > 0 && !IsReviewed;
     public bool CanReview => IsDone;
 
+    /// <summary>Which lines were estimated (their saved time and text): the file keeps only the
+    /// times, so '확인' hands these to the sync editor to mark them there.</summary>
+    public List<(TimeSpan Time, string Text)> Estimated { get; } = [];
+
     /// <summary>What the batch's save replaced (for 모두 되돌리기).</summary>
     public TagEditUndo? Undo { get; set; }
 
@@ -303,7 +307,10 @@ public sealed partial class BatchSyncViewModel : ObservableObject, IDisposable
             Status = "저장하는 중…";
             var lrc = LrcWriter.Write(header, sung.Select((text, i) => (result[i].Time, text)));
             item.Undo = await SaveAsync(item.File, lrc);
-            item.CheckCount = result.Count(r => !r.IsConfident);
+            item.Estimated.Clear();
+            for (var i = 0; i < sung.Count && i < result.Count; i++)
+                if (!result[i].IsConfident) item.Estimated.Add((result[i].Time, sung[i]));
+            item.CheckCount = item.Estimated.Count;
             item.State = BatchSyncItemState.Done;
             item.Status = item.CheckCount == 0
                 ? $"완료 · {Took(item.Took)}"
@@ -568,7 +575,7 @@ public sealed partial class BatchSyncViewModel : ObservableObject, IDisposable
             Toast.Error("가사를 읽지 못했습니다", ex.Message);
             return;
         }
-        if (LyricsSyncWindow.Run(owner, item.File, lyrics) is not null)
+        if (LyricsSyncWindow.Run(owner, item.File, lyrics, item.Estimated) is not null)
         {
             item.IsReviewed = true;
             item.Status = $"완료 · {Took(item.Took)} · 확인함";

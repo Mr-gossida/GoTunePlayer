@@ -48,16 +48,19 @@ public partial class LyricsSyncWindow : Wpf.Ui.Controls.FluentWindow
     }
 
     /// <summary>Opens the editor for <paramref name="file"/>'s lyrics: plain ones to sync, or
-    /// synced ones to fix (their times loaded). Once synced lyrics were saved (to the file), what
-    /// the save replaced; else null.</summary>
-    public static TuneSync.Core.Services.TagEditUndo? Run(Window? owner, LibraryFileViewModel file, string lyrics)
+    /// synced ones to fix (their times loaded). <paramref name="estimated"/>: lines of those synced
+    /// ones whose time was estimated (marked to check); a save leaves in it the ones still unchecked.
+    /// Once synced lyrics were saved (to the file), what the save replaced; else null.</summary>
+    public static TuneSync.Core.Services.TagEditUndo? Run(Window? owner, LibraryFileViewModel file, string lyrics,
+        List<(TimeSpan Time, string Text)>? estimated = null)
     {
-        var window = Create(file, lyrics);
+        var window = Create(file, lyrics, estimated);
         window.Owner = owner;
         return window.ShowDialog() == true ? window._viewModel.SavedUndo : null;
     }
 
-    internal static LyricsSyncWindow Create(LibraryFileViewModel file, string lyrics)
+    internal static LyricsSyncWindow Create(LibraryFileViewModel file, string lyrics,
+        List<(TimeSpan Time, string Text)>? estimated = null)
     {
         var services = ((App)Application.Current).Services;
         var viewModel = new LyricsSyncViewModel(
@@ -65,8 +68,12 @@ public partial class LyricsSyncWindow : Wpf.Ui.Controls.FluentWindow
             services.GetRequiredService<LibraryViewModel>(),
             services.GetRequiredService<Network.NetworkLibrary>(),
             services.GetRequiredService<TuneSync.Core.Models.AppSettings>(),
-            file, lyrics);
-        return new LyricsSyncWindow(viewModel);
+            file, lyrics, estimated);
+        var window = new LyricsSyncWindow(viewModel);
+        // the first estimated line, scrolled to once the list exists
+        if (viewModel.SelectedLine is { NeedsCheck: true } first)
+            window.Loaded += (_, _) => window.Dispatcher.BeginInvoke(() => window.LinesList.ScrollIntoView(first), DispatcherPriority.Loaded);
+        return window;
     }
 
     internal LyricsSyncViewModel ViewModel => _viewModel;
