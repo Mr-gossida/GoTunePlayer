@@ -1070,21 +1070,27 @@ public sealed class TonePlayer : IDisposable
         _device = OutputDevices.Open(_enumerator, output.DeviceId) ?? throw new InvalidOperationException("No playback device.");
         _deviceId = _device.ID;
         _deviceName = NameOf(_device);
+        // What it takes in exclusive mode, asked while it still can be (설정 › 음향 lists it).
+        if (output.Exclusive) OutputDevices.RememberFormats(_device);
         var deviceChannels = SafeMixChannels(_device);
         var layout = ChannelLayout.Channels(output.Layout) <= deviceChannels ? output.Layout : SpeakerLayout.Stereo;
         var channels = ChannelLayout.Channels(layout);
-        string? note = output.Layout != layout ? "이 장치에는 스피커가 그만큼 없어 스테레오로 재생 중" : null;
-        if (output.DeviceId is not null && output.DeviceId != _deviceId) note = "고른 장치가 없어 기본 장치로 재생 중";
         var wantBitPerfect = output.Exclusive && output.BitPerfect || _dop;
+        string? note = output.Layout == layout ? null
+            : wantBitPerfect ? null // said just below
+            : "이 장치에는 스피커가 그만큼 없어 스테레오로 재생 중";
         if (_dop && !output.Exclusive) throw new DopUnavailableException("not exclusive");
         _remastering = false;
         if (wantBitPerfect)
         {
-            // the file's own channels: no spreading over more speakers
+            // the file's own channels: no spreading over more speakers - said, as the remastering
+            // says it, rather than the speakers quietly going unused
+            if (output.Layout != SpeakerLayout.Stereo) note = _dop ? "DSD는 스테레오로 보냄" : "비트퍼펙트는 파일의 채널 그대로(스테레오) 보냄";
             layout = SpeakerLayout.Stereo;
             channels = 2;
-            note = null;
         }
+        // (after the layout's: the device missing is the bigger news)
+        if (output.DeviceId is not null && output.DeviceId != _deviceId) note = Join("고른 장치가 없어 기본 장치로 재생 중", note);
         _bitPerfect = false;
 
         if (output.Exclusive && !_dop && !wantBitPerfect && output.Remaster != DsdRemaster.Off)
@@ -1142,9 +1148,9 @@ public sealed class TonePlayer : IDisposable
                 _layoutName = LayoutName(layout);
                 var rate = $"{format.ValidBits}비트 {format.SampleRate / 1000.0:0.#}kHz";
                 if (wantBitPerfect && !exact)
-                    note = format.SampleRate != _sampleRate
+                    note = Join(format.SampleRate != _sampleRate
                         ? $"비트퍼펙트 아님: 장치가 {_sampleRate / 1000.0:0.#}kHz를 받지 않아 변환 중"
-                        : $"비트퍼펙트 아님: 장치가 {_sourceBits}비트를 받지 않음";
+                        : $"비트퍼펙트 아님: 장치가 {_sourceBits}비트를 받지 않음", note);
                 if (!_dop && output.HardwareVolume && !TakeHardwareVolume())
                 {
                     const string noHardware = "장치에 하드웨어 볼륨이 없어 디지털 볼륨 사용";

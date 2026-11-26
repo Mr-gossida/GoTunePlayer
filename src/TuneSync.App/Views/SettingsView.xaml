@@ -522,19 +522,23 @@
                                 <ui:TextBlock Text="소리가 나갈 스피커나 헤드폰" Style="{StaticResource Desc}"/>
                             </StackPanel>
                         </ui:CardControl.Header>
-                        <ComboBox Width="260" ItemsSource="{Binding Devices}" DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding DeviceId}"/>
+                        <!-- a device's name is often long ("Windows 기본 장치 (LG HDR QHD …)"): wider than the
+                             other lists, and whole in the tooltip when it still doesn't fit -->
+                        <ComboBox Width="300" ItemsSource="{Binding Devices}" DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding DeviceId}"
+                                  ToolTip="{Binding SelectedItem.Label, RelativeSource={RelativeSource Self}}"/>
                     </ui:CardControl>
                     <ui:CardControl Style="{StaticResource Card}" DataContext="{Binding Output}" Icon="{ui:SymbolIcon SpeakerSettings24}" Tag="스피커 구성 채널 스테레오 서라운드 5.1 7.1 4채널 업믹스"
+                                    IsEnabled="{Binding CanChooseLayout}"
                                     ToolTip="스테레오 음악을 더 많은 스피커에 나눠 보냅니다: 앞은 원래 좌우, 센터는 둘의 공통된 소리, 서브우퍼는 저음, 뒤는 좌우를 조금 작게. 저음을 어디서 우퍼로 나눌지는 리시버의 스피커 설정을 따릅니다. 장치에 있는 스피커 수만큼만 고를 수 있습니다.">
                         <ui:CardControl.Header>
                             <StackPanel>
                                 <ui:TextBlock Text="스피커 구성" FontTypography="Body"/>
-                                <ui:TextBlock Text="음악을 장치의 스피커에 나누는 방법" Style="{StaticResource Desc}"/>
+                                <ui:TextBlock Text="{Binding LayoutNote}" Style="{StaticResource Desc}" TextWrapping="Wrap"/>
                             </StackPanel>
                         </ui:CardControl.Header>
                         <ComboBox Width="260" ItemsSource="{Binding Layouts}" DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding Layout}"/>
                     </ui:CardControl>
-                    <ui:CardExpander Margin="0,0,0,4" DataContext="{Binding Output}" Icon="{ui:SymbolIcon LockClosed24}" IsExpanded="{Binding Exclusive, Mode=OneWay}"
+                    <ui:CardExpander Margin="0,0,0,4" DataContext="{Binding Output}" Icon="{ui:SymbolIcon LockClosed24}" IsExpanded="{Binding IsExclusiveOpen}"
                                      Tag="오디오 독점 모드 비트퍼펙트 WASAPI 샘플 속도 비트 수준 고음질 하이레졸루션 원음"
                                      ToolTip="GoTune Player가 장치를 혼자 씁니다. 소리는 GoTune이 디코딩한 PCM이며, Windows의 믹서와 형식 변환만 거치지 않습니다. 이퀄라이저·잔향·볼륨은 그대로 적용되고, 파일의 소리를 손대지 않고 보내려면 '비트퍼펙트'를 켭니다. 그동안 다른 프로그램의 소리는 나지 않습니다.">
                         <ui:CardExpander.Header>
@@ -613,7 +617,7 @@
                             <ui:TextBlock Margin="0,6,0,0" Style="{StaticResource Desc}" Text="장치에 지원되는 형식을 묻는 중…"
                                           Visibility="{Binding IsProbing, Converter={StaticResource BoolToVisibility}}"/>
                             <ui:TextBlock Margin="0,6,0,0" Style="{StaticResource Desc}" Foreground="{DynamicResource SystemFillColorCautionBrush}"
-                                          Text="이 장치는 독점 모드 형식을 알려 주지 않습니다(다른 프로그램이 독점 중일 수 있습니다). 켜 두면 가능한 형식을 찾아 보고, 안 되면 공유 모드로 재생합니다."
+                                          Text="지금은 이 장치에 독점 모드 형식을 물어볼 수 없습니다(다른 프로그램이 장치를 독점하고 있을 수 있습니다). 켜 두면 재생할 때 가능한 형식을 찾아 보고, 안 되면 공유 모드로 재생합니다."
                                           Visibility="{Binding NoExclusiveFormats, Converter={StaticResource BoolToVisibility}}"/>
                         </StackPanel>
                     </ui:CardExpander>
@@ -715,12 +719,14 @@
                         </ui:CardControl.Header>
                         <ui:Button Content="이퀄라이저 열기" Icon="{ui:SymbolIcon Open24}" Click="OpenEqualizer_Click"/>
                     </ui:CardControl>
+                    <!-- the limiter and the headroom are the equalizer's: while it's off they can be set up,
+                         and their lines say what happens meanwhile (the limiter always guards against clipping) -->
                     <ui:CardControl Style="{StaticResource Card}" Icon="{ui:SymbolIcon ShieldCheckmark24}" Tag="리미터 클리핑 왜곡 찌그러짐 음량 최대 크기"
                                     ToolTip="끄면 최대 크기를 넘은 소리가 잘린 채로 나가 왜곡될 수 있습니다.">
                         <ui:CardControl.Header>
                             <StackPanel>
                                 <ui:TextBlock Text="리미터" FontTypography="Body"/>
-                                <ui:TextBlock Text="소리가 최대 크기를 넘지 않도록 부드럽게 눌러 왜곡을 막기" Style="{StaticResource Desc}"/>
+                                <ui:TextBlock Text="{Binding Equalizer.LimiterNote}" Style="{StaticResource Desc}" TextWrapping="Wrap"/>
                             </StackPanel>
                         </ui:CardControl.Header>
                         <ui:ToggleSwitch IsChecked="{Binding Equalizer.Limiter}" OnContent="켬" OffContent="끔"/>
@@ -730,7 +736,7 @@
                         <ui:CardControl.Header>
                             <StackPanel>
                                 <ui:TextBlock Text="헤드룸" FontTypography="Body"/>
-                                <ui:TextBlock Text="올린 만큼 전체 음량을 미리 낮추기 (소리가 작아집니다)" Style="{StaticResource Desc}"/>
+                                <ui:TextBlock Text="{Binding Equalizer.HeadroomNote}" Style="{StaticResource Desc}" TextWrapping="Wrap"/>
                             </StackPanel>
                         </ui:CardControl.Header>
                         <ui:ToggleSwitch IsChecked="{Binding Equalizer.AutoHeadroom}" OnContent="켬" OffContent="끔"/>

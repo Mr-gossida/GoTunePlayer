@@ -19,7 +19,6 @@ public sealed partial class OutputViewModel : ObservableObject
     private bool _loading;
     private int _deviceChannels = 2;
     private IReadOnlyList<DeviceFormat> _formats = [];
-    private readonly Dictionary<string, IReadOnlyList<DeviceFormat>> _formatCache = [];
 
     public OutputViewModel(AppSettings settings, PlaybackViewModel playback)
     {
@@ -36,8 +35,15 @@ public sealed partial class OutputViewModel : ObservableObject
         _hardwareVolume = settings.Output.HardwareVolume;
         _dsdOutput = settings.Output.DsdOutput;
         _remaster = settings.Output.Remaster;
+        _isExclusiveOpen = _exclusive;
         playback.PropertyChanged += Playback_PropertyChanged;
     }
+
+    /// <summary>The 오디오 독점 모드 card is open: it opens as exclusive mode is turned on and
+    /// closes as it's turned off, and can be opened or closed by hand in between. (Bound one way
+    /// to <see cref="Exclusive"/>, a click on the card's header cut that tie for good.)</summary>
+    [ObservableProperty]
+    private bool _isExclusiveOpen;
 
     /// <summary>The device list's key for "Windows' default device" (a combo box can't select
     /// an item whose value is null).</summary>
@@ -56,7 +62,7 @@ public sealed partial class OutputViewModel : ObservableObject
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanUpsample), nameof(UpsampleNote), nameof(CanRemaster), nameof(RemasterNote),
-        nameof(RemasterActive), nameof(CanChooseFormat), nameof(CanChooseFilter), nameof(FilterNote))]
+        nameof(RemasterActive), nameof(CanChooseFormat), nameof(CanChooseFilter), nameof(FilterNote), nameof(CanChooseLayout), nameof(LayoutNote))]
     private bool _exclusive;
 
     public IReadOnlyList<Choice<UpsampleMode>> UpsampleModes { get; } =
@@ -110,7 +116,7 @@ public sealed partial class OutputViewModel : ObservableObject
     private DsdOutput _dsdOutput;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(RemasterActive), nameof(CanChooseFormat), nameof(CanUpsample), nameof(UpsampleNote))]
+    [NotifyPropertyChangedFor(nameof(RemasterActive), nameof(CanChooseFormat), nameof(CanUpsample), nameof(UpsampleNote), nameof(CanChooseLayout), nameof(LayoutNote))]
     private DsdRemaster _remaster;
 
     private bool _dsdConfirmed;
@@ -150,12 +156,22 @@ public sealed partial class OutputViewModel : ObservableObject
     /// <summary>The file's sound as it is (in exclusive mode): no processing, the song's own rate.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanChooseFormat), nameof(CanUpsample), nameof(UpsampleNote), nameof(CanRemaster), nameof(RemasterNote),
-        nameof(RemasterActive), nameof(CanChooseFilter), nameof(FilterNote))]
+        nameof(RemasterActive), nameof(CanChooseFilter), nameof(FilterNote), nameof(CanChooseLayout), nameof(LayoutNote))]
     private bool _bitPerfect;
 
     /// <summary>Rate and bits are GoTune's to choose only when the sound isn't sent bit-perfect
     /// and isn't remastered to DSD (which sets its own).</summary>
     public bool CanChooseFormat => !BitPerfect && !RemasterActive;
+
+    /// <summary>The speakers can be chosen unless the sound goes out as the file has it
+    /// (bit-perfect) or as DSD: both are stereo.</summary>
+    public bool CanChooseLayout => !(Exclusive && BitPerfect) && !RemasterActive;
+
+    /// <summary>The 스피커 구성 card's line: why it isn't used, when it isn't.</summary>
+    public string LayoutNote =>
+        Exclusive && BitPerfect ? "비트퍼펙트는 파일의 채널 그대로(스테레오) 보내 쓰지 않습니다"
+        : RemasterActive ? "DSD 리마스터링은 스테레오로 보내 쓰지 않습니다"
+        : "음악을 장치의 스피커에 나누는 방법";
 
     /// <summary>DoP (DSD playback as-is, DSD remastering) goes straight to the device, so it exists only in exclusive mode;
     /// remastering also needs the sound processed, which bit-perfect isn't.</summary>
@@ -269,11 +285,9 @@ public sealed partial class OutputViewModel : ObservableObject
         OnPropertyChanged(nameof(UpsampleNote));
         WindowsFormat = device is null ? "" : $"Windows 공유 형식: {device.Bits}비트 · {device.SampleRate / 1000.0:0.#}kHz · {device.Channels}채널";
         var formats = await Task.Run(() => OutputDevices.ExclusiveFormats(id));
-        // While GoTune itself holds the device in exclusive mode it can't be asked again: keep
-        // what it said before.
-        var key = device?.Id ?? "";
-        if (formats.Count > 0) _formatCache[key] = formats;
-        else if (_formatCache.TryGetValue(key, out var cached)) formats = cached;
+        // While GoTune itself holds the device in exclusive mode it can't be asked: what it said
+        // the last time it could be (the player asks it before taking it, at the app's start too).
+        if (formats.Count == 0 && device is not null) formats = OutputDevices.KnownFormats(device.Id);
         _formats = formats;
         IsProbing = false;
         FillChoices();
@@ -336,6 +350,7 @@ public sealed partial class OutputViewModel : ObservableObject
 
     partial void OnExclusiveChanged(bool value)
     {
+        IsExclusiveOpen = value;
         if (_loading) return;
         _settings.Output.Exclusive = value;
         Apply();

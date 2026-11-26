@@ -114,24 +114,54 @@ public static class OutputDevices
     }
 
     /// <summary>The formats the device takes in exclusive mode (stereo), lowest first. Empty
-    /// when it can't be asked (gone, or held by another program in exclusive mode).</summary>
-    public static IReadOnlyList<DeviceFormat> ExclusiveFormats(string? deviceId, SpeakerLayout layout = SpeakerLayout.Stereo)
+    /// when it can't be asked (gone, or held in exclusive mode - by another program, or by
+    /// GoTune itself: see <see cref="KnownFormats"/>).</summary>
+    public static IReadOnlyList<DeviceFormat> ExclusiveFormats(string? deviceId)
     {
-        var formats = new List<DeviceFormat>();
         try
         {
             using var enumerator = new MMDeviceEnumerator();
             using var device = Open(enumerator, deviceId);
-            if (device is null) return formats;
-            using var client = device.AudioClient;
-            foreach (var rate in Rates)
-                foreach (var bits in BitDepths)
-                    if (Supports(client, rate, bits, ChannelLayout.Channels(layout)))
-                        formats.Add(new DeviceFormat(rate, bits));
+            return device is null ? [] : Probe(device);
         }
         catch (COMException)
         {
+            return [];
         }
+    }
+
+    /// <summary>What each device said it takes in exclusive mode, the last time it could be
+    /// asked, by its id. A device GoTune holds in exclusive mode can't be asked (it answers that
+    /// it's in use) - and the player takes it as it opens the last song at start, so 설정 › 음향
+    /// would otherwise have nothing to offer all session.</summary>
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, IReadOnlyList<DeviceFormat>> Known = new();
+
+    /// <summary>The formats the device said it takes when it was last asked, or empty.</summary>
+    public static IReadOnlyList<DeviceFormat> KnownFormats(string deviceId) => Known.TryGetValue(deviceId, out var formats) ? formats : [];
+
+    /// <summary>Asks the device (once per run) before the player takes it in exclusive mode.</summary>
+    internal static void RememberFormats(MMDevice device)
+    {
+        if (Known.ContainsKey(device.ID)) return;
+        try
+        {
+            Probe(device);
+        }
+        catch (COMException)
+        {
+            // it can't be asked: nothing to remember
+        }
+    }
+
+    private static IReadOnlyList<DeviceFormat> Probe(MMDevice device)
+    {
+        var formats = new List<DeviceFormat>();
+        using var client = device.AudioClient;
+        foreach (var rate in Rates)
+            foreach (var bits in BitDepths)
+                if (Supports(client, rate, bits, 2))
+                    formats.Add(new DeviceFormat(rate, bits));
+        if (formats.Count > 0) Known[device.ID] = formats;
         return formats;
     }
 

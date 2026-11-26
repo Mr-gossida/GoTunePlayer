@@ -111,8 +111,21 @@ public sealed partial class EqualizerViewModel : ObservableObject
     public ObservableCollection<EqPresetChoice> Presets { get; } = [];
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ToolTip), nameof(IsReverbWorking))]
+    [NotifyPropertyChangedFor(nameof(ToolTip), nameof(IsReverbWorking), nameof(LimiterNote), nameof(HeadroomNote))]
     private bool _isEnabled;
+
+    /// <summary>The limiter's line in 설정 › 음향. With the equalizer off the sound gets none of
+    /// its settings (ToneConfig.Neutral), and the limiter stays on, only to catch what rate
+    /// conversion and speaker spreading push past full scale - its switch has no say then (it can
+    /// still be set, for when the equalizer is on again: the line says so).</summary>
+    public string LimiterNote => IsEnabled
+        ? "소리가 최대 크기를 넘지 않도록 부드럽게 눌러 왜곡을 막기"
+        : "이퀄라이저가 꺼져 있는 동안은 이 설정과 관계없이 넘치는 소리만 막습니다";
+
+    /// <summary>The headroom's line: with the equalizer off nothing is boosted, so nothing to make room for.</summary>
+    public string HeadroomNote => IsEnabled
+        ? "올린 만큼 전체 음량을 미리 낮추기 (소리가 작아집니다)"
+        : "이퀄라이저를 켜면 적용됩니다 · 지금은 올린 소리가 없어 낮추지 않습니다";
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(PreampText))]

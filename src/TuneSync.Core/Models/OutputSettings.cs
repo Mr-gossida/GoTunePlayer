@@ -66,9 +66,10 @@ public sealed class OutputSettings
     /// volume is at 100. Other programs can't play sound meanwhile.</summary>
     public bool Exclusive { get; set; }
 
-    /// <summary>In exclusive mode, the file's sound as it is: no equalizer, tone, reverb,
-    /// limiter or volume (the receiver sets the loudness), always at the song's own rate - the
-    /// samples reach the device unchanged.</summary>
+    /// <summary>In exclusive mode, the file's sound as it is: no equalizer, tone, reverb or
+    /// limiter, always at the song's own rate - the samples reach the device unchanged while
+    /// GoTune's volume is at 100 %. Below that the samples are turned down (GoTune's volume always
+    /// counts), unless <see cref="HardwareVolume"/> turns the device down instead.</summary>
     public bool BitPerfect { get; set; }
 
     /// <summary>Exclusive mode's sample rate: 0 = each song's own rate.</summary>
