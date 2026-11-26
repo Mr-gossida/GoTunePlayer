@@ -53,6 +53,41 @@ public class LyricsAlignerTests
     }
 
     [Fact]
+    public void A_loop_that_is_not_in_the_lyrics_is_not_taken_for_the_lines_sung_there()
+    {
+        // The last two lines weren't heard: Whisper wrote a phrase over and over instead, one
+        // that shares letters with them ("잠", "보고", "그대"). It isn't in the lyrics: dropped,
+        // so those lines are estimates, not "heard" at the loop's times.
+        var heard = Heard(Lines.Take(4).ToList(), Starts.Take(4).ToList());
+        for (var t = 30.0; t < 40; t += 2)
+            foreach (var (word, at) in new[] { ("잠이", 0.0), ("보고", 0.5), ("그대", 1.0) })
+                heard.Add(new TimedText(TimeSpan.FromSeconds(t + at), TimeSpan.FromSeconds(t + at + 0.4), word));
+
+        var result = LyricsAligner.Align(Lines, heard, TimeSpan.FromSeconds(60));
+
+        Assert.True(result[3].IsConfident);
+        Assert.False(result[4].IsConfident);
+        Assert.False(result[5].IsConfident);
+    }
+
+    [Fact]
+    public void A_chant_the_lyrics_repeat_is_kept()
+    {
+        var heard = Enumerable.Range(0, 6).Select(k => new TimedText(TimeSpan.FromSeconds(k), TimeSpan.FromSeconds(k + 0.5), "lala")).ToList();
+        Assert.Empty(LyricsAligner.DropLoops(heard, ["Go go"]));
+        Assert.Equal(6, LyricsAligner.DropLoops(heard, ["La la la la la la"]).Count);
+
+        // misheard, but like a line of the song: still the singing, kept
+        var misheard = Enumerable.Range(0, 5).SelectMany(k => new[]
+        {
+            new TimedText(TimeSpan.FromSeconds(k), TimeSpan.FromSeconds(k + 0.3), "Just"),
+            new TimedText(TimeSpan.FromSeconds(k + 0.3), TimeSpan.FromSeconds(k + 0.6), "be"),
+            new TimedText(TimeSpan.FromSeconds(k + 0.6), TimeSpan.FromSeconds(k + 0.9), "there"),
+        }).ToList();
+        Assert.Equal(15, LyricsAligner.DropLoops(misheard, ["Just beat it, beat it", "They're out to get you"]).Count);
+    }
+
+    [Fact]
     public void Tolerates_misheard_and_missed_words()
     {
         // Typical recognition slips: a different final consonant, a dropped word, a wrong word.

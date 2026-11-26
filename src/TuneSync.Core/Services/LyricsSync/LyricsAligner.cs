@@ -69,7 +69,7 @@ public static class LyricsAligner
         // A recognized word often starts where the previous one ended, silence included: a word
         // can't take longer than MaxCharTime per character, so its start is pulled up to fit.
         var heardChars = new List<(char C, double Time)>();
-        foreach (var piece in heard)
+        foreach (var piece in DropLoops(heard, lines))
         {
             var text = Normalize(piece.Text);
             if (text.Length == 0) continue;
@@ -95,6 +95,67 @@ public static class LyricsAligner
         ShiftAmongRepeats(lines, times, confident);
         return Fill(lines, lineLength, times, confident, charTime, duration.TotalSeconds, voice);
     }
+
+    /// <summary>What was heard without Whisper's loops: the same phrase written again and again in
+    /// a row, which it does when it loses its place (after a rap in English, B.B's "하늘땅 별땅"
+    /// got "다 같이 하는 걸 좋아한다고 했지만" eight times over the whole second verse). Such a loop
+    /// shares letters with the lines sung there, and the alignment took it for them: five lines
+    /// marked heard, 2-7 s early, and they outvoted the pass that had heard them right. A phrase
+    /// repeated <see cref="LoopRepeats"/> times or more is dropped only when it looks like no line
+    /// of the lyrics - a chant the song really repeats stays, and so does one Whisper misheard
+    /// ("Just be there, be there" for Beat It's "Just beat it, beat it": at the right times, the
+    /// alignment's best clue there).</summary>
+    public static List<TimedText> DropLoops(IReadOnlyList<TimedText> heard, IReadOnlyList<string> lines)
+    {
+        var normalized = lines.Select(Normalize).ToList();
+        var lyrics = string.Concat(normalized);
+        var linePairs = normalized.Select(LetterPairs).ToList();
+        // the share of the phrase's letter pairs that the lyric line most like it has
+        double LikeALine(string phrase)
+        {
+            var pairs = LetterPairs(phrase);
+            return pairs.Count == 0 ? 0 : linePairs.Max(line => pairs.Count(line.Contains) / (double)pairs.Count);
+        }
+        var keys = heard.Select(h => Normalize(h.Text)).ToList();
+        var drop = new bool[heard.Count];
+        for (var i = 0; i < heard.Count;)
+        {
+            // the phrase length (in pieces) whose repeats from here cover the most
+            int bestLength = 0, bestRepeats = 0;
+            for (var length = 1; length <= MaxLoopPieces && i + length * LoopRepeats <= heard.Count; length++)
+            {
+                if (keys.Skip(i).Take(length).Any(k => k.Length == 0)) break;
+                var repeats = 1;
+                while (i + (repeats + 1) * length <= heard.Count
+                       && Enumerable.Range(0, length).All(k => keys[i + repeats * length + k] == keys[i + k]))
+                    repeats++;
+                if (repeats >= LoopRepeats && repeats * length > bestRepeats * bestLength) (bestLength, bestRepeats) = (length, repeats);
+            }
+            var phrase = bestLength == 0 ? "" : string.Concat(keys.Skip(i).Take(bestLength));
+            if (phrase.Length < 2) { i++; continue; }
+            // Past the whole loop either way: one kept as singing would otherwise be found again a
+            // word further on ("be there just" rather than "just be there"), looking less like the line.
+            if (!lyrics.Contains(phrase, StringComparison.Ordinal) && LikeALine(phrase) < LoopLikeALine)
+                for (var k = 0; k < bestLength * bestRepeats; k++) drop[i + k] = true;
+            i += bestLength * bestRepeats;
+        }
+        return [.. heard.Where((_, k) => !drop[k])];
+    }
+
+    /// <summary>A phrase written this many times in a row (or more) is a loop, not singing.</summary>
+    private const int LoopRepeats = 4;
+
+    /// <summary>The longest phrase, in Whisper's pieces (words), looked for as a loop.</summary>
+    private const int MaxLoopPieces = 12;
+
+    /// <summary>A loop sharing at least this share of its letter pairs with one lyric line is a
+    /// chant misheard, not made up. In the transcripts of 18 benchmark songs the made-up loops
+    /// shared 0-0.38 ("Gap Playlist", "(music)", the 하늘땅 별땅 one 0.38), the misheard chants
+    /// 0.55-1 ("Just be there", "Be the", "die for you I will").</summary>
+    private const double LoopLikeALine = 0.5;
+
+    private static HashSet<(char, char)> LetterPairs(string s) =>
+        [.. Enumerable.Range(0, Math.Max(0, s.Length - 1)).Select(i => (s[i], s[i + 1]))];
 
     /// <summary>A line sung twice in a row of which only one was heard: the alignment can give
     /// what was heard to either (both cost the same), and it tends to take the second. Which one
