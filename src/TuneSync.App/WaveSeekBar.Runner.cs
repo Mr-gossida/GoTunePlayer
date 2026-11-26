@@ -653,7 +653,7 @@ public sealed partial class WaveSeekBar
                        : kind == Hazard.Fox && frame == 2 ? ground - pixel
                        : kind == Hazard.Grasshopper ? ground - OnGrid(GrassHop(o.X, thumbX, pixel)) : ground;
             var artLeft = OnGrid(o.X - art[0].Length * pixel / 2);
-            DrawOutline(dc, art, artLeft, bottom, pixel, fade, night);
+            if (!night) DrawOutline(dc, art, artLeft, bottom, pixel, fade);
             DrawSprite(dc, art, artLeft, bottom, pixel, fade);
         }
 
@@ -676,10 +676,14 @@ public sealed partial class WaveSeekBar
         }
         var shellX = OnGrid(ThumbXAt(HatchBreak) - EggArt[0].Length * pixel / 2);
         var hatching = hatchScene && since < HatchOut;
-        // once it's off, the bottom of the shell stays where it broke and fades away (it broke at
-        // the bar's very start: carried off with the ground it was gone at once, past the end)
-        var shellFade = Math.Clamp(1 - (since - HatchOut) / 0.8, 0, 1);
-        if (hatchScene && !hatching && shellFade > 0) DrawSprite(dc, EggBottomArt, shellX, ground, pixel, shellFade);
+        if (hatchScene)
+        {
+            // the shell bursts into bits that drop to the ground and fade there: its top as it
+            // breaks open, its bottom as the duck runs off out of it (whole pieces flying off or
+            // just fading looked wrong)
+            DrawShards(dc, EggTopArt, shellX, ground - (EggArt.Length - EggBottomArt.Length + 1) * pixel, ground, pixel, since - HatchBreak, 70, 0);
+            if (!hatching) DrawShards(dc, EggBottomArt, shellX, ground, ground, pixel, since - HatchOut, 45, 1);
+        }
 
         // the duck: running, tucked up in a jump, or ducked under the eagle
         var step = (int)(_runTime * 10) % 2;
@@ -730,10 +734,6 @@ public sealed partial class WaveSeekBar
             DrawSprite(dc, feet, left, top + rows * pixel, pixel, 1);
             dc.Pop();
             DrawSprite(dc, EggBottomArt, shellX, ground, pixel, 1);
-            // the top of the shell flies off up and back, and fades
-            var fly = Math.Min(out_, 0.5);
-            var topBottom = ground - (EggArt.Length - EggBottomArt.Length + 1) * pixel;
-            DrawSprite(dc, EggTopArt, OnGrid(shellX - 50 * fly), OnGrid(topBottom - (60 * fly - 90 * fly * fly)), pixel, Math.Clamp(1 - out_ / 0.5, 0, 1));
             return;
         }
         // going in at the house's door: what has gone past the door's far side is inside
@@ -774,6 +774,65 @@ public sealed partial class WaveSeekBar
         var split = 6;
         DrawSprite(dc, art[..split], left + tilt * pixel, ground - (art.Length - split) * pixel, pixel, 1);
         DrawSprite(dc, art[split..], left, ground, pixel, 1);
+    }
+
+    /// <summary>A picture cut into bits of 2 x 2 art pixels (each bit: its corner, and its cells
+    /// with their letters), worked out once per picture.</summary>
+    private static readonly Dictionary<string[], (int Row, int Column, (int R, int C, char Letter)[] Cells)[]> _shards = new(ReferenceEqualityComparer.Instance);
+
+    private static (int Row, int Column, (int R, int C, char Letter)[] Cells)[] ShardsOf(string[] art)
+    {
+        if (_shards.TryGetValue(art, out var known)) return known;
+        var width = art.Max(row => row.Length);
+        var shards = new List<(int, int, (int, int, char)[])>();
+        for (var r = 0; r < art.Length; r += 2)
+            for (var c = 0; c < width; c += 2)
+            {
+                var cells = new List<(int, int, char)>();
+                for (var dr = 0; dr < 2 && r + dr < art.Length; dr++)
+                    for (var dc = 0; dc < 2 && c + dc < art[r + dr].Length; dc++)
+                        if (ArtColor(art[r + dr][c + dc]) is not null) cells.Add((dr, dc, art[r + dr][c + dc]));
+                if (cells.Count > 0) shards.Add((r, c, [.. cells]));
+            }
+        return _shards[art] = [.. shards];
+    }
+
+    /// <summary>How fast the shell's bits fall (px a second squared), and when they're gone
+    /// (seconds after the burst: fading over the last half second, lying on the ground).</summary>
+    private const double ShardGravity = 520, ShardLife = 1.3;
+
+    /// <summary><paramref name="art"/> (its bottom-left at <paramref name="left"/>,
+    /// <paramref name="bottom"/>) burst <paramref name="t"/> seconds ago: its bits fly out from
+    /// its middle and up by about <paramref name="up"/> px a second, fall, stop where they hit
+    /// the ground and fade. Worked out from the time alone, so it's the same whenever drawn
+    /// (and paused or jumped to).</summary>
+    private void DrawShards(DrawingContext dc, string[] art, double left, double bottom, double ground, double pixel, double t, double up, int salt)
+    {
+        if (t < 0 || t > ShardLife) return;
+        var alpha = Math.Clamp((ShardLife - t) / 0.5, 0, 1);
+        var width = art.Max(row => row.Length);
+        var top = bottom - art.Length * pixel;
+        var k = 0;
+        foreach (var (row, column, cells) in ShardsOf(art))
+        {
+            k++;
+            // out from the middle (a bit more forward than back), up by a varying amount
+            var vx = (column + 1 - width / 2.0) * 9 + (SongDice(k, 20 + salt) - 0.35) * 40;
+            var vy = up * (0.5 + 0.7 * SongDice(k, 30 + salt));
+            var y0 = top + row * pixel;
+            // where it lies once down: on the ground, its own two rows tall
+            var floor = ground - 2 * pixel;
+            var landed = Math.Max(0, (vy + Math.Sqrt(Math.Max(0, vy * vy + 2 * ShardGravity * (floor - y0)))) / ShardGravity);
+            var air = Math.Min(t, landed);
+            var x = OnGrid(left + column * pixel + vx * air);
+            var y = OnGrid(Math.Min(floor, y0 - vy * air + ShardGravity / 2 * air * air));
+            foreach (var (r, c, letter) in cells)
+            {
+                var color = ArtColor(letter)!.Value;
+                dc.DrawRectangle(Solid(Color.FromArgb((byte)(255 * alpha), color.R, color.G, color.B)), null,
+                    new Rect(x + c * pixel, y + r * pixel, pixel, pixel));
+            }
+        }
     }
 
     // ---- the end of the song: the duck goes home ----
@@ -938,11 +997,11 @@ public sealed partial class WaveSeekBar
     /// as columns an art pixel wide, side by side columns of the same height as one rectangle.</summary>
     private void DrawHills(DrawingContext dc, double ground, double pixel, Color accent, bool night)
     {
-        // at night mostly a deep blue (the cover's color only a touch), a little stronger
+        // at night mostly a deep blue (the cover's color only a touch)
         var tone = night
             ? Color.FromRgb((byte)((accent.R + 3 * 0x30) / 4), (byte)((accent.G + 3 * 0x3C) / 4), (byte)((accent.B + 3 * 0x66) / 4))
             : Color.FromRgb((byte)((accent.R + 0x90) / 2), (byte)((accent.G + 0x90) / 2), (byte)((accent.B + 0x90) / 2));
-        var strength = night ? 0.45 : HillAlpha;
+        var strength = night ? 0.3 : HillAlpha;
         Color Shade(double alpha) => Color.FromArgb((byte)(255 * strength * alpha), tone.R, tone.G, tone.B);
         // how faint at screen x: fading out over the last stretch at either end, in a few steps
         // so neighboring columns still share a rectangle
@@ -1032,16 +1091,14 @@ public sealed partial class WaveSeekBar
         return _outlines[art] = [.. cells];
     }
 
-    /// <summary>An outline round a picture, so it stands out whatever the theme: soft and dark on
-    /// the light one (white and pale parts - the fox's muzzle and tail tip, the eagle's head, the
-    /// milk can, the toadstool's stem - were lost on it), faint and light on the dark one (dark
-    /// wood - the barrel, the crate, the log - was lost against the night's blue hills). The duck,
-    /// the egg and the house have outlines of their own.</summary>
-    private void DrawOutline(DrawingContext dc, string[] art, double left, double bottom, double pixel, double alpha, bool night)
+    /// <summary>A soft dark outline round a picture, for the light theme: white and pale parts (the
+    /// fox's muzzle and tail tip, the eagle's head, the milk can, the toadstool's stem) were lost
+    /// on it. The duck, the egg and the house have outlines of their own. (On the dark theme a
+    /// light outline looked like a grey rim, out of place on the grey background; the night hills
+    /// are kept faint instead, so the dark wood shows against them.)</summary>
+    private void DrawOutline(DrawingContext dc, string[] art, double left, double bottom, double pixel, double alpha)
     {
-        var brush = Solid(night
-            ? Color.FromArgb((byte)(70 * alpha), 0xF0, 0xEC, 0xE4)
-            : Color.FromArgb((byte)(150 * alpha), 0x4A, 0x40, 0x3A));
+        var brush = Solid(Color.FromArgb((byte)(150 * alpha), 0x4A, 0x40, 0x3A));
         var top = bottom - art.Length * pixel;
         foreach (var (r, c) in OutlineOf(art))
             dc.DrawRectangle(brush, null, new Rect(left + c * pixel, top + r * pixel, pixel, pixel));
@@ -1482,23 +1539,22 @@ public sealed partial class WaveSeekBar
 
     /// <summary>A hedgehog trundling at the duck: a cream pointed face with a dark eye and nose
     /// poking out of a dome of brown spines whose light tips make a jagged edge, little dark feet
-    /// stepping in two frames. (Its face was once tan like its spines, and the whole read as a
-    /// brown lump.)</summary>
+    /// stepping in two frames, and small and round with a pink cheek, so it looks cute. (Its face
+    /// was once tan like its spines, and the whole read as a brown lump; then, bigger and long,
+    /// it looked like a mole.)</summary>
     private static readonly string[] HedgehogBody =
     [
-        "......f.f.f.f..",
-        ".....fufufufuf.",
-        "....uuuuuuuuuuf",
-        "..CCuuuuuuuuuuu",
-        ".CkCCuuuuuuuuuf",
-        "kCCCCCuuuuuuuu.",
-        "...CCCCuuuuuu..",
+        "....f.f.f..",
+        "...fufufuf.",
+        "..Cuuuuuuuf",
+        ".CkCuuuuuuu",
+        "kCPCCuuuuu.",
     ];
 
     private static readonly string[][] HedgehogWalk =
     [
-        [.. HedgehogBody, "...k.k....k.k.."],
-        [.. HedgehogBody, "....k.k....k.k."],
+        [.. HedgehogBody, "..k.k..k.k."],
+        [.. HedgehogBody, "...k.k..k.k"],
     ];
 
     /// <summary>A wooden crate: a light frame round a darker panel crossed by a brace, shaded on
