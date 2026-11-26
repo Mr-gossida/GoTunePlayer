@@ -11,7 +11,7 @@ namespace TuneSync.App;
 // barrel, a milk can, a crate or a sunflower when it's loud; now and then a fox running at it, and
 // in loud passages an eagle swooping in at head height. It jumps the ones on the ground and runs
 // ducked under the eagle. Now and then a worm or a ladybug comes instead: the duck bends down,
-// pecks it up on the beat and munches.
+// pecks it up on the beat and munches. Faint clouds drift by behind, slower than the ground.
 // The fox, jumped, skids to a sit, looks up at the duck going over and then gazes after it.
 // It moves with the music: each thing is set so the duck takes off on a beat of the song (higher
 // on a strong one), it bobs on every beat as it runs and quacks on strong ones, its feet go
@@ -598,6 +598,7 @@ public sealed partial class WaveSeekBar
     {
         var pixel = ArtPixel;
         var ground = OnGrid(mid - 1.5);
+        DrawClouds(dc, ground, pixel);
         // placed for this very moment: also when the song is jumped in while paused (no frames run then)
         PlaceObstacles(thumbX);
         foreach (var o in _obstacles)
@@ -676,6 +677,31 @@ public sealed partial class WaveSeekBar
 
     /// <summary>Pixel art from rows of letters (see <see cref="ArtColor"/>; '.' is clear), its
     /// bottom-left corner at (<paramref name="left"/>, <paramref name="bottom"/>).</summary>
+    /// <summary>How fast the clouds drift by (px a second): a quarter of the ground's speed, so
+    /// they read as far off behind it.</summary>
+    private const double CloudSpeed = ObstacleSpeed / 4;
+
+    /// <summary>Clouds in the sky behind everything, faint, at a few heights above the duck's
+    /// head. Like the obstacles they move with the song (stopping when it pauses), going round
+    /// the bar: one about every 230 px of it.</summary>
+    private void DrawClouds(DrawingContext dc, double ground, double pixel)
+    {
+        var span = Right - Left + 80;
+        var count = Math.Max(2, (int)(span / 230));
+        var now = RunnerNow;
+        for (var i = 0; i < count; i++)
+        {
+            var art = CloudArt[i % CloudArt.Length];
+            // spread out evenly, each nudged a little so they don't look lined up
+            var offset = (i + 0.35 * Math.Sin(i * 2.4)) * span / count;
+            var x = offset - now * CloudSpeed;
+            x = Left - 40 + (x % span + span) % span;
+            // art pixels off the ground to its bottom: its top no higher than the eagle's wings go
+            var altitude = 13 + (i * 2) % 3;
+            DrawSprite(dc, art, OnGrid(x), ground - altitude * pixel, pixel, 0.8);
+        }
+    }
+
     private void DrawSprite(DrawingContext dc, string[] art, double left, double bottom, double pixel, double alpha)
     {
         var top = bottom - art.Length * pixel;
@@ -741,6 +767,9 @@ public sealed partial class WaveSeekBar
         // the worm and its shade
         'P' => Color.FromRgb(0xF4, 0x9A, 0xA8),
         'S' => Color.FromRgb(0xCC, 0x68, 0x7C),
+        // a cloud's white and its shaded underside
+        'U' => Color.FromRgb(0xF2, 0xF6, 0xFC),
+        'V' => Color.FromRgb(0xB8, 0xC8, 0xDC),
         _ => null,
     };
 
@@ -892,7 +921,8 @@ public sealed partial class WaveSeekBar
     /// <summary>The fox, running at the duck: tall pointed ears (orange to the tip: dark tips were
     /// lost against the dark screen saver), an eye with a light
     /// glint beside it, a white muzzle reaching out ahead of its head to a dark nose, a white chest,
-    /// a long bushy tail with a white tip, and legs in a darker orange (dark legs were lost against
+    /// a long bushy tail with a white tip, and legs in a darker orange (the front ones under its
+    /// chest: set further forward, under its muzzle, they looked out of place) (dark legs were lost against
     /// the dark screen saver) galloping in four steps - stretched out, passing, gathered under it
     /// (where it's off the ground, mid-bound), passing.</summary>
     private static readonly string[] FoxBody =
@@ -942,10 +972,10 @@ public sealed partial class WaveSeekBar
 
     private static readonly string[][] FoxRun =
     [
-        [.. FoxBody, "..qq.......qq....", ".q..q.....q..q..."],
-        [.. FoxBody, "...qq......qq....", "...q.q.....q.q..."],
-        [.. FoxBody, "....qq...qq......", ".....qq.qq......."],
-        [.. FoxBody, "...qq......qq....", "....qq......qq..."],
+        [.. FoxBody, "....qq.....qq....", "...q..q...q..q..."],
+        [.. FoxBody, ".....qq....qq....", ".....q.q...q.q..."],
+        [.. FoxBody, "......qq..qq.....", ".......qqqq......"],
+        [.. FoxBody, ".....qq....qq....", "......qq....qq..."],
     ];
 
     /// <summary>A pumpkin: round and wide, a stem on top, a shine, and two deep ridges that start
@@ -984,63 +1014,90 @@ public sealed partial class WaveSeekBar
     ];
 
     /// <summary>The eagle, flying at the duck, drawn round and chunky like the fox and the duck: a
-    /// round white head with a dark eye and a small hooked yellow beak, a plump brown body with a
-    /// paler belly, a short white tail, yellow talons tucked under it, and one broad wing with
+    /// round white head with a dark eye and a sharp yellow beak whose tip hooks down, a plump brown body with a
+    /// paler belly, a short white tail, yellow talons tucked back under it (hanging down,
+    /// they looked like a cow's udder), and one broad wing with
     /// fingered tips beating in four steps - raised, level, lowered, level. Its belly stays a row
     /// above the picture's bottom, so it flies over the ducked duck and into the standing one.</summary>
     private static readonly string[][] EagleFlap =
     [
         [
-            "..........f.f.f..",
-            ".........fffffff.",
-            "........feeeeef..",
-            ".......feeeeef...",
-            "..vvv.feeeeef....",
-            ".vvvvvfeeee......",
-            "yvkvvveeeeeeeev..",
-            ".yvvvveeeeeeeeevv",
-            "...vveeffffeeeev.",
-            "......ffffff.....",
-            ".......y..y......",
+            "............f.f.f..",
+            "...........fffffff.",
+            "..........feeeeef..",
+            ".........feeeeef...",
+            "....vvv.feeeeef....",
+            "..yvvvvvfeeee......",
+            "yyyvkvvveeeeeeeev..",
+            "y.yvvvvveeeeeeeeevv",
+            ".....vveeffffeeeev.",
+            "........ffffffyy...",
+            "...................",
         ],
         [
-            ".................",
-            ".................",
-            ".................",
-            "...........f.f.f.",
-            "..vvv..ffffffff..",
-            ".vvvvvfeeeeeeef..",
-            "yvkvvveeeeeeeev..",
-            ".yvvvveeeeeeeeevv",
-            "...vveeffffeeeev.",
-            "......ffffff.....",
-            ".......y..y......",
+            "...................",
+            "...................",
+            "...................",
+            ".............f.f.f.",
+            "....vvv..ffffffff..",
+            "..yvvvvvfeeeeeeef..",
+            "yyyvkvvveeeeeeeev..",
+            "y.yvvvvveeeeeeeeevv",
+            ".....vveeffffeeeev.",
+            "........ffffffyy...",
+            "...................",
         ],
         [
-            ".................",
-            ".................",
-            ".................",
-            ".................",
-            "..vvv............",
-            ".vvvvv.eeeee.....",
-            "yvkvvveeeeeeeev..",
-            ".yvvvveeeeeeeeevv",
-            "...vveeeeeeeeeev.",
-            "......feeeeeef...",
-            ".......ffeef.f.f.",
+            "...................",
+            "...................",
+            "...................",
+            "...................",
+            "....vvv............",
+            "..yvvvvv.eeeee.....",
+            "yyyvkvvveeeeeeeev..",
+            "y.yvvvvveeeeeeeeevv",
+            ".....vveeeeeeeeeev.",
+            "........feeeeeyy...",
+            ".........ffeef.f.f.",
         ],
         [
-            ".................",
-            ".................",
-            ".................",
-            "...........f.f.f.",
-            "..vvv..ffffffff..",
-            ".vvvvvfeeeeeeef..",
-            "yvkvvveeeeeeeev..",
-            ".yvvvveeeeeeeeevv",
-            "...vveeffffeeeev.",
-            "......ffffff.....",
-            ".......y..y......",
+            "...................",
+            "...................",
+            "...................",
+            ".............f.f.f.",
+            "....vvv..ffffffff..",
+            "..yvvvvvfeeeeeeef..",
+            "yyyvkvvveeeeeeeev..",
+            "y.yvvvvveeeeeeeeevv",
+            ".....vveeffffeeeev.",
+            "........ffffffyy...",
+            "...................",
+        ],
+    ];
+
+
+    /// <summary>Clouds: puffs on top, a flat shaded underside.</summary>
+    private static readonly string[][] CloudArt =
+    [
+        [
+            "......UUU.....",
+            "...UUUUUUU.UU.",
+            "..UUUUUUUUUUUU",
+            ".UUUUUUUUUUUUU",
+            "..VVVVVVVVVVV.",
+        ],
+        [
+            "...UUU...",
+            ".UUUUUUU.",
+            "UUUUUUUUU",
+            ".VVVVVVV.",
+        ],
+        [
+            ".......UUU........",
+            "....UUUUUUU.UUU...",
+            "..UUUUUUUUUUUUUUU.",
+            ".UUUUUUUUUUUUUUUUU",
+            "..VVVVVVVVVVVVVVV.",
         ],
     ];
 
