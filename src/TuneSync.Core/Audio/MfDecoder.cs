@@ -16,6 +16,8 @@ public sealed class MfDecoder : IAudioDecoder
     private const int InvalidMediaType = unchecked((int)0xC00D36B4);
 
     private IMFSourceReader? _reader;
+    private readonly string _pathOrUrl;
+    private bool _used; // samples have been read since the reader was opened
     private bool _float;
     private int _bytesPerSample;
 
@@ -39,6 +41,7 @@ public sealed class MfDecoder : IAudioDecoder
     public MfDecoder(string pathOrUrl)
     {
         MediaFoundationApi.Startup();
+        _pathOrUrl = pathOrUrl;
         try
         {
             _reader = Open(pathOrUrl, asFloat: true);
@@ -170,6 +173,17 @@ public sealed class MfDecoder : IAudioDecoder
     {
         var reader = _reader ?? throw new ObjectDisposedException(nameof(MfDecoder));
         if (time < TimeSpan.Zero) time = TimeSpan.Zero;
+        if (_used)
+        {
+            // A reader that has already played seeks FLAC seconds off the mark (by up to 14 s
+            // in tests, either way), and the timestamps it then reports say the time asked for,
+            // so the skip below can't correct it: the lyrics ran apart from the sound after a
+            // seek. A freshly opened reader lands exactly, so each seek gets one.
+            Marshal.ReleaseComObject(reader);
+            _reader = null;
+            _reader = reader = Open(_pathOrUrl, _float);
+            _used = false;
+        }
         var position = PropVariant.FromLong(time.Ticks);
         var pointer = Marshal.AllocHGlobal(Marshal.SizeOf<PropVariant>());
         try
@@ -221,6 +235,7 @@ public sealed class MfDecoder : IAudioDecoder
         while (true)
         {
             reader.ReadSample(FirstAudioStream, 0, out _, out var flags, out var timestamp, out var sample);
+            _used = true;
             try
             {
                 if ((flags & MF_SOURCE_READER_FLAG.MF_SOURCE_READERF_ERROR) != 0)

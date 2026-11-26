@@ -10,7 +10,7 @@ namespace TuneSync.App;
 // play, each set at a moment of the song and picked by how loud the music is then: a log, a
 // pumpkin, a stone or a toadstool when it's quiet; a hay bale, a fence or a hedgehog; a wooden
 // barrel, a milk can, a crate or a sunflower when it's loud; now and then a fox running at it, and
-// in loud passages an eagle swooping in at head height. Near the end the way is clear and the
+// in loud passages an eagle (an owl at night) swooping in at head height. Near the end the way is clear and the
 // duck walks into its house at the right end. By day (the sun) with the light theme, by night (moon, stars) with the dark one. It jumps the ones on the ground and runs
 // ducked under the eagle. Now and then a worm, a caterpillar or a grasshopper comes instead: the duck bends down,
 // pecks it up on the beat and munches. Faint clouds drift by behind, slower than the ground.
@@ -198,7 +198,8 @@ public sealed partial class WaveSeekBar
         Hazard.Caterpillar => CaterpillarCrawl[frame % CaterpillarCrawl.Length],
         Hazard.Grasshopper => GrasshopperArt[frame % GrasshopperArt.Length],
         Hazard.Fox => FoxRun[frame % FoxRun.Length],
-        _ => EagleFlap[frame % EagleFlap.Length],
+        // (by night an owl flies in its place: the same size and flight)
+        _ => Night ? OwlFlap[frame % OwlFlap.Length] : EagleFlap[frame % EagleFlap.Length],
     };
 
     /// <summary>An obstacle's half width and height in px.</summary>
@@ -355,7 +356,7 @@ public sealed partial class WaveSeekBar
         var beats = SongBeats();
         // (nothing in the last stretch: the way to the house is clear; a cue comes at most 2.4 s
         // after the one before)
-        while (time < until && time < Maximum - HouseSeconds - 2.4)
+        while (time < until && time < Math.Min(Maximum, HouseFrom) - 2.4)
         {
             var n = _cues.Count;
             // where it would go by the dice alone; a beat near there is better
@@ -623,7 +624,7 @@ public sealed partial class WaveSeekBar
         DrawClouds(dc, ground, pixel, night);
         DrawHills(dc, ground, pixel, accent, night);
         var house = HouseShown;
-        var doorRight = OnGrid(Right - (DuckArt[0].Length / 2.0 + 1) * pixel);
+        var doorRight = DoorRight(pixel);
         if (house > 0) DrawHouse(dc, ground, pixel, doorRight, house, night || thumbX - DuckArt[0].Length / 2.0 * pixel >= doorRight - 4 * pixel);
         // placed for this very moment: also when the song is jumped in while paused (no frames run then)
         PlaceObstacles(thumbX);
@@ -728,8 +729,10 @@ public sealed partial class WaveSeekBar
             body = out_ < 0.3 ? DuckQuack : DuckArt;
             feet = DuckFeet[0];
             top = OnGrid(ground + (1 - Math.Clamp(out_ / 0.2, 0, 1)) * 6 * pixel) - rows * pixel;
-            // (rising from inside the shell: nothing of it below the ground)
-            dc.PushClip(new RectangleGeometry(new Rect(-1000, -1000, ActualWidth + 2000, ground + 1000)));
+            // (rising from inside the shell: nothing of it below the ground, and nothing of it
+            // out past the shell's sides - the duck is wider than the egg, and its tail and chest
+            // stuck out of the unbroken bottom half)
+            dc.PushClip(InsideShell(shellX, ground, pixel));
             DrawSprite(dc, body, left, top + body.Length * pixel, pixel, 1);
             DrawSprite(dc, feet, left, top + rows * pixel, pixel, 1);
             dc.Pop();
@@ -744,6 +747,27 @@ public sealed partial class WaveSeekBar
     }
 
     // ---- the start of the song: the duck hatches ----
+
+    /// <summary>Where the duck can be seen while it stands in the bottom half of the shell:
+    /// anything above the shell, and inside it row by row (the shell itself is drawn over that).</summary>
+    private Geometry InsideShell(double shellX, double ground, double pixel)
+    {
+        var art = EggBottomArt;
+        var shellTop = ground - art.Length * pixel;
+        var area = new GeometryGroup();
+        area.Children.Add(new RectangleGeometry(new Rect(-1000, -1000, ActualWidth + 2000, shellTop + 1000)));
+        for (var r = 0; r < art.Length; r++)
+        {
+            var row = art[r];
+            var first = row.IndexOfAny(['K', 'w', 'n', 'U']);
+            var last = row.LastIndexOfAny(['K', 'w', 'n', 'U']);
+            if (first < 0) continue;
+            // (the jagged top row: the shell's whole width)
+            if (r == 0) (first, last) = (0, EggArt[0].Length - 1);
+            area.Children.Add(new RectangleGeometry(new Rect(shellX + first * pixel, shellTop + r * pixel, (last - first + 1) * pixel, pixel)));
+        }
+        return area;
+    }
 
     /// <summary>Songs at least this long (seconds) get the hatching and the house (a short one
     /// would be nothing but them).</summary>
@@ -837,13 +861,37 @@ public sealed partial class WaveSeekBar
 
     // ---- the end of the song: the duck goes home ----
 
-    /// <summary>How long before the song ends the duck's house shows at the bar's right end
-    /// (no obstacles come in that last stretch).</summary>
+    /// <summary>How long before the song ends the duck's house shows at the bar's right end, at
+    /// the least (no obstacles come in that last stretch).</summary>
     private const double HouseSeconds = 12;
 
     /// <summary>How much the house shows: fading in over a second and a half as the last stretch
     /// begins (and gone again when the song is jumped back).</summary>
-    private double HouseShown => Maximum >= StorySong ?Math.Clamp((RunnerNow - (Maximum - HouseSeconds)) / 1.5, 0, 1) : 0;
+    private double HouseShown => Math.Clamp((RunnerNow - HouseFrom) / 1.5, 0, 1);
+
+    /// <summary>Where the house's door ends on the right: the duck is all the way in when the
+    /// thumb reaches the bar's end.</summary>
+    private double DoorRight(double pixel) => OnGrid(Right - (DuckArt[0].Length / 2.0 + 1) * pixel);
+
+    /// <summary>The song moment the house starts to show: while the duck is still three of its
+    /// own lengths short of it, so it's seen walking up to it - at least
+    /// <see cref="HouseSeconds"/> before the end. (Showing it a fixed time before the end put it
+    /// right on top of the duck: on a four-minute song the thumb moves only some 25 px in 12 s.)
+    /// Never, for a short song or a bar too short to walk up to it.</summary>
+    private double HouseFrom
+    {
+        get
+        {
+            if (Maximum < StorySong || Right <= Left) return double.PositiveInfinity;
+            var pixel = ArtPixel;
+            var duck = DuckArt[0].Length;
+            var houseLeft = DoorRight(pixel) - 9 * pixel;
+            var thumb = houseLeft - (duck / 2.0 + 3 * duck) * pixel;
+            var at = (thumb - Left) / (Right - Left) * Maximum;
+            if (at < Maximum / 2) return double.PositiveInfinity;
+            return Math.Min(at, Maximum - HouseSeconds);
+        }
+    }
 
     /// <summary>The house at the bar's right end, its door on the left so the duck walks in
     /// (the duck is drawn in front of it and cut off past the door's far side, so it goes in
@@ -851,34 +899,36 @@ public sealed partial class WaveSeekBar
     /// the duck gets home, or is lit all along at night.</summary>
     private void DrawHouse(DrawingContext dc, double ground, double pixel, double doorRight, double alpha, bool lit)
     {
-        // the door's far side is the 13th column
-        var left = doorRight - 13 * pixel;
+        // the door's far side is the 9th column
+        var left = doorRight - 9 * pixel;
         DrawSprite(dc, lit ? HouseLitArt : HouseArt, left, ground, pixel, alpha);
     }
 
     private static readonly string[] HouseArt =
     [
-        ".........RRRR.........",
-        ".......RRRRRRRR.......",
+        "...............ee.....",
+        "...............ee.....",
+        ".........RRRR..ee.....",
+        ".......RRRRRRRRee.....",
         ".....RRRRRRRRRRRR.....",
         "...RRRRRRRRRRRRRRRR...",
         ".RRRRRRRRRRRRRRRRRRRR.",
         "QQQQQQQQQQQQQQQQQQQQQQ",
-        ".ccccbbbbbccccccccccb.",
-        ".llbbDDDDDbbllllllllb.",
-        ".bbDDDDDDDDDblllllllb.",
-        ".bDDDDDDDDDDDbccccccb.",
-        ".bDDDDDDDDDDDlbbbbbbb.",
-        ".bDDDDDDDDDDDlbJJbJJb.",
-        ".bDDDDDDDDDDDcbbbbbbb.",
-        ".bDDDDDDDDDDDlbJJbJJb.",
-        ".bDDDDDDDDDDDlbbbbbbb.",
-        ".bDDDDDDDDDDDbccccccb.",
-        ".bDDDDDDDDDDDbllllllb.",
-        ".bDDDDDDDDDDDbllllllb.",
-        ".bDDDDDDDDDDDbccccccb.",
-        ".bDDDDDDDDDDDbllllllb.",
-        ".bDDDDDDDDDDDbllllllb.",
+        ".lrrbbbrrrrrrrrrrrrrl.",
+        ".lrbDDDbrrrrrrrrrrrrl.",
+        ".lbDDDDDbrrrrrrrrrrrl.",
+        ".lDDDDDDDrrbbbbbbbrrl.",
+        ".lDDDDDDDrrbJJbJJbrrl.",
+        ".lDDDDDDDrrbbbbbbbrrl.",
+        ".lDDDDDDDrrbJJbJJbrrl.",
+        ".lDDDDDDDrrbbbbbbbrrl.",
+        ".lDDDDDDDrrcPcgcPcrrl.",
+        ".lDDDDDyDrrrrrrrrrrrl.",
+        ".lDDDDDDDrccccccccccl.",
+        ".lDDDDDDDrrrrrrrrrrrl.",
+        ".lDDDDDDDrrrrrrrrrrrl.",
+        ".lDDDDDDDrccccccccccl.",
+        ".lDDDDDDDrrrrrrrrrrrl.",
     ];
 
     /// <summary>The house with its window lit.</summary>
@@ -1156,6 +1206,10 @@ public sealed partial class WaveSeekBar
         'f' => Color.FromRgb(0xC8, 0x92, 0x56),
         'v' => Color.FromRgb(0xF2, 0xEE, 0xE6),
         'y' => Color.FromRgb(0xF2, 0xB6, 0x32),
+        // the owl: grey-brown feathers, their pale edges, its face
+        'M' => Color.FromRgb(0x8A, 0x74, 0x5E),
+        'N' => Color.FromRgb(0xBC, 0xA8, 0x8C),
+        'H' => Color.FromRgb(0xF0, 0xE6, 0xD0),
         // the barrel's hoops where they turn away
         'i' => Color.FromRgb(0x62, 0x64, 0x6E),
         // stone: lit top, body, shade
@@ -1487,6 +1541,65 @@ public sealed partial class WaveSeekBar
         ],
     ];
 
+    /// <summary>At night, in the eagle's place, a horned owl: ear tufts, a pale face with big
+    /// yellow eyes looking out at you and a little grey beak, grey-brown feathers, its wings
+    /// beating like the eagle's (it's the eagle's frames, recolored, with an owl's head).</summary>
+    private static readonly string[][] OwlFlap =
+    [
+        [
+            "............N.N.N..",
+            "...........NNNNNNN.",
+            "..........NMMMMMN..",
+            ".M...M...NMMMMMN...",
+            ".MMMMMM.NMMMMMN....",
+            "MHHMHHMMNMMMM......",
+            "HykHykMMMMMMMMMMN..",
+            "MHHzHHMMMMMMMMMMMNN",
+            ".MMMMMMMMNNNNMMMMN.",
+            "........NNNNNNNN...",
+            "...................",
+        ],
+        [
+            "...................",
+            "...................",
+            "...................",
+            ".M...M.......N.N.N.",
+            ".MMMMMM..NNNNNNNN..",
+            "MHHMHHMMNMMMMMMMN..",
+            "HykHykMMMMMMMMMMN..",
+            "MHHzHHMMMMMMMMMMMNN",
+            ".MMMMMMMMNNNNMMMMN.",
+            "........NNNNNNNN...",
+            "...................",
+        ],
+        [
+            "...................",
+            "...................",
+            "...................",
+            ".M...M.............",
+            ".MMMMMM............",
+            "MHHMHHMM.MMMMM.....",
+            "HykHykMMMMMMMMMMN..",
+            "MHHzHHMMMMMMMMMMMNN",
+            ".MMMMMMMMMMMMMMMMN.",
+            "........NMMMMMNN...",
+            ".........NNMMN.N.N.",
+        ],
+        [
+            "...................",
+            "...................",
+            "...................",
+            ".M...M.......N.N.N.",
+            ".MMMMMM..NNNNNNNN..",
+            "MHHMHHMMNMMMMMMMN..",
+            "HykHykMMMMMMMMMMN..",
+            "MHHzHHMMMMMMMMMMMNN",
+            ".MMMMMMMMNNNNMMMMN.",
+            "........NNNNNNNN...",
+            "...................",
+        ],
+    ];
+
 
     /// <summary>Clouds: puffs on top, a flat shaded underside.</summary>
     private static readonly string[][] CloudArt =
@@ -1618,26 +1731,26 @@ public sealed partial class WaveSeekBar
         ],
     ];
 
-    /// <summary>...and a grasshopper: a long antenna, a dark eye, a green body and its big hind
-    /// leg folded up over the back into a peak (without it, it read as a lizard); sitting, then
-    /// in the air with the leg stretched out behind.</summary>
+    /// <summary>...and a grasshopper, small and round-headed: a curled antenna, a big dark eye,
+    /// a short green body and its hind leg folded up into a little peak over the back (without
+    /// it, it read as a lizard); sitting, then in the air with the leg stretched out behind.</summary>
     private static readonly string[][] GrasshopperArt =
     [
         [
-            "g..........gg",
-            ".g.......gg.g",
-            ".GGG...gg...g",
-            "GkGGGgggGGGGg",
-            ".GGGGGGGGGGG.",
-            "..g.g.......g",
+            "gg.......",
+            "..g...g..",
+            ".GGG.g.g.",
+            "GkGGGGGGg",
+            ".GGGGGG..",
+            "..g.g....",
         ],
         [
-            "g............",
-            ".g...........",
-            ".GGG.........",
-            "GkGGGgggGGGgg",
-            ".GGGGGGGGGGGg",
-            "..g.g.......g",
+            "gg.......",
+            "..g......",
+            ".GGG.....",
+            "GkGGGGGgg",
+            ".GGGGGG.g",
+            "..g.g....",
         ],
     ];
 
