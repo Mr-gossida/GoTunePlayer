@@ -19,6 +19,7 @@ public partial class LibraryView : Page
         InitializeComponent();
         _viewModel = viewModel;
         DataContext = viewModel;
+        SourceBar.Selected = () => _viewModel.Editor.Selection; // the songs picked in this page's list
 
         // List and grid keep separate selections; clear both on switch so "선택한 파일" never
         // includes rows selected in the view that's now hidden.

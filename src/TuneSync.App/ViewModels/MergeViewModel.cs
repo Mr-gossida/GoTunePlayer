@@ -74,6 +74,7 @@ public sealed partial class MergeViewModel : ObservableObject
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsIdle))]
+    [NotifyCanExecuteChangedFor(nameof(UndoCommand))]
     private bool _isRunning;
 
     [ObservableProperty]
@@ -284,18 +285,18 @@ public sealed partial class MergeViewModel : ObservableObject
         var source = SourceFolder;
         var target = TargetFolder;
         var deep = IncludeSubfolders;
-        static string Describe(string? folder, SearchOption option)
+        // counted the way the merge itself lists the folders (hidden and system ones left out)
+        static string Describe(string? folder, bool recurse)
         {
             if (string.IsNullOrWhiteSpace(folder)) return "";
             if (!Directory.Exists(folder)) return "폴더를 찾을 수 없습니다";
-            var files = Directory.EnumerateFiles(folder, "*.*", option).Where(TagService.IsSupported).Select(f => new FileInfo(f)).ToList();
+            var files = MediaLibraryScanner.WalkFiles(folder, recurse, FileAttributes.Hidden | FileAttributes.System)
+                .Where(f => TagService.IsSupported(f.Name)).ToList();
             return $"{files.Count:N0}곡 · {MergeFileFacts.FormatSize(files.Sum(f => f.Length))}";
         }
         try
         {
-            var (s, t) = await Task.Run(() => (
-                Describe(source, deep ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly),
-                Describe(target, SearchOption.TopDirectoryOnly)));
+            var (s, t) = await Task.Run(() => (Describe(source, deep), Describe(target, false)));
             if (version != _statsVersion) return;
             SourceStats = s;
             TargetStats = t;
@@ -306,12 +307,16 @@ public sealed partial class MergeViewModel : ObservableObject
         }
     }
 
-    private string? ValidateFolders()
+    private async Task<string?> ValidateFoldersAsync()
     {
         if (!BothFoldersSet) return "옮길 폴더와 받을 폴더를 골라 주세요. 폴더를 카드에 끌어다 놓아도 됩니다.";
-        if (!Directory.Exists(SourceFolder) || !Directory.Exists(TargetFolder)) return "폴더를 찾을 수 없습니다. 다시 골라 주세요.";
-        var source = Path.GetFullPath(SourceFolder!).TrimEnd('\\') + "\\";
-        var target = Path.GetFullPath(TargetFolder!).TrimEnd('\\') + "\\";
+        // Asked off the UI thread: a remembered folder on a NAS that's off answers only after a long
+        // wait, and the window froze that long on opening.
+        var (sourceFolder, targetFolder) = (SourceFolder!, TargetFolder!);
+        if (!await Task.Run(() => Directory.Exists(sourceFolder) && Directory.Exists(targetFolder)))
+            return "폴더를 찾을 수 없습니다. 다시 골라 주세요.";
+        var source = Path.GetFullPath(sourceFolder).TrimEnd('\\') + "\\";
+        var target = Path.GetFullPath(targetFolder).TrimEnd('\\') + "\\";
         if (source.StartsWith(target, StringComparison.OrdinalIgnoreCase) || target.StartsWith(source, StringComparison.OrdinalIgnoreCase))
             return "두 폴더는 서로 달라야 하며, 한쪽이 다른 쪽 안에 있으면 안 됩니다.";
         return null;
@@ -326,12 +331,17 @@ public sealed partial class MergeViewModel : ObservableObject
         IsPlanReady = false;
         UpdateCounts();
 
-        if (ValidateFolders() is { } problem)
+        IsAnalyzing = true;
+        if (await ValidateFoldersAsync() is { } problem)
         {
-            StatusText = problem;
-            IsAnalyzing = false;
+            if (_analyzeCts == cts)
+            {
+                StatusText = problem;
+                IsAnalyzing = false;
+            }
             return;
         }
+        if (cts.IsCancellationRequested) return; // the folders changed meanwhile
 
         var source = SourceFolder!;
         var target = TargetFolder!;
@@ -487,11 +497,15 @@ public sealed partial class MergeViewModel : ObservableObject
     [RelayCommand]
     private void Cancel() => _runCts?.Cancel();
 
-    [RelayCommand(CanExecute = nameof(CanUndo))]
+    /// <summary>Not while a merge (or an undo) is moving files: the last run's undo used to stay on
+    /// during the next one, and both moved files at once - its record then overwritten.</summary>
+    private bool CanUndoNow() => CanUndo && !IsRunning;
+
+    [RelayCommand(CanExecute = nameof(CanUndoNow))]
     private async Task UndoAsync()
     {
         var manifest = _lastManifest;
-        if (manifest.Count == 0) return;
+        if (manifest.Count == 0 || IsRunning) return;
         IsRunning = true;
         ProgressMax = 1;
         ProgressValue = 0;

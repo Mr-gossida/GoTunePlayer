@@ -101,6 +101,64 @@ public class MergeServiceTests : IDisposable
     }
 
     [Fact]
+    public void A_replace_that_cant_bring_the_new_file_in_puts_the_old_one_back()
+    {
+        var existing = PlaceFixture(_target, "sample.mp3", "existing.mp3", "IU", "Good Day");
+        PlaceFixture(_source, "sample.flac", "existing.flac", "IU", "Good Day");
+        var plan = MergeService.BuildPlan(_source, _target, new MergeRuleSet { ConflictResolution = MergeConflictResolution.KeepLargerFile });
+        Assert.Equal(MergeActionType.Replace, Assert.Single(plan).ActionType);
+        var manifest = new List<(string From, string To)>();
+
+        List<string> errors;
+        using (new FileStream(plan[0].SourcePath, FileMode.Open, FileAccess.Read, FileShare.None)) // locked: it can't move
+            errors = MergeService.ExecutePlan(plan, _target, _quarantine, manifest);
+
+        Assert.Single(errors);
+        Assert.True(File.Exists(existing)); // the target still has the song
+        Assert.Empty(manifest);
+    }
+
+    [Fact]
+    public void A_file_gone_since_the_plan_is_an_error_not_a_quiet_success()
+    {
+        var srcPath = PlaceFixture(_source, "sample.mp3", "new.mp3", "IU", "Good Day");
+        var plan = MergeService.BuildPlan(_source, _target, new MergeRuleSet());
+        File.Delete(srcPath);
+
+        var errors = MergeService.ExecutePlan(plan, _target, _quarantine, []);
+
+        Assert.Contains("옮길 파일이 없습니다", Assert.Single(errors));
+    }
+
+    [Fact]
+    public void Two_copies_inside_the_source_are_weighed_against_each_other()
+    {
+        var small = PlaceFixture(_source, "sample.mp3", "a.mp3", "IU", "Good Day");
+        var large = PlaceFixture(_source, "sample.flac", "b.flac", "IU", "Good Day");
+
+        var plan = MergeService.BuildPlan(_source, _target, new MergeRuleSet { ConflictResolution = MergeConflictResolution.KeepLargerFile });
+        MergeService.ExecutePlan(plan, _target, _quarantine);
+
+        Assert.Equal(["b.flac"], Directory.GetFiles(_target).Select(Path.GetFileName)); // one copy in, the larger
+        Assert.Equal(["a.mp3"], Directory.GetFiles(_quarantine).Select(Path.GetFileName));
+        Assert.False(File.Exists(small) || File.Exists(large));
+    }
+
+    [Fact]
+    public void Hidden_and_system_folders_of_the_source_are_left_alone()
+    {
+        var hidden = Directory.CreateDirectory(Path.Combine(_source, "$RECYCLE.BIN"));
+        hidden.Attributes |= FileAttributes.Hidden | FileAttributes.System;
+        PlaceFixture(hidden.FullName, "sample.mp3", "deleted.mp3", "IU", "Old");
+        PlaceFixture(_source, "sample.mp3", "kept.mp3", "IU", "Good Day");
+
+        var plan = MergeService.BuildPlan(_source, _target, new MergeRuleSet { IncludeSubfolders = true });
+
+        Assert.Equal("kept.mp3", Path.GetFileName(Assert.Single(plan).SourcePath));
+        hidden.Attributes = FileAttributes.Directory; // so the cleanup can delete it
+    }
+
+    [Fact]
     public void Conflict_RenameWithSuffix_KeepsBothCopies()
     {
         PlaceFixture(_target, "sample.mp3", "existing.mp3", "IU", "Good Day");

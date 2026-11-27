@@ -92,10 +92,19 @@ public sealed partial class RenameViewModel : ObservableObject
     private RenameFilter _filter = RenameFilter.All;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsIdle))]
+    [NotifyCanExecuteChangedFor(nameof(ExecuteCommand), nameof(UndoCommand), nameof(SetAllVisibleCommand))]
     private bool _isLoading;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsIdle))]
+    [NotifyCanExecuteChangedFor(nameof(ExecuteCommand), nameof(UndoCommand), nameof(SetAllVisibleCommand))]
     private bool _isBusy;
+
+    /// <summary>Neither renaming (or undoing) nor reading the songs: the plan on screen is the one
+    /// that would run, and its rows can be ticked. Renaming from a plan still being replaced, or
+    /// undoing while renaming, used to run both at once.</summary>
+    public bool IsIdle => !IsBusy && !IsLoading;
 
     [ObservableProperty]
     private string _statusText = "";
@@ -181,9 +190,11 @@ public sealed partial class RenameViewModel : ObservableObject
             _ = ReplanAsync();
         };
 
+        // Another selection in 태그 관리 - not only another number of songs: picking other songs of
+        // the same count left the old ones' names to be changed.
         editor.PropertyChanged += (_, e) =>
         {
-            if (e.PropertyName == nameof(TagEditorViewModel.Count) && editor.Count > 0 && Source == RenameSource.Selection && _isShown && !IsBusy)
+            if (e.PropertyName == nameof(TagEditorViewModel.Selection) && editor.Count > 0 && Source == RenameSource.Selection && _isShown && !IsBusy)
                 _ = LoadTargetsAsync();
         };
     }
@@ -196,10 +207,11 @@ public sealed partial class RenameViewModel : ObservableObject
     {
         _isShown = true;
         if (IsBusy) return;
+        var before = Source;
         var hasSelection = _editor.Selection.Count > 0;
         if (hasSelection) Source = RenameSource.Selection;
         else if (Source == RenameSource.Selection && !string.IsNullOrEmpty(FolderPath)) Source = RenameSource.Folder;
-        _ = LoadTargetsAsync();
+        if (Source == before) _ = LoadTargetsAsync(); // (a changed source has loaded already - not twice)
     }
 
     public void Deactivate() => _isShown = false;
@@ -260,9 +272,16 @@ public sealed partial class RenameViewModel : ObservableObject
     [RelayCommand]
     private Task RefreshAsync() => LoadTargetsAsync();
 
+    /// <summary>The reading under way: a newer one stops it rather than letting it read every
+    /// song's tags for nothing.</summary>
+    private CancellationTokenSource? _loading;
+
     private async Task LoadTargetsAsync()
     {
         var version = ++_loadVersion;
+        _loading?.Cancel();
+        var cts = _loading = new CancellationTokenSource();
+        var ct = cts.Token;
         IsLoading = true;
         try
         {
@@ -283,26 +302,34 @@ public sealed partial class RenameViewModel : ObservableObject
             else
             {
                 var folder = FolderPath;
-                if (string.IsNullOrWhiteSpace(folder) || !Directory.Exists(folder))
+                // (asked off the UI thread: a folder on a NAS that's off answers only after a long wait)
+                if (string.IsNullOrWhiteSpace(folder) || !await Task.Run(() => Directory.Exists(folder), ct))
                 {
                     SourceSummary = string.IsNullOrWhiteSpace(folder) ? "폴더를 선택하세요" : "폴더를 찾을 수 없습니다";
                     paths = [];
                 }
                 else
                 {
-                    var option = IncludeSubfolders ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
-                    paths = await Task.Run(() => Directory.EnumerateFiles(folder, "*.*", option).Where(TagService.IsSupported).ToList());
+                    // Hidden and system folders ($RECYCLE.BIN…) left out, and a folder it may not
+                    // read skipped - one such folder used to fail the whole listing.
+                    var subfolders = IncludeSubfolders;
+                    paths = await Task.Run(() => MediaLibraryScanner.WalkFiles(folder, subfolders, FileAttributes.Hidden | FileAttributes.System)
+                        .Select(f => f.FullName).Where(TagService.IsSupported).ToList(), ct);
                     SourceSummary = $"{folder} · {paths.Count}곡";
                 }
             }
             if (version != _loadVersion) return;
 
             StatusText = paths.Count > 0 ? $"{paths.Count}곡의 태그를 읽는 중…" : "";
-            var targets = await Task.Run(() => RenameService.ReadTargets(paths));
+            var targets = await Task.Run(() => RenameService.ReadTargets(paths, ct), ct);
             if (version != _loadVersion) return;
             _targetPaths = paths;
             _targets = targets;
             await ReplanAsync();
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            // a newer reading took over
         }
         catch (Exception ex)
         {
@@ -369,8 +396,13 @@ public sealed partial class RenameViewModel : ObservableObject
             : "";
     }
 
+    /// <summary>Rows being ticked together: counted once at the end, not after each (thousands of
+    /// rows each counting them all froze the window for seconds).</summary>
+    private bool _ticking;
+
     private void UpdateCounts()
     {
+        if (_ticking) return;
         TotalCount = _plan.Count;
         ChangedCount = _plan.Count(p => p.WillChange);
         SameCount = _plan.Count(p => p.Kind == RenameKind.Same);
@@ -379,15 +411,26 @@ public sealed partial class RenameViewModel : ObservableObject
     }
 
     /// <summary>Ticks or unticks every changing row that the current filter shows.</summary>
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(IsIdle))]
     private void SetAllVisible(string? on)
     {
         var value = on == "True";
-        foreach (var row in PreviewView.Cast<RenamePreviewItemViewModel>().Where(r => r.WillChange))
-            row.IsIncluded = value;
+        _ticking = true;
+        try
+        {
+            foreach (var row in PreviewView.Cast<RenamePreviewItemViewModel>().Where(r => r.WillChange))
+                row.IsIncluded = value;
+        }
+        finally
+        {
+            _ticking = false;
+        }
+        UpdateCounts();
     }
 
-    private bool CanExecute() => IncludedCount > 0 && !IsBusy;
+    private bool CanExecute() => IncludedCount > 0 && IsIdle;
+
+    private bool CanUndoNow() => CanUndo && IsIdle;
 
     [RelayCommand(CanExecute = nameof(CanExecute))]
     private async Task ExecuteAsync()
@@ -452,7 +495,7 @@ public sealed partial class RenameViewModel : ObservableObject
             : $"{renamed}곡 변경, {errors.Count}곡 실패: {string.Join("; ", errors.Take(3))}";
     }
 
-    [RelayCommand(CanExecute = nameof(CanUndo))]
+    [RelayCommand(CanExecute = nameof(CanUndoNow))]
     private async Task UndoAsync()
     {
         var moves = _lastMoves;

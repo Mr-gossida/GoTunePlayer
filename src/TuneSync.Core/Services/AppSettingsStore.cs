@@ -25,6 +25,7 @@ public static class AppSettingsStore
         {
             var json = File.ReadAllText(path);
             var settings = JsonSerializer.Deserialize<AppSettings>(json) ?? new AppSettings();
+            FillNullLists(settings);
             (settings.Tone ??= new ToneSettings()).Normalize();
             (settings.Hotkeys ??= new HotkeySettings()).Normalize();
             (settings.Output ??= new OutputSettings()).Normalize();
@@ -43,6 +44,20 @@ public static class AppSettingsStore
             // choice) for a hand repair - the first save would otherwise write the defaults over it.
             try { File.Copy(path, path + ".bad", overwrite: true); } catch (Exception) { /* best effort */ }
             return new AppSettings();
+        }
+    }
+
+    /// <summary>A list written as null ("LibraryFolders": null - a hand edit, another version) is
+    /// read as an empty one: the app reads them without checking, and one null failed every start.</summary>
+    private static void FillNullLists(AppSettings settings)
+    {
+        foreach (var property in typeof(AppSettings).GetProperties())
+        {
+            var type = property.PropertyType;
+            if (!property.CanWrite || !type.IsGenericType || property.GetValue(settings) is not null) continue;
+            var definition = type.GetGenericTypeDefinition();
+            if (definition == typeof(List<>) || definition == typeof(HashSet<>) || definition == typeof(Dictionary<,>))
+                property.SetValue(settings, Activator.CreateInstance(type));
         }
     }
 

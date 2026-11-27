@@ -12,16 +12,19 @@ public static class MergeService
     /// <see cref="ExecutePlan"/> with the result to actually move anything.</summary>
     public static List<MergeAction> BuildPlan(string sourceFolder, string targetFolder, MergeRuleSet rules, CancellationToken ct = default)
     {
-        var targetIndex = BuildTargetIndex(targetFolder);
+        var targetIndex = BuildTargetIndex(targetFolder, ct);
         var plan = new List<MergeAction>();
         // File names the target root will hold: what's there now plus what this plan moves in, so
         // two songs that happen to share a file name never collide (everything lands in the root).
         var claimed = new HashSet<string>(
-            Directory.Exists(targetFolder) ? Directory.EnumerateFiles(targetFolder).Select(p => Path.GetFileName(p)) : [],
+            Directory.Exists(targetFolder) ? Directory.EnumerateFiles(targetFolder, "*", Listing(false)).Select(p => Path.GetFileName(p)) : [],
             StringComparer.OrdinalIgnoreCase);
+        // The songs this plan brings into the target from the source, by song: a second copy of one
+        // inside the source is weighed against the first by the same rule - both used to go in.
+        var incoming = new Dictionary<string, int>();
 
-        var sourceOption = rules.IncludeSubfolders ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
-        var sourceFiles = Directory.EnumerateFiles(sourceFolder, "*.*", sourceOption)
+        var sourceFiles = MediaLibraryScanner.WalkFiles(sourceFolder, rules.IncludeSubfolders, FileAttributes.Hidden | FileAttributes.System)
+            .Select(f => f.FullName)
             .Where(TagService.IsSupported);
 
         foreach (var sourcePath in sourceFiles)
@@ -33,6 +36,13 @@ public static class MergeService
             var lyricsPath = File.Exists(lrcPath) ? lrcPath : null;
             var sourceSize = new FileInfo(sourcePath).Length;
             var destFileName = Path.GetFileName(sourcePath);
+
+            if (key is not null && incoming.TryGetValue(key, out var firstIndex))
+            {
+                plan.Add(AgainstEarlier(plan, firstIndex, rules, sourcePath, lyricsPath, sourceSize, claimed, out var newWinner));
+                if (newWinner) incoming[key] = plan.Count - 1;
+                continue;
+            }
 
             if (key is null || !targetIndex.TryGetValue(key, out var conflictPath))
             {
@@ -49,6 +59,7 @@ public static class MergeService
                         : key is null ? "태그/파일명에서 곡 정보를 읽지 못함 - 그대로 이동" : "받을 폴더에 같은 곡 없음",
                     SourceSize = sourceSize,
                 });
+                if (key is not null) incoming[key] = plan.Count - 1;
                 continue;
             }
 
@@ -60,10 +71,83 @@ public static class MergeService
                 action = Override(action, action.ActionType, UniqueAmong(action.DestFileName, claimed));
             if (action.ActionType != MergeActionType.Quarantine) claimed.Add(action.DestFileName);
             plan.Add(action);
+            if (action.ActionType is MergeActionType.Replace or MergeActionType.RenameAndMove) incoming[key] = plan.Count - 1;
         }
 
         return plan;
     }
+
+    /// <summary>A song the source holds twice (or more): the later copy against the one already
+    /// headed for the target, by the same rule. Keep-both moves it in under a free name; when the
+    /// rule prefers the later copy, it takes the earlier one's place in the plan (same name, same
+    /// replaced file) and the earlier one goes to quarantine; otherwise the later one does. These
+    /// rows have no file in the target to compare with, so their choice isn't changed by hand.</summary>
+    private static MergeAction AgainstEarlier(List<MergeAction> plan, int firstIndex, MergeRuleSet rules, string sourcePath,
+        string? lyricsPath, long sourceSize, HashSet<string> claimed, out bool newWinner)
+    {
+        var first = plan[firstIndex];
+        var verdict = BuildConflictAction(rules, sourcePath, lyricsPath, Path.GetFileName(sourcePath), first.SourcePath, sourceSize, first.SourceSize);
+        newWinner = false;
+        MergeAction Quarantined(string path, string? lyrics, long size, string why) => new()
+        {
+            SourcePath = path,
+            SourceLyricsPath = lyrics,
+            DestFileName = Path.GetFileName(path),
+            ActionType = MergeActionType.Quarantine,
+            Reason = why,
+            SourceSize = size,
+        };
+
+        switch (verdict.ActionType)
+        {
+            case MergeActionType.RenameAndMove:
+                var name = UniqueAmong(Path.GetFileName(sourcePath), claimed);
+                claimed.Add(name);
+                return new MergeAction
+                {
+                    SourcePath = sourcePath,
+                    SourceLyricsPath = lyricsPath,
+                    DestFileName = name,
+                    ActionType = MergeActionType.RenameAndMove,
+                    Reason = "옮길 폴더에 같은 곡이 또 있음 · 규칙: 둘 다 보존 (이름 변경)",
+                    SourceSize = sourceSize,
+                };
+            case MergeActionType.Replace:
+                newWinner = true;
+                plan[firstIndex] = Quarantined(first.SourcePath, first.SourceLyricsPath, first.SourceSize,
+                    $"옮길 폴더 안의 같은 곡 {Path.GetFileName(sourcePath)}을(를) 대신 옮김 · {verdict.Reason}");
+                // It goes in under its own name (its own extension), in place of the first one's.
+                claimed.Remove(first.DestFileName);
+                var own = Path.GetFileName(sourcePath);
+                var dest = claimed.Contains(own) ? UniqueAmong(own, claimed) : own;
+                claimed.Add(dest);
+                return new MergeAction
+                {
+                    SourcePath = sourcePath,
+                    SourceLyricsPath = lyricsPath,
+                    DestFileName = dest,
+                    // (still replacing - or keeping beside - the target's copy the first one met)
+                    ActionType = first.ConflictWithPath is not null ? first.ActionType
+                        : dest == own ? MergeActionType.Move : MergeActionType.RenameAndMove,
+                    Reason = first.Reason + " · 옮길 폴더 안의 같은 곡 중 이쪽을 옮김",
+                    ConflictWithPath = first.ConflictWithPath,
+                    SourceSize = sourceSize,
+                    ConflictSize = first.ConflictSize,
+                };
+            default:
+                return Quarantined(sourcePath, lyricsPath, sourceSize,
+                    $"옮길 폴더 안의 같은 곡 {Path.GetFileName(first.SourcePath)}을(를) 옮김 · {verdict.Reason}");
+        }
+    }
+
+    /// <summary>A listing that leaves out hidden and system items ($RECYCLE.BIN, System Volume
+    /// Information - a drive root's own) and skips folders it may not read, instead of failing.</summary>
+    private static EnumerationOptions Listing(bool recurse) => new()
+    {
+        RecurseSubdirectories = recurse,
+        IgnoreInaccessible = true,
+        AttributesToSkip = FileAttributes.Hidden | FileAttributes.System,
+    };
 
     private static string UniqueAmong(string fileName, HashSet<string> claimed)
     {
@@ -160,9 +244,14 @@ public static class MergeService
     public static MergeAction Override(MergeAction action, MergeActionType type, string? destFileName = null)
     {
         if (action.ConflictWithPath is null || action.ActionType == type && destFileName is null) return action;
-        var destName = destFileName ?? (type == MergeActionType.RenameAndMove
-            ? MakeUniqueName(Path.GetFileName(action.SourcePath), action.ConflictWithPath)
-            : Path.GetFileName(action.SourcePath));
+        var own = Path.GetFileName(action.SourcePath);
+        // Keeping the incoming file under its own name: unless another file of the target (not the
+        // one it replaces) has that name - then it takes a free one rather than failing to move in.
+        var taken = File.Exists(Path.Combine(Path.GetDirectoryName(action.ConflictWithPath)!, own))
+                    && !string.Equals(Path.GetFileName(action.ConflictWithPath), own, StringComparison.OrdinalIgnoreCase);
+        var destName = destFileName ?? (type == MergeActionType.RenameAndMove || type == MergeActionType.Replace && taken
+            ? MakeUniqueName(own, action.ConflictWithPath)
+            : own);
         if (destFileName is not null && action.ActionType == type)
             return new MergeAction
             {
@@ -260,7 +349,12 @@ public static class MergeService
     {
         if (!Directory.Exists(root)) return 0;
         var removed = 0;
-        foreach (var dir in Directory.EnumerateDirectories(root, "*", SearchOption.AllDirectories)
+        // (Hidden and system folders - a drive root's own - are left alone, so are linked folders
+        // (not walked through, nor removed), and an unreadable one no longer throws out of here
+        // over the result of the merge.)
+        var listing = Listing(true);
+        listing.AttributesToSkip |= FileAttributes.ReparsePoint;
+        foreach (var dir in Directory.EnumerateDirectories(root, "*", listing)
                      .OrderByDescending(d => d.Length).ToList())
         {
             try
@@ -282,29 +376,64 @@ public static class MergeService
 
     private static void Apply(MergeAction action, string targetFolder, string quarantineFolder, List<(string From, string To)> manifest)
     {
+        // The song itself must still be there: a file moved or deleted since the plan was made
+        // used to be skipped without a word and the row reported as done.
+        if (!File.Exists(action.SourcePath)) throw new IOException("옮길 파일이 없습니다 (계획을 만든 뒤 옮겨졌거나 지워짐).");
+        var dest = Path.Combine(targetFolder, action.DestFileName);
+        switch (action.ActionType)
         {
-            switch (action.ActionType)
+            case MergeActionType.Move:
+            case MergeActionType.RenameAndMove:
+                MoveTracked(action.SourcePath, dest, manifest);
+                MoveSidecar(action, targetFolder, manifest);
+                break;
+
+            case MergeActionType.Replace:
+                // The name may be taken by a file other than the one replaced (a choice changed by
+                // hand): found out now, before anything moves.
+                if (File.Exists(dest) && !string.Equals(Path.GetFullPath(dest), Path.GetFullPath(action.ConflictWithPath!), StringComparison.OrdinalIgnoreCase))
+                    throw new IOException($"받을 폴더에 같은 이름의 다른 파일({action.DestFileName})이 있습니다.");
+                var start = manifest.Count;
+                var conflictLrc = Path.ChangeExtension(action.ConflictWithPath!, ".lrc");
+                MoveTracked(action.ConflictWithPath!, Quarantined(quarantineFolder, action.ConflictWithPath!), manifest);
+                if (File.Exists(conflictLrc))
+                    MoveTracked(conflictLrc, Quarantined(quarantineFolder, conflictLrc), manifest);
+                try
+                {
+                    MoveTracked(action.SourcePath, dest, manifest);
+                }
+                catch
+                {
+                    // The new file couldn't come in (locked, the disk full): the one it was to replace
+                    // goes back, so the target never ends up without the song.
+                    PutBack(manifest, start);
+                    throw;
+                }
+                MoveSidecar(action, targetFolder, manifest);
+                break;
+
+            case MergeActionType.Quarantine:
+                MoveTracked(action.SourcePath, Quarantined(quarantineFolder, action.SourcePath), manifest);
+                if (action.SourceLyricsPath is not null)
+                    MoveTracked(action.SourceLyricsPath, Quarantined(quarantineFolder, action.SourceLyricsPath), manifest);
+                break;
+        }
+    }
+
+    /// <summary>Undoes the moves recorded from <paramref name="start"/> on, newest first.</summary>
+    private static void PutBack(List<(string From, string To)> manifest, int start)
+    {
+        for (var i = manifest.Count - 1; i >= start; i--)
+        {
+            var (from, to) = manifest[i];
+            try
             {
-                case MergeActionType.Move:
-                case MergeActionType.RenameAndMove:
-                    MoveTracked(action.SourcePath, Path.Combine(targetFolder, action.DestFileName), manifest);
-                    MoveSidecar(action, targetFolder, manifest);
-                    break;
-
-                case MergeActionType.Replace:
-                    var conflictLrc = Path.ChangeExtension(action.ConflictWithPath!, ".lrc");
-                    MoveTracked(action.ConflictWithPath!, Quarantined(quarantineFolder, action.ConflictWithPath!), manifest);
-                    if (File.Exists(conflictLrc))
-                        MoveTracked(conflictLrc, Quarantined(quarantineFolder, conflictLrc), manifest);
-                    MoveTracked(action.SourcePath, Path.Combine(targetFolder, action.DestFileName), manifest);
-                    MoveSidecar(action, targetFolder, manifest);
-                    break;
-
-                case MergeActionType.Quarantine:
-                    MoveTracked(action.SourcePath, Quarantined(quarantineFolder, action.SourcePath), manifest);
-                    if (action.SourceLyricsPath is not null)
-                        MoveTracked(action.SourceLyricsPath, Quarantined(quarantineFolder, action.SourceLyricsPath), manifest);
-                    break;
+                File.Move(to, from);
+                manifest.RemoveAt(i);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                // left in the manifest: 되돌리기 can still try it
             }
         }
     }
@@ -352,13 +481,16 @@ public static class MergeService
         }
     }
 
-    private static Dictionary<string, string> BuildTargetIndex(string targetFolder)
+    private static Dictionary<string, string> BuildTargetIndex(string targetFolder, CancellationToken ct)
     {
         var index = new Dictionary<string, string>();
         if (!Directory.Exists(targetFolder)) return index;
 
-        foreach (var path in Directory.EnumerateFiles(targetFolder).Where(TagService.IsSupported))
+        foreach (var path in Directory.EnumerateFiles(targetFolder, "*", Listing(false)).Where(TagService.IsSupported))
         {
+            // Reading every song's tags takes a while on a big folder: a changed choice in the
+            // window cancels it rather than letting it read to the end.
+            ct.ThrowIfCancellationRequested();
             var key = ResolveKey(path);
             if (key is not null) index.TryAdd(key, path);
         }

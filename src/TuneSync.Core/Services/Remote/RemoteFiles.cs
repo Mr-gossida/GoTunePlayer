@@ -69,22 +69,22 @@ public static class RemoteFiles
     {
         if (!RemotePath.IsRemote(path))
         {
-            // Something may still be reading the file for a moment (the spectrum analysis of a
-            // song that just started, an indexer, a virus scan): wait for it instead of failing.
-            for (var attempt = 1; ; attempt++)
+            if (IsOnLocalDisk(path))
             {
-                try
-                {
-                    using var local = TagLib.File.Create(path);
-                    edit(local);
-                    local.Save();
-                    return;
-                }
-                catch (IOException ex) when (attempt < 12 && IsSharingViolation(ex))
-                {
-                    Thread.Sleep(250);
-                }
+                EditViaCopy(path, edit);
+                return;
             }
+            // A network share (\\NAS\Music, a mapped drive): written in place - a copy would cross
+            // the network twice per save. Something may still be reading the file for a moment (the
+            // spectrum analysis of a song that just started, an indexer, a virus scan): wait for it
+            // instead of failing.
+            WhenFree(() =>
+            {
+                using var local = TagLib.File.Create(path);
+                edit(local);
+                local.Save();
+            });
+            return;
         }
 
         var copy = LocalCopyOf?.Invoke(path) ?? throw new IOException("원격 파일을 받아오지 못했습니다.");
@@ -110,6 +110,73 @@ public static class RemoteFiles
         // cache does that, told below).
         Seen[path] = new RemoteVersion(new FileInfo(copy).Length, default);
         Uploaded?.Invoke(path, copy);
+    }
+
+    /// <summary>A song on this PC's own disk (not a share, not a mapped network drive).</summary>
+    private static bool IsOnLocalDisk(string path)
+    {
+        try
+        {
+            var root = Path.GetPathRoot(Path.GetFullPath(path));
+            if (string.IsNullOrEmpty(root) || root.StartsWith(@"\\", StringComparison.Ordinal)) return false;
+            return new DriveInfo(root).DriveType == DriveType.Fixed;
+        }
+        catch (Exception ex) when (ex is ArgumentException or IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>Saves the edit to a copy beside the song, and only then swaps the copy in. TagLib
+    /// rewrites a file in place - when the tags outgrow their room, the whole file - so a crash or
+    /// power cut in the middle used to leave a broken song; now the song is the old one or the new
+    /// one, whole. The copy is on disk before it takes the song's place.</summary>
+    private static void EditViaCopy(string path, Action<TagLib.File> edit)
+    {
+        var temp = Path.Combine(Path.GetDirectoryName(path)!, "~" + Path.GetFileName(path) + ".gotune-tmp");
+        try
+        {
+            WhenFree(() => File.Copy(path, temp, overwrite: true));
+            using (var file = TagLib.File.Create(new CopyAbstraction(path, temp)))
+            {
+                edit(file);
+                file.Save();
+            }
+            using (var written = new FileStream(temp, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+                written.Flush(flushToDisk: true);
+            WhenFree(() => File.Replace(temp, path, destinationBackupFileName: null));
+        }
+        finally
+        {
+            try { if (File.Exists(temp)) File.Delete(temp); } catch (Exception) { /* left for the next save to overwrite */ }
+        }
+    }
+
+    /// <summary>Runs <paramref name="action"/>, waiting a moment and trying again while something
+    /// else holds the file (up to about 3 s).</summary>
+    private static void WhenFree(Action action)
+    {
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                action();
+                return;
+            }
+            catch (IOException ex) when (attempt < 12 && IsSharingViolation(ex))
+            {
+                Thread.Sleep(250);
+            }
+        }
+    }
+
+    /// <summary>TagLib editing the copy, under the song's own name (its extension tells TagLib the format).</summary>
+    private sealed class CopyAbstraction(string name, string copy) : TagLib.File.IFileAbstraction
+    {
+        public string Name { get; } = name;
+        public Stream ReadStream => new FileStream(copy, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+        public Stream WriteStream => new FileStream(copy, FileMode.Open, FileAccess.ReadWrite, FileShare.ReadWrite);
+        public void CloseStream(Stream stream) => stream.Dispose();
     }
 
     /// <summary>TagLib reading a remote file through <see cref="RemoteReadStream"/>. The name keeps

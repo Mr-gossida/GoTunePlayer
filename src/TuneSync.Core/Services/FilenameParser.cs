@@ -20,7 +20,10 @@ public static partial class FilenameParser
             return (bracket.Groups["artist"].Value.Trim(), bracket.Groups["title"].Value.Trim());
 
         var hyphen = HyphenPattern().Match(fileNameWithoutExtension);
-        if (hyphen.Success)
+        // "01 - Intro" is a track number and a title, not an artist "01": every untagged
+        // "01 - Intro" of different albums was taken for the same song (합치기) and searched for
+        // by artist "01" (통합 검색).
+        if (hyphen.Success && !hyphen.Groups["artist"].Value.Trim().All(c => char.IsAsciiDigit(c) || c is '.' or ' '))
             return (hyphen.Groups["artist"].Value.Trim(), hyphen.Groups["title"].Value.Trim());
 
         return null;

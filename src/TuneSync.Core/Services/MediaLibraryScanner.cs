@@ -77,19 +77,51 @@ public static class MediaLibraryScanner
         }
     }
 
+    /// <summary>The files under a folder (its subfolders too with <paramref name="recurse"/>), skipping
+    /// folders it may not read and items with <paramref name="skip"/>. A linked folder (junction,
+    /// symbolic link) is walked into once, and never when it leads back to a folder above it: such a
+    /// link made the walk go round and round - a scan that never ended, its memory growing. Cloud
+    /// placeholders (OneDrive) aren't links and are walked as usual.</summary>
+    public static IEnumerable<FileInfo> WalkFiles(string rootFolder, bool recurse, FileAttributes skip)
+    {
+        var root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(rootFolder));
+        var walked = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { Target(root) ?? root };
+        var options = new EnumerationOptions { RecurseSubdirectories = recurse, IgnoreInaccessible = true, AttributesToSkip = skip };
+        return new System.IO.Enumeration.FileSystemEnumerable<FileInfo>(root,
+            (ref System.IO.Enumeration.FileSystemEntry e) => (FileInfo)e.ToFileSystemInfo(), options)
+        {
+            ShouldIncludePredicate = (ref System.IO.Enumeration.FileSystemEntry e) => !e.IsDirectory,
+            ShouldRecursePredicate = (ref System.IO.Enumeration.FileSystemEntry e) =>
+            {
+                if ((e.Attributes & FileAttributes.ReparsePoint) == 0) return true;
+                var path = e.ToFullPath();
+                if (Target(path) is not { } target) return true; // not a link
+                return walked.Add(target) && !path.StartsWith(target + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
+            },
+        };
+
+        static string? Target(string path)
+        {
+            try
+            {
+                return Directory.ResolveLinkTarget(path, returnFinalTarget: true) is { } t
+                    ? Path.TrimEndingDirectorySeparator(t.FullName)
+                    : null;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                return path; // a link that can't be followed: counted as walked, not entered twice
+            }
+        }
+    }
+
     /// <summary>Supported audio files under the folder with their size and date, straight from the
     /// directory listing (no per-file round trip on a network share).</summary>
     private static List<(string Path, long Size, DateTime Modified)> EnumerateAudioFileInfos(string rootFolder, bool includeSubfolders)
     {
-        var options = new EnumerationOptions
-        {
-            RecurseSubdirectories = includeSubfolders,
-            IgnoreInaccessible = true,
-            AttributesToSkip = FileAttributes.System,
-        };
         try
         {
-            return [.. new DirectoryInfo(rootFolder).EnumerateFiles("*", options)
+            return [.. WalkFiles(rootFolder, includeSubfolders, FileAttributes.System)
                 .Where(f => TagService.IsSupported(f.Name))
                 .Select(f => (f.FullName, f.Length, f.LastWriteTimeUtc))];
         }
@@ -109,6 +141,9 @@ public static class MediaLibraryScanner
 
         var channel = Channel.CreateUnbounded<LibraryFile>();
         var degreeOfParallelism = Math.Clamp(Environment.ProcessorCount, 2, 8);
+        // Stopped with the caller's token, and also when the caller stops reading (a newer scan took
+        // over): the reading went on to the last file in the background before.
+        using var stop = CancellationTokenSource.CreateLinkedTokenSource(ct);
 
         var producer = Task.Run(async () =>
         {
@@ -116,7 +151,7 @@ public static class MediaLibraryScanner
             {
                 await Parallel.ForEachAsync(
                     paths,
-                    new ParallelOptions { MaxDegreeOfParallelism = degreeOfParallelism, CancellationToken = ct },
+                    new ParallelOptions { MaxDegreeOfParallelism = degreeOfParallelism, CancellationToken = stop.Token },
                     async (path, token) =>
                     {
                         // Missing/corrupt/unreadable file - skip it rather than aborting the scan.
@@ -130,27 +165,32 @@ public static class MediaLibraryScanner
             {
                 channel.Writer.TryComplete();
             }
-        }, ct);
+        }, stop.Token);
 
-        await foreach (var item in channel.Reader.ReadAllAsync(ct))
-            yield return item;
+        try
+        {
+            await foreach (var item in channel.Reader.ReadAllAsync(ct))
+                yield return item;
 
-        await producer; // surfaces cancellation/any unexpected exception to the caller
+            await producer; // surfaces cancellation/any unexpected exception to the caller
+        }
+        finally
+        {
+            if (!producer.IsCompleted)
+            {
+                stop.Cancel();
+                try { await producer; } catch (OperationCanceledException) { /* stopped, as asked */ }
+            }
+        }
     }
 
     /// <summary>Supported audio files under the folder. An unreadable sub-folder (permissions,
     /// a share dropping out) is skipped instead of aborting the whole scan.</summary>
     private static List<string> EnumerateAudioFiles(string rootFolder, bool includeSubfolders)
     {
-        var options = new EnumerationOptions
-        {
-            RecurseSubdirectories = includeSubfolders,
-            IgnoreInaccessible = true,
-            AttributesToSkip = FileAttributes.System,
-        };
         try
         {
-            return [.. Directory.EnumerateFiles(rootFolder, "*", options).Where(TagService.IsSupported)];
+            return [.. WalkFiles(rootFolder, includeSubfolders, FileAttributes.System).Select(f => f.FullName).Where(TagService.IsSupported)];
         }
         catch (IOException)
         {
@@ -313,8 +353,32 @@ public sealed class LibraryIndex
         }
     }
 
+    /// <summary>The songs a full scan has met so far (see <see cref="BeginScan"/>).</summary>
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, byte> _met = new(StringComparer.Ordinal);
+    private volatile bool _counting;
+
+    /// <summary>A full scan starts: from now on the songs it meets are noted.</summary>
+    public void BeginScan()
+    {
+        _met.Clear();
+        _counting = true;
+    }
+
+    /// <summary>After a full scan that reached every folder: drops the songs it didn't meet (deleted,
+    /// renamed, or in a folder taken out of the library). The index only ever grew before - with
+    /// a thumbnail each, read and written whole at every start and scan.</summary>
+    public void ForgetUnmet()
+    {
+        if (!_counting) return;
+        _counting = false;
+        foreach (var path in _entries.Keys)
+            if (!_met.ContainsKey(path) && _entries.TryRemove(path, out _)) _dirty = true;
+        _met.Clear();
+    }
+
     public LibraryFile? TryGet(string path, long size, DateTime modified)
     {
+        if (_counting) _met.TryAdd(path, 0);
         if (!_entries.TryGetValue(path, out var e) || e.Size != size || e.Modified != modified || e.Tags is not { } t) return null;
         return new LibraryFile
         {
@@ -342,6 +406,7 @@ public sealed class LibraryIndex
 
     public void Put(LibraryFile file, long size, DateTime modified)
     {
+        if (_counting) _met.TryAdd(file.Path, 0);
         _entries[file.Path] = new Entry
         {
             Size = size,

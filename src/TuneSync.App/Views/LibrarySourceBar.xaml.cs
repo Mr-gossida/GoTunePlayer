@@ -13,6 +13,13 @@ public partial class LibrarySourceBar : UserControl
 
     private LibraryViewModel? Library => DataContext as LibraryViewModel;
 
+    /// <summary>The songs '선택한 곡 목록에서 빼기' takes out: the play queue's selection, unless the
+    /// page the bar sits on has a list of its own (태그 관리) - there it used to take out the songs
+    /// picked in the queue, usually the one playing, not the ones picked on screen.</summary>
+    public Func<IReadOnlyList<LibraryFileViewModel>>? Selected { get; set; }
+
+    private IReadOnlyList<LibraryFileViewModel> Picked => Selected?.Invoke() ?? Library?.QueueSelection ?? [];
+
     /// <summary>"+": local folders/files or a network location.</summary>
     private void AddButton_Click(object sender, RoutedEventArgs e)
     {
@@ -59,7 +66,7 @@ public partial class LibrarySourceBar : UserControl
     {
         var button = (Button)sender;
         if (button.ContextMenu is not { } menu) return;
-        var selected = Library?.QueueSelection.Count ?? 0;
+        var selected = Picked.Count;
         RemoveSelectedItem.Header = selected > 0 ? $"선택한 {selected}곡 목록에서 빼기" : "선택한 곡 목록에서 빼기";
         RemoveSelectedItem.IsEnabled = selected > 0;
         var excluded = Library?.ExcludedCount ?? 0;
@@ -81,7 +88,7 @@ public partial class LibrarySourceBar : UserControl
 
     private async void RemoveSelected_Click(object sender, RoutedEventArgs e)
     {
-        if (Library is { QueueSelection.Count: > 0 } library) await library.RemoveFromListAsync(library.QueueSelection);
+        if (Library is { } library && Picked is { Count: > 0 } picked) await library.RemoveFromListAsync([.. picked]);
     }
 
     private void RestoreRemoved_Click(object sender, RoutedEventArgs e) => Library?.RestoreRemovedCommand.Execute(null);

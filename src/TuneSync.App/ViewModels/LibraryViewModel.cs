@@ -785,7 +785,9 @@ public sealed partial class LibraryViewModel : ObservableObject
         static string Norm(string p) => Path.GetFullPath(p).TrimEnd('\\', '/') + "\\";
 
         var changed = changedFolders.Where(f => !string.IsNullOrWhiteSpace(f)).Select(f => Norm(f!)).ToList();
-        var affected = Folders.Any(source =>
+        // (A network location's folder "/Music" isn't a path on this PC: read as one it became
+        // C:\Music\ and set off a full rescan - the network too - for changes elsewhere.)
+        var affected = Folders.Where(source => !source.Entry.IsRemote).Any(source =>
         {
             var root = Norm(source.IsFile ? Path.GetDirectoryName(source.Path)! : source.Path);
             return changed.Any(c => c.StartsWith(root, StringComparison.OrdinalIgnoreCase)
@@ -823,9 +825,9 @@ public sealed partial class LibraryViewModel : ObservableObject
         bool Registered(LibraryFolderEntry entry) => Folders.Any(f =>
             string.Equals(f.Path, entry.Path, StringComparison.OrdinalIgnoreCase) && f.Entry.RemoteSourceId == entry.RemoteSourceId);
         var fresh = entries.Where(e => !Registered(e)).ToList();
-        Unexclude(entries);
         if (fresh.Count == 0)
         {
+            Unexclude(entries);
             Toast.Info("이미 등록된 항목입니다", entries.Count == 1 ? "목록을 다시 불러옵니다." : $"{entries.Count}개 모두 등록되어 있어 목록을 다시 불러옵니다.");
             await RescanAsync();
             return;
@@ -834,6 +836,8 @@ public sealed partial class LibraryViewModel : ObservableObject
         var mode = Folders.Count == 0 ? LibraryAddMode.Append : _settings.LibraryAddMode;
         if (mode == LibraryAddMode.Ask)
         {
+            // Cancelled: nothing changes - the songs taken out of the list stay out (they used to
+            // be put back and saved before the question was even answered).
             if (await Dialogs.ChooseAddModeAsync(Folders.Count, fresh.Count) is not { } choice) return;
             mode = choice.Mode;
             if (choice.Remember)
@@ -843,6 +847,7 @@ public sealed partial class LibraryViewModel : ObservableObject
                 OnPropertyChanged(nameof(AddMode));
             }
         }
+        var unexcluded = Unexclude(entries);
 
         var replaced = false;
         if (mode == LibraryAddMode.Replace)
@@ -860,7 +865,11 @@ public sealed partial class LibraryViewModel : ObservableObject
             added = true;
         }
 
-        if (!added && !replaced) return;
+        if (!added && !replaced)
+        {
+            if (unexcluded) await RescanAsync(); // songs put back in still have to come back to the list
+            return;
+        }
         SaveFolders();
         await RescanAsync();
     }
@@ -965,7 +974,8 @@ public sealed partial class LibraryViewModel : ObservableObject
         var duplicates = new List<LibraryFolderViewModel>();
         foreach (var f in Folders)
         {
-            if (!seen.Add(f.Path.TrimEnd('\\', '/')))
+            // the same folder of the same place: "/Music" on two servers is two folders
+            if (!seen.Add((f.Entry.RemoteSourceId ?? "") + "|" + f.Path.TrimEnd('\\', '/')))
                 duplicates.Add(f);
         }
         if (duplicates.Count == 0) return;
@@ -1026,6 +1036,8 @@ public sealed partial class LibraryViewModel : ObservableObject
         Files.Clear();
         IsScanning = true;
         StatusText = "스캔 중...";
+        _index.BeginScan();
+        _network.Index.BeginScan();
         var count = 0;
         var sources = Folders.ToList();
 
@@ -1035,10 +1047,14 @@ public sealed partial class LibraryViewModel : ObservableObject
         // for every song, freezing the player for seconds while a big library loaded.
         var pending = new List<LibraryFile>();
         var sinceFlush = System.Diagnostics.Stopwatch.StartNew();
+        // Sources can overlap (a folder and one inside it, a file in a registered folder): each song
+        // once. It used to be listed twice - and taking one row out of the list left the other.
+        var listed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         async Task Add(LibraryFile file)
         {
             if (_excluded.Count > 0 && _excluded.Contains(file.Path)) return; // taken out of the list
+            if (!listed.Add(file.Path)) return;
             pending.Add(file);
             count++;
             if (sinceFlush.ElapsedMilliseconds >= 300) await FlushAsync();
@@ -1127,7 +1143,16 @@ public sealed partial class LibraryViewModel : ObservableObject
                     await Add(file);
             }
             await FlushAsync();
-            _network.Index.Save();
+            // Every folder was reached and read to the end: songs the indexes hold that this scan
+            // didn't meet are gone (or out of the library) and are dropped. (With a folder offline,
+            // its songs stay remembered for when it's back.)
+            if (!cts.IsCancellationRequested && unreachableFolders == 0 && foundFromFileSources == filePaths.Count)
+            {
+                _index.ForgetUnmet();
+                _network.Index.ForgetUnmet();
+            }
+            // (written off the UI thread: the network index holds a thumbnail per song)
+            await Task.Run(_network.Index.Save);
             await Task.Run(_index.Save);
 
             if (!cts.IsCancellationRequested)

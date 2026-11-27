@@ -270,8 +270,19 @@
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="86"/>
                                 </Grid.ColumnDefinitions>
-                                <CheckBox IsChecked="{Binding IsIncluded}" IsEnabled="{Binding WillChange}" VerticalAlignment="Center"
-                                          MinWidth="0" Padding="0" Margin="0"/>
+                                <!-- not while renaming or reading the songs: the plan on screen is about to run or change -->
+                                <CheckBox IsChecked="{Binding IsIncluded}" VerticalAlignment="Center" MinWidth="0" Padding="0" Margin="0">
+                                    <CheckBox.Style>
+                                        <Style TargetType="CheckBox" BasedOn="{StaticResource {x:Type CheckBox}}">
+                                            <Setter Property="IsEnabled" Value="{Binding WillChange}"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding DataContext.IsIdle, RelativeSource={RelativeSource AncestorType=ListBox}}" Value="False">
+                                                    <Setter Property="IsEnabled" Value="False"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </CheckBox.Style>
+                                </CheckBox>
                                 <StackPanel Grid.Column="1" VerticalAlignment="Center">
                                     <TextBlock x:Name="OldName" Text="{Binding OldFileName}" TextTrimming="CharacterEllipsis"
                                                ToolTip="{Binding OldFileName}" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
