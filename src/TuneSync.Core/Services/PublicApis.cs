@@ -5,6 +5,14 @@ using TuneSync.Core.Services.CoverSearch;
 
 namespace TuneSync.Core.Services;
 
+/// <summary>Limits on what the public web services (MusicBrainz, iTunes, Deezer, LRCLIB) send back.</summary>
+public static class ApiLimits
+{
+    /// <summary>The most an answer is read into memory. Real ones are tens to hundreds of KB; a
+    /// service gone wrong (or something posing as it) mustn't make the app read gigabytes.</summary>
+    public const long MaxAnswerBytes = 8 * 1024 * 1024;
+}
+
 /// <summary>Keeps to what a keyless public API asks of its users: the iTunes Search API about 20
 /// calls a minute, Deezer 50 in 5 seconds. Searching many songs at once (통합 검색) would run past
 /// both within seconds - then they refuse (403 / 429) and the rest of the songs get nothing from

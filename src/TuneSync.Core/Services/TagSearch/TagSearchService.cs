@@ -11,7 +11,7 @@ public sealed class TagSearchService : IDisposable
 
     public TagSearchService(MusicBrainzService musicBrainz)
     {
-        _http = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
+        _http = new HttpClient { Timeout = TimeSpan.FromSeconds(15), MaxResponseContentBufferSize = ApiLimits.MaxAnswerBytes };
         _http.DefaultRequestHeaders.UserAgent.ParseAdd(MusicBrainzService.UserAgentString);
         _sources = [new MusicBrainzTagSource(musicBrainz), new ITunesTagSource(_http), new DeezerTagSource(_http)];
     }

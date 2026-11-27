@@ -128,6 +128,9 @@ public sealed class ToastHost : StackPanel
 
             Loaded += (_, _) =>
             {
+                // Dismissed before it was even shown (a burst of toasts pushed it out): fading in now
+                // would replace the fade-out - whose end removes it - and leave it on screen for good.
+                if (Leaving) return;
                 var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
                 BeginAnimation(OpacityProperty, new DoubleAnimation(1, TimeSpan.FromMilliseconds(200)));
                 _slide.BeginAnimation(TranslateTransform.YProperty, new DoubleAnimation(0, TimeSpan.FromMilliseconds(260)) { EasingFunction = ease });

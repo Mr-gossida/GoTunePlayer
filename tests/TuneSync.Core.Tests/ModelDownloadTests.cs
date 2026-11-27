@@ -45,8 +45,10 @@ public class ModelDownloadTests : IDisposable
     }
 
     private Task Download(Func<HttpContent> body, long expectedBytes, IProgress<double>? progress = null, CancellationToken ct = default,
-        string url = "https://models.example/model.bin") =>
-        ModelDownload.ToFileAsync(new HttpClient(new Server(body)), url, ModelPath, expectedBytes, progress, ct);
+        string url = "https://models.example/model.bin", string sha256 = "00") =>
+        ModelDownload.ToFileAsync(new HttpClient(new Server(body)), url, ModelPath, expectedBytes, sha256, progress, ct);
+
+    private static string Sha256(byte[] bytes) => Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(bytes));
 
     private void AssertNothingLeft()
     {
@@ -59,10 +61,23 @@ public class ModelDownloadTests : IDisposable
     {
         var model = Enumerable.Range(0, 300_000).Select(i => (byte)i).ToArray();
 
-        await Download(() => new ByteArrayContent(model), model.Length);
+        await Download(() => new ByteArrayContent(model), model.Length, sha256: Sha256(model).ToLowerInvariant());
 
         Assert.Equal(model, File.ReadAllBytes(ModelPath));
         Assert.False(File.Exists(ModelPath + ".part"));
+    }
+
+    [Fact]
+    public async Task OtherBytesOfTheRightSizeAreRefused()
+    {
+        var model = Enumerable.Range(0, 300_000).Select(i => (byte)i).ToArray();
+        var swapped = (byte[])model.Clone();
+        swapped[150_000] ^= 0xFF;
+
+        var ex = await Assert.ThrowsAsync<IOException>(() => Download(() => new ByteArrayContent(swapped), model.Length, sha256: Sha256(model)));
+
+        Assert.Contains("예상과 다릅니다", ex.Message);
+        AssertNothingLeft();
     }
 
     [Fact]

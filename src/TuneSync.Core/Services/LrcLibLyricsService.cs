@@ -33,7 +33,7 @@ public sealed class LrcLibLyricsService : ILyricsService, IDisposable
     /// script), which wins ties between languages when the tags don't say.</param>
     public LrcLibLyricsService(HttpMessageHandler handler, string preferredLanguage = "ko")
     {
-        _http = new HttpClient(handler) { BaseAddress = new Uri("https://lrclib.net/api/") };
+        _http = new HttpClient(handler) { BaseAddress = new Uri("https://lrclib.net/api/"), MaxResponseContentBufferSize = ApiLimits.MaxAnswerBytes };
         _http.DefaultRequestHeaders.UserAgent.ParseAdd("GoTunePlayer/1.0");
         _preferred = preferredLanguage switch { "ko" => Script.Korean, "ja" => Script.Japanese, "zh" => Script.Chinese, _ => Script.Latin };
     }

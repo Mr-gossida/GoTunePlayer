@@ -304,6 +304,14 @@ public sealed partial class BatchSyncViewModel : ObservableObject, IDisposable
         _work?.Cancel();
     }
 
+    /// <summary>Stops, and completes once the work has ended - a song being written is finished
+    /// first (the app quitting waits for this, so no file is cut off mid-write).</summary>
+    public Task StopAndWaitAsync()
+    {
+        Stop();
+        return _running.ContinueWith(_ => { }, CancellationToken.None, TaskContinuationOptions.None, TaskScheduler.Default);
+    }
+
     private async Task RunAsync(CancellationToken ct)
     {
         using var awake = new PowerRequest("싱크 가사 일괄 만들기");
@@ -356,6 +364,9 @@ public sealed partial class BatchSyncViewModel : ObservableObject, IDisposable
         _songDone = 0;
         try
         {
+            // Lyrics changed in the tag editor and not saved yet are the ones wanted, not the
+            // file's - and saving them would replace whatever the batch wrote.
+            if (item.File.PendingLyrics is not null) { Skip(item, "저장하지 않은 가사 변경이 있습니다"); return; }
             var lyrics = await Task.Run(() => TagService.ReadLyrics(item.File.Path), ct) ?? "";
             var synced = LrcParser.Parse(lyrics);
             List<string> header = [];
@@ -363,6 +374,9 @@ public sealed partial class BatchSyncViewModel : ObservableObject, IDisposable
             if (synced.Count > 0)
             {
                 if (!IncludeSynced) { Skip(item, "이미 싱크 가사가 있습니다"); return; }
+                // Lines without a time among the timed ones would be dropped by writing only the
+                // timed ones again: left for 싱크 편집, where they're shown to be timed.
+                if (LrcParser.UntimedLines(lyrics) is > 0 and var untimed) { Skip(item, $"시간이 없는 줄 {untimed}개가 섞여 있습니다"); return; }
                 header = LrcWriter.HeaderLines(lyrics);
                 sung = [.. synced.Where(l => l.Text.Length > 0).Select(l => l.Text)];
             }
@@ -398,6 +412,15 @@ public sealed partial class BatchSyncViewModel : ObservableObject, IDisposable
             if (LyricsSyncSpeed.Record(_settings, item.File.Model.Duration, item.Took)) AppSettingsStore.Save(_settings);
 
             Status = "저장하는 중…";
+            // The lyrics may have changed in the minutes this took (saved from the tag editor, 가사
+            // 찾기, 싱크 편집): the times found are for the old text, and writing them would replace
+            // the user's lyrics.
+            var now = await Task.Run(() => TagService.ReadLyrics(item.File.Path), ct) ?? "";
+            if (now != lyrics || item.File.PendingLyrics is not null)
+            {
+                Skip(item, "맞추는 동안 가사가 바뀌어 저장하지 않았습니다");
+                return;
+            }
             var lrc = LrcWriter.Write(header, sung.Select((text, i) => (result[i].Time, text)));
             item.Undo = await SaveAsync(item.File, lrc);
             item.Estimated.Clear();
@@ -750,23 +773,34 @@ public sealed partial class BatchSyncViewModel : ObservableObject, IDisposable
     /// <summary>Opens a finished song in the sync editor, to listen to the estimated lines.</summary>
     public async Task ReviewAsync(BatchSyncItemViewModel item, System.Windows.Window owner)
     {
-        if (!item.IsDone) return;
-        string lyrics;
+        // Not while 되돌리기 / 다시 저장 is going through the songs: it would undo this one under the
+        // editor, and the row would then claim the user's checked lyrics were undone. The undoing
+        // waits for the editor in turn.
+        if (!item.IsDone || _fileWork) return;
+        _fileWork = true;
         try
         {
-            lyrics = await Task.Run(() => TagService.ReadLyrics(item.File.Path)) ?? "";
+            string lyrics;
+            try
+            {
+                lyrics = await Task.Run(() => TagService.ReadLyrics(item.File.Path)) ?? "";
+            }
+            catch (Exception ex)
+            {
+                Toast.Error("가사를 읽지 못했습니다", ex.Message);
+                return;
+            }
+            if (LyricsSyncWindow.Run(owner, item.File, lyrics, item.Estimated) is not null && item.IsDone)
+            {
+                item.IsReviewed = true;
+                item.Status = DoneStatus(item);
+                Refresh([item.File]);
+                UpdateTotals();
+            }
         }
-        catch (Exception ex)
+        finally
         {
-            Toast.Error("가사를 읽지 못했습니다", ex.Message);
-            return;
-        }
-        if (LyricsSyncWindow.Run(owner, item.File, lyrics, item.Estimated) is not null)
-        {
-            item.IsReviewed = true;
-            item.Status = DoneStatus(item);
-            Refresh([item.File]);
-            UpdateTotals();
+            _fileWork = false;
         }
     }
 

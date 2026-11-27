@@ -13,6 +13,28 @@ public class LrcParserTests
     }
 
     [Fact]
+    public void Other_scripts_digits_arent_a_time_and_dont_throw()
+    {
+        // fullwidth and Arabic-Indic digits: \d took them, int.Parse refused them
+        var lines = LrcParser.Parse("[０１:２３.４５]전각 숫자\n[٠١:٢٣.٤٥]아랍 숫자\n[00:05.00]보통 줄");
+
+        Assert.Equal(("보통 줄", TimeSpan.FromSeconds(5)), (Assert.Single(lines).Text, lines[0].Time));
+    }
+
+    [Fact]
+    public void Half_synced_lyrics_keep_their_untimed_lines_in_order()
+    {
+        const string lyrics = "[ar:아이유]\n[00:01.00]첫 줄\n시간 없는 줄\n\n[00:05.00]셋째 줄\n끝 줄";
+
+        Assert.Equal(2, LrcParser.UntimedLines(lyrics));
+        Assert.Equal(0, LrcParser.UntimedLines("그냥 가사\n둘째 줄")); // plain lyrics aren't half-synced
+        Assert.Equal(0, LrcParser.UntimedLines("[ti:밤편지]\n[00:01.00]첫 줄"));
+        Assert.Equal(
+            [(TimeSpan.FromSeconds(1), "첫 줄"), (null, "시간 없는 줄"), (TimeSpan.FromSeconds(5), "셋째 줄"), ((TimeSpan?)null, "끝 줄")],
+            LrcParser.ParseInFileOrder(lyrics));
+    }
+
+    [Fact]
     public void Parse_ExtractsTimeAndText()
     {
         var lines = LrcParser.Parse("[00:12.50]첫 줄\n[00:17.00]두 번째 줄");

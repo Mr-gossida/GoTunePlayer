@@ -21,7 +21,7 @@ public sealed class MusicBrainzService : IMusicBrainzService, IDisposable
 
     public MusicBrainzService()
     {
-        _mbHttp = new HttpClient { BaseAddress = new Uri("https://musicbrainz.org/ws/2/") };
+        _mbHttp = new HttpClient { BaseAddress = new Uri("https://musicbrainz.org/ws/2/"), MaxResponseContentBufferSize = ApiLimits.MaxAnswerBytes };
         _mbHttp.DefaultRequestHeaders.UserAgent.ParseAdd(UserAgentString);
         _mbHttp.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
 

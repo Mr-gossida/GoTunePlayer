@@ -83,20 +83,32 @@ public sealed partial class LyricsSyncViewModel : ObservableObject, IDisposable
         File = file;
         var synced = LrcParser.Parse(lyrics);
         IsEditing = synced.Count > 0;
+        var untimed = LrcParser.UntimedLines(lyrics);
         if (IsEditing)
         {
             // Already synced: start from its times (and keep its [ar:]/[ti:]… tags for saving).
             _header = LrcWriter.HeaderLines(lyrics);
-            foreach (var line in synced) Lines.Add(new SyncLineViewModel(line.Text) { Time = line.Time });
+            if (untimed > 0)
+            {
+                // Half-synced: every line in the file's order, the untimed ones waiting for a time
+                // (saving asks for them). Showing only the timed ones dropped the rest on save.
+                foreach (var (time, text) in LrcParser.ParseInFileOrder(lyrics)) Lines.Add(new SyncLineViewModel(text) { Time = time });
+            }
+            else
+            {
+                foreach (var line in synced) Lines.Add(new SyncLineViewModel(line.Text) { Time = line.Time });
+            }
             MarkEstimated();
         }
         else
         {
             foreach (var line in LrcWriter.PlainLines(lyrics)) Lines.Add(new SyncLineViewModel(line));
         }
-        SelectedLine = Lines.FirstOrDefault(l => l.NeedsCheck) ?? Lines.FirstOrDefault(l => !l.IsGap) ?? Lines.FirstOrDefault();
+        SelectedLine = Lines.FirstOrDefault(l => l.NeedsCheck) ?? Lines.FirstOrDefault(l => IsEditing && !l.HasTime && !l.IsGap)
+                       ?? Lines.FirstOrDefault(l => !l.IsGap) ?? Lines.FirstOrDefault();
         var check = Lines.Count(l => l.NeedsCheck);
         if (check > 0) Status = $"노란색으로 표시된 {check}줄은 추정한 시간이니 들어보고 확인하세요.";
+        else if (IsEditing && untimed > 0) Status = $"시간이 없는 줄이 {untimed}개 있습니다. 들으며 Space로 시간을 지정하거나 자동으로 맞추기를 쓰세요.";
         UpdateSummary();
     }
 

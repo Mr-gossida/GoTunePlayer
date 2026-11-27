@@ -9,7 +9,30 @@ public class AppSettingsStoreTests : IDisposable
 
     public void Dispose()
     {
-        if (File.Exists(_path)) File.Delete(_path);
+        foreach (var file in new[] { _path, _path + ".tmp", _path + ".bad" })
+            if (File.Exists(file)) File.Delete(file);
+    }
+
+    [Fact]
+    public void Saving_swaps_a_whole_new_file_in_and_leaves_no_temporary_one()
+    {
+        AppSettingsStore.Save(new AppSettings { LibraryFolders = [new() { Path = @"D:\Music" }] }, _path);
+        AppSettingsStore.Save(new AppSettings { LibraryFolders = [new() { Path = @"D:\Music" }, new() { Path = @"E:\More" }] }, _path);
+
+        Assert.Equal([@"D:\Music", @"E:\More"], AppSettingsStore.Load(_path).LibraryFolders.Select(f => f.Path));
+        Assert.False(File.Exists(_path + ".tmp"));
+    }
+
+    [Fact]
+    public void An_unreadable_file_is_kept_aside_before_defaults_are_saved_over_it()
+    {
+        File.WriteAllText(_path, "{ \"LibraryFolders\": [{ \"Path\": \"D:\\\\Music\" "); // cut off mid-write
+
+        var settings = AppSettingsStore.Load(_path);
+        AppSettingsStore.Save(settings, _path);
+
+        Assert.Empty(settings.LibraryFolders);
+        Assert.Contains("D:\\\\Music", File.ReadAllText(_path + ".bad"));
     }
 
     [Fact]

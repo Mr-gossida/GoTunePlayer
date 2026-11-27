@@ -19,16 +19,25 @@ public static class CoverArtService
 
     /// <summary>Embeds the front cover; for a network file the change is written back to the server.</summary>
     public static void SetCover(string path, byte[] imageBytes, string mimeType = "image/jpeg") =>
-        Remote.RemoteFiles.Edit(path, file =>
+        Remote.RemoteFiles.Edit(path, file => file.Tag.Pictures = WithCover(file.Tag.Pictures, imageBytes, mimeType));
+
+    /// <summary><paramref name="pictures"/> with <paramref name="cover"/> as the front cover, first
+    /// (where the cover is read from): it takes the old cover's place - the first front cover, or
+    /// the first picture when none is marked so - and every other picture (back cover, booklet,
+    /// artist) stays. Writing the new cover alone used to drop them all.</summary>
+    public static IPicture[] WithCover(IPicture[]? pictures, byte[] cover, string? mimeType = null)
+    {
+        var all = pictures ?? [];
+        var old = Array.FindIndex(all, p => p.Type == PictureType.FrontCover);
+        if (old < 0 && all.Length > 0) old = 0;
+        var picture = new Picture(new ByteVector(cover))
         {
-            var picture = new Picture(new ByteVector(imageBytes))
-            {
-                Type = PictureType.FrontCover,
-                Description = "Front Cover",
-                MimeType = mimeType,
-            };
-            file.Tag.Pictures = [picture];
-        });
+            Type = PictureType.FrontCover,
+            Description = "Front Cover",
+            MimeType = mimeType ?? MimeTypeOf(cover),
+        };
+        return [picture, .. all.Where((_, i) => i != old)];
+    }
 
     /// <summary>Removes every embedded picture (written back to the server for a network file).</summary>
     public static void RemoveCover(string path) =>

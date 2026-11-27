@@ -52,6 +52,51 @@ public class TagEditServiceTests
         }
     }
 
+    [Theory]
+    [InlineData("sample.mp3")]
+    [InlineData("sample.flac")]
+    [InlineData("sample.m4a")]
+    public void A_new_cover_keeps_the_files_other_pictures_and_undo_puts_them_all_back(string fixture)
+    {
+        var path = TestFixtures.CopyFixture(fixture);
+        try
+        {
+            var front = File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "TestAssets", "cover_a.jpg"));
+            var back = File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "TestAssets", "cover_b.jpg"));
+            using (var tagged = TagLib.File.Create(path))
+            {
+                tagged.Tag.Pictures =
+                [
+                    new TagLib.Picture(new TagLib.ByteVector(front)) { Type = TagLib.PictureType.FrontCover, MimeType = "image/jpeg" },
+                    new TagLib.Picture(new TagLib.ByteVector(back)) { Type = TagLib.PictureType.BackCover, MimeType = "image/jpeg" },
+                ];
+                tagged.Save();
+            }
+            var file = new LibraryFile { Path = path, Tags = TagService.Read(path), HasCover = true };
+            var cover = (byte[])back.Clone();
+            cover[^3] ^= 0x01; // another picture than either
+
+            var undo = TagEditService.Write(file, null, cover, null);
+
+            using (var written = TagLib.File.Create(path))
+            {
+                var pictures = written.Tag.Pictures;
+                Assert.Equal(2, pictures.Length);
+                Assert.Equal(cover, pictures[0].Data.Data); // the new cover, first
+                Assert.Equal(back, pictures[1].Data.Data);  // the back cover stays
+            }
+
+            TagEditService.Undo(undo);
+
+            using var restored = TagLib.File.Create(path);
+            Assert.Equal([front, back], restored.Tag.Pictures.Select(p => p.Data.Data));
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
     // The editor shows only the first artist/genre and the year, so saving one field must leave the
     // others as the file has them: writing them back would keep one value and cut the date to "2017".
     [Theory]

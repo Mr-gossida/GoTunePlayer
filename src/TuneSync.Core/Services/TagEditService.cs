@@ -16,6 +16,9 @@ public sealed class TagEditUndo
 
     public bool CoverChanged { get; init; }
     public byte[]? Cover { get; init; }
+
+    /// <summary>Every picture the file held (the cover and any others), put back whole by an undo.</summary>
+    internal TagLib.IPicture[]? Pictures { get; init; }
     public bool LyricsChanged { get; init; }
     public string? Lyrics { get; init; }
 }
@@ -29,7 +32,7 @@ public static class TagEditService
     /// <param name="cover">New cover; an empty array removes it; null leaves it.</param>
     /// <param name="lyrics">New lyrics; "" removes them; null leaves them.</param>
     public static TagEditUndo Write(LibraryFile file, TrackTags? tags, byte[]? cover, string? lyrics) =>
-        WriteCore(file, tags, null, cover, lyrics);
+        WriteCore(file, tags, null, cover, null, lyrics);
 
     /// <summary>Puts back what <see cref="Write"/> replaced.</summary>
     public static void Undo(TagEditUndo undo) => WriteCore(
@@ -37,14 +40,18 @@ public static class TagEditService
         undo.Tags,
         undo.ValueLists,
         undo.CoverChanged ? undo.Cover ?? [] : null,
+        undo.CoverChanged ? undo.Pictures : null,
         undo.LyricsChanged ? undo.Lyrics ?? "" : null);
 
     /// <param name="valueLists">For an undo: the multi-valued fields to put back whole.</param>
-    private static TagEditUndo WriteCore(LibraryFile file, TrackTags? tags, TagValueLists? valueLists, byte[]? cover, string? lyrics)
+    /// <param name="pictures">For an undo: every picture to put back (in place of <paramref name="cover"/>).</param>
+    private static TagEditUndo WriteCore(LibraryFile file, TrackTags? tags, TagValueLists? valueLists, byte[]? cover,
+        TagLib.IPicture[]? pictures, string? lyrics)
     {
         TrackTags? beforeTags = tags is null ? null : file.Tags.Clone();
         TagValueLists? beforeLists = null;
         byte[]? beforeCover = null;
+        TagLib.IPicture[]? beforePictures = null;
         string? beforeLyrics = null;
 
         RemoteFiles.Edit(file.Path, f =>
@@ -57,15 +64,13 @@ public static class TagEditService
             }
             if (cover is not null)
             {
-                beforeCover = f.Tag.Pictures.FirstOrDefault()?.Data?.Data;
-                f.Tag.Pictures = cover.Length == 0
-                    ? []
-                    : [new TagLib.Picture(new TagLib.ByteVector(cover))
-                    {
-                        Type = TagLib.PictureType.FrontCover,
-                        Description = "Front Cover",
-                        MimeType = CoverArtService.MimeTypeOf(cover),
-                    }];
+                var held = f.Tag.Pictures ?? [];
+                beforeCover = held.FirstOrDefault()?.Data?.Data;
+                // copies: the file's own objects go when it's closed
+                beforePictures = [.. held.Select(p => new TagLib.Picture(p))];
+                // A new cover takes the old one's place, the other pictures stay; removing the cover
+                // removes them all (one left would show as the cover).
+                f.Tag.Pictures = pictures ?? (cover.Length == 0 ? [] : CoverArtService.WithCover(held, cover));
             }
             if (lyrics is not null)
             {
@@ -95,6 +100,7 @@ public static class TagEditService
             ValueLists = beforeLists,
             CoverChanged = cover is not null,
             Cover = beforeCover,
+            Pictures = beforePictures,
             LyricsChanged = lyrics is not null,
             Lyrics = beforeLyrics,
         };

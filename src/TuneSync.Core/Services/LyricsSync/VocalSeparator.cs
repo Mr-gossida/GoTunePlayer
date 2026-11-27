@@ -98,11 +98,15 @@ public sealed class VocalSeparator : IDisposable
         }
 
         var vocals = new float[n];
+        // Who works: both while both are in; the CPU alone once the graphics dropped out (it
+        // failed - a lost device - or was far slower). Handing the pieces back to the graphics
+        // alone then made a failed GPU fail again on every later song of a batch.
+        var cpuOnly = _cpuSpeed is not null && _gpuSpeed.Retired;
         var shared = _cpuSpeed is { Retired: false } && !_gpuSpeed.Retired;
-        using var cpuOptions = shared ? CpuOptions(_threads) : null;
+        using var cpuOptions = shared || cpuOnly ? CpuOptions(_threads) : null;
         using var cpu = cpuOptions is null ? null : new InferenceSession(_modelPath, cpuOptions);
-        var sessions = cpu is null ? [_session] : new[] { _session, cpu };
-        WorkShare.Device[] speeds = cpu is null ? [_gpuSpeed] : [_gpuSpeed, _cpuSpeed!];
+        var sessions = cpuOnly ? [cpu!] : cpu is null ? [_session] : new[] { _session, cpu };
+        WorkShare.Device[] speeds = cpuOnly ? [_cpuSpeed!] : cpu is null ? [_gpuSpeed] : [_gpuSpeed, _cpuSpeed!];
         // Each device works on one piece at a time, in buffers of its own.
         var buffers = new (float[] Spectrum, DenseTensor<float> Tensor, float[][] Piece)?[sessions.Length];
 

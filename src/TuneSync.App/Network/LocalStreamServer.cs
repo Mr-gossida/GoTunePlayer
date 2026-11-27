@@ -15,8 +15,14 @@ public sealed class LocalStreamServer : IDisposable
     /// <summary>How long a connection may take to send its request: the player sends it at once.</summary>
     private static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(10);
 
+    /// <summary>Songs' addresses kept answering: the newest few (a player opens one, the next song's
+    /// another; an older one is never asked for again). Kept forever, every song played over a
+    /// long session stayed reachable and held in memory.</summary>
+    private const int Kept = 32;
+
     private readonly TcpListener _listener = new(IPAddress.Loopback, 0);
     private readonly ConcurrentDictionary<string, CacheItem> _published = new();
+    private readonly ConcurrentQueue<string> _order = new();
     private readonly CancellationTokenSource _stop = new();
 
     public LocalStreamServer()
@@ -33,6 +39,8 @@ public sealed class LocalStreamServer : IDisposable
     {
         var token = Guid.NewGuid().ToString("N");
         _published[token] = item;
+        _order.Enqueue(token);
+        while (_order.Count > Kept && _order.TryDequeue(out var old)) _published.TryRemove(old, out _);
         return new Uri($"http://127.0.0.1:{Port}/{token}/song{Path.GetExtension(item.RemotePath).ToLowerInvariant()}");
     }
 
@@ -45,9 +53,17 @@ public sealed class LocalStreamServer : IDisposable
             {
                 client = await _listener.AcceptTcpClientAsync(_stop.Token);
             }
+            catch (Exception) when (!_stop.IsCancellationRequested)
+            {
+                // One failed accept (a connection reset before it was taken, the system short of
+                // sockets for a moment) used to end the loop for good: no network song would play
+                // again until the app restarted. Wait a moment and go on.
+                try { await Task.Delay(100, _stop.Token); } catch (OperationCanceledException) { return; }
+                continue;
+            }
             catch
             {
-                return;
+                return; // stopping
             }
             _ = Task.Run(() => ServeAsync(client));
         }

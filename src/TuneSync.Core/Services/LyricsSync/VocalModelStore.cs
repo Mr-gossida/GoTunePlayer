@@ -9,13 +9,17 @@ public static class VocalModelStore
     public const string DisplaySize = "64MB";
     private const string Url = "https://github.com/TRvlvr/model_repo/releases/download/all_public_uvr_models/" + FileName;
 
+    /// <summary>The release (2023) publishes no hash: this is the file as it was downloaded and
+    /// used since, so a later download must be that same file.</summary>
+    public const string Sha256 = "534b2070fcc7df514b13ef660dc8cbb328679c2374d04354a5c42bb14ecce111";
+
     public static string ModelPath => Path.Combine(WhisperModelStore.Folder, FileName);
 
     public static bool IsDownloaded => File.Exists(ModelPath) && new FileInfo(ModelPath).Length == ExpectedBytes;
 
     /// <summary>Downloads the model. Progress is 0..1.</summary>
     public static Task DownloadAsync(IProgress<double>? progress, CancellationToken ct) =>
-        ModelDownload.ToFileAsync(Url, ModelPath, ExpectedBytes, progress, ct);
+        ModelDownload.ToFileAsync(Url, ModelPath, ExpectedBytes, Sha256, progress, ct);
 
     /// <summary>Deletes the model when <paramref name="path"/> is it and it couldn't be read (see
     /// <see cref="WhisperModelStore.Discard"/>).</summary>

@@ -228,31 +228,98 @@ public partial class ShellWindow : FluentWindow
             return;
         }
 
-        // Unsaved tag edits: ask before they're lost. (During a rescan, edits wait for their song's
-        // new row and aren't in the editor's count yet.)
-        var editor = _services.GetService<TagEditorViewModel>();
-        var unsaved = (editor?.PendingFileCount ?? 0) + (_services.GetService<LibraryViewModel>()?.PendingEditsInScan ?? 0);
-        if (!_discardConfirmed && unsaved > 0)
+        // Unsaved tag edits, or a 싱크 가사 일괄 만들기 at work (quitting would cut it off, maybe
+        // in the middle of writing a song): ask first.
+        var unsaved = UnsavedEdits();
+        var batch = LyricsSyncActivity.BatchRunning;
+        if (_asking)
+        {
+            e.Cancel = true; // asked already (a second close, or Windows signing out meanwhile)
+            return;
+        }
+        if (!_discardConfirmed && (unsaved > 0 || batch))
         {
             e.Cancel = true;
+            _asking = true;
             Dispatcher.BeginInvoke(async () =>
             {
-                if (IsInTray) RestoreFromTray(); // 종료 from the tray: the question needs a window
-                if (WindowState == WindowState.Minimized) WindowState = WindowState.Normal;
-                Activate();
-                if (!await Dialogs.ConfirmAsync("저장하지 않은 태그 변경",
-                        $"저장하지 않은 변경 내용이 {unsaved}곡 있습니다. 저장하지 않고 닫을까요?", "저장하지 않고 닫기"))
+                try
                 {
-                    _exitRequested = false; // stays open; the close button goes back to what it's set to
-                    return;
+                    await AskAndQuitAsync(unsaved, batch);
                 }
-                _discardConfirmed = true;
-                Close();
+                finally
+                {
+                    _asking = false;
+                }
             });
             return;
         }
 
         IsClosing = true;
+        SaveForNextTime();
+        base.OnClosing(e);
+    }
+
+    /// <summary>The question asked before quitting is open.</summary>
+    private bool _asking;
+
+    /// <summary>Asks before quitting with unsaved edits or a batch at work; quits on yes.</summary>
+    private async Task AskAndQuitAsync(int unsaved, bool batch)
+    {
+        if (IsInTray) RestoreFromTray(); // 종료 from the tray: the question needs a window
+        if (WindowState == WindowState.Minimized) WindowState = WindowState.Normal;
+        Activate();
+        var (title, message, button) =
+            unsaved > 0 && batch ? ("저장하지 않은 태그 변경",
+                $"저장하지 않은 변경 내용이 {unsaved}곡 있고, 싱크 가사 일괄 만들기도 진행 중입니다. 저장하지 않고 종료할까요? 일괄 작업은 지금 곡에서 멈추고, 끝난 곡은 이미 저장되어 있습니다.",
+                "저장하지 않고 종료")
+            : unsaved > 0 ? ("저장하지 않은 태그 변경", $"저장하지 않은 변경 내용이 {unsaved}곡 있습니다. 저장하지 않고 닫을까요?", "저장하지 않고 닫기")
+            : ("싱크 가사 일괄 만들기", "싱크 가사 일괄 만들기가 진행 중입니다. 종료하면 지금 곡에서 멈춥니다. 끝난 곡은 이미 저장되어 있습니다.", "멈추고 종료");
+        var quit = await Dialogs.ConfirmAsync(title, KeepWords.Joined(message), button);
+        ShutdownBlock.Clear(this);
+        if (!quit)
+        {
+            _exitRequested = false; // stays open; the close button goes back to what it's set to
+            return;
+        }
+        _discardConfirmed = true;
+        // Stopped first, and waited for: a song being written is finished, not cut off.
+        if (LyricsSyncActivity.Batch is { ViewModel.IsRunning: true } running)
+        {
+            try { await running.ViewModel.StopAndWaitAsync().WaitAsync(TimeSpan.FromSeconds(30)); }
+            catch (TimeoutException) { /* stuck: quit anyway */ }
+        }
+        _asking = false;
+        Close();
+    }
+
+    /// <summary>Songs with unsaved tag edits. (During a rescan, edits wait for their song's new row
+    /// and aren't in the editor's count yet.)</summary>
+    private int UnsavedEdits() =>
+        (_services.GetService<TagEditorViewModel>()?.PendingFileCount ?? 0) + (_services.GetService<LibraryViewModel>()?.PendingEditsInScan ?? 0);
+
+    /// <summary>Windows is signing out or shutting down. The window isn't closed then (no
+    /// <see cref="OnClosing"/>), so unsaved edits were dropped without a word and the session and
+    /// window place weren't kept. Now: with something unsaved or a batch at work, the sign-out is
+    /// held - Windows lists the app with the reason - and the usual question comes up; otherwise
+    /// what the next start needs is saved here.</summary>
+    private void OnSessionEnding(object? sender, SessionEndingCancelEventArgs e)
+    {
+        _exitRequested = true; // must quit, not hide to the tray
+        var unsaved = UnsavedEdits();
+        if (!_discardConfirmed && (unsaved > 0 || LyricsSyncActivity.BatchRunning))
+        {
+            e.Cancel = true;
+            ShutdownBlock.Set(this, unsaved > 0 ? $"저장하지 않은 태그 변경이 {unsaved}곡 있습니다." : "싱크 가사 일괄 만들기가 진행 중입니다.");
+            Dispatcher.BeginInvoke(Close);
+            return;
+        }
+        if (!IsClosing) SaveForNextTime();
+    }
+
+    /// <summary>The song and spot to reopen on, and the window's place.</summary>
+    private void SaveForNextTime()
+    {
         _playback.SaveSession(); // reopen on this song, at this spot
         var bounds = WindowState == WindowState.Normal ? new Rect(Left, Top, Width, Height) : RestoreBounds;
         // (Never shown - started and closed in the mini player - leaves NaN bounds: keep the old ones.)
@@ -268,6 +335,5 @@ public partial class ShellWindow : FluentWindow
             };
             AppSettingsStore.Save(_settings);
         }
-        base.OnClosing(e);
     }
 }

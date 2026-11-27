@@ -38,7 +38,8 @@ public sealed class CoverSearchService : ICoverSearchService, IDisposable
 
     public CoverSearchService(MusicBrainzService musicBrainz)
     {
-        _http = new HttpClient { Timeout = TimeSpan.FromSeconds(20) };
+        // The searches' answers are capped; images are read as streams, under their own limit.
+        _http = new HttpClient { Timeout = TimeSpan.FromSeconds(20), MaxResponseContentBufferSize = ApiLimits.MaxAnswerBytes };
         _http.DefaultRequestHeaders.UserAgent.ParseAdd(MusicBrainzService.UserAgentString);
         _ownsHttp = true;
         _sources = [new MusicBrainzCoverSource(musicBrainz), new ITunesCoverSource(_http), new DeezerCoverSource(_http)];

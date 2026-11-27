@@ -1049,13 +1049,15 @@ public sealed partial class TagEditorViewModel : ObservableObject
             {
                 var file = files[i];
                 SaveProgress = files.Count > 1 ? $"저장 중… {i + 1}/{files.Count}" : "저장 중…";
-                var tags = file.PendingTags.Count > 0 ? TagFields.Apply(file.Model.Tags, file.PendingTags) : null;
+                // what's written: the edits as they are now (the fields stay editable meanwhile)
+                var edits = new Dictionary<TagField, string>(file.PendingTags);
+                var tags = edits.Count > 0 ? TagFields.Apply(file.Model.Tags, edits) : null;
                 var cover = file.PendingCover;
                 var lyrics = file.PendingLyrics;
                 try
                 {
                     undo.Add(await Task.Run(() => TagEditService.Write(file.Model, tags, cover, lyrics)));
-                    file.ClearAllPending();
+                    file.ClearSaved(edits, cover, lyrics);
                 }
                 catch (Exception ex)
                 {

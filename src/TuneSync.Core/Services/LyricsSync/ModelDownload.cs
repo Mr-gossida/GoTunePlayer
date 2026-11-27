@@ -1,24 +1,26 @@
+using System.Security.Cryptography;
+
 namespace TuneSync.Core.Services.LyricsSync;
 
 /// <summary>Downloads a model file over HTTPS to a .part file next to it, moved into place only
-/// once it has arrived whole and exactly the size it should be. A server that announces or sends
-/// another size, a broken connection, a full disk or cancelling leave nothing behind, so a
-/// half-written or different file is never loaded.
-///
-/// The size is all that's checked: the publishers' SHA-256 hashes of the models aren't pinned
-/// here yet.</summary>
+/// once it has arrived whole, exactly the size it should be and with the SHA-256 it should have.
+/// A server that announces or sends another size or other bytes (a file changed or replaced where
+/// it's published, or swapped on the way), a broken connection, a full disk or cancelling leave
+/// nothing behind, so a half-written or different file is never loaded - the models are run by
+/// native code (whisper.cpp, ONNX Runtime) that trusts what it reads.</summary>
 public static class ModelDownload
 {
+    /// <param name="sha256">The file's SHA-256, in hex.</param>
     /// <param name="progress">0..1.</param>
-    public static async Task ToFileAsync(string url, string path, long expectedBytes, IProgress<double>? progress, CancellationToken ct)
+    public static async Task ToFileAsync(string url, string path, long expectedBytes, string sha256, IProgress<double>? progress, CancellationToken ct)
     {
         using var http = new HttpClient { Timeout = TimeSpan.FromMinutes(30) };
         http.DefaultRequestHeaders.UserAgent.ParseAdd("GoTunePlayer/1.0");
-        await ToFileAsync(http, url, path, expectedBytes, progress, ct);
+        await ToFileAsync(http, url, path, expectedBytes, sha256, progress, ct);
     }
 
     /// <summary>The same with a given client (tests).</summary>
-    public static async Task ToFileAsync(HttpClient http, string url, string path, long expectedBytes, IProgress<double>? progress, CancellationToken ct)
+    public static async Task ToFileAsync(HttpClient http, string url, string path, long expectedBytes, string sha256, IProgress<double>? progress, CancellationToken ct)
     {
         if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || uri.Scheme != Uri.UriSchemeHttps)
             throw new ArgumentException("Models are only downloaded over HTTPS.", nameof(url));
@@ -35,6 +37,7 @@ public static class ModelDownload
             // now rather than after the whole download.
             if (response.Content.Headers.ContentLength is { } length && length != expectedBytes) throw NotTheModel();
 
+            using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
             await using (var input = await response.Content.ReadAsStreamAsync(ct))
             await using (var output = new FileStream(part, FileMode.Create, FileAccess.Write, FileShare.None, 1 << 16, useAsync: true))
             {
@@ -46,11 +49,14 @@ public static class ModelDownload
                     done += read;
                     // More than the model: stop at once (a server that never stops mustn't fill the disk).
                     if (done > expectedBytes) throw NotTheModel();
+                    hash.AppendData(buffer, 0, read);
                     await output.WriteAsync(buffer.AsMemory(0, read), ct);
                     progress?.Report((double)done / expectedBytes);
                 }
                 if (done != expectedBytes) throw new IOException("모델 파일을 끝까지 받지 못했습니다. 다시 시도해 주세요.");
             }
+            // The right size isn't enough: the same number of other bytes is another file.
+            if (!Convert.ToHexString(hash.GetHashAndReset()).Equals(sha256, StringComparison.OrdinalIgnoreCase)) throw NotTheModel();
             File.Move(part, path, overwrite: true);
         }
         catch

@@ -25,8 +25,8 @@ public partial class ShellWindow
 
     private void SetUpTray()
     {
-        // Windows signing out or shutting down must quit, not hide.
-        Application.Current.SessionEnding += (_, _) => _exitRequested = true;
+        // Windows signing out or shutting down must quit, not hide (and not lose what's unsaved).
+        Application.Current.SessionEnding += OnSessionEnding;
         _playback.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName is nameof(PlaybackViewModel.NowPlayingTitle) or nameof(PlaybackViewModel.NowPlayingSubtitle)

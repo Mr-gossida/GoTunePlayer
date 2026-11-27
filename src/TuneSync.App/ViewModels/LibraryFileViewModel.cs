@@ -270,6 +270,28 @@ public sealed partial class LibraryFileViewModel : ObservableObject
         NotifyPending();
     }
 
+    /// <summary>After a save: drops the edits that were written - those still as they were when the
+    /// save began. An edit made while the file was being written stays (clearing everything lost it
+    /// without a word), unless it's now what the file holds anyway.</summary>
+    public void ClearSaved(IReadOnlyDictionary<TagField, string> tags, byte[]? cover, string? lyrics)
+    {
+        var changed = false;
+        foreach (var (field, value) in tags)
+            if (_pendingTags.TryGetValue(field, out var now) && now == value) changed |= _pendingTags.Remove(field);
+        foreach (var field in _pendingTags.Keys.Where(f => _pendingTags[f] == Original(f)).ToList()) changed |= _pendingTags.Remove(field);
+        if (cover is not null && ReferenceEquals(PendingCover, cover))
+        {
+            PendingCover = null;
+            changed = true;
+        }
+        if (lyrics is not null && PendingLyrics == lyrics)
+        {
+            PendingLyrics = null;
+            changed = true;
+        }
+        if (changed) NotifyPending();
+    }
+
     public void ClearAllPending()
     {
         if (!HasPendingChanges) return;

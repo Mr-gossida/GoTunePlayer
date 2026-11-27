@@ -198,14 +198,27 @@ public sealed class WhisperTranscriber(string modelPath, LyricsSyncOptions optio
             try
             {
                 gpu = Load(modelPath, true);
-                if (!_gpuIntegrated) return [(gpu, true)];
-                return [(gpu, true), (Load(modelPath, false), false)];
             }
             catch (WhisperModelLoadException)
             {
                 // The card has no room for it, or (when the CPU can't read it either, just
                 // below) the file itself is at fault.
-                gpu?.Dispose();
+            }
+            if (gpu is not null)
+            {
+                if (!_gpuIntegrated) return [(gpu, true)];
+                try
+                {
+                    return [(gpu, true), (Load(modelPath, false), false)];
+                }
+                catch (WhisperModelLoadException)
+                {
+                    // The graphics read the model, so the file is fine: the CPU's second copy found
+                    // no room (memory shared with the graphics). The graphics work alone - throwing
+                    // the working copy away and then failing on the CPU too had the model deleted
+                    // as damaged.
+                    return [(gpu, true)];
+                }
             }
         }
         return [(Load(modelPath, false), false)];

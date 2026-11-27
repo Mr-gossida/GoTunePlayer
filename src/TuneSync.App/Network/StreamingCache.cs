@@ -288,7 +288,10 @@ public sealed class CacheItem
 
     private volatile bool _cancel;
     private bool _resume;
-    private Stream? _source;
+    private volatile Stream? _source;
+
+    /// <summary>How long a download may go without a byte before its connection is given up.</summary>
+    private static readonly TimeSpan StallLimit = TimeSpan.FromMinutes(1);
 
     /// <summary>Called when the song is wanted again. True when its download is running - and if
     /// it was being stopped, it now continues from where it got to rather than ending.</summary>
@@ -391,6 +394,25 @@ public sealed class CacheItem
 
         Task.Run(() =>
         {
+            // A connection that goes quiet without closing (Wi-Fi gone, the NAS asleep) left the read
+            // waiting forever: the song never finished, and playing it again reused the dead
+            // download. A minute without a byte closes the stream, which ends the read with an
+            // error; the next play starts afresh.
+            var stalled = false;
+            var lastCount = -1L;
+            var lastMove = Environment.TickCount64;
+            using var watchdog = new System.Threading.Timer(_ =>
+            {
+                var count = Downloaded;
+                if (count != lastCount)
+                {
+                    (lastCount, lastMove) = (count, Environment.TickCount64);
+                    return;
+                }
+                if (Environment.TickCount64 - lastMove < StallLimit.TotalMilliseconds || _source is not { } quiet) return;
+                stalled = true;
+                try { quiet.Dispose(); } catch { /* already closed */ }
+            }, null, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(5));
             try
             {
                 // Taken before anything is read, so it is never newer than what arrives.
@@ -459,6 +481,7 @@ public sealed class CacheItem
             }
             catch (Exception ex)
             {
+                if (stalled) ex = new IOException("서버가 1분 동안 응답하지 않아 내려받기를 멈췄습니다. 다시 재생하면 처음부터 받습니다.", ex);
                 _failure = ex;
                 try { File.Delete(PartPath); } catch { /* best effort */ }
                 _completion.TrySetException(ex);

@@ -90,7 +90,11 @@ public sealed partial class LibraryViewModel : ObservableObject
         ApplyPlaylistOrder();
 
         Files.CollectionChanged += (_, _) => NotifyLibraryState();
-        Folders.CollectionChanged += (_, _) => NotifyLibraryState();
+        Folders.CollectionChanged += (_, _) =>
+        {
+            NotifyLibraryState();
+            FolderTreeChanged();
+        };
 
         foreach (var entry in settings.LibraryFolders)
             Folders.Add(new LibraryFolderViewModel(entry));
@@ -573,6 +577,24 @@ public sealed partial class LibraryViewModel : ObservableObject
     /// of times).</summary>
     private readonly Dictionary<string, FolderNode[]> _chains = new(StringComparer.OrdinalIgnoreCase);
 
+    private bool _treeRefreshQueued;
+
+    /// <summary>The library folders changed: the tree hangs off them (a song added on its own sits
+    /// under a library folder added later), so it's worked out anew - once, after a run of changes.
+    /// Until the sort or grouping was changed, songs kept their old place in the tree, and
+    /// next/previous followed that order.</summary>
+    private void FolderTreeChanged()
+    {
+        _chains.Clear();
+        if (PlaylistGroup != PlaylistGroupKey.Folder || _treeRefreshQueued) return;
+        _treeRefreshQueued = true;
+        System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>
+        {
+            _treeRefreshQueued = false;
+            if (PlaylistGroup == PlaylistGroupKey.Folder) ApplyPlaylistOrder();
+        }, System.Windows.Threading.DispatcherPriority.Background);
+    }
+
     private static readonly Thickness FlatIndent = new(0, 1, 12, 1);
 
     /// <summary>How far each level is set in.</summary>
@@ -690,9 +712,13 @@ public sealed partial class LibraryViewModel : ObservableObject
                 }
 
             var own = chain[^1];
-            row.GroupName = own.Key;
-            row.GroupLabel = own.Name;
-            row.GroupCount = counts[own.Key];
+            // The group the row is shown under: its own folder, or the folded level above that hides
+            // it. (Its own deepest folder had the pinned heading name - and fold - a folder that
+            // wasn't on screen.)
+            var shown = foldAt >= 0 ? chain[foldAt] : own;
+            row.GroupName = shown.Key;
+            row.GroupLabel = shown.Name;
+            row.GroupCount = counts[shown.Key];
             row.GroupHeader = headings.Count > 0 ? headings[^1].Name : null;
             SetHeadings(row, headings.Count > 0 ? [.. headings] : null);
             row.RowIndent = new Thickness(TreeStep * own.Depth, 1, 12, 1);
