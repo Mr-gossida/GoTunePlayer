@@ -170,7 +170,9 @@ public partial class App : Application
         services.AddSingleton<MusicBrainzService>();
         services.AddSingleton<IMusicBrainzService>(sp => sp.GetRequiredService<MusicBrainzService>());
         services.AddSingleton<ICoverSearchService, CoverSearchService>();
+        services.AddSingleton<TuneSync.Core.Services.TagSearch.TagSearchService>();
         services.AddSingleton<ILyricsService, LrcLibLyricsService>();
+        services.AddSingleton<OnlineSourcesViewModel>();
         services.AddSingleton<IAutoFillService, AutoFillService>();
 
         // Singletons: closing a tool window and opening it again must bring back the same

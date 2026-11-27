@@ -15,9 +15,14 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     private readonly Network.NetworkLibrary _network;
 
+    /// <summary>설정 › 도구 › 온라인 검색: where 태그 찾기 and 가사 찾기 look (the same switches as
+    /// the chips beside those buttons).</summary>
+    public OnlineSourcesViewModel Sources { get; }
+
     public SettingsViewModel(AppSettings settings, MergeViewModel merge, PlaybackViewModel playback, Network.NetworkLibrary network, EqualizerViewModel equalizer,
-        HotkeysViewModel hotkeys, OutputViewModel output, HudViewModel hud)
+        HotkeysViewModel hotkeys, OutputViewModel output, HudViewModel hud, OnlineSourcesViewModel sources)
     {
+        Sources = sources;
         Hud = hud;
         Hotkeys = hotkeys;
         Output = output;

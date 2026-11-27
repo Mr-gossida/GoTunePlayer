@@ -174,6 +174,13 @@ public sealed class AppSettings
     /// <summary>How much of the CPU "싱크 가사 만들기" may use for what runs on it.</summary>
     public LyricsSyncCpuUsage LyricsSyncCpuUsage { get; set; } = LyricsSyncCpuUsage.Normal;
 
+    /// <summary>Sources the user switched off for 태그 찾기 ("MusicBrainz", "iTunes", "Deezer"): the
+    /// rest are asked. Kept as the ones off, so a source added later is on from the start.</summary>
+    public List<string> DisabledTagSources { get; set; } = [];
+
+    /// <summary>Sources switched off for 가사 찾기 ("LRCLIB", "폴더 파일").</summary>
+    public List<string> DisabledLyricsSources { get; set; } = [];
+
     /// <summary>How fast "싱크 가사 만들기" has been on this PC: seconds per minute of song, per
     /// device setting (see <see cref="Services.LyricsSync.LyricsSyncSpeed"/>), for the time a
     /// batch of songs will take.</summary>

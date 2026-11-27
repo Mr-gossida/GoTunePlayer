@@ -3,6 +3,7 @@
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                     xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
                     xmlns:vm="clr-namespace:TuneSync.App.ViewModels"
+                    xmlns:app="clr-namespace:TuneSync.App"
                     xmlns:conv="clr-namespace:TuneSync.App.Converters">
     <!-- The tag editor's parts, shared by 태그 관리 (LibraryView) and the one-song editor
          (SongEditorView): field rows, the search status line, tabs, cover candidate tiles. -->
@@ -19,7 +20,7 @@
             <ui:ProgressRing x:Name="Ring" IsIndeterminate="True" Width="14" Height="14" Margin="0,0,8,0" VerticalAlignment="Center"
                              Visibility="Collapsed"/>
             <TextBlock Grid.Column="1" Text="{Binding SearchStatus}" FontSize="12" TextWrapping="Wrap" VerticalAlignment="Center"
-                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                       app:KeepWords.IsEnabled="True" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
             <ui:Button x:Name="Cancel" Grid.Column="2" Content="취소" Appearance="Transparent" Padding="8,2" FontSize="12"
                        Margin="6,0,0,0" Command="{Binding CancelSearchCommand}" Visibility="Collapsed"/>
         </Grid>
@@ -30,6 +31,240 @@
             </DataTrigger>
             <DataTrigger Binding="{Binding SearchStatus}" Value="">
                 <Setter TargetName="Line" Property="Visibility" Value="Collapsed"/>
+            </DataTrigger>
+        </DataTemplate.Triggers>
+    </DataTemplate>
+
+    <!-- A source 태그 찾기 / 가사 찾기 asks (SearchSourceViewModel), as a chip: on, tinted with the
+         accent and checked; off, plain. A globe marks the online ones, a folder what's on this PC.
+         The last one on can't be switched off (still drawn as on); its tooltip says why. -->
+    <DataTemplate x:Key="SourceChipTemplate">
+        <ToggleButton IsChecked="{Binding IsOn}" IsEnabled="{Binding CanToggle}" ToolTip="{Binding ToolTip}"
+                      ToolTipService.ShowOnDisabled="True" Margin="0,0,6,4" Cursor="Hand" FocusVisualStyle="{x:Null}"
+                      AutomationProperties.Name="{Binding Name}">
+            <ToggleButton.Template>
+                <ControlTemplate TargetType="ToggleButton">
+                    <Grid>
+                        <Border x:Name="Tint" CornerRadius="12" Background="{DynamicResource AccentFillColorDefaultBrush}" Opacity="0"/>
+                        <Border x:Name="Frame" CornerRadius="12" BorderThickness="1" Padding="8,3,10,3" Background="Transparent"
+                                BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}">
+                            <StackPanel Orientation="Horizontal">
+                                <Grid Width="14" Margin="0,0,5,0" VerticalAlignment="Center">
+                                    <ui:SymbolIcon x:Name="Online" Symbol="Globe16" FontSize="13" Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
+                                    <ui:SymbolIcon x:Name="Local" Symbol="Folder16" FontSize="13" Visibility="Collapsed" Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
+                                </Grid>
+                                <TextBlock x:Name="Label" Text="{Binding Name}" FontSize="12" VerticalAlignment="Center"
+                                           Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
+                                <ui:SymbolIcon x:Name="Check" Symbol="Checkmark12" FontSize="11" Margin="5,1,0,0" Visibility="Collapsed"
+                                               VerticalAlignment="Center" Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}"/>
+                            </StackPanel>
+                        </Border>
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <DataTrigger Binding="{Binding IsOnline}" Value="False">
+                            <Setter TargetName="Online" Property="Visibility" Value="Collapsed"/>
+                            <Setter TargetName="Local" Property="Visibility" Value="Visible"/>
+                        </DataTrigger>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Frame" Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}"/>
+                        </Trigger>
+                        <Trigger Property="IsChecked" Value="True">
+                            <Setter TargetName="Tint" Property="Opacity" Value="0.12"/>
+                            <Setter TargetName="Frame" Property="BorderBrush" Value="{DynamicResource AccentFillColorDefaultBrush}"/>
+                            <Setter TargetName="Label" Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}"/>
+                            <Setter TargetName="Online" Property="Foreground" Value="{DynamicResource AccentTextFillColorPrimaryBrush}"/>
+                            <Setter TargetName="Local" Property="Foreground" Value="{DynamicResource AccentTextFillColorPrimaryBrush}"/>
+                            <Setter TargetName="Check" Property="Visibility" Value="Visible"/>
+                        </Trigger>
+                        <Trigger Property="IsKeyboardFocused" Value="True">
+                            <Setter TargetName="Frame" Property="BorderBrush" Value="{DynamicResource TextFillColorPrimaryBrush}"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </ToggleButton.Template>
+        </ToggleButton>
+    </DataTemplate>
+
+    <!-- A source's name on a result card -->
+    <Style x:Key="SourceBadge" TargetType="Border">
+        <Setter Property="CornerRadius" Value="4"/>
+        <Setter Property="Padding" Value="6,1,6,2"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+        <Setter Property="Background" Value="{DynamicResource ControlFillColorSecondaryBrush}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource ControlStrokeColorDefaultBrush}"/>
+        <Setter Property="TextElement.FontSize" Value="10"/>
+        <Setter Property="TextElement.FontWeight" Value="SemiBold"/>
+        <Setter Property="TextElement.Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}"/>
+    </Style>
+
+    <!-- The mark at a card's left: an empty ring, or filled with a check for the card in use -->
+    <DataTemplate x:Key="CandidateMark">
+        <Grid Width="18" Height="18">
+            <Ellipse x:Name="Ring" StrokeThickness="1.5" Stroke="{DynamicResource TextFillColorTertiaryBrush}"/>
+            <Ellipse x:Name="Fill" Fill="{DynamicResource AccentFillColorDefaultBrush}" Visibility="Collapsed"/>
+            <ui:SymbolIcon x:Name="Check" Symbol="Checkmark12" FontSize="11" Visibility="Collapsed"
+                           Foreground="{DynamicResource TextOnAccentFillColorPrimaryBrush}"/>
+        </Grid>
+        <DataTemplate.Triggers>
+            <DataTrigger Binding="{Binding IsApplied}" Value="True">
+                <Setter TargetName="Ring" Property="Visibility" Value="Collapsed"/>
+                <Setter TargetName="Fill" Property="Visibility" Value="Visible"/>
+                <Setter TargetName="Check" Property="Visibility" Value="Visible"/>
+            </DataTrigger>
+        </DataTemplate.Triggers>
+    </DataTemplate>
+
+    <!-- The frame every result card shares: hover tint, an accent outline on the card in use -->
+    <ControlTemplate x:Key="CandidateCardFrame" TargetType="Button">
+        <Grid Margin="0,0,0,6">
+            <Border x:Name="Frame" CornerRadius="8" BorderThickness="1" Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"/>
+            <Border x:Name="Outline" CornerRadius="8" BorderThickness="2" BorderBrush="Transparent"/>
+            <ContentPresenter Margin="10,8,10,9"/>
+        </Grid>
+        <ControlTemplate.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="Frame" Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}"/>
+            </Trigger>
+            <Trigger Property="IsKeyboardFocused" Value="True">
+                <Setter TargetName="Outline" Property="BorderBrush" Value="{DynamicResource ControlStrokeColorDefaultBrush}"/>
+            </Trigger>
+            <DataTrigger Binding="{Binding IsApplied}" Value="True">
+                <Setter TargetName="Outline" Property="BorderBrush" Value="{DynamicResource AccentFillColorDefaultBrush}"/>
+            </DataTrigger>
+        </ControlTemplate.Triggers>
+    </ControlTemplate>
+
+    <!-- 태그 찾기 result (TagCandidateViewModel): title, where it's from and how well it fits;
+         artist · album (year); track, disc, genre, length; what it would change. -->
+    <DataTemplate x:Key="TagCandidateTemplate">
+        <!-- Stretch: the app's button style sizes buttons to their content; a card fills its row
+             (and, two a row, its cell, so cards side by side are the same height) -->
+        <Button Template="{StaticResource CandidateCardFrame}" Cursor="Hand" HorizontalContentAlignment="Stretch"
+                HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+                Command="{Binding DataContext.PickTagCandidateCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                CommandParameter="{Binding}" AutomationProperties.Name="{Binding Title}">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <ContentControl Content="{Binding}" ContentTemplate="{StaticResource CandidateMark}" Focusable="False"
+                                VerticalAlignment="Top" Margin="0,1,10,0"/>
+                <StackPanel Grid.Column="1">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="{Binding Title}" FontSize="13" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"
+                                   VerticalAlignment="Center" ToolTip="{Binding Title}"/>
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="8,0,0,0">
+                            <Border x:Name="Recommended" Style="{StaticResource SourceBadge}" Margin="0,0,4,0" Visibility="Collapsed"
+                                    Background="Transparent" BorderBrush="{DynamicResource AccentFillColorDefaultBrush}"
+                                    ToolTip="여러 출처 가운데 이 곡과 가장 잘 맞는 결과">
+                                <TextBlock Text="추천" Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}"/>
+                            </Border>
+                            <Border Style="{StaticResource SourceBadge}" ToolTip="이 결과를 가져온 곳">
+                                <TextBlock Text="{Binding Source}"/>
+                            </Border>
+                            <TextBlock Text="{Binding ScoreText}" FontSize="11" Margin="6,0,0,0" VerticalAlignment="Center"
+                                       ToolTip="{Binding ScoreToolTip}" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                        </StackPanel>
+                    </Grid>
+                    <TextBlock Text="{Binding Subtitle}" FontSize="12" Margin="0,2,0,0" TextTrimming="CharacterEllipsis"
+                               ToolTip="{Binding Subtitle}" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                    <TextBlock FontSize="11" Margin="0,2,0,0" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextFillColorTertiaryBrush}">
+                        <Run Text="{Binding Details, Mode=OneWay}"/><Run Text="   "/><Run x:Name="Length" Text="{Binding LengthNote, Mode=OneWay}"
+                             Foreground="{DynamicResource SystemFillColorCautionBrush}"/>
+                    </TextBlock>
+                    <TextBlock x:Name="Changes" Text="{Binding Changes}" FontSize="11" Margin="0,4,0,0" TextWrapping="Wrap"
+                               app:KeepWords.IsEnabled="True" Foreground="{DynamicResource TagChangeBrush}"/>
+                </StackPanel>
+            </Grid>
+        </Button>
+        <DataTemplate.Triggers>
+            <DataTrigger Binding="{Binding IsRecommended}" Value="True">
+                <Setter TargetName="Recommended" Property="Visibility" Value="Visible"/>
+            </DataTrigger>
+            <DataTrigger Binding="{Binding LengthMatches}" Value="True">
+                <Setter TargetName="Length" Property="Foreground" Value="{DynamicResource SystemFillColorSuccessBrush}"/>
+            </DataTrigger>
+            <DataTrigger Binding="{Binding HasChanges}" Value="False">
+                <Setter TargetName="Changes" Property="Foreground" Value="{DynamicResource TextFillColorTertiaryBrush}"/>
+            </DataTrigger>
+        </DataTemplate.Triggers>
+    </DataTemplate>
+
+    <!-- 가사 찾기 result (LyricsCandidateViewModel): title · artist (or the file's name), where it's
+         from, synced or plain, language and length; album, length, line count; the first lines. -->
+    <DataTemplate x:Key="LyricsCandidateTemplate">
+        <Button Template="{StaticResource CandidateCardFrame}" Cursor="Hand" HorizontalContentAlignment="Stretch"
+                HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+                Command="{Binding DataContext.PickLyricsCandidateCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                CommandParameter="{Binding}" AutomationProperties.Name="{Binding Heading}" ToolTip="{Binding ToolTip}">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <ContentControl Content="{Binding}" ContentTemplate="{StaticResource CandidateMark}" Focusable="False"
+                                VerticalAlignment="Top" Margin="0,1,10,0"/>
+                <StackPanel Grid.Column="1">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="{Binding Heading}" FontSize="13" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="8,0,0,0">
+                            <Border x:Name="Recommended" Style="{StaticResource SourceBadge}" Margin="0,0,4,0" Visibility="Collapsed"
+                                    Background="Transparent" BorderBrush="{DynamicResource AccentFillColorDefaultBrush}"
+                                    ToolTip="찾은 가사 가운데 이 곡과 가장 잘 맞는 것">
+                                <TextBlock Text="추천" Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}"/>
+                            </Border>
+                            <Border Style="{StaticResource SourceBadge}" ToolTip="이 가사를 가져온 곳">
+                                <TextBlock Text="{Binding Source}"/>
+                            </Border>
+                        </StackPanel>
+                    </Grid>
+                    <WrapPanel Margin="0,4,0,0">
+                        <Border x:Name="Kind" Style="{StaticResource SourceBadge}" Margin="0,0,4,2"
+                                ToolTip="싱크: 줄마다 시간이 있어 재생할 때 따라갑니다 · 일반: 시간이 없는 가사">
+                            <TextBlock x:Name="KindText" Text="{Binding KindText}"/>
+                        </Border>
+                        <Border x:Name="Language" Style="{StaticResource SourceBadge}" Margin="0,0,4,2" ToolTip="가사가 쓰인 글자">
+                            <TextBlock Text="{Binding Language}"/>
+                        </Border>
+                        <Border x:Name="Length" Style="{StaticResource SourceBadge}" Margin="0,0,4,2" Background="Transparent"
+                                ToolTip="이 곡과 길이가 맞으면 같은 녹음이라 싱크가 잘 맞습니다">
+                            <TextBlock x:Name="LengthText" Text="{Binding LengthNote}" Foreground="{DynamicResource SystemFillColorCautionBrush}"/>
+                        </Border>
+                        <TextBlock Text="{Binding Details}" FontSize="11" Margin="2,1,0,2" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                                   Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
+                    </WrapPanel>
+                    <TextBlock Text="{Binding Preview}" FontSize="12" Margin="0,3,0,0" TextTrimming="CharacterEllipsis"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                </StackPanel>
+            </Grid>
+        </Button>
+        <DataTemplate.Triggers>
+            <DataTrigger Binding="{Binding IsRecommended}" Value="True">
+                <Setter TargetName="Recommended" Property="Visibility" Value="Visible"/>
+            </DataTrigger>
+            <DataTrigger Binding="{Binding IsSynced}" Value="True">
+                <Setter TargetName="Kind" Property="BorderBrush" Value="{DynamicResource AccentFillColorDefaultBrush}"/>
+                <Setter TargetName="KindText" Property="Foreground" Value="{DynamicResource AccentTextFillColorPrimaryBrush}"/>
+            </DataTrigger>
+            <DataTrigger Binding="{Binding HasLanguage}" Value="False">
+                <Setter TargetName="Language" Property="Visibility" Value="Collapsed"/>
+            </DataTrigger>
+            <DataTrigger Binding="{Binding HasLengthNote}" Value="False">
+                <Setter TargetName="Length" Property="Visibility" Value="Collapsed"/>
+            </DataTrigger>
+            <DataTrigger Binding="{Binding LengthMatches}" Value="True">
+                <Setter TargetName="LengthText" Property="Foreground" Value="{DynamicResource SystemFillColorSuccessBrush}"/>
             </DataTrigger>
         </DataTemplate.Triggers>
     </DataTemplate>

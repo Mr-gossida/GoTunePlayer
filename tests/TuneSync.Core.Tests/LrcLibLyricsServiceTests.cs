@@ -390,4 +390,53 @@ public class LrcLibLyricsServiceTests
 
         Assert.Null(await service.FindAsync(new LyricsQuery("ZICO", "날 (feat. Jtong) (Live)", null, TimeSpan.FromSeconds(211))));
     }
+
+    // ---- every fitting upload, to choose from (가사 찾기's list) ----
+
+    [Fact]
+    public async Task Lists_every_fitting_upload_best_first_without_stopping_at_the_exact_hit()
+    {
+        var server = new FakeLrcLib { Get = Track("IU", "Good Day", 234, "REAL", lyrics: "정답") };
+        server.Search.Add(Track("IU", "Good Day", 234, "REAL", synced: false, lyrics: "일반 가사"));
+        server.Search.Add(Track("IU", "Good Day", 235, "REAL", lyrics: "다른 싱크"));
+        server.Search.Add(Track("IU", "Good Day", 358, "Live", lyrics: "라이브")); // another recording: not offered
+        using var service = new LrcLibLyricsService(server);
+
+        var result = await service.SearchAsync(GoodDay);
+
+        Assert.True(result.Certain);
+        Assert.Equal(["[00:01.00]정답", "[00:01.00]다른 싱크", "일반 가사"], result.Candidates.Select(c => c.Lyrics));
+        Assert.All(result.Candidates, c => Assert.Equal("LRCLIB", c.Source));
+        Assert.Equal([true, true, false], result.Candidates.Select(c => c.IsSynced));
+        Assert.True(result.Candidates[0].LengthMatches);
+        Assert.True(result.Candidates[0].AlbumMatches);
+        Assert.Equal("한국어", result.Candidates[0].Language);
+        Assert.True(server.Requests.Count > 1); // searched on after the exact lookup
+    }
+
+    [Fact]
+    public async Task The_same_lyrics_uploaded_twice_are_listed_once()
+    {
+        var server = new FakeLrcLib();
+        server.Search.Add(Track("IU", "Good Day", 234, "REAL", lyrics: "같은 가사"));
+        server.Search.Add(Track("IU", "Good Day", 234.5, "REAL", lyrics: "같은 가사"));
+        using var service = new LrcLibLyricsService(server);
+
+        Assert.Single((await service.SearchAsync(GoodDay)).Candidates);
+    }
+
+    [Fact]
+    public async Task The_list_starts_with_what_FindAsync_takes()
+    {
+        var server = new FakeLrcLib();
+        server.Search.Add(Track("IU", "Good Day", 358, "Live", lyrics: "라이브"));
+        server.Search.Add(Track("IU", "Good Day", 236.07, "Good Day (Japanese Version)", lyrics: "일본어"));
+        server.Search.Add(Track("IU", "Good Day", 234, "Real", lyrics: "원곡"));
+        using var service = new LrcLibLyricsService(server);
+
+        var found = await service.FindAsync(GoodDay);
+        var listed = await service.SearchAsync(GoodDay);
+
+        Assert.Equal(found?.BestLyrics, listed.Candidates[0].Lyrics);
+    }
 }

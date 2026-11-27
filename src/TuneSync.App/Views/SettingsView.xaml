@@ -45,6 +45,34 @@
                 </StackPanel>
             </Border>
         </DataTemplate>
+        <!-- A place 태그 찾기 / 가사 찾기 may ask (SearchSourceViewModel): what it is, and a switch.
+             The last one on can't be switched off; the note under it says why. -->
+        <DataTemplate x:Key="SourceRowTemplate">
+            <DockPanel Margin="0,6">
+                <ui:ToggleSwitch DockPanel.Dock="Right" IsChecked="{Binding IsOn}" IsEnabled="{Binding CanToggle}" OnContent="켬" OffContent="끔"
+                                 VerticalAlignment="Center" Margin="16,0,0,0" AutomationProperties.Name="{Binding Name}"/>
+                <Grid DockPanel.Dock="Left" Width="20" Margin="0,1,12,0" VerticalAlignment="Top">
+                    <ui:SymbolIcon x:Name="Online" Symbol="Globe24" FontSize="18" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                    <ui:SymbolIcon x:Name="Local" Symbol="Folder24" FontSize="18" Visibility="Collapsed" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                </Grid>
+                <StackPanel>
+                    <TextBlock Text="{Binding Name}" FontSize="13" Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                    <TextBlock Text="{Binding Description}" FontSize="12" Margin="0,2,0,0" TextWrapping="Wrap" app:KeepWords.IsEnabled="True"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                    <TextBlock x:Name="LastNote" Text="출처를 하나 이상 켜 두어야 해서 끌 수 없습니다" FontSize="11" Margin="0,2,0,0" Visibility="Collapsed"
+                               Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
+                </StackPanel>
+            </DockPanel>
+            <DataTemplate.Triggers>
+                <DataTrigger Binding="{Binding IsOnline}" Value="False">
+                    <Setter TargetName="Online" Property="Visibility" Value="Collapsed"/>
+                    <Setter TargetName="Local" Property="Visibility" Value="Visible"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding IsLast}" Value="True">
+                    <Setter TargetName="LastNote" Property="Visibility" Value="Visible"/>
+                </DataTrigger>
+            </DataTemplate.Triggers>
+        </DataTemplate>
         <Style x:Key="Desc" TargetType="ui:TextBlock">
             <Setter Property="FontSize" Value="12"/>
             <Setter Property="TextWrapping" Value="Wrap"/>
@@ -1087,7 +1115,31 @@
                 <!-- 도구 -->
                 <StackPanel Tag="Tools">
                     <ui:TextBlock Text="도구" Style="{StaticResource CategoryTitle}"/>
-                    <ui:TextBlock Text="폴더 합치기와 가사 싱크" Style="{StaticResource CategoryLead}"/>
+                    <ui:TextBlock Text="온라인 검색 출처, 폴더 합치기와 가사 싱크" Style="{StaticResource CategoryLead}"/>
+                    <ui:TextBlock Text="온라인 검색" Style="{StaticResource Group}"/>
+                    <!-- the same switches as the chips beside 태그 찾기 / 가사 찾기 (one view model) -->
+                    <ui:CardExpander Margin="0,0,0,4" DataContext="{Binding Sources}" Icon="{ui:SymbolIcon GlobeSearch24}" IsExpanded="True"
+                                     Tag="온라인 검색 태그 찾기 출처 소스 MusicBrainz iTunes Deezer 뮤직브레인즈 아이튠즈 디저 인터넷 정보 찾기"
+                                     ToolTip="켜 둔 출처에서 모두 찾아, 결과를 일치율 순으로 보여 주고 가장 잘 맞는 것을 넣습니다. 출처에는 아티스트·제목·앨범만 보냅니다.">
+                        <ui:CardExpander.Header>
+                            <StackPanel>
+                                <ui:TextBlock Text="태그 찾기 출처" FontTypography="Body"/>
+                                <ui:TextBlock Text="켜 둔 곳에서 모두 찾아 결과를 일치율 순으로 보여 줍니다" Style="{StaticResource Desc}"/>
+                            </StackPanel>
+                        </ui:CardExpander.Header>
+                        <ItemsControl ItemsSource="{Binding TagSources}" ItemTemplate="{StaticResource SourceRowTemplate}" Focusable="False"/>
+                    </ui:CardExpander>
+                    <ui:CardExpander Margin="0,0,0,4" DataContext="{Binding Sources}" Icon="{ui:SymbolIcon TextQuote24}" IsExpanded="True"
+                                     Tag="온라인 검색 가사 찾기 출처 소스 LRCLIB 폴더 파일 lrc txt 싱크 가사 인터넷"
+                                     ToolTip="폴더의 가사 파일과 온라인 가사를 함께 보여 줍니다. 곡 옆에 싱크 가사 파일이 있으면 그것을 먼저 넣습니다. 온라인 출처에는 아티스트·제목·앨범·길이만 보냅니다.">
+                        <ui:CardExpander.Header>
+                            <StackPanel>
+                                <ui:TextBlock Text="가사 찾기 출처" FontTypography="Body"/>
+                                <ui:TextBlock Text="곡 옆의 가사 파일을 먼저, 그다음 온라인 가사를 보여 줍니다" Style="{StaticResource Desc}"/>
+                            </StackPanel>
+                        </ui:CardExpander.Header>
+                        <ItemsControl ItemsSource="{Binding LyricsSources}" ItemTemplate="{StaticResource SourceRowTemplate}" Focusable="False"/>
+                    </ui:CardExpander>
                     <ui:TextBlock Text="폴더 합치기" Style="{StaticResource Group}"/>
                     <ui:CardControl Style="{StaticResource Card}" Icon="{ui:SymbolIcon FolderProhibited24}" Tag="폴더 합치기 격리 폴더 충돌"
                                     ToolTip="충돌한 파일을 삭제하지 않고 옮겨 두는, 타겟 폴더 안의 폴더 이름입니다.">
@@ -1142,7 +1194,7 @@
                                 </StackPanel>
                             </StackPanel>
                             <ui:TextBlock Margin="0,12,0,0" Style="{StaticResource Desc}"
-                                          Text="태그·커버 정보는 MusicBrainz와 Cover Art Archive, 가사는 LRCLIB에서 가져옵니다."/>
+                                          Text="태그 정보는 MusicBrainz·iTunes·Deezer, 커버는 Cover Art Archive·iTunes·Deezer, 가사는 LRCLIB의 공개 검색에서 가져옵니다. 어디서 찾았는지는 결과마다 표시됩니다."/>
                             <ui:TextBlock Margin="0,6,0,0" Style="{StaticResource Desc}"
                                           Text="싱크 가사 만들기는 OpenAI Whisper(whisper.cpp)로 노래를 듣습니다. 보컬 분리 모델(MDX-Net Voc FT)은 Ultimate Vocal Remover(UVR) 프로젝트와 그 개발자들이 만들었습니다."/>
                         </StackPanel>

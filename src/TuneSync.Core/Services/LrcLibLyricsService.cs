@@ -40,6 +40,57 @@ public sealed class LrcLibLyricsService : ILyricsService, IDisposable
 
     public async Task<LyricsResult?> FindAsync(LyricsQuery query, CancellationToken ct = default)
     {
+        var ranking = await RankAsync(query, stopEarly: true, ct);
+        return ranking.Early is { } early ? ToResult(early)
+            : ranking.Ambiguous ? null
+            : ranking.Ranked.FirstOrDefault() is { Track: { } best } ? ToResult(best)
+            : null;
+    }
+
+    /// <summary>The source's name as the user sees it.</summary>
+    public const string SourceName = "LRCLIB";
+
+    /// <summary>Every set of lyrics that fits, best first - the same rules as <see cref="FindAsync"/>,
+    /// without stopping at the first good one. Lyrics uploaded more than once count once.</summary>
+    public async Task<LyricsSearchResult> SearchAsync(LyricsQuery query, CancellationToken ct = default)
+    {
+        var ranking = await RankAsync(query, stopEarly: false, ct);
+        var list = ranking.Ranked
+            .Where(r => (r.Track.SyncedLyrics ?? r.Track.PlainLyrics) is { Length: > 0 })
+            .DistinctBy(r => (HasSynced(r.Track) ? r.Track.SyncedLyrics! : r.Track.PlainLyrics!).Trim())
+            .Take(MaxListed)
+            .Select(r =>
+            {
+                var lyrics = HasSynced(r.Track) ? r.Track.SyncedLyrics! : r.Track.PlainLyrics!;
+                double? diff = query.Seconds is { } seconds && r.Track.Duration > 0 ? Math.Abs(r.Track.Duration - seconds) : null;
+                return new LyricsCandidate
+                {
+                    Source = SourceName,
+                    Title = r.Track.TrackName,
+                    Artist = r.Track.ArtistName,
+                    Album = r.Track.AlbumName,
+                    Duration = r.Track.Duration > 0 ? TimeSpan.FromSeconds(r.Track.Duration) : null,
+                    Lyrics = lyrics.Trim(),
+                    IsSynced = HasSynced(r.Track),
+                    Language = r.Language switch { Script.Korean => "한국어", Script.Japanese => "일본어", Script.Chinese => "중국어", _ => "영문" },
+                    LengthMatches = diff is null ? null : diff <= 3,
+                    AlbumMatches = SameAlbum(query.Album, r.Track.AlbumName),
+                };
+            })
+            .ToList();
+        return new LyricsSearchResult(list, Certain: !ranking.Ambiguous);
+    }
+
+    /// <summary>The most lyrics offered for one song.</summary>
+    private const int MaxListed = 8;
+
+    /// <summary>What fits, best first; <see cref="Early"/> when the exact lookup was good enough to
+    /// stop at; <see cref="Ambiguous"/> when only songs of the same album and length fit and
+    /// there's more than one of them (which one this is can't be told).</summary>
+    private sealed record Ranking(List<(LrcLibTrack Track, double Score, Script Language)> Ranked, LrcLibTrack? Early = null, bool Ambiguous = false);
+
+    private async Task<Ranking> RankAsync(LyricsQuery query, bool stopEarly, CancellationToken ct)
+    {
         var candidates = new List<Candidate>();
         var tagged = TagLanguage(query);
         bool AnyFits() => candidates.Any(c => Match(query, c.Track, c.StrictArtist) is not null);
@@ -47,12 +98,13 @@ public sealed class LrcLibLyricsService : ILyricsService, IDisposable
 
         // 1. The exact lookup, with album and length when known (LRCLIB then picks the recording
         //    within ~2 s of that length). A synced, well-fitting hit in the right language (the
-        //    tags', or the app's when they don't say) ends the search right here.
+        //    tags', or the app's when they don't say) ends the search right here - unless every
+        //    fitting upload is wanted (to choose from).
         if (await TryGetAsync(query, query.Title, ct) is { } exact)
         {
             candidates.Add(new(exact, false));
-            if (Score(query, exact) is { } s && s >= GoodEnough && HasSynced(exact) && LanguageOf(exact) == (tagged ?? _preferred))
-                return ToResult(exact);
+            if (stopEarly && Score(query, exact) is { } s && s >= GoodEnough && HasSynced(exact) && LanguageOf(exact) == (tagged ?? _preferred))
+                return new Ranking([], exact);
         }
 
         // 2. Without a "(feat. …)" / "(with …)" clause - a common reason the exact lookup misses.
@@ -101,10 +153,11 @@ public sealed class LrcLibLyricsService : ILyricsService, IDisposable
 
         // A song recognized by artist, album and length alone is only taken when nothing matches
         // by title, and when just one song of the album fits that length (two tracks of nearly
-        // the same length leave it open which one this is).
+        // the same length leave it open which one this is - offered to choose from, never taken).
+        var ambiguous = false;
         if (fitting.Any(c => !c.Fit.ByAlbum)) fitting.RemoveAll(c => c.Fit.ByAlbum);
-        else if (fitting.Select(c => Normalize(StripBrackets(c.Track.TrackName))).Distinct().Count() > 1) return null;
-        if (fitting.Count == 0) return null;
+        else if (fitting.Select(c => Normalize(StripBrackets(c.Track.TrackName))).Distinct().Count() > 1) ambiguous = true;
+        if (fitting.Count == 0) return new Ranking([]);
 
         // 7. The language: the tags', or the one most of the fitting candidates are in (the app's
         //    language counting double) - so one Japanese or romanized upload of a Korean song,
@@ -114,12 +167,13 @@ public sealed class LrcLibLyricsService : ILyricsService, IDisposable
             .OrderByDescending(g => g.Count() * (g.Key == _preferred ? 2 : 1))
             .ThenByDescending(g => g.Key == _preferred)
             .First().Key;
-        var best = fitting
-            .Select(c => (c.Track, Score: c.Fit.Score + LanguageScore(wanted, c.Language, tagged is not null)))
+        var ranked = fitting
+            .Select(c => (c.Track, Score: c.Fit.Score + LanguageScore(wanted, c.Language, tagged is not null), c.Language))
             .Where(c => c.Score is not null)
             .OrderByDescending(c => c.Score)
-            .FirstOrDefault();
-        return best.Track is null ? null : ToResult(best.Track);
+            .Select(c => (c.Track, c.Score!.Value, c.Language))
+            .ToList();
+        return new Ranking(ranked, Ambiguous: ambiguous);
     }
 
     /// <summary>A search result, and whether its artist must match ours (the result of a search

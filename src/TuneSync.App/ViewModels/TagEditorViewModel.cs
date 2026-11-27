@@ -49,12 +49,16 @@ public sealed partial class TagEditorViewModel : ObservableObject
 
     private readonly IAutoFillService _autoFill;
 
-    public TagEditorViewModel(LibraryViewModel library, PlaybackViewModel playback, IAutoFillService autoFill, ICoverSearchService coverSearch)
+    public TagEditorViewModel(LibraryViewModel library, PlaybackViewModel playback, IAutoFillService autoFill, ICoverSearchService coverSearch,
+        TuneSync.Core.Services.TagSearch.TagSearchService tagSearch, ILyricsService lyrics, OnlineSourcesViewModel sources)
     {
         _library = library;
         _playback = playback;
         _autoFill = autoFill;
         _coverSearch = coverSearch;
+        _tagSearch = tagSearch;
+        _lyrics = lyrics;
+        Sources = sources;
 
         TitleField = new(this, TagField.Title);
         ArtistField = new(this, TagField.Artist, usesSuggestions: true);
@@ -149,6 +153,7 @@ public sealed partial class TagEditorViewModel : ObservableObject
         foreach (var field in AllFields) LoadField(field);
         LoadHeader();
         LoadCover();
+        RefreshOnlineCandidates();
         _ = LoadDetailsAsync(_selectionVersion);
         _ = LoadLyricsAsync(_selectionVersion);
     }
@@ -366,7 +371,10 @@ public sealed partial class TagEditorViewModel : ObservableObject
     /// <summary>Looks the selected songs up online and puts what it finds in as unsaved edits -
     /// highlighted, with the previous values shown, reviewed and saved like any other edit.</summary>
     [RelayCommand]
-    private Task SearchTagsAsync() => SearchAsync(new AutoFillOptions(Tags: true, Cover: false, Lyrics: false, ReplaceExisting: true, ReplaceTags: true), "태그");
+    private Task SearchTagsAsync() =>
+        IsSearching ? Task.CompletedTask
+        : _selection.Count == 1 ? SearchTagCandidatesAsync(_selection[0])
+        : SearchAsync(new AutoFillOptions(Tags: true, Cover: false, Lyrics: false, ReplaceExisting: true, ReplaceTags: true), "태그");
 
     [RelayCommand]
     private Task SearchCoverAsync() =>
@@ -375,7 +383,10 @@ public sealed partial class TagEditorViewModel : ObservableObject
         : SearchAsync(new AutoFillOptions(Tags: false, Cover: true, Lyrics: false, ReplaceExisting: true), "커버");
 
     [RelayCommand]
-    private Task SearchLyricsAsync() => SearchAsync(new AutoFillOptions(Tags: false, Cover: false, Lyrics: true, ReplaceExisting: true), "가사");
+    private Task SearchLyricsAsync() =>
+        IsSearching ? Task.CompletedTask
+        : _selection.Count == 1 ? SearchLyricsCandidatesAsync(_selection[0])
+        : SearchAsync(new AutoFillOptions(Tags: false, Cover: false, Lyrics: true, ReplaceExisting: true), "가사");
 
     [RelayCommand]
     private void CancelSearch() => _searchCts?.Cancel();
@@ -752,6 +763,7 @@ public sealed partial class TagEditorViewModel : ObservableObject
         _lyricsLoading = false;
         OnPropertyChanged(nameof(CanMakeSynced));
         OnPropertyChanged(nameof(CanEditSynced));
+        RefreshLyricsCandidateList();
     }
 
     partial void OnIsLyricsLoadingChanged(bool value)
@@ -766,6 +778,7 @@ public sealed partial class TagEditorViewModel : ObservableObject
         var file = _selection[0];
         file.SetPendingLyrics(Normalize(value) == Normalize(_lyricsOriginal) ? null : value.Trim());
         UpdateLyricsState();
+        RefreshLyricsCandidateList(); // the card that's in the editor (none once typed into)
     }
 
     private static string Normalize(string? text) => LrcParser.NormalizeNewlines(text).Trim();

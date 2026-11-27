@@ -5,6 +5,7 @@
       xmlns:vm="clr-namespace:TuneSync.App.ViewModels"
       xmlns:views="clr-namespace:TuneSync.App.Views"
       xmlns:conv="clr-namespace:TuneSync.App.Converters"
+      xmlns:app="clr-namespace:TuneSync.App"
       d:DataContext="{d:DesignInstance Type=vm:LibraryPageViewModel}"
       xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
       mc:Ignorable="d"
@@ -468,18 +469,60 @@
                               Visibility="{Binding Tab, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=Tags}">
                     <Grid Margin="0,0,14,8">
                         <StackPanel Visibility="{Binding HasSelection, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}">
-                            <!-- Online lookup: results go into the fields as unsaved edits (blue, with the old value). -->
+                            <!-- Online lookup: the sources it asks (chips), then what each found, as cards; the
+                                 best goes into the fields as unsaved edits (blue, with the old value), and another
+                                 card is one click away. -->
                             <Border CornerRadius="6" Padding="10,8" Margin="0,0,0,10" Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
                                     BorderThickness="1" BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}">
                                 <StackPanel>
                                     <Grid>
-                                        <TextBlock Text="제목·아티스트로 온라인 정보를 찾아 빈 칸과 다른 값을 채웁니다" FontSize="12" TextWrapping="Wrap"
-                                                   VerticalAlignment="Center" Margin="0,0,150,0" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                        <TextBlock FontSize="12" TextWrapping="Wrap" VerticalAlignment="Center" Margin="0,0,110,0"
+                                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Text" Value="제목·아티스트로 아래 출처에서 찾아, 가장 잘 맞는 결과를 넣습니다"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsMulti}" Value="True">
+                                                            <Setter Property="Text" Value="곡마다 MusicBrainz에서 가장 잘 맞는 값을 찾아 빈 칸과 다른 값을 채웁니다"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
                                         <ui:Button HorizontalAlignment="Right" Content="태그 찾기" Icon="{ui:SymbolIcon Search24}" Padding="10,4"
                                                    Command="{Binding SearchTagsCommand}"
-                                                   ToolTip="MusicBrainz에서 찾은 값이 저장 전 변경으로 들어갑니다. 칸마다 되돌릴 수 있습니다"/>
+                                                   ToolTip="찾은 값은 저장 전 변경으로 들어갑니다. 칸마다 되돌릴 수 있고, 저장하기 전까지 파일은 그대로입니다"/>
                                     </Grid>
+                                    <!-- one song: the sources, switched on and off here or in 설정 › 도구 -->
+                                    <DockPanel Margin="0,8,0,0" Visibility="{Binding IsSingle, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}">
+                                        <TextBlock Text="출처" FontSize="12" Margin="0,4,10,0" VerticalAlignment="Top"
+                                                   Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
+                                        <ItemsControl ItemsSource="{Binding Sources.TagSources}" ItemTemplate="{StaticResource SourceChipTemplate}" Focusable="False">
+                                            <ItemsControl.ItemsPanel>
+                                                <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+                                            </ItemsControl.ItemsPanel>
+                                        </ItemsControl>
+                                    </DockPanel>
                                     <ContentControl Content="{Binding}" ContentTemplate="{StaticResource SearchStatusTemplate}" Focusable="False" Margin="0,6,0,0"/>
+                                    <!-- what was found: the card in use (checked), or all of them to choose from -->
+                                    <StackPanel Margin="0,10,0,0" Visibility="{Binding HasTagCandidates, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}">
+                                        <DockPanel Margin="0,0,0,4">
+                                            <ui:Button DockPanel.Dock="Right" Content="{Binding MoreTagCandidatesText}" Appearance="Transparent" Padding="8,2" FontSize="12"
+                                                       Command="{Binding ToggleMoreTagCandidatesCommand}"
+                                                       ToolTip="찾은 결과를 일치율 순으로 모두 보여 줍니다"
+                                                       Visibility="{Binding HasMoreTagCandidates, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}"/>
+                                            <TextBlock Text="{Binding TagCandidatesHeader}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                        </DockPanel>
+                                        <ItemsControl ItemsSource="{Binding TagCandidates}" ItemTemplate="{StaticResource TagCandidateTemplate}" Focusable="False"/>
+                                        <DockPanel>
+                                            <ui:Button DockPanel.Dock="Right" Content="원래 태그로" Icon="{ui:SymbolIcon ArrowUndo16}" Appearance="Transparent"
+                                                       Padding="8,2" FontSize="12" Margin="6,0,0,0" Command="{Binding UndoTagCandidateCommand}"
+                                                       ToolTip="찾은 결과로 바뀐 칸을 원래 값으로 되돌립니다 (직접 고친 칸은 그대로)"
+                                                       Visibility="{Binding IsTagCandidateApplied, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}"/>
+                                            <TextBlock Text="카드를 누르면 그 값으로 바뀝니다. 저장하기 전까지 파일은 그대로입니다." FontSize="11" TextWrapping="Wrap"
+                                                       app:KeepWords.IsEnabled="True" VerticalAlignment="Center" Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
+                                        </DockPanel>
+                                    </StackPanel>
                                 </StackPanel>
                             </Border>
                             <TextBlock Style="{StaticResource EditorSection}" Text="기본 정보" Margin="0,0,0,4"/>
@@ -720,7 +763,7 @@
                             <WrapPanel Orientation="Horizontal">
                                 <ui:Button Content="가사 찾기" Icon="{ui:SymbolIcon Search24}" Padding="10,4" FontSize="12" Margin="0,0,4,0"
                                            Command="{Binding SearchLyricsCommand}"
-                                           ToolTip="LRCLIB에서 이 곡(길이·앨범까지 맞는 버전)의 가사를 찾아 넣습니다. 싱크 가사를 우선합니다"/>
+                                           ToolTip="아래 출처에서 이 곡(길이·앨범까지 맞는 버전)의 가사를 찾아, 가장 잘 맞는 것을 넣습니다. 싱크 가사를 우선합니다"/>
                                 <ui:Button Content="싱크 가사 만들기" Icon="{ui:SymbolIcon Sparkle24}" Padding="10,4" FontSize="12" Margin="0,0,4,0"
                                            Command="{Binding MakeSyncedCommand}"
                                            ToolTip="음성 인식으로 각 줄의 시간을 자동으로 맞추고, 들어보며 고칠 수 있습니다"
@@ -734,7 +777,32 @@
                                            Visibility="{Binding IsLyricsPending, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}"/>
                             </WrapPanel>
                         </StackPanel>
-                        <ContentControl Grid.Row="1" Content="{Binding}" ContentTemplate="{StaticResource SearchStatusTemplate}" Focusable="False" Margin="0,0,0,8" VerticalAlignment="Top"/>
+                        <!-- where 가사 찾기 looks, what it said, and what it found (as cards; the one in
+                             the box below is checked) - kept short so the lyrics keep their room -->
+                        <StackPanel Grid.Row="1" Margin="0,0,0,8">
+                            <DockPanel Margin="0,0,0,4">
+                                <TextBlock Text="출처" FontSize="12" Margin="0,4,10,0" VerticalAlignment="Top"
+                                           Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
+                                <ItemsControl ItemsSource="{Binding Sources.LyricsSources}" ItemTemplate="{StaticResource SourceChipTemplate}" Focusable="False">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                </ItemsControl>
+                            </DockPanel>
+                            <ContentControl Content="{Binding}" ContentTemplate="{StaticResource SearchStatusTemplate}" Focusable="False" VerticalAlignment="Top"/>
+                            <StackPanel Margin="0,8,0,0" Visibility="{Binding HasLyricsCandidates, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}">
+                                <DockPanel Margin="0,0,0,4">
+                                    <ui:Button DockPanel.Dock="Right" Content="{Binding MoreLyricsCandidatesText}" Appearance="Transparent" Padding="8,2" FontSize="12"
+                                               Command="{Binding ToggleMoreLyricsCandidatesCommand}"
+                                               ToolTip="찾은 가사를 모두 보여 줍니다. 카드 위에 마우스를 올리면 가사를 더 볼 수 있습니다"
+                                               Visibility="{Binding HasMoreLyricsCandidates, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}"/>
+                                    <TextBlock Text="{Binding LyricsCandidatesHeader}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                </DockPanel>
+                                <ScrollViewer MaxHeight="260" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Focusable="False">
+                                    <ItemsControl ItemsSource="{Binding LyricsCandidates}" ItemTemplate="{StaticResource LyricsCandidateTemplate}" Focusable="False"/>
+                                </ScrollViewer>
+                            </StackPanel>
+                        </StackPanel>
                         <ui:TextBox Grid.Row="2" Text="{Binding LyricsText, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" AcceptsTab="False"
                                     TextWrapping="Wrap" VerticalContentAlignment="Top" VerticalScrollBarVisibility="Auto" FontSize="13"
                                     PlaceholderText="가사를 입력하거나 붙여넣으세요" ClearButtonEnabled="False"
@@ -754,7 +822,7 @@
                                     Visibility="{Binding IsMulti, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}">
                             <ui:Button Content="선택한 곡 가사 찾기" Icon="{ui:SymbolIcon Search24}" HorizontalAlignment="Stretch"
                                        Command="{Binding SearchLyricsCommand}"
-                                       ToolTip="선택한 곡마다 LRCLIB에서 가사를 찾아 저장 전 변경으로 넣습니다"/>
+                                       ToolTip="선택한 곡마다 LRCLIB에서 가장 잘 맞는 가사를 찾아 저장 전 변경으로 넣습니다. 여러 결과에서 고르려면 한 곡씩 찾으세요"/>
                             <ui:Button Content="선택한 곡 싱크 가사 만들기" Icon="{ui:SymbolIcon Sparkle24}" HorizontalAlignment="Stretch" Margin="0,8,0,0"
                                        Command="{Binding BatchSyncCommand}"
                                        Visibility="{Binding CanBatchSync, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}"
