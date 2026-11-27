@@ -97,26 +97,16 @@ public sealed class MusicBrainzTagSource(MusicBrainzService musicBrainz) : ITagS
 }
 
 /// <summary>The iTunes Search API (no key): album, album artist, year, genre, track and disc
-/// numbers. Searched in the US and Japanese stores, as the cover search does (this API doesn't
-/// serve the Korean one); Korean songs come back under their international names there.</summary>
-public sealed partial class ITunesTagSource(HttpClient http) : ITagSource
+/// numbers. The same store search as the cover search's (<see cref="ITunesSearch"/>); Korean songs
+/// come back under their international names there.</summary>
+public sealed partial class ITunesTagSource(HttpClient http, ApiGate? gate = null) : ITagSource
 {
     public const string SourceName = "iTunes";
-    private static readonly string[] Countries = ["US", "JP"];
 
     public string Name => SourceName;
 
-    public async Task<IReadOnlyList<TagCandidate>> SearchAsync(TagQuery query, CancellationToken ct)
-    {
-        var term = Uri.EscapeDataString($"{query.Artist} {query.Title}");
-        var results = new List<TagCandidate>();
-        foreach (var country in Countries)
-        {
-            var json = await http.GetStringAsync($"https://itunes.apple.com/search?term={term}&entity=song&limit=15&country={country}", ct);
-            results.AddRange(Parse(JsonNode.Parse(json)));
-        }
-        return results;
-    }
+    public async Task<IReadOnlyList<TagCandidate>> SearchAsync(TagQuery query, CancellationToken ct) =>
+        [.. (await ITunesSearch.SongsAsync(http, gate ?? ApiGate.ITunes, query.Artist, query.Title, ct)).SelectMany(Parse)];
 
     public static List<TagCandidate> Parse(JsonNode? root)
     {
@@ -155,20 +145,23 @@ public sealed partial class ITunesTagSource(HttpClient http) : ITagSource
 /// <summary>The Deezer API (no key). Its search answers title, artist, album and length; the track
 /// and album pages add the track and disc number, year, genre and album artist - asked for the
 /// few results that look like the song only.</summary>
-public sealed class DeezerTagSource(HttpClient http) : ITagSource
+public sealed class DeezerTagSource(HttpClient http, ApiGate? gate = null) : ITagSource
 {
     public const string SourceName = "Deezer";
 
     /// <summary>Results whose details (two more requests each) are fetched.</summary>
     private const int Detailed = 4;
 
+    private ApiGate Gate => gate ?? ApiGate.Deezer;
+
     public string Name => SourceName;
 
     public async Task<IReadOnlyList<TagCandidate>> SearchAsync(TagQuery query, CancellationToken ct)
     {
-        // Its field filters (artist:"…") answer nothing from some regions: a plain text search.
+        // Its field filters (artist:"…") answer nothing from some regions: a plain text search
+        // (the cover search's too, so a song searched for both is asked once).
         var q = Uri.EscapeDataString($"{query.Artist} {query.Title}");
-        var found = JsonNode.Parse(await http.GetStringAsync($"https://api.deezer.com/search?q={q}&limit=15", ct))?["data"]?.AsArray() ?? [];
+        var found = JsonNode.Parse(await Gate.GetStringAsync(http, $"https://api.deezer.com/search?q={q}&limit=15", ct))?["data"]?.AsArray() ?? [];
         var likely = found.OfType<JsonNode>()
             .Select(r => (Node: r, Title: r["title"]?.GetValue<string>() ?? "", Artist: r["artist"]?["name"]?.GetValue<string>() ?? ""))
             .Where(r => r.Title.Length > 0 && r.Artist.Length > 0 && CoverRanking.TitleSimilarity(query.Title, r.Title) >= 0.5)
@@ -183,7 +176,7 @@ public sealed class DeezerTagSource(HttpClient http) : ITagSource
     {
         async Task<JsonNode?> Get(string url)
         {
-            try { return JsonNode.Parse(await http.GetStringAsync(url, ct)); }
+            try { return JsonNode.Parse(await Gate.GetStringAsync(http, url, ct)); }
             catch (Exception) when (!ct.IsCancellationRequested) { return null; } // the search's own fields still stand
         }
         var trackId = result["id"]?.ToString();

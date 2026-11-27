@@ -374,7 +374,10 @@ public sealed partial class TagEditorViewModel : ObservableObject
     private Task SearchTagsAsync() =>
         IsSearching ? Task.CompletedTask
         : _selection.Count == 1 ? SearchTagCandidatesAsync(_selection[0])
-        : SearchAsync(new AutoFillOptions(Tags: true, Cover: false, Lyrics: false, ReplaceExisting: true, ReplaceTags: true), "태그");
+        : SearchAsync(new AutoFillOptions(Tags: true, Cover: false, Lyrics: false, ReplaceExisting: true, ReplaceTags: true)
+        {
+            DisabledTagSources = Sources.DisabledTagSources,
+        }, "태그");
 
     [RelayCommand]
     private Task SearchCoverAsync() =>
@@ -386,10 +389,17 @@ public sealed partial class TagEditorViewModel : ObservableObject
     private Task SearchLyricsAsync() =>
         IsSearching ? Task.CompletedTask
         : _selection.Count == 1 ? SearchLyricsCandidatesAsync(_selection[0])
-        : SearchAsync(new AutoFillOptions(Tags: false, Cover: false, Lyrics: true, ReplaceExisting: true), "가사");
+        : SearchAsync(new AutoFillOptions(Tags: false, Cover: false, Lyrics: true, ReplaceExisting: true)
+        {
+            DisabledLyricsSources = Sources.DisabledLyricsSources,
+        }, "가사");
 
     [RelayCommand]
     private void CancelSearch() => _searchCts?.Cancel();
+
+    /// <summary>To 통합 검색, where every song's results are listed with their sources to choose from.</summary>
+    [RelayCommand]
+    private void OpenAutoFill() => Tab = EditorTab.AutoFill;
 
     private async Task SearchAsync(AutoFillOptions options, string what)
     {
@@ -407,10 +417,19 @@ public sealed partial class TagEditorViewModel : ObservableObject
             });
             var proposals = await _autoFill.BuildProposalsAsync(files.Select(f => f.Model), progress, _searchCts.Token, options);
             var (songs, items) = Stage(proposals);
+            // where each song's answer came from, and the songs left for the user to choose for
+            var from = SearchSummary.BySource(proposals.Select(p =>
+                options.Tags ? (p.HasTagProposal ? p.ChosenTags?.Source : null)
+                : options.Lyrics ? (string.IsNullOrWhiteSpace(p.ProposedLyrics) ? null : p.ChosenLyrics?.Source)
+                : p.CoverSource));
+            var unsure = proposals.Count(p => p.NeedsChoice);
+            var left = unsure > 0 ? $" 확실하지 않은 {unsure}곡은 넣지 않았습니다. 통합 검색에서 곡마다 결과를 보고 고를 수 있습니다." : "";
+            var failed = SearchSummary.Failed(proposals);
             SearchStatus = items > 0
-                ? (files.Count == 1 ? $"{what}를 찾아 채웠습니다. 확인한 뒤 저장하세요." : $"{songs}곡의 {what}를 찾아 채웠습니다. 확인한 뒤 저장하세요.")
+                ? (files.Count == 1 ? $"{what}를 찾아 채웠습니다. 확인한 뒤 저장하세요." : $"{songs}곡의 {what}를 찾아 채웠습니다{(from.Length > 0 ? $" ({from})" : "")}. 확인한 뒤 저장하세요.") + left + failed
                 : files.Count == 1 ? $"{what}를 찾지 못했습니다 ({proposals.FirstOrDefault()?.Status ?? "결과 없음"})."
-                : $"{files.Count}곡 모두 새로 채울 {what}를 찾지 못했습니다.";
+                : unsure > 0 ? $"{files.Count}곡 모두 새로 채울 {what}를 확실히 찾지 못했습니다.{left}{failed}"
+                : $"{files.Count}곡 모두 새로 채울 {what}를 찾지 못했습니다.{failed}";
         }
         catch (OperationCanceledException)
         {
@@ -428,28 +447,31 @@ public sealed partial class TagEditorViewModel : ObservableObject
 
     /// <summary>Search results (from a tab's button or 통합 검색) as unsaved edits on their songs.
     /// Returns how many songs and items changed.</summary>
-    public (int Songs, int Items) Stage(IEnumerable<AutoFillProposal> proposals)
+    public (int Songs, int Items) Stage(IEnumerable<AutoFillProposal> proposals) => Stage([.. proposals.Select(StagedEdit.Of)]);
+
+    /// <summary>Puts <paramref name="edits"/> in as unsaved edits on their songs (each edit then
+    /// holds the values as they went in, for <see cref="TakeBack"/>). Returns how many songs and
+    /// items changed.</summary>
+    public (int Songs, int Items) Stage(IReadOnlyList<StagedEdit> edits)
     {
         var rows = _library.Files.ToDictionary(f => f.Model);
         int songs = 0, items = 0;
-        foreach (var p in proposals)
+        foreach (var edit in edits)
         {
-            if (!rows.TryGetValue(p.File, out var file)) continue; // the library was rescanned meanwhile
+            if (!rows.TryGetValue(edit.File, out var file)) continue; // the library was rescanned meanwhile
             var before = file.PendingChangeCount;
-            void Text(TagField field, string? value)
+            var tags = new List<(TagField, string)>();
+            foreach (var (field, value) in edit.Tags)
             {
-                if (value is not null && TagFields.TryNormalize(field, value, out var normalized, out _)) file.SetPending(field, normalized);
+                if (!TagFields.TryNormalize(field, value, out var normalized, out _)) continue;
+                file.SetPending(field, normalized);
+                tags.Add((field, normalized));
             }
-            Text(TagField.Title, p.ProposedTitle);
-            Text(TagField.Artist, p.ProposedArtist);
-            Text(TagField.Album, p.ProposedAlbum);
-            Text(TagField.AlbumArtist, p.ProposedAlbumArtist);
-            Text(TagField.Track, p.ProposedTrack?.ToString());
-            Text(TagField.Disc, p.ProposedDisc?.ToString());
-            if (p.ProposedCoverBytes is { Length: > 0 } cover) file.SetPendingCover(cover);
-            if (!string.IsNullOrWhiteSpace(p.ProposedLyrics)) file.SetPendingLyrics(p.ProposedLyrics.Trim());
+            edit.Tags = tags;
+            if (edit.Cover is { } cover) file.SetPendingCover(cover);
+            if (edit.Lyrics is { } lyrics) file.SetPendingLyrics(lyrics);
             var added = file.PendingChangeCount - before;
-            if (added > 0 || p.ProposedCoverBytes is { Length: > 0 } || !string.IsNullOrWhiteSpace(p.ProposedLyrics))
+            if (added > 0 || edit.Cover is not null || edit.Lyrics is not null)
             {
                 songs++;
                 items += Math.Max(added, 1);
@@ -457,6 +479,22 @@ public sealed partial class TagEditorViewModel : ObservableObject
         }
         Reload();
         return (songs, items);
+    }
+
+    /// <summary>Takes back what <paramref name="edits"/> put in - where it's still as they put it
+    /// (a value typed over since, or saved, stays).</summary>
+    public void TakeBack(IEnumerable<StagedEdit> edits)
+    {
+        var rows = _library.Files.ToDictionary(f => f.Model);
+        foreach (var edit in edits)
+        {
+            if (!rows.TryGetValue(edit.File, out var file)) continue;
+            foreach (var (field, value) in edit.Tags)
+                if (file.PendingTags.TryGetValue(field, out var pending) && pending == value) file.ClearPending(field);
+            if (edit.Cover is not null && ReferenceEquals(file.PendingCover, edit.Cover)) file.SetPendingCover(null);
+            if (edit.Lyrics is not null && file.PendingLyrics == edit.Lyrics) file.SetPendingLyrics(null);
+        }
+        Reload();
     }
 
     // ---- Cover ----

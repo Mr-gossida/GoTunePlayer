@@ -33,4 +33,14 @@ public sealed class LyricsCandidate
 public sealed record LyricsSearchResult(IReadOnlyList<LyricsCandidate> Candidates, bool Certain = true)
 {
     public static LyricsSearchResult Empty { get; } = new([]);
+
+    /// <summary>The lyrics to put in by themselves from <paramref name="found"/> (the files beside
+    /// the song and the online ones, best first): synced lyrics kept beside the song (the user's
+    /// own), else the best online ones - unless it's unclear which song they're of
+    /// (<paramref name="onlineCertain"/> false) - else plain lyrics beside it. Null: none is
+    /// clearly the song's, the user chooses.</summary>
+    public static LyricsCandidate? Pick(IReadOnlyList<LyricsCandidate> found, bool onlineCertain) =>
+        found.FirstOrDefault(c => c.FileName is not null && c.IsSynced)
+        ?? (onlineCertain ? found.FirstOrDefault(c => c.FileName is null) : null)
+        ?? found.FirstOrDefault(c => c.FileName is not null);
 }

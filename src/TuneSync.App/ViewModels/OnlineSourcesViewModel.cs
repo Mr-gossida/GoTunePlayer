@@ -68,8 +68,12 @@ public sealed class OnlineSourcesViewModel
 
     public IReadOnlyList<SearchSourceViewModel> LyricsSources { get; }
 
-    /// <summary>The tag sources switched off.</summary>
-    public IReadOnlyCollection<string> DisabledTagSources => _settings.DisabledTagSources;
+    /// <summary>The tag sources switched off (as they are now: a chip switched mid-search doesn't
+    /// change the songs still to come).</summary>
+    public IReadOnlyCollection<string> DisabledTagSources => [.. _settings.DisabledTagSources];
+
+    /// <summary>The lyrics sources switched off.</summary>
+    public IReadOnlyCollection<string> DisabledLyricsSources => [.. _settings.DisabledLyricsSources];
 
     public bool IsLyricsSourceOn(string name) => LyricsSources.FirstOrDefault(s => s.Name == name)?.IsOn ?? false;
 

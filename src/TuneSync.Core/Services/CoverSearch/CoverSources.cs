@@ -99,26 +99,15 @@ public sealed class MusicBrainzCoverSource(MusicBrainzService musicBrainz) : ICo
         date is { Length: >= 4 } && int.TryParse(date.AsSpan(0, 4), out var y) ? y : null;
 }
 
-/// <summary>The iTunes Search API (no key). Searched in the US and Japanese stores: the Korean
-/// store isn't served by this API, and the Japanese one covers J-pop, anime and game music well.
-/// Artwork URLs take any size in the file name, up to what Apple has on file.</summary>
-public sealed partial class ITunesCoverSource(HttpClient http) : ICoverSource
+/// <summary>The iTunes Search API (no key), in the US store and - for J-pop, anime and game music
+/// the US one doesn't have - the Japanese one (<see cref="ITunesSearch"/>; the Korean store isn't
+/// served by this API). Artwork URLs take any size in the file name, up to what Apple has on file.</summary>
+public sealed partial class ITunesCoverSource(HttpClient http, ApiGate? gate = null) : ICoverSource
 {
-    private static readonly string[] Countries = ["US", "JP"];
-
     public string Name => "iTunes";
 
-    public async Task<IReadOnlyList<CoverCandidate>> SearchAsync(CoverQuery query, CancellationToken ct)
-    {
-        var term = Uri.EscapeDataString($"{query.Artist} {query.Title}");
-        var results = new List<CoverCandidate>();
-        foreach (var country in Countries)
-        {
-            var json = await http.GetStringAsync($"https://itunes.apple.com/search?term={term}&entity=song&limit=15&country={country}", ct);
-            results.AddRange(Parse(JsonNode.Parse(json)));
-        }
-        return results;
-    }
+    public async Task<IReadOnlyList<CoverCandidate>> SearchAsync(CoverQuery query, CancellationToken ct) =>
+        [.. (await ITunesSearch.SongsAsync(http, gate ?? ApiGate.ITunes, query.Artist, query.Title, ct)).SelectMany(Parse)];
 
     public static List<CoverCandidate> Parse(JsonNode? root)
     {
@@ -163,14 +152,14 @@ public sealed partial class ITunesCoverSource(HttpClient http) : ICoverSource
 
 /// <summary>The Deezer search API (no key). Its field filters (artist:"…") answer nothing from
 /// some regions, so it's a plain text search; the ranking sorts out the strays.</summary>
-public sealed class DeezerCoverSource(HttpClient http) : ICoverSource
+public sealed class DeezerCoverSource(HttpClient http, ApiGate? gate = null) : ICoverSource
 {
     public string Name => "Deezer";
 
     public async Task<IReadOnlyList<CoverCandidate>> SearchAsync(CoverQuery query, CancellationToken ct)
     {
         var q = Uri.EscapeDataString($"{query.Artist} {query.Title}");
-        var json = await http.GetStringAsync($"https://api.deezer.com/search?q={q}&limit=15", ct);
+        var json = await (gate ?? ApiGate.Deezer).GetStringAsync(http, $"https://api.deezer.com/search?q={q}&limit=15", ct);
         return Parse(JsonNode.Parse(json));
     }
 

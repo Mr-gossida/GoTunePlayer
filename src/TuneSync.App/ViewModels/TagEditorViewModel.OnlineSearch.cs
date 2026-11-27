@@ -10,8 +10,8 @@ namespace TuneSync.App.ViewModels;
 /// <summary>태그 찾기 and 가사 찾기 for one song: every source the user has on is asked, the
 /// answers are shown as cards - each with where it's from and how well it fits - and the best one
 /// is put in as unsaved edits, as 커버 찾기 does. Another card is one click away; nothing is
-/// written until the user saves. (With several songs selected, each song still gets its best
-/// answer directly.)</summary>
+/// written until the user saves. (With several songs selected, each song gets its best answer
+/// from the same sources when it clearly fits; 통합 검색 lists every answer for each song.)</summary>
 public sealed partial class TagEditorViewModel
 {
     private readonly TagSearchService _tagSearch;
@@ -158,40 +158,9 @@ public sealed partial class TagEditorViewModel
     }
 
     /// <summary>The fields a candidate would change: those it has a value for that differs from
-    /// what the file holds (capitalization alone isn't a change), the value as the field takes it.
-    /// A genre only fills an empty one: the stores' are broad ("K-Pop", "Asian Music"), and one
-    /// the user set (often finer) shouldn't be swapped on every search.</summary>
-    private static List<(TagField Field, string Value)> Changes(LibraryFileViewModel file, TagCandidate c)
-    {
-        var list = new List<(TagField, string)>();
-        void Check(TagField field, string? value)
-        {
-            if (string.IsNullOrWhiteSpace(value) || !TagFields.TryNormalize(field, value, out var normalized, out _) || normalized.Length == 0) return;
-            if (!string.Equals(file.Original(field).Trim(), normalized, StringComparison.OrdinalIgnoreCase)) list.Add((field, normalized));
-        }
-        Check(TagField.Title, c.Title);
-        Check(TagField.Artist, c.Artist);
-        Check(TagField.Album, c.Album);
-        Check(TagField.AlbumArtist, c.AlbumArtist);
-        Check(TagField.Year, c.Year?.ToString());
-        if (string.IsNullOrWhiteSpace(file.Original(TagField.Genre))) Check(TagField.Genre, c.Genre);
-        Check(TagField.Track, c.Track?.ToString());
-        Check(TagField.Disc, c.Disc?.ToString());
-        return list;
-    }
-
-    private static string FieldName(TagField field) => field switch
-    {
-        TagField.Title => "제목",
-        TagField.Artist => "아티스트",
-        TagField.Album => "앨범",
-        TagField.AlbumArtist => "앨범 아티스트",
-        TagField.Year => "연도",
-        TagField.Genre => "장르",
-        TagField.Track => "트랙",
-        TagField.Disc => "디스크",
-        _ => field.ToString(),
-    };
+    /// what the file holds (<see cref="TagChanges"/>; a genre only fills an empty one).</summary>
+    private static List<(TagField Field, string Value)> Changes(LibraryFileViewModel file, TagCandidate c) =>
+        TagChanges.Of(c, file.Original, replace: true);
 
     private void ShowTagCandidates(LibraryFileViewModel? file, List<TagCandidateViewModel> items)
     {
@@ -220,7 +189,7 @@ public sealed partial class TagEditorViewModel
             {
                 var changes = Changes(_tagCandidatesFile!, item.Candidate);
                 item.HasChanges = changes.Count > 0;
-                item.Changes = changes.Count > 0 ? $"바뀌는 칸: {string.Join(" · ", changes.Select(c => FieldName(c.Field)))}" : "지금 태그와 같습니다";
+                item.Changes = changes.Count > 0 ? $"바뀌는 칸: {TagChanges.Names(changes)}" : "지금 태그와 같습니다";
             }
         }
         OnPropertyChanged(nameof(HasTagCandidates));
@@ -306,11 +275,9 @@ public sealed partial class TagEditorViewModel
                 return;
             }
 
-            // The pick: synced lyrics kept beside the song (the user's own), else the best online
-            // ones - unless it's unclear which song they're of - else plain lyrics beside it.
-            var best = list.FirstOrDefault(c => c.FileName is not null && c.IsSynced)
-                       ?? (certain ? list.FirstOrDefault(c => c.FileName is null) : null)
-                       ?? list.FirstOrDefault(c => c.FileName is not null);
+            // synced lyrics beside the song, else the best online ones (when it's clear they're
+            // this song's), else plain ones beside it
+            var best = LyricsSearchResult.Pick(list, certain);
             var items = list.Select(c => new LyricsCandidateViewModel(c, file.Model.Duration, c == best)).ToList();
             if (best is not null) items = [.. items.OrderByDescending(i => i.IsRecommended)];
             ShowLyricsCandidates(file, items);

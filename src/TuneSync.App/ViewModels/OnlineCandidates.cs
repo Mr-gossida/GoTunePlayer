@@ -19,6 +19,61 @@ internal static class Lengths
     }
 }
 
+/// <summary>Where a batch search's answers came from, for its status line.</summary>
+internal static class SearchSummary
+{
+    /// <summary>"MusicBrainz 5곡 · iTunes 2곡" (one source per song; nulls skipped), most first.</summary>
+    public static string BySource(IEnumerable<string?> sources) =>
+        string.Join(" · ", sources.OfType<string>().GroupBy(s => s).OrderByDescending(g => g.Count()).Select(g => $"{g.Key} {g.Count()}곡"));
+
+    /// <summary>" (iTunes 응답 없음 3곡)", or empty when every source answered.</summary>
+    public static string Failed(IEnumerable<AutoFillProposal> proposals)
+    {
+        var failed = BySource(proposals.SelectMany(p => p.FailedSources.Distinct()));
+        return failed.Length > 0 ? $" (응답 없음: {failed})" : "";
+    }
+}
+
+/// <summary>What a search result puts in a song's unsaved edits (tags, cover, lyrics), kept so it
+/// can be taken back when another result is picked (<see cref="TagEditorViewModel.TakeBack"/>).</summary>
+public sealed class StagedEdit(LibraryFile file, IReadOnlyList<(TagField Field, string Value)> tags, byte[]? cover, string? lyrics)
+{
+    public LibraryFile File { get; } = file;
+
+    /// <summary>The tag values; once staged, as the fields took them.</summary>
+    public IReadOnlyList<(TagField Field, string Value)> Tags { get; set; } = tags;
+
+    public byte[]? Cover { get; } = cover;
+
+    public string? Lyrics { get; } = lyrics;
+
+    public bool IsEmpty => Tags.Count == 0 && Cover is null && Lyrics is null;
+
+    /// <summary>Everything a proposal proposes.</summary>
+    public static StagedEdit Of(AutoFillProposal p) =>
+        new(p.File, TagsOf(p), p.ProposedCoverBytes is { Length: > 0 } cover ? cover : null,
+            string.IsNullOrWhiteSpace(p.ProposedLyrics) ? null : p.ProposedLyrics.Trim());
+
+    /// <summary>The tag values a proposal proposes, field by field in the editor's order.</summary>
+    public static List<(TagField Field, string Value)> TagsOf(AutoFillProposal p)
+    {
+        var tags = new List<(TagField, string)>();
+        void Add(TagField field, string? value)
+        {
+            if (value is not null) tags.Add((field, value));
+        }
+        Add(TagField.Title, p.ProposedTitle);
+        Add(TagField.Artist, p.ProposedArtist);
+        Add(TagField.Album, p.ProposedAlbum);
+        Add(TagField.AlbumArtist, p.ProposedAlbumArtist);
+        Add(TagField.Year, p.ProposedYear?.ToString());
+        Add(TagField.Genre, p.ProposedGenre);
+        Add(TagField.Track, p.ProposedTrack?.ToString());
+        Add(TagField.Disc, p.ProposedDisc?.ToString());
+        return tags;
+    }
+}
+
 /// <summary>One answer of 태그 찾기, as a card: what it would put in the tags and where it's from.</summary>
 public sealed partial class TagCandidateViewModel : ObservableObject
 {

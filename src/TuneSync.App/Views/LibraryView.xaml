@@ -483,7 +483,7 @@
                                                     <Setter Property="Text" Value="제목·아티스트로 아래 출처에서 찾아, 가장 잘 맞는 결과를 넣습니다"/>
                                                     <Style.Triggers>
                                                         <DataTrigger Binding="{Binding IsMulti}" Value="True">
-                                                            <Setter Property="Text" Value="곡마다 MusicBrainz에서 가장 잘 맞는 값을 찾아 빈 칸과 다른 값을 채웁니다"/>
+                                                            <Setter Property="Text" Value="곡마다 아래 출처에서 찾아, 확실히 맞는 결과만 넣습니다"/>
                                                         </DataTrigger>
                                                     </Style.Triggers>
                                                 </Style>
@@ -493,8 +493,8 @@
                                                    Command="{Binding SearchTagsCommand}"
                                                    ToolTip="찾은 값은 저장 전 변경으로 들어갑니다. 칸마다 되돌릴 수 있고, 저장하기 전까지 파일은 그대로입니다"/>
                                     </Grid>
-                                    <!-- one song: the sources, switched on and off here or in 설정 › 도구 -->
-                                    <DockPanel Margin="0,8,0,0" Visibility="{Binding IsSingle, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}">
+                                    <!-- the sources, switched on and off here or in 설정 › 도구 -->
+                                    <DockPanel Margin="0,8,0,0">
                                         <TextBlock Text="출처" FontSize="12" Margin="0,4,10,0" VerticalAlignment="Top"
                                                    Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
                                         <ItemsControl ItemsSource="{Binding Sources.TagSources}" ItemTemplate="{StaticResource SourceChipTemplate}" Focusable="False">
@@ -504,6 +504,11 @@
                                         </ItemsControl>
                                     </DockPanel>
                                     <ContentControl Content="{Binding}" ContentTemplate="{StaticResource SearchStatusTemplate}" Focusable="False" Margin="0,6,0,0"/>
+                                    <!-- several songs: every result of every song, with its source, is in 통합 검색 -->
+                                    <ui:Button Content="곡마다 결과를 보고 고르기" Icon="{ui:SymbolIcon TaskListSquareLtr24}" Appearance="Transparent"
+                                               Padding="8,3" FontSize="12" Margin="0,4,0,0" HorizontalAlignment="Left" Command="{Binding OpenAutoFillCommand}"
+                                               ToolTip="통합 검색 탭에서 곡마다 찾은 결과를 출처와 함께 보고, 다른 결과로 바꿔 넣을 수 있습니다"
+                                               Visibility="{Binding IsMulti, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}"/>
                                     <!-- what was found: the card in use (checked), or all of them to choose from -->
                                     <StackPanel Margin="0,10,0,0" Visibility="{Binding HasTagCandidates, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}">
                                         <DockPanel Margin="0,0,0,4">
@@ -820,9 +825,18 @@
                         <!-- several songs: find their lyrics, or time the lyrics they have (one batch) -->
                         <StackPanel HorizontalAlignment="Center" Margin="0,14,0,0"
                                     Visibility="{Binding IsMulti, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}">
+                            <ItemsControl ItemsSource="{Binding Sources.LyricsSources}" ItemTemplate="{StaticResource SourceChipTemplate}" Focusable="False"
+                                          HorizontalAlignment="Center" Margin="6,0,0,6">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                            </ItemsControl>
                             <ui:Button Content="선택한 곡 가사 찾기" Icon="{ui:SymbolIcon Search24}" HorizontalAlignment="Stretch"
                                        Command="{Binding SearchLyricsCommand}"
-                                       ToolTip="선택한 곡마다 LRCLIB에서 가장 잘 맞는 가사를 찾아 저장 전 변경으로 넣습니다. 여러 결과에서 고르려면 한 곡씩 찾으세요"/>
+                                       ToolTip="선택한 곡마다 켜 둔 출처(LRCLIB·곡 옆 가사 파일)에서 이 곡의 가사가 확실한 것만 저장 전 변경으로 넣습니다. 출처는 설정 › 도구 › 온라인 검색에서 고릅니다"/>
+                            <ui:Button Content="곡마다 결과를 보고 고르기" Icon="{ui:SymbolIcon TaskListSquareLtr24}" HorizontalAlignment="Stretch" Margin="0,8,0,0"
+                                       Appearance="Transparent" Command="{Binding OpenAutoFillCommand}"
+                                       ToolTip="통합 검색 탭에서 곡마다 찾은 가사를 출처와 함께 보고, 다른 가사로 바꿔 넣을 수 있습니다"/>
                             <ui:Button Content="선택한 곡 싱크 가사 만들기" Icon="{ui:SymbolIcon Sparkle24}" HorizontalAlignment="Stretch" Margin="0,8,0,0"
                                        Command="{Binding BatchSyncCommand}"
                                        Visibility="{Binding CanBatchSync, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}"
@@ -842,12 +856,32 @@
                         <TextBlock Style="{StaticResource EditorSection}" Text="찾을 항목" Margin="0,0,0,4"/>
                         <WrapPanel Margin="0,0,0,8">
                             <CheckBox Content="태그" MinWidth="0" Margin="0,0,16,0" IsChecked="{Binding FillTags}"
-                                      ToolTip="비어 있는 태그(제목·아티스트·앨범·트랙 등)만 채웁니다. 기존 값은 바꾸지 않습니다."/>
+                                      ToolTip="비어 있는 태그(제목·아티스트·앨범·연도·장르·트랙 등)만 채웁니다. 기존 값은 바꾸지 않습니다."/>
                             <CheckBox Content="앨범 커버" MinWidth="0" Margin="0,0,16,0" IsChecked="{Binding FillCover}"
-                                      ToolTip="이미 커버가 있는 곡을 선택해 체크하면 새 커버를 찾아 교체 후보로 보여줍니다."/>
+                                      ToolTip="MusicBrainz(Cover Art Archive)·iTunes·Deezer에서 찾습니다. 이미 커버가 있는 곡을 선택해 체크하면 새 커버를 찾아 교체 후보로 보여줍니다."/>
                             <CheckBox Content="가사" MinWidth="0" IsChecked="{Binding FillLyrics}"
                                       ToolTip="이미 가사가 있는 곡을 선택해 체크하면 새 가사를 찾아 교체 후보로 보여줍니다."/>
                         </WrapPanel>
+                        <!-- where tags and lyrics are looked for: the same switches as the tag editor's chips -->
+                        <DockPanel Margin="0,0,0,2" Visibility="{Binding FillTags, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}">
+                            <TextBlock Text="태그 출처" Width="58" FontSize="12" Margin="0,4,0,0" VerticalAlignment="Top"
+                                       Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
+                            <ItemsControl ItemsSource="{Binding Sources.TagSources}" ItemTemplate="{StaticResource SourceChipTemplate}" Focusable="False">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                            </ItemsControl>
+                        </DockPanel>
+                        <DockPanel Margin="0,0,0,2" Visibility="{Binding FillLyrics, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}">
+                            <TextBlock Text="가사 출처" Width="58" FontSize="12" Margin="0,4,0,0" VerticalAlignment="Top"
+                                       Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
+                            <ItemsControl ItemsSource="{Binding Sources.LyricsSources}" ItemTemplate="{StaticResource SourceChipTemplate}" Focusable="False">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                            </ItemsControl>
+                        </DockPanel>
+                        <Border Height="8"/>
 
                         <ui:ToggleSwitch Content="찾은 결과 바로 넣기" IsChecked="{Binding IsAutomaticMode}" OffContent="결과를 보고 골라 넣기" Margin="0,0,0,10"
                                          ToolTip="어느 쪽이든 결과는 저장 전 변경으로 들어가며, 아래 저장 바에서 확인하고 저장합니다"/>
@@ -860,101 +894,219 @@
                                        Visibility="{Binding HasResults, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}"/>
                         </WrapPanel>
 
-                        <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
-                            <ui:ProgressRing IsIndeterminate="True" Width="14" Height="14" Margin="0,0,8,0" VerticalAlignment="Center"
+                        <Grid Margin="0,0,0,10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <ui:ProgressRing IsIndeterminate="True" Width="14" Height="14" Margin="0,0,8,0" VerticalAlignment="Top"
                                              Visibility="{Binding IsRunning, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}"/>
-                            <TextBlock Text="{Binding StatusText}" FontSize="12" TextWrapping="Wrap" MaxWidth="330"
-                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-                        </StackPanel>
+                            <StackPanel Grid.Column="1">
+                                <TextBlock Text="{Binding StatusText}" FontSize="12" TextWrapping="Wrap" app:KeepWords.IsEnabled="True"
+                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                <!-- where the answers came from: "태그: MusicBrainz 8곡 · iTunes 2곡" -->
+                                <TextBlock Text="{Binding SourceSummary}" FontSize="11" Margin="0,4,0,0" TextWrapping="Wrap" LineHeight="16"
+                                           ToolTip="곡마다 넣은 결과를 가져온 곳입니다. 결과 카드에서 출처와 다른 결과를 볼 수 있습니다."
+                                           Foreground="{DynamicResource TextFillColorTertiaryBrush}">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding SourceSummary}" Value="">
+                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                            </StackPanel>
+                        </Grid>
 
-                        <!-- Results: each change as before → after, ticked one by one -->
+                        <!-- Results, a card per song: what changes (before → after, ticked one by one), where
+                             each part is from, and the other results found - a click swaps to one (in the
+                             editor already, the unsaved edits follow). Songs whose result is in the editor
+                             are marked, with 빼기 to take it back out. -->
                         <ItemsControl ItemsSource="{Binding Results}">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
-                                    <Border BorderThickness="1" CornerRadius="6" Padding="10,8" Margin="0,0,0,8"
+                                    <Border x:Name="Card" BorderThickness="1" CornerRadius="6" Padding="10,8" Margin="0,0,0,8"
                                             BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
                                             Background="{DynamicResource ControlFillColorDefaultBrush}">
                                         <StackPanel>
+                                            <!-- the song: ticked for 편집에 넣기, or marked as in the editor -->
                                             <Grid>
                                                 <Grid.ColumnDefinitions>
                                                     <ColumnDefinition Width="Auto"/>
                                                     <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
                                                 </Grid.ColumnDefinitions>
-                                                <CheckBox MinWidth="0" Margin="0,0,6,0" VerticalAlignment="Center"
+                                                <CheckBox x:Name="Pick" MinWidth="0" Margin="0,0,6,0" VerticalAlignment="Top"
                                                           IsChecked="{Binding IsSelected, UpdateSourceTrigger=PropertyChanged}"
-                                                          IsEnabled="{Binding HasProposal}" ToolTip="이 곡의 결과 적용"/>
+                                                          IsEnabled="{Binding HasProposal}" ToolTip="체크하면 '편집에 넣기'로 이 곡의 결과를 넣습니다"/>
+                                                <ui:SymbolIcon x:Name="InMark" Symbol="CheckmarkCircle20" Filled="True" FontSize="18" Margin="2,1,8,0"
+                                                               VerticalAlignment="Top" Visibility="Collapsed" ToolTip="이 곡의 결과가 편집에 들어가 있습니다 (저장 전)"
+                                                               Foreground="{DynamicResource TagChangeBrush}"/>
                                                 <StackPanel Grid.Column="1" VerticalAlignment="Center">
                                                     <TextBlock Text="{Binding FileName}" ToolTip="{Binding Path}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
-                                                    <TextBlock Text="{Binding Status}" FontSize="11" Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
+                                                    <TextBlock x:Name="SummaryText" Text="{Binding Summary}" FontSize="11" Margin="0,1,0,0" TextWrapping="Wrap"
+                                                               app:KeepWords.IsEnabled="True" Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
                                                 </StackPanel>
+                                                <ui:Button Grid.Column="2" Content="빼기" Icon="{ui:SymbolIcon ArrowUndo16}" Appearance="Transparent"
+                                                           Padding="8,2" FontSize="12" Margin="6,0,0,0" VerticalAlignment="Top" Command="{Binding UnstageCommand}"
+                                                           ToolTip="이 곡에 넣은 변경을 편집에서 뺍니다 (직접 고친 칸은 그대로)"
+                                                           Visibility="{Binding IsStaged, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}"/>
                                             </Grid>
 
-                                            <ItemsControl ItemsSource="{Binding TagChangeRows}" Margin="0,6,0,0" IsEnabled="{Binding IsSelected}">
-                                                <ItemsControl.ItemTemplate>
-                                                    <DataTemplate>
-                                                        <Grid Margin="0,2">
-                                                            <Grid.ColumnDefinitions>
-                                                                <ColumnDefinition Width="Auto"/>
-                                                                <ColumnDefinition Width="78"/>
-                                                                <ColumnDefinition Width="*"/>
-                                                            </Grid.ColumnDefinitions>
-                                                            <CheckBox MinWidth="0" Padding="0" Margin="0,0,6,0" VerticalAlignment="Top" IsChecked="{Binding IsChecked}"/>
-                                                            <TextBlock Grid.Column="1" Text="{Binding Label}" FontSize="12" Margin="0,4,0,0"
-                                                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-                                                            <StackPanel Grid.Column="2" Margin="0,4,0,0">
-                                                                <TextBlock Text="{Binding Before}" FontSize="11" TextDecorations="Strikethrough" TextTrimming="CharacterEllipsis"
-                                                                           Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
-                                                                <TextBlock Text="{Binding After}" FontSize="12" TextWrapping="Wrap"
-                                                                           Foreground="{DynamicResource TagChangeBrush}"/>
-                                                            </StackPanel>
-                                                        </Grid>
-                                                    </DataTemplate>
-                                                </ItemsControl.ItemTemplate>
-                                            </ItemsControl>
+                                            <!-- tags: where from and how well they fit; each change; the other results -->
+                                            <StackPanel Margin="0,10,0,0"
+                                                        Visibility="{Binding HasTagSection, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}">
+                                                <DockPanel>
+                                                    <ui:Button DockPanel.Dock="Right" Content="{Binding MoreTagsText}" Appearance="Transparent" Padding="8,1" FontSize="12"
+                                                               Command="{Binding ToggleMoreTagsCommand}" ToolTip="이 곡에서 찾은 태그 결과를 일치율 순으로 보여 줍니다"
+                                                               Visibility="{Binding HasMoreTags, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}"/>
+                                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                        <TextBlock Text="태그" FontSize="12" FontWeight="SemiBold" Margin="0,0,8,0" VerticalAlignment="Center"
+                                                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                                        <Border Style="{StaticResource SourceBadge}" ToolTip="이 태그를 가져온 곳"
+                                                                Visibility="{Binding HasTagSource, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}">
+                                                            <TextBlock Text="{Binding TagSource}"/>
+                                                        </Border>
+                                                        <TextBlock Text="{Binding TagScore}" FontSize="11" Margin="6,0,0,0" VerticalAlignment="Center"
+                                                                   ToolTip="이 곡과 맞는 정도: 제목·아티스트가 가장 크게, 앨범·길이가 그다음으로 반영됩니다"
+                                                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                                    </StackPanel>
+                                                </DockPanel>
+                                                <TextBlock x:Name="TagNoteText" Text="{Binding TagNote}" FontSize="11" Margin="0,4,0,0" TextWrapping="Wrap"
+                                                           app:KeepWords.IsEnabled="True" Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                                           Visibility="{Binding HasTagNote, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}"/>
+                                                <ItemsControl ItemsSource="{Binding TagChangeRows}" Margin="0,4,0,0" IsEnabled="{Binding IsSelected}" Focusable="False">
+                                                    <ItemsControl.ItemTemplate>
+                                                        <DataTemplate>
+                                                            <Grid Margin="0,2">
+                                                                <Grid.ColumnDefinitions>
+                                                                    <ColumnDefinition Width="Auto"/>
+                                                                    <ColumnDefinition Width="78"/>
+                                                                    <ColumnDefinition Width="*"/>
+                                                                </Grid.ColumnDefinitions>
+                                                                <CheckBox x:Name="RowCheck" MinWidth="0" Padding="0" Margin="0,0,6,0" VerticalAlignment="Top" IsChecked="{Binding IsChecked}"/>
+                                                                <TextBlock Grid.Column="1" Text="{Binding Label}" FontSize="12" Margin="0,4,0,0"
+                                                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                                                <StackPanel Grid.Column="2" Margin="0,4,0,0">
+                                                                    <TextBlock Text="{Binding Before}" FontSize="11" TextDecorations="Strikethrough" TextTrimming="CharacterEllipsis"
+                                                                               Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
+                                                                    <TextBlock Text="{Binding After}" FontSize="12" TextWrapping="Wrap"
+                                                                               Foreground="{DynamicResource TagChangeBrush}"/>
+                                                                </StackPanel>
+                                                            </Grid>
+                                                            <DataTemplate.Triggers>
+                                                                <!-- in the editor already: nothing left to tick -->
+                                                                <DataTrigger Binding="{Binding DataContext.IsStaged, RelativeSource={RelativeSource AncestorType=ItemsControl}}" Value="True">
+                                                                    <Setter TargetName="RowCheck" Property="Visibility" Value="Collapsed"/>
+                                                                </DataTrigger>
+                                                            </DataTemplate.Triggers>
+                                                        </DataTemplate>
+                                                    </ItemsControl.ItemTemplate>
+                                                </ItemsControl>
+                                                <ItemsControl ItemsSource="{Binding TagCandidates}" ItemTemplate="{StaticResource TagCandidateTemplate}" Margin="0,6,0,0" Focusable="False"/>
+                                            </StackPanel>
 
-                                            <Grid Margin="0,8,0,0" IsEnabled="{Binding IsSelected}"
-                                                  Visibility="{Binding HasProposedCover, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}">
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="Auto"/>
-                                                    <ColumnDefinition Width="78"/>
-                                                    <ColumnDefinition Width="*"/>
-                                                </Grid.ColumnDefinitions>
-                                                <CheckBox MinWidth="0" Padding="0" Margin="0,0,6,0" VerticalAlignment="Top" IsChecked="{Binding IncludeCover}"/>
-                                                <TextBlock Grid.Column="1" Text="커버" FontSize="12" Margin="0,4,0,0" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-                                                <StackPanel Grid.Column="2" Orientation="Horizontal" Background="Transparent" Cursor="Hand"
-                                                            ToolTip="클릭하면 크게 비교해 봅니다" MouseLeftButtonUp="AutoFillCover_Click">
-                                                    <Border Width="52" Height="52" CornerRadius="4" Background="{DynamicResource ControlFillColorSecondaryBrush}">
-                                                        <Border CornerRadius="4" Opacity="0.6">
+                                            <!-- cover: where from; the current one → the proposed one (a click compares them large) -->
+                                            <StackPanel Margin="0,10,0,0"
+                                                        Visibility="{Binding HasProposedCover, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}">
+                                                <StackPanel Orientation="Horizontal">
+                                                    <TextBlock Text="커버" FontSize="12" FontWeight="SemiBold" Margin="0,0,8,0" VerticalAlignment="Center"
+                                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                                    <Border Style="{StaticResource SourceBadge}" ToolTip="이 커버를 가져온 곳"
+                                                            Visibility="{Binding HasCoverSource, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}">
+                                                        <TextBlock Text="{Binding CoverSource}"/>
+                                                    </Border>
+                                                </StackPanel>
+                                                <Grid Margin="0,6,0,0" IsEnabled="{Binding IsSelected}">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="Auto"/>
+                                                        <ColumnDefinition Width="*"/>
+                                                    </Grid.ColumnDefinitions>
+                                                    <CheckBox x:Name="CoverCheck" MinWidth="0" Padding="0" Margin="0,0,6,0" VerticalAlignment="Center" IsChecked="{Binding IncludeCover}"/>
+                                                    <StackPanel Grid.Column="1" Orientation="Horizontal" Background="Transparent" Cursor="Hand"
+                                                                ToolTip="클릭하면 크게 비교해 봅니다" MouseLeftButtonUp="AutoFillCover_Click">
+                                                        <Border Width="52" Height="52" CornerRadius="4" Background="{DynamicResource ControlFillColorSecondaryBrush}">
+                                                            <Border CornerRadius="4" Opacity="0.6">
+                                                                <Border.Background>
+                                                                    <ImageBrush ImageSource="{Binding CurrentCover}" Stretch="UniformToFill"/>
+                                                                </Border.Background>
+                                                            </Border>
+                                                        </Border>
+                                                        <ui:SymbolIcon Symbol="ArrowRight16" Margin="6,0" VerticalAlignment="Center"
+                                                                       Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
+                                                        <Border Width="52" Height="52" CornerRadius="4" BorderThickness="2" BorderBrush="{DynamicResource TagChangeBrush}">
                                                             <Border.Background>
-                                                                <ImageBrush ImageSource="{Binding CurrentCover}" Stretch="UniformToFill"/>
+                                                                <ImageBrush ImageSource="{Binding ProposedCover}" Stretch="UniformToFill"/>
                                                             </Border.Background>
                                                         </Border>
-                                                    </Border>
-                                                    <ui:SymbolIcon Symbol="ArrowRight16" Margin="6,0" VerticalAlignment="Center"
-                                                                   Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
-                                                    <Border Width="52" Height="52" CornerRadius="4" BorderThickness="2" BorderBrush="{DynamicResource TagChangeBrush}">
-                                                        <Border.Background>
-                                                            <ImageBrush ImageSource="{Binding ProposedCover}" Stretch="UniformToFill"/>
-                                                        </Border.Background>
-                                                    </Border>
-                                                </StackPanel>
-                                            </Grid>
+                                                    </StackPanel>
+                                                </Grid>
+                                            </StackPanel>
 
-                                            <Grid Margin="0,8,0,0" IsEnabled="{Binding IsSelected}"
-                                                  Visibility="{Binding HasProposedLyrics, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}">
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="Auto"/>
-                                                    <ColumnDefinition Width="78"/>
-                                                    <ColumnDefinition Width="*"/>
-                                                </Grid.ColumnDefinitions>
-                                                <CheckBox MinWidth="0" Padding="0" Margin="0,0,6,0" VerticalAlignment="Top" IsChecked="{Binding IncludeLyrics}"/>
-                                                <TextBlock Grid.Column="1" Text="{Binding LyricsLabel}" FontSize="12" Margin="0,4,0,0"
-                                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-                                                <TextBlock Grid.Column="2" Text="{Binding LyricsPreview}" FontSize="12" Margin="0,4,0,0" TextWrapping="Wrap" LineHeight="18"
-                                                           Foreground="{DynamicResource TagChangeBrush}"/>
-                                            </Grid>
+                                            <!-- lyrics: where from, synced or plain, language; the first lines; the other lyrics -->
+                                            <StackPanel Margin="0,10,0,0"
+                                                        Visibility="{Binding HasLyricsSection, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}">
+                                                <DockPanel>
+                                                    <ui:Button DockPanel.Dock="Right" Content="{Binding MoreLyricsText}" Appearance="Transparent" Padding="8,1" FontSize="12"
+                                                               Command="{Binding ToggleMoreLyricsCommand}" ToolTip="이 곡에서 찾은 가사를 모두 보여 줍니다. 카드 위에 마우스를 올리면 가사를 더 볼 수 있습니다"
+                                                               Visibility="{Binding HasMoreLyrics, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}"/>
+                                                    <WrapPanel VerticalAlignment="Center">
+                                                        <TextBlock Text="가사" FontSize="12" FontWeight="SemiBold" Margin="0,0,8,0" VerticalAlignment="Center"
+                                                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                                        <Border Style="{StaticResource SourceBadge}" Margin="0,0,4,0" ToolTip="이 가사를 가져온 곳"
+                                                                Visibility="{Binding HasLyricsSource, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}">
+                                                            <TextBlock Text="{Binding LyricsSource}"/>
+                                                        </Border>
+                                                        <Border Style="{StaticResource SourceBadge}" Margin="0,0,4,0" Background="Transparent"
+                                                                ToolTip="싱크: 줄마다 시간이 있어 재생할 때 따라갑니다 · 일반: 시간이 없는 가사"
+                                                                Visibility="{Binding HasProposedLyrics, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}">
+                                                            <TextBlock Text="{Binding LyricsLabel}"/>
+                                                        </Border>
+                                                        <Border Style="{StaticResource SourceBadge}" Background="Transparent" ToolTip="가사가 쓰인 글자"
+                                                                Visibility="{Binding HasLyricsLanguage, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}">
+                                                            <TextBlock Text="{Binding LyricsLanguage}"/>
+                                                        </Border>
+                                                    </WrapPanel>
+                                                </DockPanel>
+                                                <TextBlock x:Name="LyricsNoteText" Text="{Binding LyricsNote}" FontSize="11" Margin="0,4,0,0" TextWrapping="Wrap"
+                                                           app:KeepWords.IsEnabled="True" Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                                           Visibility="{Binding HasLyricsNote, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}"/>
+                                                <Grid Margin="0,6,0,0" IsEnabled="{Binding IsSelected}"
+                                                      Visibility="{Binding HasProposedLyrics, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="Auto"/>
+                                                        <ColumnDefinition Width="*"/>
+                                                    </Grid.ColumnDefinitions>
+                                                    <CheckBox x:Name="LyricsCheck" MinWidth="0" Padding="0" Margin="0,0,6,0" VerticalAlignment="Top" IsChecked="{Binding IncludeLyrics}"/>
+                                                    <TextBlock Grid.Column="1" Text="{Binding LyricsPreview}" FontSize="12" Margin="0,4,0,0" TextWrapping="Wrap" LineHeight="18"
+                                                               Foreground="{DynamicResource TagChangeBrush}"/>
+                                                </Grid>
+                                                <ItemsControl ItemsSource="{Binding LyricsCandidates}" ItemTemplate="{StaticResource LyricsCandidateTemplate}" Margin="0,6,0,0" Focusable="False"/>
+                                            </StackPanel>
                                         </StackPanel>
                                     </Border>
+                                    <DataTemplate.Triggers>
+                                        <DataTrigger Binding="{Binding IsStaged}" Value="True">
+                                            <Setter TargetName="Card" Property="BorderBrush" Value="{DynamicResource TagChangeBrush}"/>
+                                            <Setter TargetName="Pick" Property="Visibility" Value="Collapsed"/>
+                                            <Setter TargetName="InMark" Property="Visibility" Value="Visible"/>
+                                            <Setter TargetName="CoverCheck" Property="Visibility" Value="Collapsed"/>
+                                            <Setter TargetName="LyricsCheck" Property="Visibility" Value="Collapsed"/>
+                                        </DataTrigger>
+                                        <!-- a part waits for the user to pick a result -->
+                                        <DataTrigger Binding="{Binding NeedsChoice}" Value="True">
+                                            <Setter TargetName="SummaryText" Property="Foreground" Value="{DynamicResource SystemFillColorCautionBrush}"/>
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding IsTagUnsure}" Value="True">
+                                            <Setter TargetName="TagNoteText" Property="Foreground" Value="{DynamicResource SystemFillColorCautionBrush}"/>
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding IsLyricsUnsure}" Value="True">
+                                            <Setter TargetName="LyricsNoteText" Property="Foreground" Value="{DynamicResource SystemFillColorCautionBrush}"/>
+                                        </DataTrigger>
+                                    </DataTemplate.Triggers>
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
