@@ -66,21 +66,26 @@
                 <StackPanel.LayoutTransform>
                     <ScaleTransform x:Name="StackScale" ScaleX="1" ScaleY="1"/>
                 </StackPanel.LayoutTransform>
-                <Border x:Name="CoverCard" Width="340" Height="340" CornerRadius="14" HorizontalAlignment="Center" Background="#22FFFFFF">
-                    <Border.Effect>
-                        <DropShadowEffect BlurRadius="60" ShadowDepth="12" Direction="270" Opacity="0.55" Color="Black"/>
-                    </Border.Effect>
-                    <!-- Kept as a picture: otherwise the wide blur is redone every time the light
-                         behind it changes. -->
-                    <Border.CacheMode>
+                <!-- Kept as a picture, shadow and all: otherwise the wide blur is redone every time
+                     the light behind it changes or anything near it is redrawn. The cache sits on a
+                     wrapper because a cache on the card itself holds only the card - its own Effect
+                     is applied over the cached picture again on every redraw (measured: most of the
+                     difference between focus mode with and without the shadow). -->
+                <Grid x:Name="CoverShadowHost" HorizontalAlignment="Center">
+                    <Grid.CacheMode>
                         <BitmapCache/>
-                    </Border.CacheMode>
-                    <Border CornerRadius="14">
-                        <Border.Background>
-                            <ImageBrush ImageSource="{Binding CurrentCover}" Stretch="UniformToFill" RenderOptions.BitmapScalingMode="HighQuality"/>
-                        </Border.Background>
+                    </Grid.CacheMode>
+                    <Border x:Name="CoverCard" Width="340" Height="340" CornerRadius="14" HorizontalAlignment="Center" Background="#22FFFFFF">
+                        <Border.Effect>
+                            <DropShadowEffect BlurRadius="60" ShadowDepth="12" Direction="270" Opacity="0.55" Color="Black"/>
+                        </Border.Effect>
+                        <Border CornerRadius="14">
+                            <Border.Background>
+                                <ImageBrush ImageSource="{Binding CurrentCover}" Stretch="UniformToFill" RenderOptions.BitmapScalingMode="HighQuality"/>
+                            </Border.Background>
+                        </Border>
                     </Border>
-                </Border>
+                </Grid>
                 <TextBlock x:Name="TitleText" Text="{Binding NowPlayingTitle}" FontSize="38" FontWeight="Bold" Foreground="White" Margin="0,36,0,0"
                            TextAlignment="Center" TextWrapping="Wrap"/>
                 <TextBlock x:Name="SubtitleText" Text="{Binding NowPlayingSubtitle}" FontSize="20" Foreground="#CCFFFFFF" Margin="0,8,0,0"
@@ -112,82 +117,94 @@
                 <!-- Three lines - the one just sung, the current one, the next - gliding up like the
                      player's lyrics (LyricsScroller). Lines are laid out at the current-line size and
                      drawn smaller when not current, so a line growing never re-wraps. -->
-                <ScrollViewer x:Name="LyricsViewer" Height="160" Margin="0,34,0,0" Focusable="False" IsHitTestVisible="False"
-                              VerticalScrollBarVisibility="Hidden" HorizontalScrollBarVisibility="Disabled" CanContentScroll="False"
-                              SizeChanged="LyricsViewer_SizeChanged"
-                              Visibility="{Binding HasSyncedLyrics, Converter={StaticResource BoolToVisibility}}">
-                    <ScrollViewer.Effect>
-                        <DropShadowEffect BlurRadius="14" ShadowDepth="0" Opacity="0.65" Color="Black"/>
-                    </ScrollViewer.Effect>
-                    <!-- Absolute, matching the view's Height: a relative mask is sized to the drawn
-                         lines and would fade the first/last line itself (see PlayView). -->
-                    <ScrollViewer.OpacityMask>
-                        <LinearGradientBrush MappingMode="Absolute" StartPoint="0,0" EndPoint="0,160">
-                            <GradientStop Color="Transparent" Offset="0"/>
-                            <GradientStop Color="Black" Offset="0.12"/>
-                            <GradientStop Color="Black" Offset="0.88"/>
-                            <GradientStop Color="Transparent" Offset="1"/>
-                        </LinearGradientBrush>
-                    </ScrollViewer.OpacityMask>
-                    <ItemsControl x:Name="LyricsItems" ItemsSource="{Binding LyricsLines}">
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate>
-                                <Grid x:Name="Line" Margin="0,5" RenderTransformOrigin="0.5,0.5" Opacity="0.55">
-                                    <Grid.RenderTransform>
-                                        <ScaleTransform ScaleX="0.62" ScaleY="0.62"/>
-                                    </Grid.RenderTransform>
-                                    <TextBlock Text="{Binding Text}" FontFamily="{DynamicResource LyricsFontFamily}" FontSize="30" FontWeight="SemiBold" Foreground="White"
-                                               TextAlignment="Center" TextWrapping="Wrap"/>
-                                </Grid>
-                                <DataTemplate.Triggers>
-                                    <DataTrigger Binding="{Binding IsCurrent}" Value="True">
-                                        <DataTrigger.EnterActions>
-                                            <BeginStoryboard>
-                                                <Storyboard>
-                                                    <DoubleAnimation Storyboard.TargetName="Line" Storyboard.TargetProperty="Opacity" To="1" Duration="0:0:0.45"/>
-                                                    <DoubleAnimation Storyboard.TargetName="Line" Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleX)" To="1" Duration="0:0:0.45">
-                                                        <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut"/></DoubleAnimation.EasingFunction>
-                                                    </DoubleAnimation>
-                                                    <DoubleAnimation Storyboard.TargetName="Line" Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)" To="1" Duration="0:0:0.45">
-                                                        <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut"/></DoubleAnimation.EasingFunction>
-                                                    </DoubleAnimation>
-                                                </Storyboard>
-                                            </BeginStoryboard>
-                                        </DataTrigger.EnterActions>
-                                        <DataTrigger.ExitActions>
-                                            <BeginStoryboard>
-                                                <Storyboard>
-                                                    <DoubleAnimation Storyboard.TargetName="Line" Storyboard.TargetProperty="Opacity" To="0.55" Duration="0:0:0.5"/>
-                                                    <DoubleAnimation Storyboard.TargetName="Line" Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleX)" To="0.62" Duration="0:0:0.5">
-                                                        <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseInOut"/></DoubleAnimation.EasingFunction>
-                                                    </DoubleAnimation>
-                                                    <DoubleAnimation Storyboard.TargetName="Line" Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)" To="0.62" Duration="0:0:0.5">
-                                                        <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseInOut"/></DoubleAnimation.EasingFunction>
-                                                    </DoubleAnimation>
-                                                </Storyboard>
-                                            </BeginStoryboard>
-                                        </DataTrigger.ExitActions>
-                                    </DataTrigger>
-                                </DataTemplate.Triggers>
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-                </ScrollViewer>
+                <!-- Kept as a picture, shadow and all, while the lines stand still (most of the time):
+                     otherwise each step of the light behind them redid the blur of their shadow. While
+                     they glide, the picture is redrawn every frame as before. (On the viewer itself, a
+                     cache would hold only the lines: its own Effect is laid over the picture anew.) -->
+                <Grid x:Name="LyricsShadowHost">
+                    <Grid.CacheMode>
+                        <BitmapCache/>
+                    </Grid.CacheMode>
+                    <ScrollViewer x:Name="LyricsViewer" Height="160" Margin="0,34,0,0" Focusable="False" IsHitTestVisible="False"
+                                  VerticalScrollBarVisibility="Hidden" HorizontalScrollBarVisibility="Disabled" CanContentScroll="False"
+                                  SizeChanged="LyricsViewer_SizeChanged"
+                                  Visibility="{Binding HasSyncedLyrics, Converter={StaticResource BoolToVisibility}}">
+                        <ScrollViewer.Effect>
+                            <DropShadowEffect BlurRadius="14" ShadowDepth="0" Opacity="0.65" Color="Black"/>
+                        </ScrollViewer.Effect>
+                        <!-- Absolute, matching the view's Height: a relative mask is sized to the drawn
+                             lines and would fade the first/last line itself (see PlayView). -->
+                        <ScrollViewer.OpacityMask>
+                            <LinearGradientBrush MappingMode="Absolute" StartPoint="0,0" EndPoint="0,160">
+                                <GradientStop Color="Transparent" Offset="0"/>
+                                <GradientStop Color="Black" Offset="0.12"/>
+                                <GradientStop Color="Black" Offset="0.88"/>
+                                <GradientStop Color="Transparent" Offset="1"/>
+                            </LinearGradientBrush>
+                        </ScrollViewer.OpacityMask>
+                        <ItemsControl x:Name="LyricsItems" ItemsSource="{Binding LyricsLines}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid x:Name="Line" Margin="0,5" RenderTransformOrigin="0.5,0.5" Opacity="0.55">
+                                        <Grid.RenderTransform>
+                                            <ScaleTransform ScaleX="0.62" ScaleY="0.62"/>
+                                        </Grid.RenderTransform>
+                                        <TextBlock Text="{Binding Text}" FontFamily="{DynamicResource LyricsFontFamily}" FontSize="30" FontWeight="SemiBold" Foreground="White"
+                                                   TextAlignment="Center" TextWrapping="Wrap"/>
+                                    </Grid>
+                                    <DataTemplate.Triggers>
+                                        <DataTrigger Binding="{Binding IsCurrent}" Value="True">
+                                            <DataTrigger.EnterActions>
+                                                <BeginStoryboard>
+                                                    <Storyboard>
+                                                        <DoubleAnimation Storyboard.TargetName="Line" Storyboard.TargetProperty="Opacity" To="1" Duration="0:0:0.45"/>
+                                                        <DoubleAnimation Storyboard.TargetName="Line" Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleX)" To="1" Duration="0:0:0.45">
+                                                            <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut"/></DoubleAnimation.EasingFunction>
+                                                        </DoubleAnimation>
+                                                        <DoubleAnimation Storyboard.TargetName="Line" Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)" To="1" Duration="0:0:0.45">
+                                                            <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut"/></DoubleAnimation.EasingFunction>
+                                                        </DoubleAnimation>
+                                                    </Storyboard>
+                                                </BeginStoryboard>
+                                            </DataTrigger.EnterActions>
+                                            <DataTrigger.ExitActions>
+                                                <BeginStoryboard>
+                                                    <Storyboard>
+                                                        <DoubleAnimation Storyboard.TargetName="Line" Storyboard.TargetProperty="Opacity" To="0.55" Duration="0:0:0.5"/>
+                                                        <DoubleAnimation Storyboard.TargetName="Line" Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleX)" To="0.62" Duration="0:0:0.5">
+                                                            <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseInOut"/></DoubleAnimation.EasingFunction>
+                                                        </DoubleAnimation>
+                                                        <DoubleAnimation Storyboard.TargetName="Line" Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)" To="0.62" Duration="0:0:0.5">
+                                                            <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseInOut"/></DoubleAnimation.EasingFunction>
+                                                        </DoubleAnimation>
+                                                    </Storyboard>
+                                                </BeginStoryboard>
+                                            </DataTrigger.ExitActions>
+                                        </DataTrigger>
+                                    </DataTemplate.Triggers>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </Grid>
             </StackPanel>
 
             <!-- Other monitors (ScreenSaverRole.Ambient), and the lyrics screen while there are no
                  lines to show: a big clock over a wide spectrum. -->
             <StackPanel x:Name="AmbientPanel" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed">
-                <StackPanel>
-                    <StackPanel.Effect>
-                        <DropShadowEffect BlurRadius="16" ShadowDepth="0" Opacity="0.5" Color="Black"/>
-                    </StackPanel.Effect>
-                    <StackPanel.CacheMode>
+                <!-- The cache on a wrapper, so it holds the shadow too (see CoverShadowHost). -->
+                <Grid>
+                    <Grid.CacheMode>
                         <BitmapCache/>
-                    </StackPanel.CacheMode>
-                    <TextBlock x:Name="AmbientClock" FontSize="150" FontWeight="Light" Foreground="White" HorizontalAlignment="Center"/>
-                    <TextBlock x:Name="AmbientDate" FontSize="24" Foreground="#B3FFFFFF" HorizontalAlignment="Center" Margin="0,-6,0,0"/>
-                </StackPanel>
+                    </Grid.CacheMode>
+                    <StackPanel>
+                        <StackPanel.Effect>
+                            <DropShadowEffect BlurRadius="16" ShadowDepth="0" Opacity="0.5" Color="Black"/>
+                        </StackPanel.Effect>
+                        <TextBlock x:Name="AmbientClock" FontSize="150" FontWeight="Light" Foreground="White" HorizontalAlignment="Center"/>
+                        <TextBlock x:Name="AmbientDate" FontSize="24" Foreground="#B3FFFFFF" HorizontalAlignment="Center" Margin="0,-6,0,0"/>
+                    </StackPanel>
+                </Grid>
                 <views:SpectrumView x:Name="AmbientSpectrum" Playback="{Binding}" Look="{Binding SpectrumLook}" BarBrush="#E6FFFFFF" BarWidth="8"
                                     Width="1000" Height="130" Margin="0,56,0,0"/>
                 <TextBlock Margin="0,30,0,0" HorizontalAlignment="Center" FontSize="18" Foreground="#B3FFFFFF">
@@ -196,13 +213,19 @@
             </StackPanel>
 
             <!-- The lyrics screen (ScreenSaverRole.Lyrics): which song, quietly, under the lines. -->
-            <TextBlock x:Name="WallFooter" Visibility="Collapsed" HorizontalAlignment="Center" VerticalAlignment="Bottom"
-                       Margin="0,0,0,90" FontSize="20" Foreground="#B3FFFFFF">
-                <TextBlock.Effect>
-                    <DropShadowEffect BlurRadius="10" ShadowDepth="0" Opacity="0.5" Color="Black"/>
-                </TextBlock.Effect>
-                <Run Text="{Binding NowPlayingTitle, Mode=OneWay}" FontWeight="SemiBold" Foreground="White"/><Run Text="  ·  "/><Run Text="{Binding NowPlayingSubtitle, Mode=OneWay}"/>
-            </TextBlock>
+            <!-- Cached with its shadow (see CoverShadowHost): the light behind it steps 15 times a second. -->
+            <Grid HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,90">
+                <Grid.CacheMode>
+                    <BitmapCache/>
+                </Grid.CacheMode>
+                <TextBlock x:Name="WallFooter" Visibility="Collapsed"
+                           FontSize="20" Foreground="#B3FFFFFF">
+                    <TextBlock.Effect>
+                        <DropShadowEffect BlurRadius="10" ShadowDepth="0" Opacity="0.5" Color="Black"/>
+                    </TextBlock.Effect>
+                    <Run Text="{Binding NowPlayingTitle, Mode=OneWay}" FontWeight="SemiBold" Foreground="White"/><Run Text="  ·  "/><Run Text="{Binding NowPlayingSubtitle, Mode=OneWay}"/>
+                </TextBlock>
+            </Grid>
         </Grid>
     </Grid>
 </UserControl>

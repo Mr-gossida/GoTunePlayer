@@ -470,14 +470,21 @@ public partial class NowPlayingStage : UserControl
         AmbientDate.Text = DateText.Text;
     }
 
-    /// <summary>A slow glide to a nearby spot (burn-in protection on OLED and plasma screens).</summary>
+    /// <summary>A slow glide to a nearby spot (burn-in protection on OLED and plasma screens).
+    /// At most 30 steps a second: it moves the whole picture, so every step redraws the screen, and
+    /// at under 30 px a second a step is never more than a pixel (at the monitor's full rate it was
+    /// 10 seconds of 144 full redraws a second, every 30 seconds).</summary>
     private void DriftSomewhere()
     {
         var ease = new SineEase { EasingMode = EasingMode.EaseInOut };
         var duration = TimeSpan.FromSeconds(10);
-        Drift.BeginAnimation(TranslateTransform.XProperty,
-            new DoubleAnimation(Random.Shared.Next(-90, 91), duration) { EasingFunction = ease });
-        Drift.BeginAnimation(TranslateTransform.YProperty,
-            new DoubleAnimation(Random.Shared.Next(-50, 51), duration) { EasingFunction = ease });
+        DoubleAnimation Glide(double to)
+        {
+            var glide = new DoubleAnimation(to, duration) { EasingFunction = ease };
+            Timeline.SetDesiredFrameRate(glide, 30);
+            return glide;
+        }
+        Drift.BeginAnimation(TranslateTransform.XProperty, Glide(Random.Shared.Next(-90, 91)));
+        Drift.BeginAnimation(TranslateTransform.YProperty, Glide(Random.Shared.Next(-50, 51)));
     }
 }
