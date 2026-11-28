@@ -15,9 +15,12 @@ public sealed class TrackTags
     public uint Disc { get; set; }
     public uint Year { get; set; }
 
-    public TrackTags Clone() => new()
+    public TrackTags Clone() => WithPath(Path);
+
+    /// <summary>A copy of these tags for the file at <paramref name="path"/>.</summary>
+    public TrackTags WithPath(string path) => new()
     {
-        Path = Path,
+        Path = path,
         Title = Title,
         Artist = Artist,
         AlbumArtist = AlbumArtist,

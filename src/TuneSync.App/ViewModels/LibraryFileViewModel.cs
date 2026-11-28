@@ -333,6 +333,16 @@ public sealed partial class LibraryFileViewModel : ObservableObject
     public bool IsArtistPending => _pendingTags.ContainsKey(TagField.Artist);
     public bool IsAlbumPending => _pendingTags.ContainsKey(TagField.Album);
 
+    /// <summary>The file was renamed: the row follows it (its folder and format are worked out
+    /// again from the new path).</summary>
+    public void MoveTo(string newPath)
+    {
+        Model.MoveTo(newPath);
+        _folder = null;
+        _format = null;
+        OnPropertyChanged(string.Empty);
+    }
+
     /// <summary>Re-reads everything from <see cref="Model"/> after it was changed in place.</summary>
     public void Refresh()
     {

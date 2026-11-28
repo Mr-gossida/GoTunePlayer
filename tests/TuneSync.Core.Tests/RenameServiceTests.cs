@@ -175,4 +175,75 @@ public class RenameServiceTests : IDisposable
         Assert.True(File.Exists(Path.ChangeExtension(a, ".lrc")));
         Assert.False(File.Exists(Path.Combine(_dir, "IU - Good Day.mp3")));
     }
+
+    [Fact]
+    public void PlanOne_NamesFromTheGivenTags_NotTheFilesOwn()
+    {
+        // The tag editor plans from its unsaved edits: the file still says "IU - Good Day".
+        var path = PlaceFixture("sample.mp3", "IU - Good Day.mp3", "IU", "Good Day");
+        var edited = new TrackTags { Path = path, Artist = "IU", Title = "Blueming: Live", Album = "Love poem", Track = 3 };
+
+        var single = RenameService.PlanOne(path, edited, new RenameRuleSet(), RenameMode.Single);
+        var auto = RenameService.PlanOne(path, edited, new RenameRuleSet(), RenameMode.Auto);
+
+        Assert.Equal("IU - Blueming： Live.mp3", single.NewFileName);
+        Assert.Equal(RenameKind.Change, single.Kind);
+        Assert.Equal("03 Blueming： Live.mp3", auto.NewFileName); // track and album: the album pattern
+    }
+
+    [Fact]
+    public void PlanOne_SameName_IsLeftAlone_AndATakenNameGetsANumber()
+    {
+        var path = PlaceFixture("sample.mp3", "IU - Good Day.mp3", "IU", "Good Day");
+        PlaceFixture("sample.mp3", "IU - Other.mp3", "IU", "Other");
+        var rules = new RenameRuleSet();
+
+        var same = RenameService.PlanOne(path, TagService.Read(path), rules, RenameMode.Single);
+        var taken = RenameService.PlanOne(path, new TrackTags { Path = path, Artist = "IU", Title = "Other" }, rules, RenameMode.Single);
+
+        Assert.Equal(RenameKind.Same, same.Kind);
+        Assert.False(same.WillChange);
+        Assert.Equal(RenameKind.Collision, taken.Kind);
+        Assert.Equal("IU - Other (2).mp3", taken.NewFileName);
+    }
+
+    [Fact]
+    public void Execute_CaseOnlyChange_RenamesTheFileItself()
+    {
+        var path = PlaceFixture("sample.mp3", "iu - good day.mp3", "IU", "Good Day");
+        var item = RenameService.PlanOne(path, TagService.Read(path), new RenameRuleSet(), RenameMode.Single);
+        var moves = new List<(string From, string To)>();
+
+        var errors = RenameService.Execute([item], moves);
+
+        Assert.Empty(errors);
+        Assert.Equal(RenameKind.Change, item.Kind);
+        Assert.Equal("IU - Good Day.mp3", Path.GetFileName(Assert.Single(Directory.GetFiles(_dir))));
+        Assert.Single(moves);
+    }
+
+    [Fact]
+    public void RulesFrom_TakesTheSavedPatterns()
+    {
+        var settings = new AppSettings { RenameSingleTrackPattern = "{Title}", RenameAlbumTrackPattern = "{Track}. {Title}" };
+
+        var rules = RenameService.RulesFrom(settings);
+
+        Assert.Equal("{Title}", rules.SingleTrackPattern);
+        Assert.Equal("{Track}. {Title}", rules.AlbumTrackPattern);
+    }
+
+    [Fact]
+    public void LibraryFile_MoveTo_CarriesTheTagsAlong()
+    {
+        var file = new LibraryFile { Path = @"C:\a\old.mp3", Tags = new TrackTags { Path = @"C:\a\old.mp3", Title = "T", Track = 4 } };
+
+        file.MoveTo(@"C:\a\new.mp3");
+
+        Assert.Equal(@"C:\a\new.mp3", file.Path);
+        Assert.Equal("new.mp3", file.FileName);
+        Assert.Equal(@"C:\a\new.mp3", file.Tags.Path);
+        Assert.Equal("T", file.Tags.Title);
+        Assert.Equal(4u, file.Tags.Track);
+    }
 }

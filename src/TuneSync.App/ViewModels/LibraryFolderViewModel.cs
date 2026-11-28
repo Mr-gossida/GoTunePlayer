@@ -17,6 +17,13 @@ public sealed partial class LibraryFolderViewModel : ObservableObject
     public string Path => Entry.Path;
     public bool IsFile => Entry.IsFile;
 
+    /// <summary>A file registered on its own was renamed: the entry points at its new name.</summary>
+    public void MoveTo(string newPath)
+    {
+        Entry.Path = newPath;
+        OnPropertyChanged(string.Empty);
+    }
+
     /// <summary>Network folders (WebDAV/FTP/SFTP) are checked by the scan itself, not here.</summary>
     public bool Exists => Entry.IsRemote || (IsFile ? File.Exists(Path) : Directory.Exists(Path));
 }

@@ -50,8 +50,10 @@ public sealed partial class TagEditorViewModel : ObservableObject
     private readonly IAutoFillService _autoFill;
 
     public TagEditorViewModel(LibraryViewModel library, PlaybackViewModel playback, IAutoFillService autoFill, ICoverSearchService coverSearch,
-        TuneSync.Core.Services.TagSearch.TagSearchService tagSearch, ILyricsService lyrics, OnlineSourcesViewModel sources)
+        TuneSync.Core.Services.TagSearch.TagSearchService tagSearch, ILyricsService lyrics, OnlineSourcesViewModel sources,
+        AppSettings settings)
     {
+        _settings = settings;
         _library = library;
         _playback = playback;
         _autoFill = autoFill;
@@ -156,6 +158,7 @@ public sealed partial class TagEditorViewModel : ObservableObject
         RefreshOnlineCandidates();
         _ = LoadDetailsAsync(_selectionVersion);
         _ = LoadLyricsAsync(_selectionVersion);
+        RefreshFileName();
     }
 
     private void LoadField(TagFieldViewModel field)
@@ -920,6 +923,7 @@ public sealed partial class TagEditorViewModel : ObservableObject
         else _pending.Remove(file);
         if (file.HasPendingChanges) HideUndo();
         UpdatePendingSummary();
+        if (_selection.Count == 1 && _selection[0] == file) RefreshFileName();
     }
 
     private void UpdatePendingSummary()
@@ -1037,12 +1041,14 @@ public sealed partial class TagEditorViewModel : ObservableObject
         await CommitAsync(OrderedPending());
     }
 
-    private async Task CommitAsync(List<LibraryFileViewModel> files)
+    /// <param name="releasePlayback">False when the caller has let go of the playing song itself
+    /// (saving before a rename, which then reopens it under its new name).</param>
+    private async Task CommitAsync(List<LibraryFileViewModel> files, bool releasePlayback = true)
     {
         IsSaving = true;
         var undo = new List<TagEditUndo>();
         var failed = new List<string>();
-        var resume = await _playback.ReleaseIfPlayingAsync(files.Select(f => f.Path));
+        var resume = releasePlayback ? await _playback.ReleaseIfPlayingAsync(files.Select(f => f.Path)) : null;
         try
         {
             for (var i = 0; i < files.Count; i++)

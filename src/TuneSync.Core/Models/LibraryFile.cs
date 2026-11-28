@@ -4,7 +4,8 @@ namespace TuneSync.Core.Models;
 /// properties are what the library filter and the auto-fill pipeline both key off.</summary>
 public sealed class LibraryFile
 {
-    public required string Path { get; init; }
+    /// <summary>Where the file is. Changes only through <see cref="MoveTo"/> (renamed in place).</summary>
+    public required string Path { get; set; }
     public required TrackTags Tags { get; set; }
     public bool HasCover { get; set; }
     public bool HasLyrics { get; set; }
@@ -22,6 +23,15 @@ public sealed class LibraryFile
     public byte[]? ThumbnailBytes { get; set; }
 
     public string FileName => System.IO.Path.GetFileName(Path);
+
+    /// <summary>The file was renamed or moved to <paramref name="newPath"/>: this entry (and its
+    /// tags, which carry the path too) follow it, so a row can stay as it is instead of the
+    /// library being scanned again.</summary>
+    public void MoveTo(string newPath)
+    {
+        Path = newPath;
+        Tags = Tags.WithPath(newPath);
+    }
 
     public bool IsMissingCover => !HasCover;
     public bool IsMissingLyrics => !HasLyrics;

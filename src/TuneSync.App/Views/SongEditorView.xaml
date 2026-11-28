@@ -152,17 +152,85 @@
                             <ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
                         <Grid.RowDefinitions>
-                            <RowDefinition/><RowDefinition/><RowDefinition/>
+                            <RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/>
                         </Grid.RowDefinitions>
                         <TextBlock Text="형식" Style="{StaticResource InfoLabel}"/>
                         <TextBlock Grid.Column="1" Text="{Binding FileFormat}" ToolTip="{Binding FileFormat}" Style="{StaticResource InfoValue}"/>
                         <TextBlock Grid.Row="1" Text="크기" Style="{StaticResource InfoLabel}"/>
                         <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding FileSize, Converter={StaticResource EmptyDashConverter}}" Style="{StaticResource InfoValue}"/>
-                        <TextBlock Grid.Row="2" Text="위치" Style="{StaticResource InfoLabel}"/>
-                        <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding FileLocation}" ToolTip="{Binding FilePath}" Style="{StaticResource InfoValue}"/>
+                        <TextBlock Grid.Row="2" Text="이름" Style="{StaticResource InfoLabel}"/>
+                        <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding FileName}" ToolTip="{Binding FileName}" Style="{StaticResource InfoValue}"/>
+                        <!-- under the name: the one 이름 변경's rule gives it (from the tags as edited), or why there's none to give -->
+                        <StackPanel Grid.Row="3" Grid.Column="1" Margin="0,0,0,3" ToolTip="{Binding RenameRuleText}">
+                            <StackPanel Visibility="{Binding RenameState, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=Change}">
+                                <TextBlock FontSize="12" TextWrapping="Wrap" MaxHeight="34" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TagChangeBrush}">
+                                    <Run Text="→"/><Run Text=" "/><Run Text="{Binding RenameNewName, Mode=OneWay}" FontWeight="SemiBold"/>
+                                </TextBlock>
+                                <TextBlock Text="저장하지 않은 태그 기준 · 바꿀 때 함께 저장합니다" Margin="0,2,0,0" FontSize="11" TextWrapping="Wrap"
+                                           Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                           Visibility="{Binding RenameNeedsSave, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}"/>
+                                <TextBlock Text="{Binding RenameNote}" Margin="0,2,0,0" FontSize="11" TextWrapping="Wrap"
+                                           Foreground="{DynamicResource SystemFillColorCautionBrush}">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding RenameNote}" Value="">
+                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal">
+                                <StackPanel.Style>
+                                    <Style TargetType="StackPanel">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                        <Style.Triggers>
+                                            <MultiDataTrigger>
+                                                <MultiDataTrigger.Conditions>
+                                                    <Condition Binding="{Binding RenameState}" Value="{x:Static vm:FileRenameState.Same}"/>
+                                                    <Condition Binding="{Binding CanUndoRename}" Value="False"/>
+                                                </MultiDataTrigger.Conditions>
+                                                <Setter Property="Visibility" Value="Visible"/>
+                                            </MultiDataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </StackPanel.Style>
+                                <ui:SymbolIcon Symbol="CheckmarkCircle16" FontSize="13" Margin="0,0,4,0" VerticalAlignment="Center"
+                                               Foreground="{DynamicResource SystemFillColorSuccessBrush}"/>
+                                <TextBlock Text="이름 변경 규칙에 맞는 이름" FontSize="11" VerticalAlignment="Center"
+                                           Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
+                            </StackPanel>
+                            <!-- just renamed here: the old name one click away -->
+                            <StackPanel Orientation="Horizontal"
+                                        Visibility="{Binding CanUndoRename, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}">
+                                <ui:SymbolIcon Symbol="CheckmarkCircle16" FontSize="13" Margin="0,0,4,0" VerticalAlignment="Center"
+                                               Foreground="{DynamicResource SystemFillColorSuccessBrush}"/>
+                                <TextBlock Text="이름을 바꿨습니다" FontSize="11" VerticalAlignment="Center"
+                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                <ui:Button Content="되돌리기" Appearance="Transparent" Padding="6,0" Margin="4,0,0,0" FontSize="11" MinHeight="0"
+                                           Command="{Binding UndoRenameCommand}" ToolTip="원래 파일 이름으로 되돌립니다"
+                                           IsEnabled="{Binding IsRenaming, Converter={StaticResource InverseBooleanConverter}}"/>
+                            </StackPanel>
+                            <TextBlock Text="규칙에 쓰는 태그가 비어 있어 새 이름을 만들 수 없습니다" FontSize="11" TextWrapping="Wrap"
+                                       Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                       Visibility="{Binding RenameState, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=NoName}"/>
+                            <TextBlock Text="{Binding RenameNote}" FontSize="11" TextWrapping="Wrap"
+                                       Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                       Visibility="{Binding RenameState, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=Remote}"/>
+                        </StackPanel>
+                        <TextBlock Grid.Row="4" Text="위치" Style="{StaticResource InfoLabel}"/>
+                        <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding FileLocation}" ToolTip="{Binding FilePath}" Style="{StaticResource InfoValue}"/>
                     </Grid>
-                    <ui:Button Content="파일 위치 열기" Icon="{ui:SymbolIcon FolderOpen24}" Appearance="Transparent" Padding="8,4" Margin="-8,6,0,0"
-                               HorizontalAlignment="Left" Click="RevealFile_Click"/>
+                    <UniformGrid Columns="2" Margin="-3,8,-3,0">
+                        <ui:Button Content="폴더 열기" Icon="{ui:SymbolIcon FolderOpen24}" Margin="3" HorizontalAlignment="Stretch" Click="RevealFile_Click"
+                                   ToolTip="파일이 있는 폴더를 엽니다"/>
+                        <!-- (ToolTipService: the reason shows on the button greyed out too) -->
+                        <ui:Button Content="이름 변경" Icon="{ui:SymbolIcon Rename24}" Margin="3" HorizontalAlignment="Stretch"
+                                   Command="{Binding RenameFileCommand}" IsEnabled="{Binding CanRename}"
+                                   ToolTip="{Binding RenameButtonToolTip}" ToolTipService.ShowOnDisabled="True"/>
+                    </UniformGrid>
                 </StackPanel>
             </ScrollViewer>
 

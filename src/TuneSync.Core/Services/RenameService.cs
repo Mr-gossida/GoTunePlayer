@@ -141,6 +141,18 @@ public static class RenameService
         return items;
     }
 
+    /// <summary>The rename screen's rules as they are saved in the settings.</summary>
+    public static RenameRuleSet RulesFrom(AppSettings settings) => new()
+    {
+        SingleTrackPattern = settings.RenameSingleTrackPattern,
+        AlbumTrackPattern = settings.RenameAlbumTrackPattern,
+    };
+
+    /// <summary>The new name for one song from <paramref name="tags"/> - which need not be the
+    /// ones in the file yet (the tag editor shows the name its unsaved edits would give).</summary>
+    public static RenamePreviewItem PlanOne(string path, TrackTags tags, RenameRuleSet rules, RenameMode mode) =>
+        Plan([(path, tags)], rules, mode)[0];
+
     /// <summary>Renames every item whose name actually changes. A destination that collides with
     /// an existing file (other than the source itself) gets a " (2)", " (3)", ... suffix instead
     /// of overwriting it. Returns one error message per file that failed.</summary>

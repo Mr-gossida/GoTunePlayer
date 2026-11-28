@@ -13,6 +13,7 @@ public sealed partial class SongEditorViewModel : ObservableObject
         Editor = editor;
         Songs = songs;
         editor.ReviewSeveral = false;
+        editor.OffersRename = true;
         editor.LimitTo(songs);
         Show(Math.Clamp(index, 0, songs.Count - 1));
     }

@@ -778,6 +778,42 @@ public sealed partial class LibraryViewModel : ObservableObject
         FilesView.Refresh();
     }
 
+    /// <summary>Songs renamed one at a time (the tag editor's 파일 이름 바꾸기): their rows, a file
+    /// registered on its own and the saved custom order follow the new names in place. Rescanning
+    /// instead would rebuild every row - the editor's window holds the old ones - and read the
+    /// whole library again for one name.</summary>
+    public void ApplyRenames(IReadOnlyList<(string From, string To)> moves)
+    {
+        var map = moves.Where(m => TagService.IsSupported(m.To))
+            .GroupBy(m => m.From, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.Last().To, StringComparer.OrdinalIgnoreCase);
+        if (map.Count == 0) return;
+
+        foreach (var row in Files)
+            if (!row.IsRemote && map.TryGetValue(row.Path, out var to)) row.MoveTo(to);
+
+        var sourcesMoved = false;
+        foreach (var source in Folders.Where(f => f.IsFile && !f.Entry.IsRemote))
+        {
+            if (!map.TryGetValue(source.Path, out var to)) continue;
+            source.MoveTo(to);
+            sourcesMoved = true;
+        }
+        if (sourcesMoved) SaveFolders();
+
+        if (_settings.CustomOrder.Any(map.ContainsKey))
+        {
+            _settings.CustomOrder = [.. _settings.CustomOrder.Select(p => map.TryGetValue(p, out var to) ? to : p)];
+            AppSettingsStore.Save(_settings);
+        }
+        // (the custom order in use keeps the song in its place, not at the end as a newcomer)
+        foreach (var (from, to) in map)
+            if (_customRank.Remove(from, out var rank)) _customRank[to] = rank;
+
+        PlaylistView.Refresh();
+        FilesView.Refresh();
+    }
+
     /// <summary>Rescans when a merge/rename touched a folder the library is built from, so the
     /// list doesn't keep showing files that were moved or renamed away.</summary>
     public void RescanIfAffected(params string?[] changedFolders)
