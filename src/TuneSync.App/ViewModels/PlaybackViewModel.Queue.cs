@@ -109,6 +109,23 @@ public sealed partial class PlaybackViewModel
         return null;
     }
 
+    /// <summary>The song that will play when this one ends, without changing anything; null when
+    /// that can't be told yet (shuffle picks it at random then) or nothing follows.</summary>
+    public LibraryFileViewModel? PeekNext()
+    {
+        if (CurrentFile is null || Repeat == RepeatMode.One) return null;
+        if (_upNext.Count > 0)
+        {
+            var visible = _library.Files.ToHashSet();
+            if (_upNext.FirstOrDefault(visible.Contains) is { } reserved) return reserved;
+        }
+        if (IsShuffle) return null;
+        var files = CurrentList();
+        var index = IndexOfCurrent(files);
+        if (index >= 0 && index < files.Count - 1) return files[index + 1];
+        return Repeat == RepeatMode.All && files.Count > 1 && index >= 0 ? files[0] : null;
+    }
+
     /// <summary>"다음" button: always moves on (wrapping around), regardless of repeat mode.</summary>
     [RelayCommand]
     private void PlayNext()

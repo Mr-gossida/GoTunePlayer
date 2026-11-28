@@ -23,6 +23,7 @@ public partial class PlayView : Page
 
         _viewModel.Playback.PropertyChanged += Playback_PropertyChanged;
         HookEqualizer();
+        HookNoLyrics();
         // The queue emptied or changed (folders removed, a rescan, a search): the "지금 재생 중"
         // button only makes sense while the playing song is in it.
         ((System.Collections.Specialized.INotifyCollectionChanged)PlaylistBox.Items).CollectionChanged += (_, _) =>

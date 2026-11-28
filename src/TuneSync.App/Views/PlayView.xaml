@@ -467,7 +467,7 @@
                     <TextBlock Text="{Binding NowPlayingDetails}" FontSize="12" Margin="0,2,0,0" TextTrimming="CharacterEllipsis"
                                Foreground="{DynamicResource TextFillColorTertiaryBrush}"/>
                     <ContentControl Content="{Binding}" ContentTemplate="{StaticResource QualityLineTemplate}" Margin="0,4,0,0" Focusable="False"/>
-                    <views:SpectrumView Playback="{Binding}" Look="{Binding SpectrumLook}" CycleOnClick="True" BarBrush="{DynamicResource PlayerAccentBrush}" Height="21" Margin="0,8,0,0"/>
+                    <views:SpectrumView x:Name="HeaderSpectrum" Playback="{Binding}" Look="{Binding SpectrumLook}" CycleOnClick="True" BarBrush="{DynamicResource PlayerAccentBrush}" Height="21" Margin="0,8,0,0"/>
                 </StackPanel>
             </Grid>
 
@@ -534,7 +534,8 @@
                 </Grid>
             </StackPanel>
 
-            <Grid x:Name="LyricsArea" Grid.Column="1" Grid.RowSpan="2"
+            <Grid x:Name="LyricsArea" Grid.Column="1" Grid.RowSpan="2" Background="Transparent"
+                  MouseEnter="LyricsArea_MouseChanged" MouseLeave="LyricsArea_MouseChanged"
                   Visibility="{Binding IsLyricsAreaShown, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=True}">
                 <!-- the lyrics, all of them: hidden (still laid out) while the equalizer takes their place -->
                 <Grid x:Name="LyricsLayer">
@@ -771,9 +772,30 @@
                            MouseOverBackground="{DynamicResource PlayerAccentBrush}" PressedBackground="{DynamicResource PlayerAccentBrush}"
                            PressedForeground="{DynamicResource PlayerOnAccentBrush}" Click="BackToLyric_Click"/>
 
+                <!-- No lyrics, a while into the song: the spectrum under the song info moves here,
+                     big, with what plays next below it, instead of the notice (PlayView.NoLyrics).
+                     Shown from code; its look follows the small one's (set from code too). -->
+                <StackPanel x:Name="NoLyricsAmbient" VerticalAlignment="Center" Margin="40,0"
+                            MaxWidth="600" IsHitTestVisible="False" Visibility="Collapsed" Opacity="0">
+                    <views:SpectrumView x:Name="AmbientSpectrum" Playback="{Binding}" BarWidth="5"
+                                        BarBrush="{DynamicResource PlayerAccentBrush}" Height="160"/>
+                    <Border x:Name="AmbientNext" HorizontalAlignment="Center" Margin="0,34,0,0" Padding="14,7" CornerRadius="16"
+                            Background="{DynamicResource PlayerHoverBrush}" Visibility="Collapsed">
+                        <StackPanel Orientation="Horizontal">
+                            <ui:SymbolIcon Symbol="Next20" FontSize="14" VerticalAlignment="Center"
+                                           Foreground="{DynamicResource PlayerAccentBrush}"/>
+                            <TextBlock Text="다음 곡" FontSize="12" FontWeight="SemiBold" Margin="6,0,10,0" VerticalAlignment="Center"
+                                       Foreground="{DynamicResource PlayerAccentBrush}"/>
+                            <TextBlock x:Name="AmbientNextText" FontSize="12" MaxWidth="420" TextTrimming="CharacterEllipsis"
+                                       VerticalAlignment="Center" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+
                 <!-- No lyrics: "가사 찾기" searches online for this song and offers the result to save
-                     right here (PlayPageViewModel). Always shown: it used to appear only on hover,
-                     so nothing on screen said there was a way to get the lyrics. -->
+                     right here (PlayPageViewModel). Shown when the song starts, then it gives way to
+                     the spectrum above, and comes back while the pointer is over the lyrics area
+                     (PlayView.NoLyrics) - so there's always a way to get the lyrics in reach. -->
                 <Border x:Name="NoLyricsCard" HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="460"
                         Padding="32,24" CornerRadius="14"
                         DataContext="{Binding DataContext, RelativeSource={RelativeSource AncestorType=Page}}"

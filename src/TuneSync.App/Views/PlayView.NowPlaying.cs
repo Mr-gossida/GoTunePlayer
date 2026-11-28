@@ -28,7 +28,8 @@ public partial class PlayView
             BigCover.Height = size;
         }
         Cover(full);
-        PanelSpectrum.Visibility = visible;
+        // Hidden (still taking its room) while it's shown big in the middle instead (PlayView.NoLyrics).
+        PanelSpectrum.Visibility = _ambientShown == true ? System.Windows.Visibility.Hidden : visible;
         PanelQuality.Visibility = visible;
         PanelDetails.Visibility = visible;
 
