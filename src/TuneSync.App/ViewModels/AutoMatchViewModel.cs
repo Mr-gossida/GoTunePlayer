@@ -28,8 +28,18 @@ public sealed partial class AutoMatchViewModel : ObservableObject
     private bool _isAutomaticMode;
 
     [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(ApplySelectedCommand))]
+    [NotifyCanExecuteChangedFor(nameof(ApplySelectedCommand), nameof(RunCommand))]
     private bool _isRunning;
+
+    /// <summary>The tag editor, whose tab searches share "one search at a time" with this one.</summary>
+    public TagEditorViewModel Editor => _editor;
+
+    partial void OnIsRunningChanged(bool value) => _editor.IsAutoFillRunning = value;
+
+    partial void OnStatusTextChanged(string value) => _editor.AutoFillStatus = value;
+
+    /// <summary>Not while a tab's 찾기 runs (its progress shows here instead).</summary>
+    private bool CanRun() => !_editor.IsSearching;
 
     [ObservableProperty]
     private string _statusText = "채울 항목을 고른 뒤 검색을 누르세요.";
@@ -80,6 +90,11 @@ public sealed partial class AutoMatchViewModel : ObservableObject
         Sources = sources;
         _isAutomaticMode = settings.AutoFillIsAutomaticMode;
         Results.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasResults));
+        editor.CancelAutoFill = () => RunCancelCommand.Execute(null);
+        editor.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(TagEditorViewModel.IsSearching)) RunCommand.NotifyCanExecuteChanged();
+        };
     }
 
     /// <summary>Where tags and lyrics are looked for (the same switches as the tag editor's chips
@@ -98,9 +113,10 @@ public sealed partial class AutoMatchViewModel : ObservableObject
 
     /// <summary>The rows selected in the list, or - with nothing selected - every row the current
     /// 누락 filter shows (what the user is looking at, not the whole library behind the filter).</summary>
-    [RelayCommand(IncludeCancelCommand = true)]
+    [RelayCommand(IncludeCancelCommand = true, CanExecute = nameof(CanRun))]
     private async Task RunAsync(CancellationToken ct)
     {
+        if (_editor.IsSearching) return;
         if (!FillTags && !FillCover && !FillLyrics)
         {
             StatusText = "채울 항목(태그, 앨범 커버, 가사)을 하나 이상 선택해 주세요.";

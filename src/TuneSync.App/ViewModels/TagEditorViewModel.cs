@@ -364,33 +364,70 @@ public sealed partial class TagEditorViewModel : ObservableObject
     // ---- online search (each tab's "찾기" button) ----
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsAnySearchRunning), nameof(ShownSearchStatus))]
+    [NotifyCanExecuteChangedFor(nameof(SearchTagsCommand), nameof(SearchCoverCommand), nameof(SearchLyricsCommand))]
     private bool _isSearching;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShownSearchStatus))]
     private string _searchStatus = "";
 
     private CancellationTokenSource? _searchCts;
 
+    // One search at a time: a tab's 찾기 and 통합 검색 (AutoMatchViewModel) look the same songs up
+    // at the same sources and put their results in as edits, so running both at once searched
+    // every song twice (LRCLIB and MusicBrainz turn bursts away) and the later answers overwrote
+    // the earlier ones. While 통합 검색 runs, the tabs show its progress and can cancel it.
+
+    /// <summary>Set by 통합 검색 while it runs.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsAnySearchRunning), nameof(ShownSearchStatus))]
+    [NotifyCanExecuteChangedFor(nameof(SearchTagsCommand), nameof(SearchCoverCommand), nameof(SearchLyricsCommand))]
+    private bool _isAutoFillRunning;
+
+    /// <summary>통합 검색's progress line, shown in the tabs while it runs.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShownSearchStatus))]
+    private string _autoFillStatus = "";
+
+    /// <summary>Stops 통합 검색 (from a tab's 취소).</summary>
+    public Action? CancelAutoFill { get; set; }
+
+    public bool IsAnySearchRunning => IsSearching || IsAutoFillRunning;
+
+    /// <summary>What the tabs' status line says: their own search, or 통합 검색's while it runs.</summary>
+    public string ShownSearchStatus => !IsSearching && IsAutoFillRunning
+        ? $"통합 검색 · {AutoFillStatus}"
+        : SearchStatus;
+
+    // The tab's last result is stale once 통합 검색 has searched the songs again.
+    partial void OnIsAutoFillRunningChanged(bool value)
+    {
+        if (value && !IsSearching) SearchStatus = "";
+    }
+
+    private bool CanSearch() => !IsAnySearchRunning;
+
     /// <summary>Looks the selected songs up online and puts what it finds in as unsaved edits -
     /// highlighted, with the previous values shown, reviewed and saved like any other edit.</summary>
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanSearch))]
     private Task SearchTagsAsync() =>
-        IsSearching ? Task.CompletedTask
+        IsAnySearchRunning ? Task.CompletedTask
         : _selection.Count == 1 ? SearchTagCandidatesAsync(_selection[0])
         : SearchAsync(new AutoFillOptions(Tags: true, Cover: false, Lyrics: false, ReplaceExisting: true, ReplaceTags: true)
         {
             DisabledTagSources = Sources.DisabledTagSources,
         }, "태그");
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanSearch))]
     private Task SearchCoverAsync() =>
-        IsSearching ? Task.CompletedTask
+        IsAnySearchRunning ? Task.CompletedTask
         : _selection.Count == 1 ? SearchCoverCandidatesAsync(_selection[0])
         : SearchAsync(new AutoFillOptions(Tags: false, Cover: true, Lyrics: false, ReplaceExisting: true), "커버");
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanSearch))]
     private Task SearchLyricsAsync() =>
-        IsSearching ? Task.CompletedTask
+        IsAnySearchRunning ? Task.CompletedTask
         : _selection.Count == 1 ? SearchLyricsCandidatesAsync(_selection[0])
         : SearchAsync(new AutoFillOptions(Tags: false, Cover: false, Lyrics: true, ReplaceExisting: true)
         {
@@ -398,7 +435,11 @@ public sealed partial class TagEditorViewModel : ObservableObject
         }, "가사");
 
     [RelayCommand]
-    private void CancelSearch() => _searchCts?.Cancel();
+    private void CancelSearch()
+    {
+        _searchCts?.Cancel();
+        if (IsAutoFillRunning) CancelAutoFill?.Invoke();
+    }
 
     /// <summary>To 통합 검색, where every song's results are listed with their sources to choose from.</summary>
     [RelayCommand]
@@ -406,7 +447,7 @@ public sealed partial class TagEditorViewModel : ObservableObject
 
     private async Task SearchAsync(AutoFillOptions options, string what)
     {
-        if (IsSearching || _selection.Count == 0) return;
+        if (IsAnySearchRunning || _selection.Count == 0) return;
         var files = _selection.ToList();
         _searchCts = new CancellationTokenSource();
         IsSearching = true;

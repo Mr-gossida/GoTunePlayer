@@ -9,7 +9,8 @@
          (SongEditorView): field rows, the search status line, tabs, cover candidate tiles. -->
     <conv:EnumToVisibilityConverter x:Key="EnumToVisibilityConverter"/>
 
-    <!-- A tab's online search: progress, then what was found (or not), with a cancel link. -->
+    <!-- A tab's online search: progress, then what was found (or not), with a cancel link. While
+         통합 검색 runs it shows that search instead (one search at a time - TagEditorViewModel). -->
     <DataTemplate x:Key="SearchStatusTemplate">
         <Grid x:Name="Line">
             <Grid.ColumnDefinitions>
@@ -19,17 +20,17 @@
             </Grid.ColumnDefinitions>
             <ui:ProgressRing x:Name="Ring" IsIndeterminate="True" Width="14" Height="14" Margin="0,0,8,0" VerticalAlignment="Center"
                              Visibility="Collapsed"/>
-            <TextBlock Grid.Column="1" Text="{Binding SearchStatus}" FontSize="12" TextWrapping="Wrap" VerticalAlignment="Center"
+            <TextBlock Grid.Column="1" Text="{Binding ShownSearchStatus}" FontSize="12" TextWrapping="Wrap" VerticalAlignment="Center"
                        app:KeepWords.IsEnabled="True" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
             <ui:Button x:Name="Cancel" Grid.Column="2" Content="취소" Appearance="Transparent" Padding="8,2" FontSize="12"
                        Margin="6,0,0,0" Command="{Binding CancelSearchCommand}" Visibility="Collapsed"/>
         </Grid>
         <DataTemplate.Triggers>
-            <DataTrigger Binding="{Binding IsSearching}" Value="True">
+            <DataTrigger Binding="{Binding IsAnySearchRunning}" Value="True">
                 <Setter TargetName="Ring" Property="Visibility" Value="Visible"/>
                 <Setter TargetName="Cancel" Property="Visibility" Value="Visible"/>
             </DataTrigger>
-            <DataTrigger Binding="{Binding SearchStatus}" Value="">
+            <DataTrigger Binding="{Binding ShownSearchStatus}" Value="">
                 <Setter TargetName="Line" Property="Visibility" Value="Collapsed"/>
             </DataTrigger>
         </DataTemplate.Triggers>
