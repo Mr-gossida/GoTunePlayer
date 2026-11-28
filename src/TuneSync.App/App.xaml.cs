@@ -87,6 +87,8 @@ public partial class App : Application
             // Must run before any Wpf.Ui control is constructed, so the first frame is already in
             // the right theme instead of flashing light and then switching.
             ThemeHelper.Apply(_host.Services.GetRequiredService<AppSettings>().Theme);
+            // Before any window or animation: the light level caps every animation's frame rate.
+            GraphicsProfile.Start(_host.Services.GetRequiredService<AppSettings>().GraphicsQuality);
 
             PlayerPalette.Register(this);
             _host.Start();

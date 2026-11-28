@@ -134,6 +134,10 @@ public sealed class AppSettings
     /// <summary>Which moving light it is (the aurora, or another; all cost about the same).</summary>
     public BackgroundEffect BackgroundEffect { get; set; } = BackgroundEffect.Aurora;
 
+    /// <summary>설정 › 화면 효과 › 그래픽 품질: how smoothly and finely the moving visuals are drawn,
+    /// to suit the PC (Auto picks Standard or Light from the graphics card).</summary>
+    public GraphicsQuality GraphicsQuality { get; set; } = GraphicsQuality.Auto;
+
     /// <summary>What the player opens with when the app starts.</summary>
     public StartupResume StartupResume { get; set; } = StartupResume.LastPosition;
 
@@ -237,6 +241,18 @@ public enum BackgroundEffect
     Rain = 9,
     /// <summary>워프: flying forward through stars streaming out of the middle of the screen.</summary>
     Warp = 10,
+}
+
+public enum GraphicsQuality
+{
+    /// <summary>Standard, or Light on an integrated or weak graphics card.</summary>
+    Auto,
+    /// <summary>고화질: the visuals at the monitor's refresh rate and the light finer and twice as often.</summary>
+    High,
+    /// <summary>표준: about 30 frames a second, the light 15 steps a second at a third of the resolution.</summary>
+    Standard,
+    /// <summary>가볍게: about 20 frames a second, the light 8 steps a second, no big shadows, animations at 30.</summary>
+    Light,
 }
 
 public enum AuroraMode

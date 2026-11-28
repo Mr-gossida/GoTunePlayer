@@ -5,6 +5,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
+using System.Windows.Media.Effects;
 using System.Windows.Threading;
 using TuneSync.App.ViewModels;
 using TuneSync.Core.Models;
@@ -62,7 +63,7 @@ public partial class NowPlayingStage : UserControl
             MainStack.Margin = new Thickness(0, 0, 0, 84);
         }
 
-        _auroraCache = AuroraLayer.CacheMode;
+        _auroraCache = AuroraLayer.CacheMode as BitmapCache;
 
         // The column changes height too, not just the window: the lyrics appear or go with the
         // song (no synced lyrics -> none), and a long title wraps. Fit again after each change.
@@ -85,6 +86,8 @@ public partial class NowPlayingStage : UserControl
         _running = true;
         _playback.PropertyChanged += Playback_PropertyChanged;
         PlayerPalette.Changed += RecolorAurora;
+        GraphicsProfile.Changed += ApplyGraphics;
+        ApplyShadows();
         UpdateClock();
         StartAurora();
         // Open on the line being sung, without a glide (once the lines are laid out).
@@ -103,6 +106,7 @@ public partial class NowPlayingStage : UserControl
         _running = false;
         _playback.PropertyChanged -= Playback_PropertyChanged;
         PlayerPalette.Changed -= RecolorAurora;
+        GraphicsProfile.Changed -= ApplyGraphics;
         StopAuroraSteps();
         Views.LyricsScroller.Stop(LyricsViewer);
         _lyricsGate.Stop();
@@ -384,9 +388,28 @@ public partial class NowPlayingStage : UserControl
 
     // The aurora needs pixel shader 3.0 (any GPU from the last ~15 years).
     private static readonly bool AuroraSupported = RenderCapability.IsPixelShaderVersionSupported(3, 0);
-    private readonly CacheMode? _auroraCache;
+    private readonly BitmapCache? _auroraCache;
     private bool _auroraStepping;
-    private int _auroraEvery = 2;
+
+    /// <summary>설정 › 그래픽 품질 changed: the light's pace and resolution, and the shadows.</summary>
+    private void ApplyGraphics()
+    {
+        ApplyShadows();
+        ApplyAuroraMode();
+    }
+
+    // The wide soft shadows and what they were, so the light level can take them away and give them back.
+    private (UIElement Element, Effect Shadow)[]? _shadows;
+
+    /// <summary>The light level leaves out the wide shadows (cover, lyrics, clock): each is
+    /// redrawn whenever what it falls on changes - with the lyrics, on every frame of a glide.</summary>
+    private void ApplyShadows()
+    {
+        _shadows ??= [.. new UIElement[] { CoverCard, LyricsViewer, AmbientClockPanel, WallFooter }
+            .Where(e => e.Effect is not null).Select(e => (e, e.Effect))];
+        foreach (var (element, shadow) in _shadows)
+            element.Effect = GraphicsProfile.BigShadows ? shadow : null;
+    }
 
     /// <summary>설정 › 배경 효과 (or no shader support): the light on, stepping less often, or
     /// off - then the plain backdrop is shown full size, and with nothing changing it, it is only
@@ -403,8 +426,9 @@ public partial class NowPlayingStage : UserControl
             return;
         }
         AuroraLayer.Effect = AuroraLight;
+        if (_auroraCache is not null && _auroraCache.RenderAtScale != GraphicsProfile.LightScale) _auroraCache.RenderAtScale = GraphicsProfile.LightScale;
         AuroraLayer.CacheMode = _auroraCache;
-        _auroraEvery = mode == AuroraMode.Saver ? 4 : 2;
+        _auroraStep = TimeSpan.FromSeconds((mode == AuroraMode.Saver ? 2 : 1) / GraphicsProfile.LightStepsPerSecond);
         if (!_auroraStepping)
         {
             _auroraStepping = true;
@@ -424,19 +448,24 @@ public partial class NowPlayingStage : UserControl
     /// itself moves (WPF would otherwise animate it at the monitor's full refresh rate).</summary>
     private static T AuroraTimeline<T>(T timeline) where T : Timeline
     {
-        Timeline.SetDesiredFrameRate(timeline, 15);
+        Timeline.SetDesiredFrameRate(timeline, (int)GraphicsProfile.LightStepsPerSecond);
         return timeline;
     }
 
-    private int _auroraTick;
+    /// <summary>How long between steps of the light, and when the last one was.</summary>
+    private TimeSpan _auroraStep = TimeSpan.FromSeconds(1 / 15.0);
+    private TimeSpan _lastAuroraStep;
 
-    /// <summary>15 times a second (every other tick of the shared ~30 fps clock; 절전: every
-    /// fourth): the light drifts too slowly for more to show, and each update redraws the whole
-    /// screen. (The ticker's sender is always null; skipping ticks only for a non-null sender
-    /// meant the light really moved at the clock's full ~30 a second.)</summary>
+    /// <summary>15 times a second on the standard level (8 light, 30 high; 절전 halves it): the
+    /// light drifts too slowly for more to show, and each update redraws the whole screen. By time,
+    /// not by counting ticks, as the shared clock's own pace follows the level too. A step is
+    /// taken from three-quarters of the interval on: the clock's ticks don't land exactly on it,
+    /// and waiting for the whole interval made it every third tick, not every other.</summary>
     private void AdvanceAurora(object? sender, EventArgs e)
     {
-        if (++_auroraTick % _auroraEvery != 0) return;
+        var now = FrameTicker.Now;
+        if (now - _lastAuroraStep < _auroraStep * 0.75) return;
+        _lastAuroraStep = now;
         ShowAuroraNow();
     }
 
@@ -471,9 +500,9 @@ public partial class NowPlayingStage : UserControl
     }
 
     /// <summary>A slow glide to a nearby spot (burn-in protection on OLED and plasma screens).
-    /// At most 30 steps a second: it moves the whole picture, so every step redraws the screen, and
-    /// at under 30 px a second a step is never more than a pixel (at the monitor's full rate it was
-    /// 10 seconds of 144 full redraws a second, every 30 seconds).</summary>
+    /// At most 30 steps a second (on the high level, every frame): it moves the whole picture, so
+    /// every step redraws the screen, and at under 30 px a second a step is never more than a pixel
+    /// (at the monitor's full rate it was 10 seconds of 144 full redraws a second, every 30 seconds).</summary>
     private void DriftSomewhere()
     {
         var ease = new SineEase { EasingMode = EasingMode.EaseInOut };
@@ -481,7 +510,7 @@ public partial class NowPlayingStage : UserControl
         DoubleAnimation Glide(double to)
         {
             var glide = new DoubleAnimation(to, duration) { EasingFunction = ease };
-            Timeline.SetDesiredFrameRate(glide, 30);
+            Timeline.SetDesiredFrameRate(glide, GraphicsProfile.WholeScreenFrameRate);
             return glide;
         }
         Drift.BeginAnimation(TranslateTransform.XProperty, Glide(Random.Shared.Next(-90, 91)));

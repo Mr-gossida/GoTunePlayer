@@ -170,8 +170,8 @@ public sealed partial class WaveSeekBar : FrameworkElement
         UseLayoutRounding = true; // on whole screen pixels, so 오리's pixel art stays crisp
         FocusVisualStyle = null;
         // (the theme's event is static: subscribed only while loaded, so a closed window's bar isn't kept)
-        Loaded += (_, _) => { UpdateAnimationState(); ApplicationThemeManager.Changed += OnAppThemeChanged; };
-        Unloaded += (_, _) => { StopAnimating(); ApplicationThemeManager.Changed -= OnAppThemeChanged; };
+        Loaded += (_, _) => { UpdateAnimationState(); ApplicationThemeManager.Changed += OnAppThemeChanged; GraphicsProfile.Changed += OnGraphicsChanged; };
+        Unloaded += (_, _) => { StopAnimating(); ApplicationThemeManager.Changed -= OnAppThemeChanged; GraphicsProfile.Changed -= OnGraphicsChanged; };
         // Hidden (mini player in use) or minimized: no waves to draw.
         OnScreen.Watch(this, () => { if (OnScreen.Check(this)) UpdateAnimationState(); else StopAnimating(); });
     }
@@ -1924,7 +1924,16 @@ public sealed partial class WaveSeekBar : FrameworkElement
     /// whole pixel steps, and at 30 frames that's 4-5 px jumps that read as stutter (moving the
     /// mouse over the bar, which redraws it on every mouse event, made it smooth). The flowing
     /// looks stay at 30, which they look the same at.</summary>
-    private static bool NeedsScreenFrames(SeekBarStyle look) => look == SeekBarStyle.Runner;
+    private static bool NeedsScreenFrames(SeekBarStyle look) => look == SeekBarStyle.Runner && GraphicsProfile.SmoothMotion;
+
+    /// <summary>그래픽 품질 changed: 오리 may move to the other clock (the light level takes it off
+    /// the screen's frames).</summary>
+    private void OnGraphicsChanged()
+    {
+        if (!_animating || _onScreenFrames == NeedsScreenFrames(Look)) return;
+        StopAnimating();
+        UpdateAnimationState();
+    }
 
     /// <summary>Which clock the animation is on while <see cref="_animating"/>.</summary>
     private bool _onScreenFrames;

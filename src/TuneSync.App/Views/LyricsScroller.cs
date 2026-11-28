@@ -65,13 +65,20 @@ internal static class LyricsScroller
         if (Glides.Count == 1)
         {
             _lastFrame = TimeSpan.Zero;
-            CompositionTarget.Rendering += OnRendering;
+            // On the screen's frames, for a glide as smooth as the screen; on the light level of
+            // 그래픽 품질, on the shared clock's steps (each step redraws the lyrics).
+            _onScreenFrames = GraphicsProfile.SmoothMotion;
+            if (_onScreenFrames) CompositionTarget.Rendering += OnRendering;
+            else FrameTicker.Add(OnRendering);
         }
     }
 
+    /// <summary>Which clock the glides are on while any runs.</summary>
+    private static bool _onScreenFrames;
+
     private static void OnRendering(object? sender, EventArgs e)
     {
-        var now = ((RenderingEventArgs)e).RenderingTime;
+        var now = e is RenderingEventArgs rendering ? rendering.RenderingTime : FrameTicker.Now;
         if (now == _lastFrame) return; // Rendering can fire more than once per frame
         var dt = _lastFrame == TimeSpan.Zero ? 1 / 60.0 : Math.Min((now - _lastFrame).TotalSeconds, 0.1);
         _lastFrame = now;
@@ -109,7 +116,9 @@ internal static class LyricsScroller
 
     private static void Remove(ScrollViewer viewer)
     {
-        if (Glides.Remove(viewer) && Glides.Count == 0) CompositionTarget.Rendering -= OnRendering;
+        if (!Glides.Remove(viewer) || Glides.Count > 0) return;
+        if (_onScreenFrames) CompositionTarget.Rendering -= OnRendering;
+        else FrameTicker.Remove(OnRendering);
     }
 
     /// <summary>Cancels a glide in progress (e.g. the user grabbed the wheel, or the track changed).</summary>

@@ -467,6 +467,18 @@
                 <StackPanel Tag="Effects">
                     <ui:TextBlock Text="화면 효과" Style="{StaticResource CategoryTitle}"/>
                     <ui:TextBlock Text="재생바와 스펙트럼, 집중 모드·화면 보호기 뒤의 움직이는 효과" Style="{StaticResource CategoryLead}"/>
+                    <ui:TextBlock Text="성능" Style="{StaticResource Group}"/>
+                    <ui:CardControl Style="{StaticResource Card}" Icon="{ui:SymbolIcon Gauge24}" Tag="그래픽 품질 성능 고화질 표준 가볍게 저사양 고사양 내장 그래픽 GPU 사용량 프레임 부드럽게 자동"
+                                    ToolTip="움직이는 효과(스펙트럼, 재생바 효과, 가사 전환, 집중 모드·화면 보호기의 배경 빛)를 얼마나 부드럽고 곱게 그릴지 PC에 맞춰 정합니다. 자동은 그래픽 카드를 보고 표준이나 가볍게를 고릅니다. 고화질은 효과를 모니터 주사율로 그리고 배경 빛을 초당 30번, 화면의 절반 해상도로 그립니다. 표준은 효과를 초당 약 30번, 배경 빛을 초당 15번 그립니다. 가볍게는 효과를 초당 약 20번, 배경 빛을 초당 8번 그리고 집중 모드·화면 보호기의 큰 그림자를 빼며, 화면 전환 애니메이션도 초당 30번으로 줄입니다.">
+                        <ui:CardControl.Header>
+                            <StackPanel>
+                                <ui:TextBlock Text="그래픽 품질" FontTypography="Body"/>
+                                <ui:TextBlock Text="{Binding GraphicsQualityNote}" Style="{StaticResource Desc}"/>
+                            </StackPanel>
+                        </ui:CardControl.Header>
+                        <ComboBox Width="200" ItemsSource="{Binding GraphicsQualityOptions}" DisplayMemberPath="Label"
+                                  SelectedValuePath="Value" SelectedValue="{Binding GraphicsQuality}" AutomationProperties.Name="그래픽 품질"/>
+                    </ui:CardControl>
                     <ui:TextBlock Text="재생 화면" Style="{StaticResource Group}"/>
                     <ui:CardControl Style="{StaticResource Card}" Icon="{ui:SymbolIcon Flash24}" Tag="재생바 효과 비눗방울 별똥별 오리 테슬라 코일 꽃잎 물결 불꽃 네온 파형 막대 분수 빗방울 오로라 별빛 불꽃놀이 폭죽 없음 랜덤 무작위 임의 시크바"
                                     ToolTip="재생한 부분 위에서 음악에 맞춰 움직이는 효과입니다. 무작위는 곡마다 효과 중 하나를 고르고, 없음은 움직이지 않는 선만 그립니다(가장 가벼움).">

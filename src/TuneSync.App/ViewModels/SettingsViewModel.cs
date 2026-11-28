@@ -439,6 +439,52 @@ public sealed partial class SettingsViewModel : ObservableObject
         new(BackgroundEffect.Warp, "워프"),
     ];
 
+    /// <summary>설정 › 화면 효과 › 그래픽 품질; 자동 says what it picked on this PC.</summary>
+    public IReadOnlyList<Choice<GraphicsQuality>> GraphicsQualityOptions { get; } =
+    [
+        new(GraphicsQuality.Auto, $"자동 (이 PC: {QualityName(GraphicsProfile.Detected)})"),
+        new(GraphicsQuality.High, "고화질"),
+        new(GraphicsQuality.Standard, "표준"),
+        new(GraphicsQuality.Light, "가볍게"),
+    ];
+
+    private static string QualityName(GraphicsQuality quality) => quality switch
+    {
+        GraphicsQuality.High => "고화질",
+        GraphicsQuality.Light => "가볍게",
+        _ => "표준",
+    };
+
+    public GraphicsQuality GraphicsQuality
+    {
+        get => _settings.GraphicsQuality;
+        set
+        {
+            if (_settings.GraphicsQuality == value) return;
+            _settings.GraphicsQuality = value;
+            AppSettingsStore.Save(_settings);
+            GraphicsProfile.Apply(value); // open visuals follow at once
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(GraphicsQualityNote));
+        }
+    }
+
+    /// <summary>What the level in use does, and when part of it waits for a restart.</summary>
+    public string GraphicsQualityNote
+    {
+        get
+        {
+            var note = GraphicsProfile.Level switch
+            {
+                GraphicsQuality.High => "고사양 PC · 효과를 모니터 주사율로, 배경 빛을 더 곱고 자주 그립니다 (GPU 사용 많음)",
+                GraphicsQuality.Light => "저사양 PC·내장 그래픽 · 효과를 덜 자주 그리고 큰 그림자를 뺍니다",
+                _ => "대부분의 PC · 부드러움과 GPU 사용의 균형",
+            };
+            var capped = GraphicsProfile.Level == GraphicsQuality.Light;
+            return capped == GraphicsProfile.AnimationsCapped ? note : note + " · 화면 전환 애니메이션은 다시 시작하면 적용";
+        }
+    }
+
     /// <summary>설정 › 화면 효과 › 배경 효과: how it moves (bound to Playback.AuroraMode).</summary>
     public IReadOnlyList<Choice<AuroraMode>> AuroraModeOptions { get; } =
     [

@@ -197,7 +197,7 @@
                     <Grid.CacheMode>
                         <BitmapCache/>
                     </Grid.CacheMode>
-                    <StackPanel>
+                    <StackPanel x:Name="AmbientClockPanel">
                         <StackPanel.Effect>
                             <DropShadowEffect BlurRadius="16" ShadowDepth="0" Opacity="0.5" Color="Black"/>
                         </StackPanel.Effect>
