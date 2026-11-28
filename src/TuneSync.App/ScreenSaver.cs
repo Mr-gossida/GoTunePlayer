@@ -73,7 +73,13 @@ public static class ScreenSaver
                 var px = monitor.Bounds;
                 var dips = new Rect(px.X / dpi.DpiScaleX, px.Y / dpi.DpiScaleY, px.Width / dpi.DpiScaleX, px.Height / dpi.DpiScaleY);
                 var window = new ScreenSaverWindow(_playback, dips, role, lyricsElsewhere: true) { PixelBounds = px };
-                window.SetAuroraRegion(new Point((px.X - left) / unit, (px.Y - top) / unit),
+                // The effects are a band one screen high: rain over water at its bottom, lights and
+                // blobs rising and sinking within it. A screen in a lower row (another monitor placed
+                // above it) lay wholly below the band - all water and no rain, hardly any lights - so
+                // each row takes the band again; screens side by side still carry it on across.
+                var y = (px.Y - top) / unit;
+                y -= Math.Floor(y + 0.001);
+                window.SetAuroraRegion(new Point((px.X - left) / unit, y),
                                        new Size(px.Width / unit, px.Height / unit));
                 windows.Add(window);
             }
