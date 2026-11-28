@@ -185,6 +185,27 @@ public class LrcLibLyricsServiceTests
     }
 
     [Fact]
+    public async Task Finds_Korean_lyrics_under_the_English_title_a_bilingual_romanized_upload_gives()
+    {
+        // what LRCLIB really answers for "사랑은 미친짓" by "15&": every search by our title finds
+        // only romanized uploads, one titled with both names; the Korean lyrics are listed under
+        // the English one
+        var server = new FakeLrcLib();
+        server.Search.Add(Track("15&", "사랑은 미친짓 (feat. 칸토 of 트로이)", 217, "Love is Madness", synced: false, lyrics: Romanized));
+        server.Search.Add(Track("15", "사랑은 미친짓 (feat. 칸토 of 트로이) Love is Madness", 217, synced: false, lyrics: Romanized));
+        server.SearchBy["?q=15& Love is Madness"] =
+        [
+            Track("15&", "Love is Madness (feat. Kanto)", 217, "Love is Madness (feat. Kanto)", lyrics: Korean),
+        ];
+        using var service = new LrcLibLyricsService(server);
+        var query = new LyricsQuery("15&", "사랑은 미친짓 (feat. 칸토 of 트로이)", "사랑은 미친짓", TimeSpan.FromSeconds(217));
+
+        Assert.Equal($"[00:01.00]{Korean}", (await service.FindAsync(query))?.BestLyrics);
+        var listed = await service.SearchAsync(query);
+        Assert.Equal("한국어", listed.Candidates[0].Language);
+    }
+
+    [Fact]
     public async Task An_English_song_still_gets_its_English_lyrics()
     {
         var server = new FakeLrcLib { Get = Track("Coldplay", "Yellow", 266, "Parachutes", lyrics: "Look at the stars") };

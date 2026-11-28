@@ -129,16 +129,33 @@ public sealed class LrcLibLyricsService : ILyricsService, IDisposable
         //    song may be listed under its title in that script, which ours doesn't search for.
         //    "Some" by "소유, 정기고" only finds a romanized upload titled "썸 (Some)"; the Korean
         //    lyrics are all under "썸". The other-language candidate's title tells us that name.
+        //    Or the other way round: "사랑은 미친짓" by "15&" only finds romanized uploads, one of
+        //    them titled "사랑은 미친짓 (feat. …) Love is Madness"; the Korean lyrics are under
+        //    "Love is Madness (feat. Kanto)". The Latin half of a title whose Hangul half is ours
+        //    is that other name.
         HashSet<string>? aliases = null;
         if (tagged is { } script and not Script.Latin
             && !candidates.Any(c => Match(query, c.Track, c.StrictArtist) is not null && LanguageOf(c.Track) == script))
         {
             var ours = TitleVariants(query.Title);
-            aliases = [.. candidates
+            var ourMain = MainTitle(query.Title);
+            var fitTitles = candidates
                 .Where(c => Match(query, c.Track, c.StrictArtist) is { ByAlbum: false })
-                .Select(c => MainTitle(c.Track.TrackName))
-                .Where(v => v.Length > 0 && !ours.Contains(v) && InScript(v, script))];
-            foreach (var alias in aliases.Take(2))
+                .Select(c => c.Track.TrackName)
+                .ToList();
+            // (what to search for, the name as compared)
+            var names = new List<(string Search, string Key)>();
+            foreach (var title in fitTitles)
+            {
+                if (MainTitle(title) is { Length: > 0 } main && !ours.Contains(main) && InScript(main, script))
+                    names.Add((main, main));
+                if (script == Script.Korean && ScriptParts(StripBrackets(title)) is [var hangul, var latin]
+                    && Normalize(hangul) == ourMain && Normalize(latin) is { Length: >= 2 } key && !ours.Contains(key))
+                    names.Add((latin.Trim(), key));
+            }
+            names = [.. names.DistinctBy(n => n.Key)];
+            aliases = [.. names.Select(n => n.Key)];
+            foreach (var (alias, _) in names.Take(2))
             {
                 Add(await SearchAsync($"search?q={Esc(query.Artist + " " + alias)}", ct), false);
                 Add(await SearchAsync($"search?track_name={Esc(alias)}", ct), true);
